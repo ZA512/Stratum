@@ -300,3 +300,8 @@ Le système de navigation doit permettre de toujours savoir **où l’on se situ
 - **Sécurité** : JWT (via Passport/OIDC), RBAC par héritage de rôle/titre.
     
 - **Infra** : Docker + Caddy + GitHub Actions, Sentry pour logs.
+
+
+tout le projet doit etre multi langue, on mets tout en anglais first, mais on traduit tout directement en français on verra les autres langues après.
+
+le projet s'appelle pour le moment "Stratum"
