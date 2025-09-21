@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum NodeType {
+  SIMPLE
+  MEDIUM
+  COMPLEX
+}
+
+enum ColumnBehaviorKey {
+  BACKLOG
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CUSTOM
+}
+
+model User {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  passwordHash    String?
+  displayName     String
+  locale          String        @default("en-US")
+  avatarUrl       String?
+  bio             String?
+  preferences     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  memberships     Membership[]
+  assignedNodes   NodeAssignment[]
+  comments        Comment[]
+  refreshTokens    RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  invitationsSent  Invitation[] @relation("UserInvitations")
+}
+
+model Team {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String?           @unique
+  description      String?
+  settings         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  memberships      Membership[]
+  nodes            Node[]
+  columnBehaviors  ColumnBehavior[]
+  automationRules  AutomationRule[]
+  invitations      Invitation[]
+}
+
+model Membership {
+  id         String            @id @default(cuid())
+  userId     String
+  teamId     String
+  title      String?
+  status     MembershipStatus  @default(ACTIVE)
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+model Node {
+  id              String            @id @default(cuid())
+  teamId          String
+  parentId        String?
+  columnId        String?
+  type            NodeType          @default(SIMPLE)
+  title           String
+  description     String?           @db.Text
+  path            String
+  depth           Int               @default(0)
+  position        Float             @default(0)
+  statusMetadata  Json?
+  metadata        Json?
+  dueAt           DateTime?
+  startAt         DateTime?
+  archivedAt      DateTime?
+  createdById     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  team            Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parent          Node?             @relation("NodeToNode", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Node[]            @relation("NodeToNode")
+  board           Board?
+  column          Column?           @relation(fields: [columnId], references: [id])
+  assignments     NodeAssignment[]
+  dependencies    Dependency[]      @relation("DependencyDependents")
+  dependents      Dependency[]      @relation("DependencyDependencies")
+  checklist       Checklist?
+  attachments     Attachment[]
+  comments        Comment[]
+}
+
+model Board {
+  id              String            @id @default(cuid())
+  nodeId          String            @unique
+  layout          Json?
+  themeOverride   Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  node            Node              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  columns         Column[]
+}
+
+model Column {
+  id              String             @id @default(cuid())
+  boardId         String
+  behaviorId      String
+  name            String
+  position        Int
+  wipLimit        Int?
+  slaConfig       Json?
+  settings        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  board           Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  behavior        ColumnBehavior     @relation(fields: [behaviorId], references: [id], onDelete: Restrict)
+  nodes           Node[]
+}
+
+model ColumnBehavior {
+  id          String             @id @default(cuid())
+  teamId      String
+  key         ColumnBehaviorKey
+  label       String
+  metadata    Json?
+  color       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  columns     Column[]
+}
+
+model NodeAssignment {
+  id          String    @id @default(cuid())
+  nodeId      String
+  userId      String
+  role        String?
+  assignedAt  DateTime  @default(now())
+
+  node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Checklist {
+  id          String          @id @default(cuid())
+  nodeId      String          @unique
+  progress    Int             @default(0)
+  items       ChecklistItem[]
+
+  node        Node            @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+}
+
+model ChecklistItem {
+  id          String     @id @default(cuid())
+  checklistId String
+  content     String
+  isDone      Boolean    @default(false)
+  position    Int
+
+  checklist   Checklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+}
+
+model Dependency {
+  id             String   @id @default(cuid())
+  dependentId    String
+  dependencyId   String
+  type           String   @default("finish-to-start")
+  lag            Int      @default(0)
+
+  dependent      Node     @relation("DependencyDependents", fields: [dependentId], references: [id], onDelete: Cascade)
+  dependency     Node     @relation("DependencyDependencies", fields: [dependencyId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentId, dependencyId])
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  nodeId      String
+  url         String
+  filename    String
+  mimeType    String
+  size        Int
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id          String    @id @default(cuid())
+  nodeId      String
+  authorId    String
+  body        String    @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  metadata    Json?
+
+  node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model AutomationRule {
+  id          String    @id @default(cuid())
+  teamId      String
+  name        String
+  trigger     String
+  action      String
+  config      Json?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Invitation {
+  id          String            @id @default(cuid())
+  email       String
+  teamId      String
+  invitedById String
+  status      InvitationStatus  @default(PENDING)
+  tokenHash   String            @unique
+  expiresAt   DateTime
+  respondedAt DateTime?
+  createdAt   DateTime          @default(now())
+
+  team        Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedBy   User              @relation("UserInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([teamId])
+}
