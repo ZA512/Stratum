@@ -34,6 +34,7 @@
     "@nestjs/swagger": "^11.2.0",
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
+    "lucide-react": "^0.544.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
@@ -76,6 +76,14 @@ export default function TeamBoardPage() {
   const [editingError, setEditingError] = useState<string | null>(null);
   const [editingSubmitting, setEditingSubmitting] = useState(false);
   const [convertingNodeId, setConvertingNodeId] = useState<string | null>(null);
+  // Caches pour navigation fluide (évite le clignotement sur descente)
+  const cachesRef = useRef<{
+    boards: Map<string, Board>;
+    breadcrumbs: Map<string, NodeBreadcrumbItem[]>;
+    childBoards: Map<string, ChildBoardMap>;
+  }>({ boards: new Map(), breadcrumbs: new Map(), childBoards: new Map() });
+  const descendTriggerRef = useRef<((href: string) => void) | null>(null);
+  const [navigatingDown, setNavigatingDown] = useState(false);
 
   const teamId = params?.teamId;
   const boardIdParam = useMemo(() => {
@@ -92,7 +100,10 @@ export default function TeamBoardPage() {
   }, [initializing, user, router]);
 
   useEffect(() => {
-    if (!teamId || !accessToken) {
+    // NOTE: Les endpoints fetchRootBoard et fetchBoardDetail ne sont pas protégés par JwtAuthGuard.
+    // On ne bloque donc plus sur accessToken pour afficher rapidement le board root.
+    // Cela évite l'état vide "Aucun board trouvé" quand le token n'est pas encore initialisé.
+    if (!teamId) {
       return;
     }
 
@@ -224,15 +235,46 @@ export default function TeamBoardPage() {
     [accessToken, board?.id],
   );
 
-  const handleOpenChildBoard = (childBoardId: string) => {
-    if (!teamId) {
-      return;
+  const prefetchBoardData = useCallback(async (targetBoardId: string) => {
+    if (!accessToken) return;
+    // Ne refetch pas si déjà en cache
+    if (cachesRef.current.boards.has(targetBoardId)) return;
+    try {
+      const detailPromise = fetchBoardDetail(targetBoardId, accessToken);
+      const detail = await detailPromise;
+      cachesRef.current.boards.set(targetBoardId, detail);
+      if (detail.nodeId) {
+        const [breadcrumbItems, childEntries] = await Promise.all([
+          fetchNodeBreadcrumb(detail.nodeId, accessToken),
+          fetchChildBoards(detail.nodeId, accessToken),
+        ]);
+        cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
+        const map: ChildBoardMap = {};
+        for (const entry of childEntries) map[entry.nodeId] = entry;
+        cachesRef.current.childBoards.set(detail.nodeId, map);
+      }
+    } catch {
+      // silencieux
     }
-    if (board?.id === childBoardId) {
-      return;
+  }, [accessToken]);
+
+  const handleOpenChildBoard = useCallback((childBoardId: string) => {
+    if (!teamId || !accessToken || !childBoardId || navigatingDown) return;
+    if (board?.id === childBoardId) return;
+    setNavigatingDown(true);
+    // Pré-charge les données
+    prefetchBoardData(childBoardId);
+    const href = `/boards/${teamId}/${childBoardId}`;
+    // Préfetch Next.js route
+    try { router.prefetch(href); } catch {}
+    if (descendTriggerRef.current) {
+      descendTriggerRef.current(href);
+    } else {
+      router.push(href);
     }
-    router.push(`/boards/${teamId}/${childBoardId}`);
-  };
+    // Sécurité pour réactiver si quelque chose échoue
+    setTimeout(() => setNavigatingDown(false), 4000);
+  }, [accessToken, board?.id, navigatingDown, prefetchBoardData, router, teamId]);
 
   const handleSelectBreadcrumb = (nodeId: string) => {
     if (!teamId) {
@@ -246,6 +288,7 @@ export default function TeamBoardPage() {
 
     if (item.boardId) {
       if (board?.id !== item.boardId) {
+        // Remontée (animation déjà gérée dans le breadcrumb). Navigation classique.
         router.push(`/boards/${teamId}/${item.boardId}`);
       }
       return;
@@ -484,6 +527,25 @@ export default function TeamBoardPage() {
 
 
 
+  // Hydrate à partir du cache si possible (évite flash de chargement) quand boardIdParam change
+  useEffect(() => {
+    if (!accessToken) return;
+    if (!boardIdParam) return;
+    // Si déjà dans cache et différent de board state actuel
+    const cached = cachesRef.current.boards.get(boardIdParam);
+    if (cached && cached.id !== board?.id) {
+      setBoard(cached);
+      if (cached.nodeId) {
+        const bc = cachesRef.current.breadcrumbs.get(cached.nodeId);
+        if (bc) setBreadcrumb(bc);
+        const ch = cachesRef.current.childBoards.get(cached.nodeId);
+        if (ch) setChildBoards(ch);
+      }
+      setLoading(false);
+      setDetailLoading(false);
+    }
+  }, [accessToken, board?.id, boardIdParam]);
+
   return (
     <FractalBreadcrumb
       items={breadcrumb}
@@ -492,6 +554,7 @@ export default function TeamBoardPage() {
       offsetY={40}
       labelWidth={220}
       visibleTrailingCount={8}
+      registerDescend={(fn) => { descendTriggerRef.current = fn; }}
     >
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur">

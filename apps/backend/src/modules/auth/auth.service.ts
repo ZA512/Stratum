@@ -37,10 +37,13 @@ export class AuthService {
     configService: ConfigService,
   ) {
     this.accessTokenTtl = configService.get<string>('JWT_ACCESS_TTL', '15m');
-    this.refreshTokenTtlMs = configService.get<number>(
+    // On autorise: nombre (ms), string numérique, ou forme humaine ("30d", "12h", "15m", "45s").
+    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 30; // 30 jours
+    const rawRefreshTtl: unknown = configService.get(
       'JWT_REFRESH_TTL_MS',
-      1000 * 60 * 60 * 24 * 30,
+      DEFAULT_REFRESH_MS,
     );
+    this.refreshTokenTtlMs = this.parseDurationMs(rawRefreshTtl, DEFAULT_REFRESH_MS);
     this.resetTokenTtlMs = configService.get<number>(
       'RESET_TOKEN_TTL_MS',
       1000 * 60 * 60,
@@ -49,6 +52,40 @@ export class AuthService {
       'INVITATION_TTL_MS',
       1000 * 60 * 60 * 24 * 7,
     ); // 7 jours
+  }
+
+  /**
+   * Parse un TTL fourni sous forme:
+   *  - number (ms déjà)
+   *  - string numérique ("3600000")
+   *  - string avec suffixe: d (jours), h (heures), m (minutes), s (secondes)
+   *  - string composite non supportée => fallback
+   */
+  private parseDurationMs(input: unknown, fallback: number): number {
+    if (typeof input === 'number' && Number.isFinite(input) && input > 0) {
+      return input;
+    }
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+      if (/^\d+$/.test(trimmed)) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      const match = trimmed.match(/^(\d+)([dhms])$/i);
+      if (match) {
+        const value = Number(match[1]);
+        if (!Number.isFinite(value) || value <= 0) return fallback;
+        const unit = match[2].toLowerCase();
+        const mul: Record<string, number> = {
+          d: 1000 * 60 * 60 * 24,
+          h: 1000 * 60 * 60,
+          m: 1000 * 60,
+          s: 1000,
+        };
+        return value * mul[unit];
+      }
+    }
+    return fallback;
   }
 
   private hashToken(value: string): string {
@@ -85,7 +122,15 @@ export class AuthService {
 
     const refreshToken = randomBytes(48).toString('hex');
     const refreshHash = this.hashToken(refreshToken);
-    const refreshExpiresAt = new Date(Date.now() + this.refreshTokenTtlMs);
+    const refreshExpiresAtMs = Date.now() + this.refreshTokenTtlMs;
+    // Sécurise: si dépassement ou NaN => fallback 30 jours.
+    const MAX_TS = 8.64e15; // limite Date
+    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 30;
+    const safeMs =
+      !Number.isFinite(refreshExpiresAtMs) || refreshExpiresAtMs > MAX_TS
+        ? Date.now() + DEFAULT_REFRESH_MS
+        : refreshExpiresAtMs;
+    const refreshExpiresAt = new Date(safeMs);
 
     await this.prisma.refreshToken.create({
       data: {
