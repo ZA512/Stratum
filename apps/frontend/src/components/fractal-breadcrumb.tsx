@@ -1,129 +1,227 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { NodeBreadcrumbItem } from "@/features/boards/boards-api";
+import React, { ReactNode, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import type { NodeBreadcrumbItem } from '@/features/boards/boards-api';
 
-const BASE_HUE = 190;
-const BASE_SATURATION = 85;
-const BASE_LIGHTNESS = 45;
-
-function generateStrata(count: number): string[] {
-  if (count <= 0) {
-    return [];
-  }
-
-  return Array.from({ length: count }, (_, index) => {
-    const depthFactor = index / Math.max(count - 1, 1);
-    const hue = (BASE_HUE + depthFactor * 20) % 360;
-    const saturation = Math.max(30, BASE_SATURATION - depthFactor * 35);
-    const lightness = Math.min(80, BASE_LIGHTNESS + depthFactor * 20);
-    return `hsl(${hue} ${saturation}% ${lightness}%)`;
-  });
+export interface FractalBreadcrumbProps {
+  items: NodeBreadcrumbItem[];
+  children: ReactNode;
+  onSelect?: (id: string) => void;
+  offsetX?: number; // px
+  offsetY?: number; // px
+  labelWidth?: number; // px
+  visibleTrailingCount?: number; // root + derniers N
+  animated?: boolean;
+  rightShrink?: number; // rétrécissement progressif des traits horizontaux à droite
+  shrinkFactor?: number; // facteur de réduction de la colonne gauche pour profondeur (0-1)
+  muted?: boolean; // palette sombre désaturée
+  strokeAlpha?: number; // alpha des traits (0..1)
+  verticalFactor?: number; // proportion de offsetY utilisée pour la hauteur visible du trait vertical (0..1)
 }
 
-export type FractalBreadcrumbProps = {
-  items: NodeBreadcrumbItem[];
-  loading: boolean;
-  onSelect: (nodeId: string) => void;
-};
+const DEFAULT_OFFSET_X = 56;
+const DEFAULT_OFFSET_Y = 40;
+const DEFAULT_LABEL_WIDTH = 220;
+const DEFAULT_TRAILING = 8;
+const DEFAULT_RIGHT_SHRINK = 24;
+const DEFAULT_SHRINK_FACTOR = 0.4; // réduction plus forte pour resserrer la colonne gauche
+const DEFAULT_MUTED = true;
+const DEFAULT_STROKE_ALPHA = 0.55;
+// Facteur par défaut = 1: le trait vertical couvre toute la distance jusqu'à la strate suivante (offsetY)
+const DEFAULT_VERTICAL_FACTOR = 1;
 
-export function FractalBreadcrumb({ items, loading, onSelect }: FractalBreadcrumbProps) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const focusRef = useRef<HTMLDivElement | null>(null);
+function generateColor(depth: number, muted: boolean, alpha: number) {
+  // Palette sombre et progressive
+  const hue = 210; // bleu froid
+  const sat = muted ? Math.max(10, 22 - depth * 1.2) : Math.max(30, 60 - depth * 4);
+  const light = muted ? Math.max(12, 20 - depth * 1.1) : Math.max(22, 50 - depth * 3);
+  return `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
+}
 
-  useEffect(() => {
-    if (items.length) {
-      setActiveIndex(items.length - 1);
-    } else {
-      setActiveIndex(null);
+function getNodeIcon(type?: string) {
+  switch (type) {
+    case 'SIMPLE': return 'S';
+    case 'MEDIUM': return 'M';
+    case 'COMPLEX': return 'K';
+    default: return 'N';
+  }
+}
+
+export function FractalBreadcrumb({
+  items,
+  children,
+  onSelect,
+  offsetX = DEFAULT_OFFSET_X,
+  offsetY = DEFAULT_OFFSET_Y,
+  labelWidth = DEFAULT_LABEL_WIDTH,
+  visibleTrailingCount = DEFAULT_TRAILING,
+  animated = true,
+  rightShrink = DEFAULT_RIGHT_SHRINK,
+  shrinkFactor = DEFAULT_SHRINK_FACTOR,
+  muted = DEFAULT_MUTED,
+  strokeAlpha = DEFAULT_STROKE_ALPHA,
+  verticalFactor = DEFAULT_VERTICAL_FACTOR,
+}: FractalBreadcrumbProps) {
+  const visibleLabelIndexes = useMemo(() => {
+    if (items.length <= visibleTrailingCount + 1) {
+      return new Set(items.map((_, i) => i));
     }
-  }, [items.length]);
+    const set = new Set<number>();
+    set.add(0); // root
+    const start = Math.max(items.length - visibleTrailingCount, 1);
+    for (let i = start; i < items.length; i++) set.add(i);
+    return set;
+  }, [items, visibleTrailingCount]);
 
-  const palette = useMemo(() => generateStrata(items.length), [items.length]);
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (items.length === 0) {
-      return;
+  const buildLayers = (index: number): ReactNode => {
+    if (index >= items.length) {
+      return <div className="fractal-content relative">{children}</div>;
     }
+    const item = items[index];
+    const depth = index + 1;
+  const color = generateColor(index, muted, strokeAlpha);
+    const showLabel = visibleLabelIndexes.has(index);
+    const isCurrent = index === items.length - 1;
 
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      setActiveIndex((previous) => {
-        if (previous === null) return items.length - 1;
-        return Math.max(0, previous - 1);
-      });
-    }
+    // Calcul dynamique de la géométrie du raccord (angle) entre cette strate et la précédente
+    const effectiveLeftPad = Math.round(offsetX * shrinkFactor);
+    const deltaX = offsetX - effectiveLeftPad; // réduction latérale
+    const deltaY = offsetY; // profondeur verticale
+    const diagonalLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  const angleDeg = Math.atan2(deltaY, deltaX) * (180 / Math.PI); // angle (positif) utilisé directement
 
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      setActiveIndex((previous) => {
-        if (previous === null) return 0;
-        return Math.min(items.length - 1, previous + 1);
-      });
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      const current = activeIndex ?? items.length - 1;
-      const target = items[current];
-      if (target && !loading) {
-        onSelect(target.id);
-      }
-    }
+    return (
+      <motion.div
+        key={item.id}
+        data-depth={depth}
+        initial={animated ? { opacity: 0, x: 6, y: 6 } : false}
+        animate={animated ? { opacity: 1, x: 0, y: 0 } : undefined}
+        transition={{ duration: 0.35, ease: 'easeOut', delay: index * 0.05 }}
+        className="relative"
+        style={{
+          paddingTop: offsetY,
+          paddingLeft: effectiveLeftPad,
+          background: 'linear-gradient(135deg,rgba(255,255,255,0.015),rgba(255,255,255,0))',
+        }}
+      >
+        {/* Lignes décoratives top + profondeur gauche + rétrécissement droite */}
+        <div className="pointer-events-none absolute top-0 left-0 right-0" aria-hidden>
+          {/* Trait horizontal supérieur (pleine longueur) */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              // Pleine largeur : on ne raccourcit plus selon l'index
+              width: '100%',
+              height: 0,
+              borderTop: `2px solid ${color}`,
+              borderTopRightRadius: 18,
+            }}
+          />
+          {/* Trait vertical de profondeur (gauche) : descend jusqu'en bas de l'écran */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              height: '100vh', // va jusqu'en bas de l'écran
+              width: 0,
+              borderLeft: `2px solid ${color}`,
+              zIndex: 2,
+            }}
+          />
+          {/* Diagonale reliant angle courant -> angle prochain (ou mini pour dernière) */}
+          {(() => {
+            // Diagonale avec longueur proportionnelle mais limitée
+            const dx = Math.max(8, effectiveLeftPad);
+            const dy = Math.max(10, offsetY);
+            const baseLength = Math.sqrt(dx * dx + dy * dy);
+            const maxLength = 45; // limite maximale
+            const length = Math.min(baseLength, maxLength);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: length,
+                  height: 0,
+                  borderTop: `2px solid ${color}`,
+                  transform: `rotate(${angle}deg)`,
+                  transformOrigin: 'left top',
+                  opacity: 0.75,
+                  pointerEvents: 'none',
+                }}
+              />
+            );
+          })()}
+        </div>
+        {showLabel && (
+          <div
+            className="absolute z-10"
+            style={{
+              // Position optimisée : alignement parfait sans décalage progressif
+              top: `${10}px`, // garde la bonne position verticale
+              left: `${effectiveLeftPad + 25}px`, // suppression du décalage progressif (index * 8)
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onSelect?.(item.id)}
+              className="group cursor-pointer bg-transparent border-none p-0 m-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-sm text-white"
+              style={{
+                // Effet de perspective avec le même angle que la barre oblique
+                transform: (() => {
+                  const dx = Math.max(8, effectiveLeftPad);
+                  const dy = Math.max(10, offsetY);
+                  const diagonalAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+                  // On adoucit l'angle pour éviter une inclinaison trop prononcée.
+                  const factor = 0.52; // ajustable si encore trop fort
+                  const applied = diagonalAngle * factor;
+                  return `skewX(${applied}deg) perspective(520px) rotateX(${diagonalAngle * 0.08}deg)`;
+                })(),
+                transformOrigin: 'left center',
+              }}
+              aria-current={isCurrent ? 'page' : undefined}
+            >
+              <span 
+                className="block text-lg font-medium tracking-wide leading-tight hover:text-white/90 transition-colors duration-200 whitespace-nowrap uppercase"
+                style={{
+                  textShadow: `
+                    0 2px 4px rgba(0,0,0,0.9),
+                    0 0 12px ${color.replace(/\/.*/, '/0.4')},
+                    2px 2px 0 rgba(0,0,0,0.8)
+                  `,
+                  filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.7))',
+                }}
+                title={item.title}
+              >
+                {item.title}
+              </span>
+            </button>
+          </div>
+        )}
+        {buildLayers(index + 1)}
+      </motion.div>
+    );
   };
 
   return (
-    <div
-      ref={focusRef}
-      role="navigation"
-      aria-label="Fil d'Ariane fractal"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      className="group/fractal relative isolate flex min-h-[72px] w-full items-center overflow-hidden rounded-2xl border border-white/10 bg-surface/70 px-4 py-3 shadow-inner shadow-black/40 outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      {loading ? (
-        <span className="text-xs uppercase tracking-wide text-muted">Chargement du breadcrumb…</span>
-      ) : null}
-
-      {!loading && items.length === 0 ? (
-        <span className="text-xs uppercase tracking-wide text-muted">Board racine</span>
-      ) : null}
-
-      {!loading && items.length > 0 ? (
-        <ul className="relative flex w-full items-center justify-start gap-2" aria-live="polite">
-          {items.map((item, index) => {
-            const isActive = index === items.length - 1;
-            const color = palette[index];
-            const nextColor = palette[index + 1] ?? color;
-            const gradient = `linear-gradient(130deg, ${color}, ${nextColor})`;
-            const offset = index * 6;
-
-            return (
-              <li key={item.id} className="relative">
-                <button
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  onFocus={() => setActiveIndex(index)}
-                  className={`relative flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium uppercase transition focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                    isActive
-                      ? "text-foreground shadow-[0_0_12px_rgba(34,211,238,0.3)]"
-                      : "text-slate-200/80 hover:text-foreground"
-                  }`}
-                  style={{
-                    backgroundImage: gradient,
-                    transform: `translateX(${offset}px)`
-                  }}
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <span className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-white/80" />
-                  <span className="text-[11px] tracking-[0.45em]">{item.title}</span>
-                  <span className="sr-only">{isActive ? "niveau courant" : ""}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+    <div className="fractal-root relative">
+      <nav aria-label="Fil hiérarchique" className="sr-only">
+        <ol>
+          {items.map((i, idx) => (
+            <li key={i.id} aria-current={idx === items.length - 1 ? 'page' : undefined}>{i.title}</li>
+          ))}
+        </ol>
+      </nav>
+      {buildLayers(0)}
     </div>
   );
 }
+
+export type { NodeBreadcrumbItem };
 

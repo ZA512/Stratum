@@ -104,23 +104,16 @@ export default function TeamBoardPage() {
         setDetailLoading(true);
         setError(null);
 
-        let targetBoardId = boardIdParam;
+        let targetBoardId: string | undefined = boardIdParam ?? undefined;
         if (!targetBoardId) {
-          const root = await fetchRootBoard(teamId, accessToken);
-          if (!active) {
-            return;
-          }
+          const root = await fetchRootBoard(teamId as string, accessToken as string);
+          if (!active) return;
           targetBoardId = root.id;
         }
-
-        if (!targetBoardId) {
-          return;
-        }
-
-        const detail = await fetchBoardDetail(targetBoardId, accessToken);
-        if (!active) {
-          return;
-        }
+  if (!targetBoardId) return;
+  // targetBoardId et accessToken sont non-null à ce stade
+  const detail = await fetchBoardDetail(targetBoardId as string, accessToken as string);
+        if (!active) return;
         setBoard(detail);
       } catch (err) {
         if (active) {
@@ -142,16 +135,17 @@ export default function TeamBoardPage() {
   }, [teamId, accessToken, boardIdParam]);
 
   useEffect(() => {
-    if (!board?.nodeId || !accessToken) {
+    if (!board || !board.nodeId || !accessToken) {
       return;
     }
+    const nodeId = board.nodeId;
 
     let active = true;
 
     async function loadBreadcrumb() {
       try {
-        setLoadingBreadcrumb(true);
-        const items = await fetchNodeBreadcrumb(board.nodeId, accessToken);
+    setLoadingBreadcrumb(true);
+  const items = await fetchNodeBreadcrumb(nodeId as string, accessToken as string);
         if (!active) {
           return;
         }
@@ -169,7 +163,7 @@ export default function TeamBoardPage() {
 
     async function loadChildBoards() {
       try {
-        const entries = await fetchChildBoards(board.nodeId, accessToken);
+  const entries = await fetchChildBoards(nodeId as string, accessToken as string);
         if (!active) {
           return;
         }
@@ -491,11 +485,16 @@ export default function TeamBoardPage() {
 
 
   return (
-
+    <FractalBreadcrumb
+      items={breadcrumb}
+      onSelect={handleSelectBreadcrumb}
+      offsetX={56}
+      offsetY={40}
+      labelWidth={220}
+      visibleTrailingCount={8}
+    >
     <div className="min-h-screen bg-background text-foreground">
-
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur">
-
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
 
           <div className="space-y-1">
@@ -544,31 +543,7 @@ export default function TeamBoardPage() {
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
 
-        <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-
-          <div className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-accent">
-
-            <h2 className="text-lg font-semibold">Navigation</h2>
-
-            <p className="mt-2 text-sm text-muted">
-
-              Utilisez le breadcrumb fractal pour remonter dans la hiérarchie des boards.
-
-            </p>
-
-            <div className="mt-4 rounded-xl border border-white/10 bg-surface/70 p-4">
-
-              <FractalBreadcrumb
-                items={breadcrumb}
-                loading={loadingBreadcrumb}
-                onSelect={handleSelectBreadcrumb}
-              />
-
-            </div>
-
-          </div>
-
-
+        <section className="grid gap-6">
 
           <div className="rounded-2xl border border-white/10 bg-card/70 p-6">
 
@@ -985,6 +960,7 @@ export default function TeamBoardPage() {
       </main>
 
     </div>
+    </FractalBreadcrumb>
 
   );
 

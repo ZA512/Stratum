@@ -423,6 +423,200 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   await upsertColumnBehaviors(prisma, DEMO_IDS);
   const rootNode = await upsertRootBoard(prisma, DEMO_IDS, user.id);
   await seedDemoNodes(prisma, DEMO_IDS, rootNode.id, user.id);
+  await createDeepHierarchy(prisma);
+}
+
+async function createDeepHierarchy(prisma: PrismaClient) {
+  console.log('🏗️  Création d\'une hiérarchie profonde pour tester le breadcrumb...');
+
+  // Convertir le nœud backlog en complexe pour en faire un sous-board
+  const backlogNode = await prisma.node.update({
+    where: { id: DEMO_IDS.nodes.backlog },
+    data: {
+      type: NodeType.COMPLEX,
+    },
+  });
+
+  // Créer un board pour ce nœud
+  const subBoard = await prisma.board.upsert({
+    where: { id: 'board_breadcrumb_sub' },
+    update: {},
+    create: {
+      id: 'board_breadcrumb_sub',
+      nodeId: backlogNode.id,
+    },
+  });
+
+  // Récupérer les behaviors existants
+  const behaviors = await prisma.columnBehavior.findMany({
+    where: { teamId: DEMO_IDS.team },
+  });
+
+  const backlogBehavior = behaviors.find(b => b.key === ColumnBehaviorKey.BACKLOG)!;
+  const progressBehavior = behaviors.find(b => b.key === ColumnBehaviorKey.IN_PROGRESS)!;
+
+  // Créer des colonnes pour le sous-board
+  await Promise.all([
+    prisma.column.upsert({
+      where: { id: 'col_sub_backlog' },
+      update: {},
+      create: {
+        id: 'col_sub_backlog',
+        boardId: subBoard.id,
+        name: 'Sub Backlog',
+        position: 0,
+        behaviorId: backlogBehavior.id,
+      },
+    }),
+    prisma.column.upsert({
+      where: { id: 'col_sub_progress' },
+      update: {},
+      create: {
+        id: 'col_sub_progress',
+        boardId: subBoard.id,
+        name: 'Sub Progress',
+        position: 1,
+        behaviorId: progressBehavior.id,
+      },
+    }),
+  ]);
+
+  // Créer des nœuds de niveau 2
+  const level2Node = await prisma.node.upsert({
+    where: { id: 'node_level2_design' },
+    update: {},
+    create: {
+      id: 'node_level2_design',
+      teamId: DEMO_IDS.team,
+      parentId: backlogNode.id,
+      columnId: 'col_sub_backlog',
+      type: NodeType.COMPLEX,
+      title: 'Composants de design',
+      description: 'Finaliser les composants UI du breadcrumb',
+      path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design`,
+      depth: 2,
+      position: 0,
+      createdById: DEMO_IDS.user,
+    },
+  });
+
+  // Créer un autre board pour le niveau 2
+  const level2Board = await prisma.board.upsert({
+    where: { id: 'board_level2_design' },
+    update: {},
+    create: {
+      id: 'board_level2_design',
+      nodeId: level2Node.id,
+    },
+  });
+
+  // Créer des colonnes pour le niveau 2
+  await Promise.all([
+    prisma.column.upsert({
+      where: { id: 'col_l2_backlog' },
+      update: {},
+      create: {
+        id: 'col_l2_backlog',
+        boardId: level2Board.id,
+        name: 'Design Backlog',
+        position: 0,
+        behaviorId: backlogBehavior.id,
+      },
+    }),
+    prisma.column.upsert({
+      where: { id: 'col_l2_progress' },
+      update: {},
+      create: {
+        id: 'col_l2_progress',
+        boardId: level2Board.id,
+        name: 'Design Progress',
+        position: 1,
+        behaviorId: progressBehavior.id,
+      },
+    }),
+  ]);
+
+  // Créer des nœuds de niveau 3
+  await Promise.all([
+    prisma.node.upsert({
+      where: { id: 'node_level3_icons' },
+      update: {},
+      create: {
+        id: 'node_level3_icons',
+        teamId: DEMO_IDS.team,
+        parentId: level2Node.id,
+        columnId: 'col_l2_backlog',
+        type: NodeType.SIMPLE,
+        title: 'Icônes de type',
+        description: 'Créer les icônes S, M, K pour les types de nœuds',
+        path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_icons`,
+        depth: 3,
+        position: 0,
+        createdById: DEMO_IDS.user,
+      },
+    }),
+    prisma.node.upsert({
+      where: { id: 'node_level3_colors' },
+      update: {},
+      create: {
+        id: 'node_level3_colors',
+        teamId: DEMO_IDS.team,
+        parentId: level2Node.id,
+        columnId: 'col_l2_progress',
+        type: NodeType.COMPLEX,
+        title: 'Palette de couleurs',
+        description: 'Définir la génération de couleurs HSL pour les couches',
+        path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors`,
+        depth: 3,
+        position: 1,
+        createdById: DEMO_IDS.user,
+      },
+    }),
+  ]);
+
+  // Créer un board pour les couleurs niveau 3
+  const level3Board = await prisma.board.upsert({
+    where: { id: 'board_level3_colors' },
+    update: {},
+    create: {
+      id: 'board_level3_colors',
+      nodeId: 'node_level3_colors',
+    },
+  });
+
+  // Créer une colonne pour le niveau 3
+  await prisma.column.upsert({
+    where: { id: 'col_l3_tasks' },
+    update: {},
+    create: {
+      id: 'col_l3_tasks',
+      boardId: level3Board.id,
+      name: 'Color Tasks',
+      position: 0,
+      behaviorId: progressBehavior.id,
+    },
+  });
+
+  // Créer un nœud niveau 4
+  await prisma.node.upsert({
+    where: { id: 'node_level4_hsl' },
+    update: {},
+    create: {
+      id: 'node_level4_hsl',
+      teamId: DEMO_IDS.team,
+      parentId: 'node_level3_colors',
+      columnId: 'col_l3_tasks',
+      type: NodeType.SIMPLE,
+      title: 'Algorithme HSL',
+      description: 'Implémentation de la fonction generateLayerColors',
+      path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${DEMO_IDS.nodes.backlog}/node_level2_design/node_level3_colors/node_level4_hsl`,
+      depth: 4,
+      position: 0,
+      createdById: DEMO_IDS.user,
+    },
+  });
+
+  console.log('✅ Hiérarchie profonde créée - 4 niveaux disponibles pour tester le breadcrumb !');
 }
 
 if (require.main === module) {
