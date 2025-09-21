@@ -10,6 +10,7 @@ export interface FractalBreadcrumbProps {
   children: ReactNode;
   onSelect?: (id: string) => void;
   buildHref?: (item: NodeBreadcrumbItem, depth: number) => string;
+  onPreNavigate?: (targetItem: NodeBreadcrumbItem, depth: number) => void; // hook pour prefetch
   offsetX?: number; // px
   offsetY?: number; // px
   labelWidth?: number; // px
@@ -76,6 +77,7 @@ export function FractalBreadcrumb({
   enableDescendAnimation = true,
   registerDescend,
   buildHref,
+  onPreNavigate,
 }: FractalBreadcrumbProps) {
   const router = useRouter();
   const [travelTargetDepth, setTravelTargetDepth] = useState<number | null>(null);
@@ -139,6 +141,9 @@ export function FractalBreadcrumb({
       return;
     }
     const targetUrl = buildHref ? buildHref(item, depth) : undefined;
+    if (onPreNavigate) {
+      try { onPreNavigate(item, depth); } catch { /* ignore */ }
+    }
     setTravelTargetDepth(depth);
     setIsTraveling(true);
     setTimeout(() => {

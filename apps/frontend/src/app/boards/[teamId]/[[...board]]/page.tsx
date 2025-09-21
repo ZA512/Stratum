@@ -1,28 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { FormEvent, useCallback, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
-import {
-  createBoardColumn,
-  deleteBoardColumn,
-  fetchBoardDetail,
-  fetchChildBoards,
-  fetchNodeBreadcrumb,
-  fetchRootBoard,
-  updateBoardColumn,
-  type Board,
-  type BoardColumn,
-  type BoardNode,
-  type ColumnBehaviorKey,
-  type NodeBreadcrumbItem,
-  type NodeChildBoard,
-  type UpdateBoardColumnInput,
-} from "@/features/boards/boards-api";
-import { FractalBreadcrumb } from "@/components/fractal-breadcrumb";
+import { createBoardColumn, deleteBoardColumn, updateBoardColumn, type BoardColumn, type BoardNode, type ColumnBehaviorKey, type UpdateBoardColumnInput } from "@/features/boards/boards-api";
 import { convertNode, createNode } from "@/features/nodes/nodes-api";
+import { useBoardData } from "@/features/boards/board-data-provider";
 
-type ChildBoardMap = Record<string, NodeChildBoard>;
+// ChildBoardMap plus nécessaire ici; fourni indirectement par le provider.
 
 type BehaviorOption = {
   value: ColumnBehaviorKey;
@@ -54,16 +38,10 @@ const NODE_CONVERSION_TARGETS: Record<BoardNode["type"], Array<{ value: BoardNod
 };
 
 export default function TeamBoardPage() {
-  const params = useParams<{ teamId: string; board?: string[] }>();
-  const router = useRouter();
-  const { user, accessToken, initializing, logout } = useAuth();
-  const [board, setBoard] = useState<Board | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [breadcrumb, setBreadcrumb] = useState<NodeBreadcrumbItem[]>([]);
-  const [loadingBreadcrumb, setLoadingBreadcrumb] = useState(false);
-  const [childBoards, setChildBoards] = useState<ChildBoardMap>({});
+  const { user, accessToken, logout } = useAuth();
+  const { board, breadcrumb, childBoards, status, error, refreshActiveBoard, openChildBoard, teamId } = useBoardData();
+  const loading = status === "loading" && !board; // charge initial
+  const detailLoading = status === "loading" && !!board; // refresh silencieux
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [columnName, setColumnName] = useState("");
   const [columnBehavior, setColumnBehavior] = useState<ColumnBehaviorKey>("BACKLOG");
@@ -77,229 +55,17 @@ export default function TeamBoardPage() {
   const [editingSubmitting, setEditingSubmitting] = useState(false);
   const [convertingNodeId, setConvertingNodeId] = useState<string | null>(null);
   // Caches pour navigation fluide (évite le clignotement sur descente)
-  const cachesRef = useRef<{
-    boards: Map<string, Board>;
-    breadcrumbs: Map<string, NodeBreadcrumbItem[]>;
-    childBoards: Map<string, ChildBoardMap>;
-  }>({ boards: new Map(), breadcrumbs: new Map(), childBoards: new Map() });
-  const descendTriggerRef = useRef<((href: string) => void) | null>(null);
-  const [navigatingDown, setNavigatingDown] = useState(false);
-
-  const teamId = params?.teamId;
-  const boardIdParam = useMemo(() => {
-    if (!params?.board || params.board.length === 0) {
-      return undefined;
-    }
-    return params.board[0];
-  }, [params]);
-
-  useEffect(() => {
-    if (!initializing && !user) {
-      router.replace("/login");
-    }
-  }, [initializing, user, router]);
-
-  useEffect(() => {
-    // NOTE: Les endpoints fetchRootBoard et fetchBoardDetail ne sont pas protégés par JwtAuthGuard.
-    // On ne bloque donc plus sur accessToken pour afficher rapidement le board root.
-    // Cela évite l'état vide "Aucun board trouvé" quand le token n'est pas encore initialisé.
-    if (!teamId) {
-      return;
-    }
-
-    let active = true;
-
-    async function loadBoard() {
-      try {
-        setLoading(true);
-        setDetailLoading(true);
-        setError(null);
-
-        let targetBoardId: string | undefined = boardIdParam ?? undefined;
-        if (!targetBoardId) {
-          const root = await fetchRootBoard(teamId as string, accessToken as string);
-          if (!active) return;
-          targetBoardId = root.id;
-        }
-  if (!targetBoardId) return;
-  // targetBoardId et accessToken sont non-null à ce stade
-  const detail = await fetchBoardDetail(targetBoardId as string, accessToken as string);
-        if (!active) return;
-        setBoard(detail);
-      } catch (err) {
-        if (active) {
-          setError((err as Error).message);
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-          setDetailLoading(false);
-        }
-      }
-    }
-
-    loadBoard();
-
-    return () => {
-      active = false;
-    };
-  }, [teamId, accessToken, boardIdParam]);
-
-  useEffect(() => {
-    if (!board || !board.nodeId || !accessToken) {
-      return;
-    }
-    const nodeId = board.nodeId;
-
-    let active = true;
-
-    async function loadBreadcrumb() {
-      try {
-    setLoadingBreadcrumb(true);
-  const items = await fetchNodeBreadcrumb(nodeId as string, accessToken as string);
-        if (!active) {
-          return;
-        }
-        setBreadcrumb(items);
-      } catch (err) {
-        if (active) {
-          console.warn("Unable to load breadcrumb", err);
-        }
-      } finally {
-        if (active) {
-          setLoadingBreadcrumb(false);
-        }
-      }
-    }
-
-    async function loadChildBoards() {
-      try {
-  const entries = await fetchChildBoards(nodeId as string, accessToken as string);
-        if (!active) {
-          return;
-        }
-        const nextMap: ChildBoardMap = {};
-        for (const entry of entries) {
-          nextMap[entry.nodeId] = entry;
-        }
-        setChildBoards(nextMap);
-      } catch (err) {
-        if (active) {
-          console.warn("Unable to load child boards", err);
-        }
-      }
-    }
-
-    loadBreadcrumb();
-    loadChildBoards();
-
-    return () => {
-      active = false;
-    };
-  }, [board?.nodeId, accessToken]);
-
-  useEffect(() => {
-    if (!editingColumnId) {
-      return;
-    }
-
-    if (!board?.columns.some((col) => col.id === editingColumnId)) {
-      setEditingColumnId(null);
-      setEditingError(null);
-      setEditingSubmitting(false);
-    }
-  }, [board?.columns, editingColumnId]);
-
-  const refreshBoardDetail = useCallback(
-    async (targetBoardId?: string) => {
-      if (!accessToken) {
-        throw new Error("Session invalide. Merci de vous reconnecter.");
-      }
-
-      const resolvedBoardId = targetBoardId ?? board?.id;
-      if (!resolvedBoardId) {
-        return;
-      }
-
-      setDetailLoading(true);
-      try {
-        const detail = await fetchBoardDetail(resolvedBoardId, accessToken);
-        setBoard(detail);
-      } catch (err) {
-        setError((err as Error).message);
-        throw err;
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [accessToken, board?.id],
-  );
-
-  const prefetchBoardData = useCallback(async (targetBoardId: string) => {
-    if (!accessToken) return;
-    // Ne refetch pas si déjà en cache
-    if (cachesRef.current.boards.has(targetBoardId)) return;
-    try {
-      const detailPromise = fetchBoardDetail(targetBoardId, accessToken);
-      const detail = await detailPromise;
-      cachesRef.current.boards.set(targetBoardId, detail);
-      if (detail.nodeId) {
-        const [breadcrumbItems, childEntries] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken),
-          fetchChildBoards(detail.nodeId, accessToken),
-        ]);
-        cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
-        const map: ChildBoardMap = {};
-        for (const entry of childEntries) map[entry.nodeId] = entry;
-        cachesRef.current.childBoards.set(detail.nodeId, map);
-      }
-    } catch {
-      // silencieux
-    }
-  }, [accessToken]);
+  const refreshBoardDetail = useCallback(async (targetBoardId?: string) => {
+    await refreshActiveBoard();
+  }, [refreshActiveBoard]);
 
   const handleOpenChildBoard = useCallback((childBoardId: string) => {
-    if (!teamId || !accessToken || !childBoardId || navigatingDown) return;
-    if (board?.id === childBoardId) return;
-    setNavigatingDown(true);
-    // Pré-charge les données
-    prefetchBoardData(childBoardId);
-    const href = `/boards/${teamId}/${childBoardId}`;
-    // Préfetch Next.js route
-    try { router.prefetch(href); } catch {}
-    if (descendTriggerRef.current) {
-      descendTriggerRef.current(href);
-    } else {
-      router.push(href);
-    }
-    // Sécurité pour réactiver si quelque chose échoue
-    setTimeout(() => setNavigatingDown(false), 4000);
-  }, [accessToken, board?.id, navigatingDown, prefetchBoardData, router, teamId]);
+    if (!childBoardId || board?.id === childBoardId) return;
+    openChildBoard(childBoardId);
+  }, [openChildBoard, board?.id]);
 
-  const handleSelectBreadcrumb = (nodeId: string) => {
-    if (!teamId) {
-      return;
-    }
-
-    const item = breadcrumb.find((entry) => entry.id === nodeId);
-    if (!item) {
-      return;
-    }
-
-    if (item.boardId) {
-      if (board?.id !== item.boardId) {
-        // Remontée (animation déjà gérée dans le breadcrumb). Navigation classique.
-        router.push(`/boards/${teamId}/${item.boardId}`);
-      }
-      return;
-    }
-
-    if (nodeId === breadcrumb[breadcrumb.length - 1]?.id) {
-      return;
-    }
-
-    router.push(`/boards/${teamId}`);
-  };
+  // Navigation breadcrumb gérée directement par FractalBreadcrumb + router dans layout (buildHref pas nécessaire ici)
+  const handleSelectBreadcrumb = () => {};
 
   const resetColumnForm = () => {
     setColumnName("");
@@ -375,7 +141,7 @@ export default function TeamBoardPage() {
     ) => {
       if (!accessToken || !board) {
         const message = 'Session invalide. Merci de vous reconnecter.';
-        setError(message);
+  // erreur déjà gérée dans le provider; on ignore ici
         throw new Error(message);
       }
 
@@ -392,7 +158,7 @@ export default function TeamBoardPage() {
         await refreshBoardDetail(board.id);
       } catch (err) {
         const message = (err as Error).message;
-        setError(message);
+  // erreur déjà gérée dans le provider; on ignore ici
         throw err;
       } finally {
         setConvertingNodeId(null);
@@ -527,35 +293,9 @@ export default function TeamBoardPage() {
 
 
 
-  // Hydrate à partir du cache si possible (évite flash de chargement) quand boardIdParam change
-  useEffect(() => {
-    if (!accessToken) return;
-    if (!boardIdParam) return;
-    // Si déjà dans cache et différent de board state actuel
-    const cached = cachesRef.current.boards.get(boardIdParam);
-    if (cached && cached.id !== board?.id) {
-      setBoard(cached);
-      if (cached.nodeId) {
-        const bc = cachesRef.current.breadcrumbs.get(cached.nodeId);
-        if (bc) setBreadcrumb(bc);
-        const ch = cachesRef.current.childBoards.get(cached.nodeId);
-        if (ch) setChildBoards(ch);
-      }
-      setLoading(false);
-      setDetailLoading(false);
-    }
-  }, [accessToken, board?.id, boardIdParam]);
+  // plus besoin d'hydratation manuelle ici: provider gère le cache
 
   return (
-    <FractalBreadcrumb
-      items={breadcrumb}
-      onSelect={handleSelectBreadcrumb}
-      offsetX={56}
-      offsetY={40}
-      labelWidth={220}
-      visibleTrailingCount={8}
-      registerDescend={(fn) => { descendTriggerRef.current = fn; }}
-    >
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
@@ -1023,7 +763,7 @@ export default function TeamBoardPage() {
       </main>
 
     </div>
-    </FractalBreadcrumb>
+    
 
   );
 
@@ -1070,7 +810,7 @@ function NodeCard(
     converting,
   }: {
     node: BoardNode;
-    childBoard?: NodeChildBoard;
+  childBoard?: any; // type fourni par le provider; any local pour éviter import supplémentaire
     onOpenChildBoard: (boardId: string) => void;
     onConvert: (target: BoardNode['type'], options?: { checklistItems?: string[] }) => Promise<void>;
     converting: boolean;
