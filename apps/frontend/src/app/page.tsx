@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
-import { fetchTeams, type Team } from "@/features/teams/teams-api";
+import { fetchTeams, bootstrapTeams, type Team } from "@/features/teams/teams-api";
 
 export default function Home() {
   const { user, accessToken, initializing, logout } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapTried, setBootstrapTried] = useState(false);
 
   useEffect(() => {
     if (!accessToken) {
@@ -21,12 +23,29 @@ export default function Home() {
     let cancelled = false;
 
     async function loadTeams() {
+      if (!accessToken) return;
       try {
         setLoadingTeams(true);
         setError(null);
-        const response = await fetchTeams(accessToken);
+        const response = await fetchTeams(accessToken!);
         if (!cancelled) {
           setTeams(response);
+        }
+        // Auto-bootstrap si aucune team
+        if (!cancelled && response.length === 0 && !bootstrapTried) {
+          setBootstrapping(true);
+          try {
+            await bootstrapTeams(accessToken!);
+            setBootstrapTried(true);
+            const again = await fetchTeams(accessToken!);
+            if (!cancelled) setTeams(again);
+          } catch (e) {
+            if (!cancelled) {
+              setError((e as Error).message + ' (bootstrap)');
+            }
+          } finally {
+            if (!cancelled) setBootstrapping(false);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -124,7 +143,26 @@ export default function Home() {
         <section className="grid gap-4 md:grid-cols-2">
           {loadingTeams && !hasTeams ? <SkeletonBoardCard /> : null}
 
-          {!loadingTeams && !hasTeams ? <EmptyState /> : null}
+          {!loadingTeams && !hasTeams ? (
+            <EmptyState
+              manualBootstrap={async () => {
+                if (!accessToken) return;
+                setBootstrapping(true);
+                setError(null);
+                try {
+                  await bootstrapTeams(accessToken!);
+                  const again = await fetchTeams(accessToken!);
+                  setTeams(again);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBootstrapping(false);
+                }
+              }}
+              disabled={bootstrapping}
+              showManual={bootstrapTried}
+            />
+          ) : null}
 
           {teams.map((team) => (
             <article
@@ -163,13 +201,27 @@ function SkeletonBoardCard() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ manualBootstrap, disabled, showManual }: { manualBootstrap?: ()=>Promise<void>; disabled?: boolean; showManual?: boolean; }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-card/60 p-8 text-center">
-      <p className="text-lg font-semibold">Aucune equipe pour le moment</p>
-      <p className="mt-2 text-sm text-muted">
-        Utilisez l API Stratum pour creer une equipe et inviter vos collaborateurs via le module Auth.
-      </p>
+    <div className="rounded-2xl border border-dashed border-white/10 bg-card/60 p-8 text-center space-y-4">
+      <div>
+        <p className="text-lg font-semibold">Aucune equipe pour le moment</p>
+        <p className="mt-2 text-sm text-muted">
+          Votre espace initial n&apos;existe pas encore. Nous pouvons le créer automatiquement.
+        </p>
+      </div>
+      {showManual && manualBootstrap ? (
+        <button
+          onClick={manualBootstrap}
+          disabled={disabled}
+          className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-sm font-medium text-background disabled:opacity-50 hover:bg-accent-strong transition"
+        >
+          {disabled ? 'Création en cours...' : 'Créer mon premier espace'}
+        </button>
+      ) : null}
+      {!showManual && (
+        <p className="text-[11px] text-muted/70">Initialisation automatique en cours...</p>
+      )}
     </div>
   );
 }

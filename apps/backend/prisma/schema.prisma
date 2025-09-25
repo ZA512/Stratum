@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL")  // Désactivé pour éviter erreurs P3006 en local
 }
 
 enum MembershipStatus {
@@ -14,11 +14,6 @@ enum MembershipStatus {
   SUSPENDED
 }
 
-enum NodeType {
-  SIMPLE
-  MEDIUM
-  COMPLEX
-}
 
 enum ColumnBehaviorKey {
   BACKLOG
@@ -26,6 +21,25 @@ enum ColumnBehaviorKey {
   BLOCKED
   DONE
   CUSTOM
+}
+
+enum Priority {
+  NONE
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  LOWEST
+}
+
+enum Effort {
+  UNDER2MIN
+  XS
+  S
+  M
+  L
+  XL
+  XXL
 }
 
 model User {
@@ -83,12 +97,18 @@ model Node {
   teamId          String
   parentId        String?
   columnId        String?
-  type            NodeType          @default(SIMPLE)
   title           String
   description     String?           @db.Text
   path            String
   depth           Int               @default(0)
   position        Float             @default(0)
+  progress        Int               @default(0)
+  priority        Priority          @default(NONE)
+  effort          Effort?
+  tags            String[]          @default([])
+  blockedReminderEmails      String[]          @default([])
+  blockedReminderIntervalDays Int?
+  blockedExpectedUnblockAt    DateTime?
   statusMetadata  Json?
   metadata        Json?
   dueAt           DateTime?
@@ -106,7 +126,6 @@ model Node {
   assignments     NodeAssignment[]
   dependencies    Dependency[]      @relation("DependencyDependents")
   dependents      Dependency[]      @relation("DependencyDependencies")
-  checklist       Checklist?
   attachments     Attachment[]
   comments        Comment[]
 }
@@ -165,24 +184,7 @@ model NodeAssignment {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Checklist {
-  id          String          @id @default(cuid())
-  nodeId      String          @unique
-  progress    Int             @default(0)
-  items       ChecklistItem[]
-
-  node        Node            @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-}
-
-model ChecklistItem {
-  id          String     @id @default(cuid())
-  checklistId String
-  content     String
-  isDone      Boolean    @default(false)
-  position    Int
-
-  checklist   Checklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-}
+// Checklist & ChecklistItem supprimés (migration unifiée vers enfants)
 
 model Dependency {
   id             String   @id @default(cuid())

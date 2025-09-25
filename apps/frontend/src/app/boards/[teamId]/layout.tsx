@@ -3,6 +3,8 @@
 import React from "react";
 import { BoardDataProvider, useBoardData } from "@/features/boards/board-data-provider";
 import { FractalBreadcrumb } from "@/components/fractal-breadcrumb";
+import { TaskDrawerProvider } from "@/features/nodes/task-drawer/TaskDrawerContext";
+import { TaskDrawer } from "@/features/nodes/task-drawer/TaskDrawer";
 
 function TeamBoardsShell({ children }: { children: React.ReactNode }) {
   const { breadcrumb, registerDescendTrigger, teamId, prefetchBoard } = useBoardData();
@@ -29,7 +31,10 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
 export default function TeamBoardsLayout({ children }: { children: React.ReactNode }) {
   return (
     <BoardDataProvider>
-      <TeamBoardsShell>{children}</TeamBoardsShell>
+      <TaskDrawerProvider>
+        <TeamBoardsShell>{children}</TeamBoardsShell>
+        <TaskDrawer />
+      </TaskDrawerProvider>
     </BoardDataProvider>
   );
 }

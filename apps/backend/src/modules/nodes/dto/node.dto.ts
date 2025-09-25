@@ -10,8 +10,7 @@ export class NodeDto {
   @ApiProperty({ example: null, nullable: true })
   parentId!: string | null;
 
-  @ApiProperty({ example: 'SIMPLE', enum: ['SIMPLE', 'MEDIUM', 'COMPLEX'] })
-  type!: string;
+  // Champ 'type' supprimé (legacy)
 
   @ApiProperty({ example: 'Implement auth flow' })
   title!: string;
@@ -36,4 +35,25 @@ export class NodeDto {
     nullable: true,
   })
   statusMetadata?: Record<string, unknown> | null;
+
+  @ApiProperty({ example: 40 })
+  progress!: number; // 0-100
+
+  @ApiProperty({ example: ['personne@example.com'], isArray: true })
+  blockedReminderEmails!: string[];
+
+  @ApiProperty({ example: 3, nullable: true })
+  blockedReminderIntervalDays!: number | null;
+
+  @ApiProperty({ example: '2025-02-10T10:00:00.000Z', nullable: true })
+  blockedExpectedUnblockAt!: string | null;
+
+  @ApiProperty({ example: 'HIGH', enum: ['NONE','CRITICAL','HIGH','MEDIUM','LOW','LOWEST'] })
+  priority!: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
+
+  @ApiProperty({ example: 'S', enum: ['UNDER2MIN','XS','S','M','L','XL','XXL'], nullable: true })
+  effort!: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
+
+  @ApiProperty({ example: ['infra','urgent'], isArray: true })
+  tags!: string[];
 }

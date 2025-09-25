@@ -1,4 +1,4 @@
-import { PrismaClient, NodeType, ColumnBehaviorKey } from '@prisma/client';
+import { PrismaClient, ColumnBehaviorKey } from '@prisma/client';
 import { DEMO_IDS } from './seed';
 
 const prisma = new PrismaClient();
@@ -8,12 +8,8 @@ async function createDeepHierarchy() {
     console.log('🏗️  Création d\'une hiérarchie profonde pour tester le breadcrumb...');
 
     // Convertir le nœud backlog en complexe pour en faire un sous-board
-    const backlogNode = await prisma.node.update({
-      where: { id: DEMO_IDS.nodes.backlog },
-      data: {
-        type: NodeType.COMPLEX,
-      },
-    });
+    const backlogNode = await prisma.node.findUnique({ where: { id: DEMO_IDS.nodes.backlog } });
+    if (!backlogNode) throw new Error('Backlog node introuvable');
 
     console.log('✅ Nœud breadcrumb converti en COMPLEX');
 
@@ -72,7 +68,6 @@ async function createDeepHierarchy() {
         teamId: DEMO_IDS.team,
         parentId: backlogNode.id,
         columnId: subColumns[0].id, // Sub Backlog
-        type: NodeType.COMPLEX,
         title: 'Composants de design',
         description: 'Finaliser les composants UI du breadcrumb',
         path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design`,
@@ -122,7 +117,6 @@ async function createDeepHierarchy() {
           teamId: DEMO_IDS.team,
           parentId: level2Node.id,
           columnId: level2Columns[0].id,
-          type: NodeType.SIMPLE,
           title: 'Icônes de type',
           description: 'Créer les icônes S, M, K pour les types de nœuds',
           path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_icons`,
@@ -137,7 +131,6 @@ async function createDeepHierarchy() {
           teamId: DEMO_IDS.team,
           parentId: level2Node.id,
           columnId: level2Columns[0].id,
-          type: NodeType.COMPLEX,
           title: 'Palette de couleurs',
           description: 'Définir la génération de couleurs HSL pour les couches',
           path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors`,
@@ -179,7 +172,6 @@ async function createDeepHierarchy() {
           teamId: DEMO_IDS.team,
           parentId: level3ColorNode.id,
           columnId: level3Column.id,
-          type: NodeType.SIMPLE,
           title: 'Algorithme HSL',
           description: 'Implémentation de la fonction generateLayerColors',
           path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors/node_level4_hsl`,

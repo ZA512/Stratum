@@ -1,7 +1,7 @@
 "use client";
 
 import React, { ReactNode, useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type TargetAndTransition } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import type { NodeBreadcrumbItem } from '@/features/boards/boards-api';
 
@@ -48,29 +48,20 @@ function generateColor(depth: number, muted: boolean, alpha: number) {
   return `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
 }
 
-function getNodeIcon(type?: string) {
-  switch (type) {
-    case 'SIMPLE': return 'S';
-    case 'MEDIUM': return 'M';
-    case 'COMPLEX': return 'K';
-    default: return 'N';
-  }
-}
-
 export function FractalBreadcrumb({
   items,
   children,
   onSelect,
   offsetX = DEFAULT_OFFSET_X,
   offsetY = DEFAULT_OFFSET_Y,
-  labelWidth = DEFAULT_LABEL_WIDTH,
+  labelWidth: _labelWidth = DEFAULT_LABEL_WIDTH,
   visibleTrailingCount = DEFAULT_TRAILING,
   animated = true,
-  rightShrink = DEFAULT_RIGHT_SHRINK,
+  rightShrink: _rightShrink = DEFAULT_RIGHT_SHRINK,
   shrinkFactor = DEFAULT_SHRINK_FACTOR,
   muted = DEFAULT_MUTED,
   strokeAlpha = DEFAULT_STROKE_ALPHA,
-  verticalFactor = DEFAULT_VERTICAL_FACTOR,
+  verticalFactor: _verticalFactor = DEFAULT_VERTICAL_FACTOR,
   travelAnimation = true,
   travelDuration = 0.6,
   travelLateralFactor = 0.55,
@@ -84,7 +75,6 @@ export function FractalBreadcrumb({
   const [isTraveling, setIsTraveling] = useState(false);
   const previousDepthRef = useRef<number>(items.length - 1);
   const [descendingBurst, setDescendingBurst] = useState(false);
-  const [preDescendHref, setPreDescendHref] = useState<string | null>(null);
   const [isPreDescending, setIsPreDescending] = useState(false);
 
   // Détection de descente (nouveau niveau plus profond chargé)
@@ -108,14 +98,12 @@ export function FractalBreadcrumb({
         return;
       }
       // Lancer animation avant navigation
-      setPreDescendHref(href);
       setIsPreDescending(true);
       setTimeout(() => {
         router.push(href);
         // petite marge pour éviter clignotement si le composant reste monté
         setTimeout(() => {
           setIsPreDescending(false);
-          setPreDescendHref(null);
         }, 120);
       }, travelDuration * 1000);
     });
@@ -154,7 +142,7 @@ export function FractalBreadcrumb({
         setTravelTargetDepth(null);
       }, 150);
     }, travelDuration * 1000);
-  }, [buildHref, currentDepth, onSelect, router, travelAnimation, travelDuration]);
+  }, [buildHref, currentDepth, onSelect, router, travelAnimation, travelDuration, onPreNavigate]);
 
   const buildLayers = (index: number): ReactNode => {
     if (index >= items.length) {
@@ -169,18 +157,18 @@ export function FractalBreadcrumb({
       const dxPerLevel2 = offsetX - effectiveLeftPad2;
       const enterX = dxPerLevel2 * travelLateralFactor * 0.8; // légère entrée depuis la droite
       const enterY = offsetY * 0.9; // vient légèrement du bas
-      let animateProps: any;
+  let animateProps: TargetAndTransition | undefined;
       if (isPreDescending) {
         // Pré-descente: on sort le contenu vers bas + droite (une "plonge" visuelle)
         const outX = dxPerLevel2 * travelLateralFactor * 0.9;
         const outY = offsetY * 1.05;
-        animateProps = { x: [0, outX], y: [0, outY], opacity: [1, 0.6] };
+  animateProps = { x: [0, outX], y: [0, outY], opacity: [1, 0.6] } as TargetAndTransition;
       } else if (isTraveling && diff > 0) {
         // Remontée (ascenseur)
-        animateProps = { y: yTarget, x: xTarget };
+  animateProps = { y: yTarget, x: xTarget };
       } else if (descendingBurst) {
         // Arrivée d'une descente (nouvelle profondeur chargée)
-        animateProps = { x: [enterX, 0], y: [enterY, 0], opacity: [0, 1] };
+  animateProps = { x: [enterX, 0], y: [enterY, 0], opacity: [0, 1] } as TargetAndTransition;
       } else {
         animateProps = { x: 0, y: 0, opacity: 1 };
       }
@@ -205,8 +193,6 @@ export function FractalBreadcrumb({
     const effectiveLeftPad = Math.round(offsetX * shrinkFactor);
     const deltaX = offsetX - effectiveLeftPad; // réduction latérale
     const deltaY = offsetY; // profondeur verticale
-    const diagonalLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-  const angleDeg = Math.atan2(deltaY, deltaX) * (180 / Math.PI); // angle (positif) utilisé directement
 
     return (
       <motion.div

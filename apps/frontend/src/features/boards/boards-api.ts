@@ -10,6 +10,12 @@ export type BoardNode = {
   position: number;
   parentId: string | null;
   dueAt: string | null;
+  // Enrichissements renvoyés par /boards/:id/detail
+  effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
+  priority?: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
+  counts?: { backlog: number; inProgress: number; blocked: number; done: number };
+  blockedExpectedUnblockAt?: string | null;
+  tags?: string[];
 };
 
 export type BoardColumn = {

@@ -130,14 +130,39 @@ export class BoardsService {
     const columnIds = board.columns.map((column) => column.id);
     const nodes = columnIds.length
       ? await this.prisma.node.findMany({
-          where: {
-            columnId: { in: columnIds },
-          },
-          orderBy: {
-            position: 'asc',
-          },
+          where: { columnId: { in: columnIds } },
+          orderBy: { position: 'asc' },
         })
       : [];
+
+    // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
+    const countsByParent = new Map<string, { backlog: number; inProgress: number; blocked: number; done: number }>();
+    if (nodes.length > 0) {
+      const nodeIds = nodes.map((n) => n.id);
+      const children = await this.prisma.node.findMany({
+        where: { parentId: { in: nodeIds } },
+        select: {
+          parentId: true,
+          column: { select: { behavior: { select: { key: true } } } },
+        },
+      });
+      for (const c of children) {
+        const pid = c.parentId!;
+        let b = countsByParent.get(pid);
+        if (!b) {
+          b = { backlog: 0, inProgress: 0, blocked: 0, done: 0 };
+          countsByParent.set(pid, b);
+        }
+        const key = c.column?.behavior?.key;
+        switch (key) {
+          case 'BACKLOG': b.backlog++; break;
+          case 'IN_PROGRESS': b.inProgress++; break;
+          case 'BLOCKED': b.blocked++; break;
+          case 'DONE': b.done++; break;
+          default: break;
+        }
+      }
+    }
 
     const nodesByColumn = new Map<string, BoardNodeDto[]>();
     for (const column of board.columns) {
@@ -156,11 +181,15 @@ export class BoardsService {
       bucket.push({
         id: node.id,
         title: node.title,
-        type: node.type,
         columnId: node.columnId,
         position: node.position,
         parentId: node.parentId,
         dueAt: node.dueAt ? node.dueAt.toISOString() : null,
+        effort: (node as any).effort ?? null,
+        priority: (node as any).priority ?? 'NONE',
+        blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt ? (node as any).blockedExpectedUnblockAt.toISOString?.() : null,
+        tags: (node as any).tags ?? [],
+        counts: countsByParent.get(node.id) ?? { backlog: 0, inProgress: 0, blocked: 0, done: 0 },
       });
     }
 

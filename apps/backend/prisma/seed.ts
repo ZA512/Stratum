@@ -1,9 +1,4 @@
-import {
-  ColumnBehaviorKey,
-  MembershipStatus,
-  NodeType,
-  PrismaClient,
-} from '@prisma/client';
+import { ColumnBehaviorKey, MembershipStatus, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 export const DEMO_IDS = {
@@ -31,11 +26,7 @@ export const DEMO_IDS = {
   },
   assignment: 'assign_alice_api',
   membership: 'membership_alice_stratum',
-  checklistItems: {
-    storybook: 'check_breadcrumb_storybook',
-    keyboard: 'check_breadcrumb_keyboard',
-    theme: 'check_breadcrumb_theme',
-  },
+  // Anciennes checklistItems supprimées
 } as const;
 
 type DemoIds = typeof DEMO_IDS;
@@ -50,12 +41,7 @@ type ColumnSeed = {
   behaviorId: string;
 };
 
-type ChecklistItemSeed = {
-  id: string;
-  content: string;
-  isDone: boolean;
-  position: number;
-};
+// plus de checklist items
 
 async function upsertCoreEntities(prisma: PrismaClient, ids: DemoIds) {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
@@ -206,7 +192,6 @@ async function upsertRootBoard(
     create: {
       id: ids.rootNode,
       teamId: ids.team,
-      type: NodeType.COMPLEX,
       title: 'Stratum Rollout',
       description: 'Master project board showcasing the fractal kanban.',
       path: [ids.team, ids.rootNode].join('/'),
@@ -249,28 +234,7 @@ async function upsertRootBoard(
   return rootNode;
 }
 
-function buildChecklistItems(ids: DemoIds): ChecklistItemSeed[] {
-  return [
-    {
-      id: ids.checklistItems.storybook,
-      content: 'Documenter dans Storybook',
-      isDone: true,
-      position: 0,
-    },
-    {
-      id: ids.checklistItems.keyboard,
-      content: 'Tester navigation clavier',
-      isDone: false,
-      position: 1,
-    },
-    {
-      id: ids.checklistItems.theme,
-      content: 'Valider contraste themes',
-      isDone: false,
-      position: 2,
-    },
-  ];
-}
+// buildChecklistItems supprimé
 
 async function seedDemoNodes(
   prisma: PrismaClient,
@@ -294,48 +258,17 @@ async function seedDemoNodes(
       teamId: ids.team,
       parentId: rootNodeId,
       columnId: ids.columns.backlog,
-      type: NodeType.MEDIUM,
       title: 'Finaliser le design breadcrumb',
       description: 'Micro-interactions et accessibilité du breadcrumb fractal.',
       path: [ids.team, ids.rootNode, backlogNodeId].join('/'),
       depth: 1,
       position: 0,
       createdById: userId,
-      statusMetadata: {
-        checklistCompleted: 1,
-        checklistTotal: 3,
-      },
+      statusMetadata: {},
     },
   });
 
-  const checklist = await prisma.checklist.upsert({
-    where: { nodeId: backlogNodeId },
-    update: {
-      progress: 1,
-    },
-    create: {
-      nodeId: backlogNodeId,
-      progress: 1,
-    },
-  });
-
-  for (const item of buildChecklistItems(ids)) {
-    await prisma.checklistItem.upsert({
-      where: { id: item.id },
-      update: {
-        content: item.content,
-        isDone: item.isDone,
-        position: item.position,
-      },
-      create: {
-        id: item.id,
-        checklistId: checklist.id,
-        content: item.content,
-        isDone: item.isDone,
-        position: item.position,
-      },
-    });
-  }
+  // checklist supprimée
 
   await prisma.node.upsert({
     where: { id: progressNodeId },
@@ -348,7 +281,6 @@ async function seedDemoNodes(
       teamId: ids.team,
       parentId: rootNodeId,
       columnId: ids.columns.inProgress,
-      type: NodeType.SIMPLE,
       title: 'Stabiliser les contrats API',
       description: 'Valider schémas OpenAPI pour Teams/Boards/Nodes.',
       path: [ids.team, ids.rootNode, progressNodeId].join('/'),
@@ -369,7 +301,6 @@ async function seedDemoNodes(
       teamId: ids.team,
       parentId: rootNodeId,
       columnId: ids.columns.blocked,
-      type: NodeType.SIMPLE,
       title: 'Analyser les dépendances critiques',
       description: 'Identifier les boucles potentielles dans le graphe fractal.',
       path: [ids.team, ids.rootNode, blockedNodeId].join('/'),
@@ -393,7 +324,6 @@ async function seedDemoNodes(
       teamId: ids.team,
       parentId: rootNodeId,
       columnId: ids.columns.done,
-      type: NodeType.SIMPLE,
       title: 'Annonce interne du lancement',
       description: 'Communiquer roadmap Stratum à l’équipe élargie.',
       path: [ids.team, ids.rootNode, doneNodeId].join('/'),
@@ -430,12 +360,8 @@ async function createDeepHierarchy(prisma: PrismaClient) {
   console.log('🏗️  Création d\'une hiérarchie profonde pour tester le breadcrumb...');
 
   // Convertir le nœud backlog en complexe pour en faire un sous-board
-  const backlogNode = await prisma.node.update({
-    where: { id: DEMO_IDS.nodes.backlog },
-    data: {
-      type: NodeType.COMPLEX,
-    },
-  });
+  const backlogNode = await prisma.node.findUnique({ where: { id: DEMO_IDS.nodes.backlog } });
+  if (!backlogNode) throw new Error('backlog node introuvable');
 
   // Créer un board pour ce nœud
   const subBoard = await prisma.board.upsert({
@@ -490,7 +416,6 @@ async function createDeepHierarchy(prisma: PrismaClient) {
       teamId: DEMO_IDS.team,
       parentId: backlogNode.id,
       columnId: 'col_sub_backlog',
-      type: NodeType.COMPLEX,
       title: 'Composants de design',
       description: 'Finaliser les composants UI du breadcrumb',
       path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design`,
@@ -546,7 +471,6 @@ async function createDeepHierarchy(prisma: PrismaClient) {
         teamId: DEMO_IDS.team,
         parentId: level2Node.id,
         columnId: 'col_l2_backlog',
-        type: NodeType.SIMPLE,
         title: 'Icônes de type',
         description: 'Créer les icônes S, M, K pour les types de nœuds',
         path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_icons`,
@@ -563,7 +487,6 @@ async function createDeepHierarchy(prisma: PrismaClient) {
         teamId: DEMO_IDS.team,
         parentId: level2Node.id,
         columnId: 'col_l2_progress',
-        type: NodeType.COMPLEX,
         title: 'Palette de couleurs',
         description: 'Définir la génération de couleurs HSL pour les couches',
         path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors`,
@@ -606,7 +529,6 @@ async function createDeepHierarchy(prisma: PrismaClient) {
       teamId: DEMO_IDS.team,
       parentId: 'node_level3_colors',
       columnId: 'col_l3_tasks',
-      type: NodeType.SIMPLE,
       title: 'Algorithme HSL',
       description: 'Implémentation de la fonction generateLayerColors',
       path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${DEMO_IDS.nodes.backlog}/node_level2_design/node_level3_colors/node_level4_hsl`,

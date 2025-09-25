@@ -5,6 +5,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  // Autoriser le frontend local sur ports courants
+  app.enableCors({
+    origin: [/^http:\/\/localhost:3\d{3}$/],
+    credentials: true,
+  });
   const globalPrefix = 'api/v1';
   app.setGlobalPrefix(globalPrefix);
 
@@ -27,7 +32,8 @@ async function bootstrap(): Promise<void> {
     },
   });
 
-  const port = Number(process.env.PORT) || 3000;
+  // Utiliser 4001 par défaut pour éviter collision avec Next.js (port 3000)
+  const port = Number(process.env.PORT) || 4001;
   await app.listen(port);
   const logger = new Logger('Bootstrap');
   logger.log(

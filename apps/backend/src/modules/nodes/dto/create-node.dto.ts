@@ -16,12 +16,5 @@ export class CreateNodeDto {
   @ApiPropertyOptional({ example: '2025-01-01T12:00:00.000Z', nullable: true })
   dueAt?: string | null;
 
-  @ApiPropertyOptional({
-    enum: ['SIMPLE', 'MEDIUM', 'COMPLEX'],
-    example: 'MEDIUM',
-  })
-  type?: 'SIMPLE' | 'MEDIUM' | 'COMPLEX';
-
-  @ApiPropertyOptional({ type: [String], example: ['Etape 1', 'Etape 2'] })
-  checklistItems?: string[];
+  // Champ 'type' supprimé (legacy non supporté)
 }

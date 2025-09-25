@@ -7,8 +7,7 @@ export class NodeBreadcrumbItemDto {
   @ApiProperty({ example: 'Implement auth flow' })
   title!: string;
 
-  @ApiProperty({ example: 'SIMPLE', enum: ['SIMPLE', 'MEDIUM', 'COMPLEX'] })
-  type!: string;
+  // type supprimé
 
   @ApiProperty({ example: 1 })
   depth!: number;

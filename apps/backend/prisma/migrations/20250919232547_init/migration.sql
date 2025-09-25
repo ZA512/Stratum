@@ -5,7 +5,7 @@ CREATE SCHEMA IF NOT EXISTS "stratum";
 CREATE TYPE "stratum"."MembershipStatus" AS ENUM ('INVITED', 'ACTIVE', 'SUSPENDED');
 
 -- CreateEnum
-CREATE TYPE "stratum"."NodeType" AS ENUM ('SIMPLE', 'MEDIUM', 'COMPLEX');
+CREATE TYPE "stratum"."NodeType" AS ENUM ('SIMPLE', 'COMPLEX');
 
 -- CreateEnum
 CREATE TYPE "stratum"."ColumnBehaviorKey" AS ENUM ('BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CUSTOM');
@@ -131,24 +131,6 @@ CREATE TABLE "stratum"."NodeAssignment" (
 );
 
 -- CreateTable
-CREATE TABLE "stratum"."Checklist" (
-    "id" TEXT NOT NULL,
-    "nodeId" TEXT NOT NULL,
-    "progress" INTEGER NOT NULL DEFAULT 0,
-
-    CONSTRAINT "Checklist_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "stratum"."ChecklistItem" (
-    "id" TEXT NOT NULL,
-    "checklistId" TEXT NOT NULL,
-    "content" TEXT NOT NULL,
-    "isDone" BOOLEAN NOT NULL DEFAULT false,
-    "position" INTEGER NOT NULL,
-
-    CONSTRAINT "ChecklistItem_pkey" PRIMARY KEY ("id")
-);
 
 -- CreateTable
 CREATE TABLE "stratum"."Dependency" (
@@ -212,8 +194,6 @@ CREATE UNIQUE INDEX "Team_slug_key" ON "stratum"."Team"("slug");
 -- CreateIndex
 CREATE UNIQUE INDEX "Board_nodeId_key" ON "stratum"."Board"("nodeId");
 
--- CreateIndex
-CREATE UNIQUE INDEX "Checklist_nodeId_key" ON "stratum"."Checklist"("nodeId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Dependency_dependentId_dependencyId_key" ON "stratum"."Dependency"("dependentId", "dependencyId");
@@ -251,11 +231,6 @@ ALTER TABLE "stratum"."NodeAssignment" ADD CONSTRAINT "NodeAssignment_nodeId_fke
 -- AddForeignKey
 ALTER TABLE "stratum"."NodeAssignment" ADD CONSTRAINT "NodeAssignment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "stratum"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "stratum"."Checklist" ADD CONSTRAINT "Checklist_nodeId_fkey" FOREIGN KEY ("nodeId") REFERENCES "stratum"."Node"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "stratum"."ChecklistItem" ADD CONSTRAINT "ChecklistItem_checklistId_fkey" FOREIGN KEY ("checklistId") REFERENCES "stratum"."Checklist"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "stratum"."Dependency" ADD CONSTRAINT "Dependency_dependentId_fkey" FOREIGN KEY ("dependentId") REFERENCES "stratum"."Node"("id") ON DELETE CASCADE ON UPDATE CASCADE;

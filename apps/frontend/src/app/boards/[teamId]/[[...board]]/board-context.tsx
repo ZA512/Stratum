@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext } from "react";
-import type { ColumnBehaviorKey } from "@/features/boards/boards-api";
+import type { ColumnBehaviorKey, Board, BoardColumn } from "@/features/boards/boards-api";
+import type { NodeChildBoard, NodeBreadcrumbItem } from "@/features/boards/boards-api";
 
 // Duplication légère des options de comportement afin d'éviter la dépendance circulaire.
 // TODO: factoriser dans un module partagé (ex: @/features/boards/behaviors).
@@ -19,20 +20,19 @@ const BEHAVIOR_LABELS = Object.fromEntries(
 
 type BoardContextValue = {
 	// Etat principal (placeholders si provider non monté)
-	board: any;
+	board: Board | null;
 	loading: boolean;
 	error: string | null;
-	breadcrumb: any[];
-	childBoards: Record<string, any>;
+	breadcrumb: NodeBreadcrumbItem[];
+	childBoards: Record<string, NodeChildBoard>;
 	// Actions (no-op par défaut)
 	handleCreateCard: (columnId: string, title: string) => Promise<void> | void;
 	handleOpenChildBoard: (boardId: string) => void;
-	handleConvertNode: (nodeId: string, target: string, options?: any) => Promise<void> | void;
-	handleOpenColumnEditor: (column: any) => void;
-	handleDeleteColumn: (column: any) => void;
-	handleMoveColumn: (column: any, direction: -1 | 1, index: number) => void;
-	handleUpdateColumn: (...args: any[]) => void;
-	handleSubmitColumn: (...args: any[]) => void;
+	handleOpenColumnEditor: (column: BoardColumn) => void;
+	handleDeleteColumn: (column: BoardColumn) => void;
+	handleMoveColumn: (column: BoardColumn, direction: -1 | 1, index: number) => void;
+	handleUpdateColumn: () => void;
+	handleSubmitColumn: () => void;
 	BEHAVIOR_OPTIONS: typeof BEHAVIOR_OPTIONS;
 	BEHAVIOR_LABELS: typeof BEHAVIOR_LABELS;
 };
@@ -48,7 +48,6 @@ const defaultValue: BoardContextValue = {
 	childBoards: {},
 	handleCreateCard: noopAsync,
 	handleOpenChildBoard: noop,
-	handleConvertNode: noopAsync,
 	handleOpenColumnEditor: noop,
 	handleDeleteColumn: noop,
 	handleMoveColumn: noop,

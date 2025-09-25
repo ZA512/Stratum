@@ -57,9 +57,7 @@ describe('App API (e2e)', () => {
     await prisma.comment.deleteMany();
     await prisma.attachment.deleteMany();
     await prisma.dependency.deleteMany();
-    await prisma.nodeAssignment.deleteMany();
-    await prisma.checklistItem.deleteMany();
-    await prisma.checklist.deleteMany();
+  await prisma.nodeAssignment.deleteMany();
     await prisma.node.deleteMany();
     await prisma.column.deleteMany();
     await prisma.columnBehavior.deleteMany();
@@ -299,28 +297,7 @@ describe('App API (e2e)', () => {
     expect(ensureString(body.type, 'node type')).toBe('SIMPLE');
   });
 
-  it('POST /api/v1/nodes creates a medium card with checklist', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/nodes')
-      .set('Authorization', 'Bearer ' + accessToken)
-      .send({
-        title: 'Prepare release',
-        columnId: DEMO_IDS.columns.inProgress,
-        type: 'MEDIUM',
-        checklistItems: ['Validate QA', 'Update changelog'],
-      })
-      .expect(201);
-
-    const body = ensureRecord(response.body, 'create medium node response');
-    expect(ensureString(body.type, 'node type')).toBe('MEDIUM');
-    const statusMetadata = ensureRecord(
-      body.statusMetadata,
-      'medium node status metadata',
-    );
-    expect(statusMetadata).toEqual(
-      expect.objectContaining({ checklistTotal: 2 }),
-    );
-  });
+  // Test MEDIUM + checklist supprimé (legacy)
 
   it('POST /api/v1/nodes/:id/convert promotes to complex', async () => {
     const createResponse = await request(app.getHttpServer())
