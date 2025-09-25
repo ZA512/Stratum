@@ -55,6 +55,7 @@ export function TeamBoardPage(){
   const [draggingId,setDraggingId] = useState<string|null>(null);
   const [draggingCard,setDraggingCard] = useState<{ id:string; title:string } | null>(null);
   const [hideDone,setHideDone] = useState(false);
+  const [showDescriptions, setShowDescriptions] = useState(true);
 
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
@@ -255,10 +256,16 @@ export function TeamBoardPage(){
               {!isAddingColumn && (
                 <button onClick={()=>setIsAddingColumn(true)} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-background transition hover:bg-accent-strong">Nouvelle colonne</button>
               )}
-              <label className="flex items-center gap-2 text-xs text-muted select-none">
-                <input type="checkbox" className="accent-accent" checked={hideDone} onChange={e=>setHideDone(e.target.checked)} />
-                Masquer colonnes DONE
-              </label>
+              <div className="flex items-center gap-4 text-xs text-muted select-none">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="accent-accent" checked={hideDone} onChange={e=>setHideDone(e.target.checked)} />
+                  Masquer colonnes DONE
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="accent-accent" checked={showDescriptions} onChange={e=>setShowDescriptions(e.target.checked)} />
+                  Description on/off
+                </label>
+              </div>
             </div>
             {isAddingColumn && (
               <form onSubmit={handleSubmitColumn} className="mt-5 grid gap-4 md:grid-cols-2">
@@ -299,21 +306,22 @@ export function TeamBoardPage(){
             {effectiveColumns && effectiveColumns.length>0 ? (
               <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                 <ColumnList
-                columns={effectiveColumns}
-                childBoards={childBoards}
-                editingColumnId={editingColumnId}
-                editingValues={{ name: editingName, wip: editingWip, submitting: editingSubmitting, error: editingError }}
-                loadingCards={detailLoading}
-                onRequestEdit={handleOpenColumnEditorById}
-                onCancelEdit={handleCancelEditColumn}
-                onSubmitEdit={handleUpdateColumn}
-                onFieldChange={(field,val)=> field==='name'? setEditingName(val): setEditingWip(val)}
-                onMoveColumn={handleMoveColumn}
-                onDeleteColumn={handleDeleteColumn}
-                onCreateCard={handleCreateCard}
-                onOpenCard={handleOpenCard}
-                onRenameCard={handleRenameCard}
-              />
+                  columns={effectiveColumns}
+                  childBoards={childBoards}
+                  editingColumnId={editingColumnId}
+                  editingValues={{ name: editingName, wip: editingWip, submitting: editingSubmitting, error: editingError }}
+                  loadingCards={detailLoading}
+                  showDescriptions={showDescriptions}
+                  onRequestEdit={handleOpenColumnEditorById}
+                  onCancelEdit={handleCancelEditColumn}
+                  onSubmitEdit={handleUpdateColumn}
+                  onFieldChange={(field,val)=> field==='name'? setEditingName(val): setEditingWip(val)}
+                  onMoveColumn={handleMoveColumn}
+                  onDeleteColumn={handleDeleteColumn}
+                  onCreateCard={handleCreateCard}
+                  onOpenCard={handleOpenCard}
+                  onRenameCard={handleRenameCard}
+                />
               <DragOverlay dropAnimation={null}>
                 {draggingCard && (
                   <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">

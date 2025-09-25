@@ -99,6 +99,7 @@ model Node {
   columnId        String?
   title           String
   description     String?           @db.Text
+  shortId         Int               @unique @default(autoincrement())
   path            String
   depth           Int               @default(0)
   position        Float             @default(0)

@@ -4,6 +4,9 @@ export class NodeDto {
   @ApiProperty({ example: 'node_123' })
   id!: string;
 
+  @ApiProperty({ example: 44 })
+  shortId!: number;
+
   @ApiProperty({ example: 'team_demo' })
   teamId!: string;
 
@@ -48,12 +51,19 @@ export class NodeDto {
   @ApiProperty({ example: '2025-02-10T10:00:00.000Z', nullable: true })
   blockedExpectedUnblockAt!: string | null;
 
-  @ApiProperty({ example: 'HIGH', enum: ['NONE','CRITICAL','HIGH','MEDIUM','LOW','LOWEST'] })
-  priority!: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
+  @ApiProperty({
+    example: 'HIGH',
+    enum: ['NONE', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'LOWEST'],
+  })
+  priority!: 'NONE' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'LOWEST';
 
-  @ApiProperty({ example: 'S', enum: ['UNDER2MIN','XS','S','M','L','XL','XXL'], nullable: true })
-  effort!: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
+  @ApiProperty({
+    example: 'S',
+    enum: ['UNDER2MIN', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
+    nullable: true,
+  })
+  effort!: 'UNDER2MIN' | 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | null;
 
-  @ApiProperty({ example: ['infra','urgent'], isArray: true })
+  @ApiProperty({ example: ['infra', 'urgent'], isArray: true })
   tags!: string[];
 }

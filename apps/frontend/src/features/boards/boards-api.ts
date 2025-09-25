@@ -4,18 +4,22 @@ export type ColumnBehaviorKey = "BACKLOG" | "IN_PROGRESS" | "BLOCKED" | "DONE" |
 
 export type BoardNode = {
   id: string;
+  shortId: number;
   title: string;
   type: "SIMPLE" | "MEDIUM" | "COMPLEX";
   columnId: string;
   position: number;
   parentId: string | null;
   dueAt: string | null;
+  description?: string | null;
   // Enrichissements renvoyés par /boards/:id/detail
   effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   priority?: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   counts?: { backlog: number; inProgress: number; blocked: number; done: number };
   blockedExpectedUnblockAt?: string | null;
   tags?: string[];
+  estimatedDurationDays?: number | null;
+  assignees?: { id: string; displayName: string; avatarUrl: string | null }[];
 };
 
 export type BoardColumn = {
