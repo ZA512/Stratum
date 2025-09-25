@@ -63,7 +63,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, bootstrapTried]);
 
   const hasTeams = teams.length > 0;
 

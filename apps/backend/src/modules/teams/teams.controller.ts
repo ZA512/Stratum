@@ -7,7 +7,10 @@ import {
 } from '@nestjs/swagger';
 import { TeamDto } from './dto/team.dto';
 import { BootstrapTeamResponseDto } from './dto/bootstrap-team-response.dto';
-import { CurrentUser, AuthenticatedUser } from '../auth/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  AuthenticatedUser,
+} from '../auth/decorators/current-user.decorator';
 import { TeamsService } from './teams.service';
 
 @ApiTags('Teams')
@@ -31,14 +34,22 @@ export class TeamsController {
   }
 
   @Post('bootstrap')
-  @ApiOperation({ summary: 'Bootstrap initial pour un utilisateur sans equipe' })
+  @ApiOperation({
+    summary: 'Bootstrap initial pour un utilisateur sans equipe',
+  })
   @ApiOkResponse({ type: BootstrapTeamResponseDto })
-  async bootstrap(@CurrentUser() user: AuthenticatedUser | undefined): Promise<BootstrapTeamResponseDto> {
+  async bootstrap(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+  ): Promise<BootstrapTeamResponseDto> {
     if (!user) {
       // Dans un contexte réel on renverrait 401; simplification ici
       throw new Error('Non authentifie');
     }
     const result = await this.teamsService.bootstrapForUser(user.id);
-    return { team: result.team, rootNodeId: result.rootNodeId, boardId: result.boardId };
+    return {
+      team: result.team,
+      rootNodeId: result.rootNodeId,
+      boardId: result.boardId,
+    };
   }
 }

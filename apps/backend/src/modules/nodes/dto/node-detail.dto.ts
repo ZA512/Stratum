@@ -21,7 +21,11 @@ export class NodeMinimalChildDto {
   @ApiProperty({ example: 'Synchro marketing' })
   title!: string;
 
-  @ApiProperty({ example: 'BACKLOG', enum: ['BACKLOG','IN_PROGRESS','BLOCKED','DONE'], required: false })
+  @ApiProperty({
+    example: 'BACKLOG',
+    enum: ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE'],
+    required: false,
+  })
   behaviorKey?: string;
 
   @ApiProperty({ example: 'column_abc', nullable: true })

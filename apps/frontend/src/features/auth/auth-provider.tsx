@@ -208,9 +208,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
             setSession(nextSession);
             persistSession(nextSession);
-          } catch (e) {
-            // ignorer, le timer normal reprendra
-          }
+      } catch {
+        // ignorer, le timer normal reprendra
+      }
         })();
       }
     }

@@ -23,8 +23,11 @@ interface ColumnPanelProps {
   onCreateCard: (title: string) => Promise<void> | void;
   onOpenCard: (id: string) => void;
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
+  onRequestMoveCard: (node: BoardNode) => void;
+  onRequestDeleteCard: (node: BoardNode) => void;
   childBoards: Record<string, NodeChildBoard>;
   loadingCards: boolean;
+  showDescription: boolean;
 }
 
 export function ColumnPanel(props: ColumnPanelProps){
@@ -32,7 +35,8 @@ export function ColumnPanel(props: ColumnPanelProps){
     column, cards, isEditing, isFirst, isLast, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
     onMove, onDelete, onCreateCard, onOpenCard, onRenameCard,
-    childBoards, loadingCards
+    onRequestMoveCard, onRequestDeleteCard,
+    childBoards, loadingCards, showDescription
   } = props;
 
   const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || '';
@@ -92,7 +96,17 @@ export function ColumnPanel(props: ColumnPanelProps){
         ) : (
           <div className="space-y-3">
             {cards.map(card => (
-              <CardItem key={card.id} node={card} columnId={column.id} childBoard={childBoards[card.id]} onOpen={onOpenCard} onRename={onRenameCard} />
+              <CardItem
+                key={card.id}
+                node={card}
+                columnId={column.id}
+                childBoard={childBoards[card.id]}
+                onOpen={onOpenCard}
+                onRename={onRenameCard}
+                onRequestMove={onRequestMoveCard}
+                onRequestDelete={onRequestDeleteCard}
+                showDescription={showDescription}
+              />
             ))}
           </div>
         )}

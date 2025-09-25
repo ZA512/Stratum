@@ -10,6 +10,7 @@ interface ColumnListProps {
   editingColumnId: string | null;
   editingValues: { name: string; wip: string; submitting: boolean; error: string|null } | null;
   loadingCards: boolean;
+  showDescriptions: boolean;
   onRequestEdit: (id:string) => void;
   onCancelEdit: () => void;
   onSubmitEdit: () => void;
@@ -19,6 +20,8 @@ interface ColumnListProps {
   onCreateCard: (columnId:string, title:string) => Promise<void> | void;
   onOpenCard: (id: string) => void;
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
+  onRequestMoveCard: (node: BoardNode) => void;
+  onRequestDeleteCard: (node: BoardNode) => void;
 }
 
 export function ColumnList(props: ColumnListProps){
@@ -46,6 +49,9 @@ export function ColumnList(props: ColumnListProps){
             onCreateCard={(title)=> props.onCreateCard(column.id, title)}
             onOpenCard={props.onOpenCard}
             onRenameCard={props.onRenameCard}
+            onRequestMoveCard={props.onRequestMoveCard}
+            onRequestDeleteCard={props.onRequestDeleteCard}
+            showDescription={props.showDescriptions}
             childBoards={childBoards}
             loadingCards={loadingCards}
           />

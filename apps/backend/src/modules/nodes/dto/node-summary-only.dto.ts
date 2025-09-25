@@ -10,5 +10,6 @@ export class NodeSummaryCountsOnlyDto {
 export class NodeSummaryOnlyDto {
   @ApiProperty({ example: 'node_123' }) id!: string;
   @ApiProperty({ example: true }) hasBoard!: boolean;
-  @ApiProperty({ type: NodeSummaryCountsOnlyDto }) counts!: NodeSummaryCountsOnlyDto;
+  @ApiProperty({ type: NodeSummaryCountsOnlyDto })
+  counts!: NodeSummaryCountsOnlyDto;
 }

@@ -43,7 +43,10 @@ export class AuthService {
       'JWT_REFRESH_TTL_MS',
       DEFAULT_REFRESH_MS,
     );
-    this.refreshTokenTtlMs = this.parseDurationMs(rawRefreshTtl, DEFAULT_REFRESH_MS);
+    this.refreshTokenTtlMs = this.parseDurationMs(
+      rawRefreshTtl,
+      DEFAULT_REFRESH_MS,
+    );
     this.resetTokenTtlMs = configService.get<number>(
       'RESET_TOKEN_TTL_MS',
       1000 * 60 * 60,

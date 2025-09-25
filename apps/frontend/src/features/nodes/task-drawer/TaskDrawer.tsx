@@ -86,11 +86,11 @@ export const TaskDrawer: React.FC = () => {
       const dDate = detail.dueAt ? detail.dueAt.substring(0,10) : '';
       setTitle(detail.title || '');
       setDescription(detail.description || '');
-  setDueAt(dDate);
-  setProgress(detail.progress ?? 0);
-  setPriority(detail.priority ?? 'NONE');
-  setEffort(detail.effort ?? null);
-  setTags(detail.tags || []);
+      setDueAt(dDate);
+      setProgress(detail.progress ?? 0);
+      setPriority(detail.priority ?? 'NONE');
+      setEffort(detail.effort ?? null);
+      setTags(detail.tags || []);
       // Blocage -> map values
       setBlockedEmails((detail.blockedReminderEmails||[]).join(', '));
       setBlockedInterval(detail.blockedReminderIntervalDays!=null? String(detail.blockedReminderIntervalDays):'');
@@ -103,8 +103,20 @@ export const TaskDrawer: React.FC = () => {
         priority: detail.priority ?? 'NONE',
         effort: detail.effort ?? null,
       });
+    } else {
+      setTitle('');
+      setDescription('');
+      setDueAt('');
+      setProgress(0);
+      setPriority('NONE');
+      setEffort(null);
+      setTags([]);
+      setBlockedEmails('');
+      setBlockedInterval('');
+      setBlockedEta('');
+      setInitialSnapshot(null);
     }
-  }, [detail?.id]);
+  }, [detail]);
 
   const hasDirty = useMemo(()=>{
     if(!initialSnapshot) return false;

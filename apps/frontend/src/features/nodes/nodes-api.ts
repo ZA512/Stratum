@@ -40,12 +40,14 @@ export async function createNode(input: CreateNodeInput, accessToken: string): P
 
   const payload = (await response.json()) as {
     id: string;
+    shortId: number;
     title: string;
     type: BoardNode["type"];
     columnId: string | null;
     position?: number;
     parentId: string | null;
     dueAt: string | null;
+    description?: string | null;
   };
 
   if (!payload.columnId) {
@@ -54,12 +56,14 @@ export async function createNode(input: CreateNodeInput, accessToken: string): P
 
   return {
     id: payload.id,
+    shortId: payload.shortId,
     title: payload.title,
     type: payload.type,
     columnId: payload.columnId,
     position: payload.position ?? 0,
     parentId: payload.parentId,
     dueAt: payload.dueAt,
+    description: payload.description ?? null,
   };
 }
 
@@ -109,6 +113,7 @@ export async function fetchNodeSummary(nodeId: string, accessToken: string): Pro
 
 export type NodeLite = {
   id: string;
+  shortId: number;
   teamId: string;
   parentId: string | null;
   title: string;
@@ -148,6 +153,48 @@ export async function moveChildNode(parentId: string, childId: string, input: { 
     await throwNodeError(response, "Impossible de deplacer la tache");
   }
   return (await response.json()) as NodeDetail;
+}
+
+export type NodeDeletePreview = {
+  id: string;
+  hasChildren: boolean;
+  directChildren: number;
+  totalDescendants: number;
+  counts: { backlog: number; inProgress: number; blocked: number; done: number };
+};
+
+export async function fetchNodeDeletePreview(
+  nodeId: string,
+  accessToken: string,
+): Promise<NodeDeletePreview> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/${nodeId}/delete-preview`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de prévisualiser la suppression");
+  }
+  return (await response.json()) as NodeDeletePreview;
+}
+
+export async function deleteNode(
+  nodeId: string,
+  options: { recursive: boolean },
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/${nodeId}?recursive=${options.recursive ? 'true' : 'false'}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (!response.ok) {
+    await throwNodeError(response, 'Impossible de supprimer la tâche');
+  }
 }
 
 async function throwNodeError(response: Response, fallback: string): Promise<never> {
