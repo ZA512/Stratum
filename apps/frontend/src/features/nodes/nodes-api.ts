@@ -155,6 +155,48 @@ export async function moveChildNode(parentId: string, childId: string, input: { 
   return (await response.json()) as NodeDetail;
 }
 
+export type NodeDeletePreview = {
+  id: string;
+  hasChildren: boolean;
+  directChildren: number;
+  totalDescendants: number;
+  counts: { backlog: number; inProgress: number; blocked: number; done: number };
+};
+
+export async function fetchNodeDeletePreview(
+  nodeId: string,
+  accessToken: string,
+): Promise<NodeDeletePreview> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/${nodeId}/delete-preview`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de prévisualiser la suppression");
+  }
+  return (await response.json()) as NodeDeletePreview;
+}
+
+export async function deleteNode(
+  nodeId: string,
+  options: { recursive: boolean },
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/nodes/${nodeId}?recursive=${options.recursive ? 'true' : 'false'}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (!response.ok) {
+    await throwNodeError(response, 'Impossible de supprimer la tâche');
+  }
+}
+
 async function throwNodeError(response: Response, fallback: string): Promise<never> {
   let message = fallback;
 

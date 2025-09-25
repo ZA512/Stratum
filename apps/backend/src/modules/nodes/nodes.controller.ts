@@ -7,6 +7,7 @@ import {
   Post,
   Patch,
   Delete,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -32,6 +33,7 @@ import { UpdateChildNodeDto } from './dto/update-child-node.dto';
 import { MoveChildNodeDto } from './dto/move-child-node.dto';
 import { ReorderChildrenDto } from './dto/reorder-children.dto';
 import { NodesService } from './nodes.service';
+import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
 
 @ApiTags('Nodes')
 @Controller('nodes')
@@ -112,6 +114,22 @@ export class NodesController {
     return this.nodesService.getNodeSummary(nodeId);
   }
 
+  @Get(':nodeId/delete-preview')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Calcule l’impact potentiel de la suppression (directs + descendants par colonne)',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: NodeDeletePreviewDto })
+  getDeletePreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<NodeDeletePreviewDto> {
+    return this.nodesService.getDeletePreview(nodeId, user.id);
+  }
+
   @Patch(':nodeId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -124,6 +142,23 @@ export class NodesController {
     @Body() dto: UpdateNodeDto,
   ): Promise<NodeDto> {
     return this.nodesService.updateNode(nodeId, dto, user.id);
+  }
+
+  @Delete(':nodeId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Supprime une tâche (optionnellement de manière récursive)',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  async deleteNode(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Query('recursive') recursiveRaw?: string,
+  ): Promise<void> {
+    const recursive = recursiveRaw === 'true' || recursiveRaw === '1';
+    await this.nodesService.deleteNode(nodeId, recursive, user.id);
   }
 
   // Endpoints checklist legacy supprimes

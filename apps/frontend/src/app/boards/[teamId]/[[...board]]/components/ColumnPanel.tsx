@@ -23,6 +23,8 @@ interface ColumnPanelProps {
   onCreateCard: (title: string) => Promise<void> | void;
   onOpenCard: (id: string) => void;
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
+  onRequestMoveCard: (node: BoardNode) => void;
+  onRequestDeleteCard: (node: BoardNode) => void;
   childBoards: Record<string, NodeChildBoard>;
   loadingCards: boolean;
   showDescription: boolean;
@@ -33,6 +35,7 @@ export function ColumnPanel(props: ColumnPanelProps){
     column, cards, isEditing, isFirst, isLast, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
     onMove, onDelete, onCreateCard, onOpenCard, onRenameCard,
+    onRequestMoveCard, onRequestDeleteCard,
     childBoards, loadingCards, showDescription
   } = props;
 
@@ -100,6 +103,8 @@ export function ColumnPanel(props: ColumnPanelProps){
                 childBoard={childBoards[card.id]}
                 onOpen={onOpenCard}
                 onRename={onRenameCard}
+                onRequestMove={onRequestMoveCard}
+                onRequestDelete={onRequestDeleteCard}
                 showDescription={showDescription}
               />
             ))}

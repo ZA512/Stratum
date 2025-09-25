@@ -132,9 +132,23 @@ export class BoardsService {
       ? await this.prisma.node.findMany({
           where: { columnId: { in: columnIds } },
           orderBy: { position: 'asc' },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            columnId: true,
+            position: true,
+            parentId: true,
+            dueAt: true,
+            shortId: true,
+            description: true,
+            effort: true,
+            priority: true,
+            blockedExpectedUnblockAt: true,
+            tags: true,
+            metadata: true,
+            statusMetadata: true,
             assignments: {
-              include: {
+              select: {
                 user: {
                   select: {
                     id: true,

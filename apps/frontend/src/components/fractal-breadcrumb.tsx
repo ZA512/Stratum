@@ -54,14 +54,14 @@ export function FractalBreadcrumb({
   onSelect,
   offsetX = DEFAULT_OFFSET_X,
   offsetY = DEFAULT_OFFSET_Y,
-  labelWidth: _labelWidth = DEFAULT_LABEL_WIDTH,
+  labelWidth = DEFAULT_LABEL_WIDTH,
   visibleTrailingCount = DEFAULT_TRAILING,
   animated = true,
-  rightShrink: _rightShrink = DEFAULT_RIGHT_SHRINK,
+  rightShrink = DEFAULT_RIGHT_SHRINK,
   shrinkFactor = DEFAULT_SHRINK_FACTOR,
   muted = DEFAULT_MUTED,
   strokeAlpha = DEFAULT_STROKE_ALPHA,
-  verticalFactor: _verticalFactor = DEFAULT_VERTICAL_FACTOR,
+  verticalFactor = DEFAULT_VERTICAL_FACTOR,
   travelAnimation = true,
   travelDuration = 0.6,
   travelLateralFactor = 0.55,
@@ -157,18 +157,18 @@ export function FractalBreadcrumb({
       const dxPerLevel2 = offsetX - effectiveLeftPad2;
       const enterX = dxPerLevel2 * travelLateralFactor * 0.8; // légère entrée depuis la droite
       const enterY = offsetY * 0.9; // vient légèrement du bas
-  let animateProps: TargetAndTransition | undefined;
+      let animateProps: TargetAndTransition | undefined;
       if (isPreDescending) {
         // Pré-descente: on sort le contenu vers bas + droite (une "plonge" visuelle)
         const outX = dxPerLevel2 * travelLateralFactor * 0.9;
         const outY = offsetY * 1.05;
-  animateProps = { x: [0, outX], y: [0, outY], opacity: [1, 0.6] } as TargetAndTransition;
+        animateProps = { x: [0, outX], y: [0, outY], opacity: [1, 0.6] } as TargetAndTransition;
       } else if (isTraveling && diff > 0) {
         // Remontée (ascenseur)
-  animateProps = { y: yTarget, x: xTarget };
+        animateProps = { y: yTarget, x: xTarget };
       } else if (descendingBurst) {
         // Arrivée d'une descente (nouvelle profondeur chargée)
-  animateProps = { x: [enterX, 0], y: [enterY, 0], opacity: [0, 1] } as TargetAndTransition;
+        animateProps = { x: [enterX, 0], y: [enterY, 0], opacity: [0, 1] } as TargetAndTransition;
       } else {
         animateProps = { x: 0, y: 0, opacity: 1 };
       }
@@ -185,14 +185,16 @@ export function FractalBreadcrumb({
     }
     const item = items[index];
     const depth = index + 1;
-  const color = generateColor(index, muted, strokeAlpha);
+    const color = generateColor(index, muted, strokeAlpha);
     const showLabel = visibleLabelIndexes.has(index);
     const isCurrent = index === items.length - 1;
 
+    const clampedVerticalFactor = Math.min(Math.max(verticalFactor, 0), 1);
+    const verticalLineHeight = `${clampedVerticalFactor * 100}vh`;
+    const horizontalWidth = rightShrink > 0 ? `calc(100% - ${rightShrink}px)` : '100%';
+
     // Calcul dynamique de la géométrie du raccord (angle) entre cette strate et la précédente
     const effectiveLeftPad = Math.round(offsetX * shrinkFactor);
-    const deltaX = offsetX - effectiveLeftPad; // réduction latérale
-    const deltaY = offsetY; // profondeur verticale
 
     return (
       <motion.div
@@ -216,8 +218,8 @@ export function FractalBreadcrumb({
               position: 'absolute',
               top: 0,
               left: 0,
-              // Pleine largeur : on ne raccourcit plus selon l'index
-              width: '100%',
+              // Pleine largeur ajustable : possibilité de raccourcir légèrement la droite
+              width: horizontalWidth,
               height: 0,
               borderTop: `2px solid ${color}`,
               borderTopRightRadius: 18,
@@ -229,7 +231,7 @@ export function FractalBreadcrumb({
               position: 'absolute',
               top: 0,
               left: 0,
-              height: '100vh', // va jusqu'en bas de l'écran
+              height: verticalLineHeight,
               width: 0,
               borderLeft: `2px solid ${color}`,
               zIndex: 2,
@@ -269,6 +271,7 @@ export function FractalBreadcrumb({
               // Position optimisée : alignement parfait sans décalage progressif
               top: `${10}px`, // garde la bonne position verticale
               left: `${effectiveLeftPad + 25}px`, // suppression du décalage progressif (index * 8)
+              maxWidth: labelWidth,
             }}
           >
             <button
@@ -290,9 +293,11 @@ export function FractalBreadcrumb({
               }}
               aria-current={isCurrent ? 'page' : undefined}
             >
-              <span 
+              <span
                 className="block text-lg font-medium tracking-wide leading-tight hover:text-white/90 transition-colors duration-200 whitespace-nowrap uppercase"
                 style={{
+                  display: 'inline-block',
+                  maxWidth: labelWidth,
                   textShadow: `
                     0 2px 4px rgba(0,0,0,0.9),
                     0 0 12px ${color.replace(/\/.*/, '/0.4')},

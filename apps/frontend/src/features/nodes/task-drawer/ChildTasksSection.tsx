@@ -16,7 +16,6 @@ export const ChildTasksSection: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   // Optimistic state with snapshot stack & pending guard
   const [optimisticChildren, setOptimisticChildren] = React.useState<NodeChild[]>(() => detail?.children ?? []);
-  const [isDirty, setIsDirty] = React.useState(false); // conservé pour rollback & état visuel futur
   const snapshotStackRef = React.useRef<typeof optimisticChildren[]>([]);
   const pendingRef = React.useRef(0);
   function pushSnapshot(){
@@ -26,21 +25,22 @@ export const ChildTasksSection: React.FC = () => {
   }
   function rollback(){
     const last = snapshotStackRef.current.pop();
-    if (last) { setOptimisticChildren(last); setIsDirty(false); }
+    if (last) { setOptimisticChildren(last); }
   }
   function beginPending(){ pendingRef.current++; }
   function endPending(){ pendingRef.current = Math.max(0, pendingRef.current-1); }
   function hasPending(){ return pendingRef.current > 0; }
-  // Adopter les enfants du parent uniquement quand on change de tâche parente
-  const prevParentIdRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (detail?.id && prevParentIdRef.current !== detail.id) {
-      setOptimisticChildren(detail.children);
-      prevParentIdRef.current = detail.id;
+    if (!detail) {
+      setOptimisticChildren([]);
+      snapshotStackRef.current = [];
+      return;
     }
-  }, [detail?.id]);
+    setOptimisticChildren(detail.children);
+    snapshotStackRef.current = [];
+  }, [detail]);
   // Ne pas faire de early return ici (sinon ordre des hooks varie si detail devient null)
-  const parentId = detail?.id || null;
+  const parentId = detail?.id ?? null;
 
   // Counts locaux dérivés à partir de l'état optimiste
   function deriveCounts(children: NodeChild[]){
@@ -60,16 +60,16 @@ export const ChildTasksSection: React.FC = () => {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-  if (!accessToken || !parentId) return;
+    if (!accessToken || !parentId) return;
     const t = title.trim();
     if (!t) return;
-  setCreating(true);
+    setCreating(true);
     setError(null);
-  const tempId = 'tmp-'+Date.now();
+    const tempId = 'tmp-'+Date.now();
     pushSnapshot();
-    setIsDirty(true);
+    beginPending();
     // Placeholder enfant typé
-  setOptimisticChildren(list => [...list, { id: tempId, title: t, type: 'SIMPLE', columnId: null, behaviorKey: 'BACKLOG' }]);
+    setOptimisticChildren(list => [...list, { id: tempId, title: t, type: 'SIMPLE', columnId: null, behaviorKey: 'BACKLOG' }]);
     setTitle("");
     try {
       const responseParent = await createChildTask(parentId, { title: t }, accessToken);
@@ -78,15 +78,15 @@ export const ChildTasksSection: React.FC = () => {
         setLocalCounts(deriveCounts(responseParent.children as NodeChild[]));
         // Appliquer immediatement le detail parent pour eviter un retour au cache stale
         applyDetail?.(responseParent as NodeDetail);
-  // L'ordre backlog sera dérivé au prochain rendu
+        // L'ordre backlog sera dérivé au prochain rendu
       }
-      setIsDirty(false);
       // Synchronise aussi le detail parent (header, autres sections)
       refresh?.();
     } catch (err) {
       rollback();
       setError((err as Error).message ?? 'Creation echouee, revert');
     } finally {
+      endPending();
       setCreating(false);
     }
   }
@@ -97,18 +97,18 @@ export const ChildTasksSection: React.FC = () => {
     if (!child) return;
     
     pushSnapshot();
-    setIsDirty(true);
-    
-  const currentBehavior = (child.behaviorKey ?? 'BACKLOG');
-  const targetBehavior = currentBehavior === 'DONE' ? 'BACKLOG' : 'DONE';
-    
+    beginPending();
+
+    const currentBehavior = (child.behaviorKey ?? 'BACKLOG');
+    const targetBehavior = currentBehavior === 'DONE' ? 'BACKLOG' : 'DONE';
+
     // Mise à jour optimiste
-  const nextChildren: NodeChild[] = optimisticChildren.map(c=> c.id===childId ? { ...c, behaviorKey: targetBehavior } : c);
+    const nextChildren: NodeChild[] = optimisticChildren.map(c=> c.id===childId ? { ...c, behaviorKey: targetBehavior } : c);
     setOptimisticChildren(nextChildren);
-    
+
     try {
       const responseParent = await toggleChildTaskDone(parentId, childId, accessToken);
-      
+
       if (responseParent?.children) {
         const children = responseParent.children as NodeChild[];
         setOptimisticChildren(children);
@@ -117,8 +117,6 @@ export const ChildTasksSection: React.FC = () => {
       } else {
         refresh?.();
       }
-      
-      setIsDirty(false);
       
       // Feedback utilisateur
       try {
@@ -132,13 +130,17 @@ export const ChildTasksSection: React.FC = () => {
         }
       }, 50);
       
-    } catch (e) {
+    } catch {
       rollback();
       setError('Echec toggle, revert');
+    } finally {
+      endPending();
     }
-  }  // Liste plate : backlog (non DONE) puis done (DONE) en respectant l'ordre courant
-  const backlogItems = optimisticChildren.filter(c=>c.behaviorKey !== 'DONE');
-  const doneItems = optimisticChildren.filter(c=>c.behaviorKey === 'DONE');
+  }
+
+  // Liste plate : backlog (non DONE) puis done (DONE) en respectant l'ordre courant
+  const backlogItems = React.useMemo(() => optimisticChildren.filter(c=>c.behaviorKey !== 'DONE'), [optimisticChildren]);
+  const doneItems = React.useMemo(() => optimisticChildren.filter(c=>c.behaviorKey === 'DONE'), [optimisticChildren]);
 
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingTitle, setEditingTitle] = React.useState("");
@@ -146,21 +148,22 @@ export const ChildTasksSection: React.FC = () => {
     setEditingId(id); setEditingTitle(current);
   }
   async function saveEdit(id: string) {
-  if (!accessToken || !parentId) return;
+    if (!accessToken || !parentId) return;
     const trimmed = editingTitle.trim();
     if (!trimmed) { setEditingId(null); return; }
     pushSnapshot();
-    setIsDirty(true);
+    beginPending();
     // Mutation locale optimiste
     setOptimisticChildren(list => list.map(c=> c.id===id ? { ...c, title: trimmed } : c));
     setEditingId(null);
     try {
-  await updateChildTask(parentId, id, { title: trimmed }, accessToken);
-      setIsDirty(false);
+      await updateChildTask(parentId, id, { title: trimmed }, accessToken);
       // Pas de refresh immédiat nécessaire (titre déjà synchro)
-    } catch (e) {
+    } catch {
       rollback();
       setError('Echec édition, revert');
+    } finally {
+      endPending();
     }
   }
 
@@ -172,7 +175,6 @@ export const ChildTasksSection: React.FC = () => {
     // Réappliquer ordre local optimiste
     setOptimisticChildren(list => {
       const map = new Map(list.map(i=>[i.id,i] as const));
-      const currentBacklog = list.filter(i=>i.behaviorKey !== 'DONE').map(i=>i.id);
       const currentDone = list.filter(i=>i.behaviorKey === 'DONE').map(i=>i.id);
       // Reconstituer backlog selon newOrder (qui ne contient que backlog ids)
       const reorderedBacklog = newOrder.map(id=>map.get(id)!).filter(Boolean);
@@ -193,12 +195,15 @@ export const ChildTasksSection: React.FC = () => {
     const columnId = detail?.board?.columns.find(c=>c.behaviorKey==='BACKLOG')?.id || backlogItems[0]?.columnId || '';
     const payload = { columnId, orderedIds: order };
     persistTimer.current = window.setTimeout(async ()=>{
-      pushSnapshot(); setIsDirty(true);
+      pushSnapshot();
+      beginPending();
       try {
         await reorderChildren(parentId!, payload, accessToken!);
-        setIsDirty(false);
-      } catch (e) {
+      } catch {
         rollback(); setError('Echec du reorder, revert');
+      } finally {
+        endPending();
+        persistTimer.current = null;
       }
     }, 300);
   }

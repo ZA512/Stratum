@@ -48,6 +48,30 @@ pm run seed:reset (drop + migrate + seed) pour synchroniser les environnements.
 - [ ] Implémenter le menu contextuel carte (édition, déplacement multi-board, suppression simple/récursive).
 - [ ] Préparer la modale de déplacement (arborescence des boards, règles d’exclusion des descendants).
 
+## 🗓️ Tâches courantes - 28/09/2025
+- [x] Lot 2 (partiel) : filtres assignés/priorités + recherche textuelle (debounce 300 ms, seuil 3 caractères) + toggles rapides « Mes tâches » et « Avec sous-kanban ».
+- [x] Lot 2 (partiel) : tri combiné intra-colonne (priorité → échéance) au-dessus de l’ordre manuel.
+- [ ] Lot 2 (suite)
+  - [x] Persistance utilisateur des filtres (stockage local + réhydratation).
+  - [ ] Implémentation backend des filtres pour alléger le payload.
+
+## 🗓️ Tâches courantes - 29/09/2025
+- [x] Persistance locale des filtres/tri/affichages du board (localStorage par board) + réhydratation automatique.
+- [x] Bouton de réinitialisation conservé (nettoyage des états et du stockage) + garde-fou si localStorage indisponible.
+- [ ] Déléguer le filtrage côté backend (requêtes paramétrées) pour réduire le volume JSON échangé.
+
+## 🗓️ Tâches courantes - 30/09/2025
+- [x] Menu contextuel des cartes : bouton trois-points + options « Éditer », « Déplacer », « Supprimer » avec fermeture automatique.
+- [x] Backend nodes : endpoint `GET /nodes/:id/delete-preview` + suppression contrôlée (simple vs récursive) avec recalcul progression parent.
+- [x] Frontend : modale de confirmation suppression (compteur agrégé a.b.c.d, blocage option simple si enfants présents).
+- [ ] Déplacement multi-board (arborescence + exclusion descendants) — reste à implémenter dans un lot dédié.
+
+## 🗓️ Tâches courantes - 01/10/2025
+- [x] Backend : normaliser la sélection `shortId` dans `GET /boards/:id/detail` et corriger le mapping `NodeDto` pour les identifiants courts.
+- [x] Frontend : finaliser la carte enrichie (ID court, description optionnelle, avatars, échéances colorées, compteur enfants, icône sous-board) et le menu contextuel avec modale de suppression.
+- [x] Documentation : journaliser l’état d’avancement du lot contextuel/suppression et préciser le suivi du déplacement multi-board restant.
+- [ ] Déplacement multi-board : construire l’arborescence de sélection et sécuriser les règles d’exclusion descendants.
+
 ℹ️ Notes :
 - `npm run prisma:migrate --workspace backend -- --name add_node_short_id` échoue ici faute de `DATABASE_URL`; migration SQL créée manuellement.
 - Les filtres/menus avancés restent à planifier après finalisation du Lot 1.

@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { BoardNode } from '@/features/boards/boards-api';
@@ -10,6 +11,9 @@ interface CardItemProps {
   childBoard?: { boardId: string } | undefined;
   onOpen: (id: string) => void;
   onRename?: (id: string, newTitle: string) => Promise<void> | void;
+  onRequestMove: (node: BoardNode) => void;
+  onRequestDelete: (node: BoardNode) => void;
+
   showDescription: boolean;
 }
 
@@ -32,7 +36,7 @@ function truncateDescription(description: string | null | undefined, maxLength =
   return `${trimmed.slice(0, maxLength).trimEnd()}…`;
 }
 
-export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDescription }: CardItemProps){
+export function CardItem({ node, columnId, childBoard, onOpen, onRename, onRequestMove, onRequestDelete, showDescription }: CardItemProps){
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: node.id, data:{ columnId, type:'card', node: { id: node.id, title: node.title } }});
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging?0.4:1 };
 
@@ -40,6 +44,9 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
   const [title,setTitle] = useState(node.title);
   const [counts, setCounts] = useState<{backlog:number; inProgress:number; blocked:number; done:number} | null>(node.counts ?? null);
   const [effort, setEffort] = useState<null | 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL'>(node.effort ?? null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(()=>{ setTitle(node.title); },[node.id,node.title]);
 
@@ -60,6 +67,30 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
     setEffort(node.effort ?? null);
   }, [node.id, node.counts, node.effort]);
 
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      closeMenu();
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMenu();
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [menuOpen, closeMenu]);
+
   const descriptionExcerpt = useMemo(() => {
     if (!showDescription) return '';
     return truncateDescription(node.description);
@@ -67,10 +98,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
 
   const assignees = node.assignees ?? [];
   const primaryAssignee = assignees.length > 0 ? assignees[0] : null;
-  const assigneeInitials = useMemo(() => {
-    if (!primaryAssignee) return '';
-    return getInitials(primaryAssignee.displayName);
-  }, [primaryAssignee?.displayName]);
+  const assigneeInitials = primaryAssignee ? getInitials(primaryAssignee.displayName) : '';
 
   const dueInfo = useMemo(() => {
     if (!node.dueAt) return null;
@@ -126,40 +154,100 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
       {shortIdLabel && (
         <span className="absolute left-3 top-3 text-[11px] font-mono uppercase tracking-wide text-muted">{shortIdLabel}</span>
       )}
-      {( (node.priority && node.priority !== 'NONE') || effort) && (
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1 z-10">
-          {node.priority && node.priority !== 'NONE' && (
-            <span
-              className={`inline-flex h-3 w-3 rounded-sm border border-white/20 ${priorityColor}`}
-              title={`Priorité: ${node.priority}`}
-              aria-label={`Priorité ${node.priority}`}
-            />
-          )}
-          {effort && (
-            <span
-              className={
-                'inline-flex h-3 w-3 rounded-sm border border-white/20 ' +
-                (effort === 'UNDER2MIN' ? 'bg-emerald-400' :
-                 effort === 'XS' ? 'bg-sky-400' :
-                 effort === 'S' ? 'bg-blue-400' :
-                 effort === 'M' ? 'bg-amber-400' :
-                 effort === 'L' ? 'bg-orange-500' :
-                 effort === 'XL' ? 'bg-rose-500' :
-                 'bg-red-600')
-              }
-              title={`Effort: ${effort}`}
-              aria-label={`Effort ${effort}`}
-            />
-          )}
-          {overdue && (
-            <span
-              className="inline-flex h-3 w-3 rounded-sm border border-white/20 bg-red-600 animate-pulse"
-              title="Blocage en retard (date prévue dépassée)"
-              aria-label="Blocage en retard"
-            />
+      <div className="absolute right-2 top-2 flex items-center gap-2">
+        {( (node.priority && node.priority !== 'NONE') || effort) && (
+          <div className="flex flex-col items-end gap-1 z-10">
+            {node.priority && node.priority !== 'NONE' && (
+              <span
+                className={`inline-flex h-3 w-3 rounded-sm border border-white/20 ${priorityColor}`}
+                title={`Priorité: ${node.priority}`}
+                aria-label={`Priorité ${node.priority}`}
+              />
+            )}
+            {effort && (
+              <span
+                className={
+                  'inline-flex h-3 w-3 rounded-sm border border-white/20 ' +
+                  (effort === 'UNDER2MIN' ? 'bg-emerald-400' :
+                   effort === 'XS' ? 'bg-sky-400' :
+                   effort === 'S' ? 'bg-blue-400' :
+                   effort === 'M' ? 'bg-amber-400' :
+                   effort === 'L' ? 'bg-orange-500' :
+                   effort === 'XL' ? 'bg-rose-500' :
+                   'bg-red-600')
+                }
+                title={`Effort: ${effort}`}
+                aria-label={`Effort ${effort}`}
+              />
+            )}
+            {overdue && (
+              <span
+                className="inline-flex h-3 w-3 rounded-sm border border-white/20 bg-red-600 animate-pulse"
+                title="Blocage en retard (date prévue dépassée)"
+                aria-label="Blocage en retard"
+              />
+            )}
+          </div>
+        )}
+        <div className="relative">
+          <button
+            ref={menuButtonRef}
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Actions carte"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div
+              ref={menuRef}
+              role="menu"
+              className="absolute right-0 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  onOpen(node.id);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+              >
+                ✏️ <span>Éditer la tâche</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  onRequestMove(node);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+              >
+                📦 <span>Déplacer dans un autre kanban</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  onRequestDelete(node);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
+              >
+                🗑️ <span>Supprimer…</span>
+              </button>
+            </div>
           )}
         </div>
-      )}
+      </div>
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="w-full min-w-0">
@@ -191,7 +279,13 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
               aria-label={`Assigné à ${primaryAssignee.displayName}`}
             >
               {primaryAssignee.avatarUrl ? (
-                <img src={primaryAssignee.avatarUrl} alt={primaryAssignee.displayName} className="h-full w-full object-cover" />
+                <Image
+                  src={primaryAssignee.avatarUrl}
+                  alt={primaryAssignee.displayName}
+                  width={32}
+                  height={32}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <span className="flex h-full w-full items-center justify-center">{assigneeInitials || '??'}</span>
               )}
@@ -242,6 +336,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, showDes
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

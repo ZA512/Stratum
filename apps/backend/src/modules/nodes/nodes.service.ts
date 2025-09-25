@@ -28,6 +28,7 @@ import { NodeChildBoardDto } from './dto/node-child-board.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
 import { NodeSummaryOnlyDto } from './dto/node-summary-only.dto';
+import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
 
 function normalizeJson(
   value: Prisma.JsonValue | null,
@@ -623,6 +624,41 @@ export class NodesService {
     return this.mapNode(updated);
   }
 
+  async deleteNode(
+    nodeId: string,
+    recursive: boolean,
+    userId: string,
+  ): Promise<void> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: { id: true, teamId: true, parentId: true },
+    });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    if (!recursive) {
+      const childCount = await this.prisma.node.count({
+        where: { parentId: node.id },
+      });
+      if (childCount > 0) {
+        throw new BadRequestException(
+          'Impossible de supprimer la tâche : des sous-tâches sont présentes. Choisissez la suppression récursive.',
+        );
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.node.delete({ where: { id: node.id } });
+      if (node.parentId) {
+        try {
+          await this.recomputeParentProgress(tx, node.parentId);
+        } catch {
+          // Parent possiblement supprimé via cascade (suppression récursive)
+        }
+      }
+    });
+  }
+
   // Legacy checklist methods removed (deprecated endpoints now return 410 in controller)
 
   // recomputeChecklistProgress supprimé (legacy)
@@ -811,6 +847,73 @@ export class NodesService {
         blocked: 0,
         done: 0,
       },
+    };
+  }
+
+  async getDeletePreview(
+    nodeId: string,
+    userId: string,
+  ): Promise<NodeDeletePreviewDto> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: { id: true, teamId: true, path: true },
+    });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const directChildren = await this.prisma.node.findMany({
+      where: { parentId: node.id },
+      select: {
+        id: true,
+        column: { select: { behavior: { select: { key: true } } } },
+      },
+    });
+
+    const descendants = await this.prisma.node.findMany({
+      where: {
+        teamId: node.teamId,
+        path: { startsWith: node.path + '/' },
+      },
+      select: {
+        id: true,
+        column: { select: { behavior: { select: { key: true } } } },
+      },
+    });
+
+    const counts = {
+      backlog: 0,
+      inProgress: 0,
+      blocked: 0,
+      done: 0,
+    };
+
+    for (const child of descendants) {
+      const key = child.column?.behavior?.key;
+      switch (key) {
+        case ColumnBehaviorKey.BACKLOG:
+          counts.backlog++;
+          break;
+        case ColumnBehaviorKey.IN_PROGRESS:
+          counts.inProgress++;
+          break;
+        case ColumnBehaviorKey.BLOCKED:
+          counts.blocked++;
+          break;
+        case ColumnBehaviorKey.DONE:
+          counts.done++;
+          break;
+        default:
+          break;
+      }
+    }
+
+    return {
+      id: node.id,
+      hasChildren: directChildren.length > 0,
+      directChildren: directChildren.length,
+      totalDescendants: descendants.length,
+      counts,
+
     };
   }
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
@@ -1015,7 +1118,7 @@ export class NodesService {
   private mapNode(node: NodeModel): NodeDto {
     return {
       id: node.id,
-      shortId: Number(node.shortId),
+      shortId: Number(node.shortId ?? 0),
       teamId: node.teamId,
       parentId: node.parentId,
       // type supprimé
