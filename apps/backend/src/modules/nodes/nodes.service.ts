@@ -913,6 +913,7 @@ export class NodesService {
       directChildren: directChildren.length,
       totalDescendants: descendants.length,
       counts,
+
     };
   }
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {

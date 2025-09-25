@@ -547,6 +547,7 @@ export function TeamBoardPage(){
                 <button onClick={()=>setIsAddingColumn(true)} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-background transition hover:bg-accent-strong">Nouvelle colonne</button>
               )}
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted select-none">
+
                 <label className="flex items-center gap-2">
                   <input type="checkbox" className="accent-accent" checked={hideDone} onChange={e=>setHideDone(e.target.checked)} />
                   Masquer colonnes DONE

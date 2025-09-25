@@ -13,6 +13,7 @@ interface CardItemProps {
   onRename?: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMove: (node: BoardNode) => void;
   onRequestDelete: (node: BoardNode) => void;
+
   showDescription: boolean;
 }
 
@@ -335,6 +336,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
