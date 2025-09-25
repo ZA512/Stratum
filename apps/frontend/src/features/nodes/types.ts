@@ -16,6 +16,7 @@ export type NodeAssignment = {
 
 export type NodeDetail = {
   id: string;
+  shortId: number;
   teamId: string;
   parentId: string | null;
   type: 'SIMPLE' | 'COMPLEX';

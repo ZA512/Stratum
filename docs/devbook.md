@@ -36,6 +36,22 @@ pm run seed:reset (drop + migrate + seed) pour synchroniser les environnements.
 ---
 
 # 🔄 Journal & Mémoire (nouveau format)
+
+## 🗓️ Tâches courantes - 26/09/2025
+- [x] Cartes Kanban : affichage de l’ID court (#) + extrait description optionnel + avatar assigné + indicateur d’échéance dynamique.
+- [x] Backend : ajout du champ `shortId` auto-incrémenté, enrichissement de `/boards/:id/detail` (description, assignees, estimation).
+- [x] Front : toggle global « Description on/off » sur le board + UI revue (compteur & sous-board regroupés).
+- [ ] Menu contextuel carte (déplacement multi-board, suppression récursive) — à réaliser sur itération suivante.
+
+## 🗓️ Tâches courantes - 27/09/2025
+- [x] Ajuster la palette du badge d’échéance pour respecter les seuils basés sur l’estimation (rouge = estimation, orange = 2× estimation, valeurs par défaut 2/7 jours).
+- [ ] Implémenter le menu contextuel carte (édition, déplacement multi-board, suppression simple/récursive).
+- [ ] Préparer la modale de déplacement (arborescence des boards, règles d’exclusion des descendants).
+
+ℹ️ Notes :
+- `npm run prisma:migrate --workspace backend -- --name add_node_short_id` échoue ici faute de `DATABASE_URL`; migration SQL créée manuellement.
+- Les filtres/menus avancés restent à planifier après finalisation du Lot 1.
+
 Ce journal sert désormais de mémoire persistante. Chaque lot de travail est découpé en tâches atomiques. Si l'IDE plante, repartir de la première tâche non cochée sous la section active.
 
 ## 📌 Lot actif: Améliorations Blocage + Compteurs + UX Cartes

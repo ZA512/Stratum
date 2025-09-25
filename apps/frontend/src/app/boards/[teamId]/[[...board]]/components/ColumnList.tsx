@@ -10,6 +10,7 @@ interface ColumnListProps {
   editingColumnId: string | null;
   editingValues: { name: string; wip: string; submitting: boolean; error: string|null } | null;
   loadingCards: boolean;
+  showDescriptions: boolean;
   onRequestEdit: (id:string) => void;
   onCancelEdit: () => void;
   onSubmitEdit: () => void;
@@ -46,6 +47,7 @@ export function ColumnList(props: ColumnListProps){
             onCreateCard={(title)=> props.onCreateCard(column.id, title)}
             onOpenCard={props.onOpenCard}
             onRenameCard={props.onRenameCard}
+            showDescription={props.showDescriptions}
             childBoards={childBoards}
             loadingCards={loadingCards}
           />

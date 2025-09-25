@@ -40,12 +40,14 @@ export async function createNode(input: CreateNodeInput, accessToken: string): P
 
   const payload = (await response.json()) as {
     id: string;
+    shortId: number;
     title: string;
     type: BoardNode["type"];
     columnId: string | null;
     position?: number;
     parentId: string | null;
     dueAt: string | null;
+    description?: string | null;
   };
 
   if (!payload.columnId) {
@@ -54,12 +56,14 @@ export async function createNode(input: CreateNodeInput, accessToken: string): P
 
   return {
     id: payload.id,
+    shortId: payload.shortId,
     title: payload.title,
     type: payload.type,
     columnId: payload.columnId,
     position: payload.position ?? 0,
     parentId: payload.parentId,
     dueAt: payload.dueAt,
+    description: payload.description ?? null,
   };
 }
 
@@ -109,6 +113,7 @@ export async function fetchNodeSummary(nodeId: string, accessToken: string): Pro
 
 export type NodeLite = {
   id: string;
+  shortId: number;
   teamId: string;
   parentId: string | null;
   title: string;

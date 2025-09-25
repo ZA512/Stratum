@@ -39,7 +39,10 @@ export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
   @Get(':nodeId')
-  @ApiOperation({ summary: 'Récupère un noeud (tâche). Si des sous-tâches existent, un board implicite peut être associé.' })
+  @ApiOperation({
+    summary:
+      'Récupère un noeud (tâche). Si des sous-tâches existent, un board implicite peut être associé.',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeDto })
   getNode(@Param('nodeId') nodeId: string): Promise<NodeDto> {
@@ -47,7 +50,9 @@ export class NodesController {
   }
 
   @Get(':nodeId/breadcrumb')
-  @ApiOperation({ summary: 'Récupère le breadcrumb hiérarchique du noeud (fractal kanban)' })
+  @ApiOperation({
+    summary: 'Récupère le breadcrumb hiérarchique du noeud (fractal kanban)',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeBreadcrumbDto })
   getBreadcrumb(@Param('nodeId') nodeId: string): Promise<NodeBreadcrumbDto> {
@@ -55,7 +60,10 @@ export class NodesController {
   }
 
   @Get(':nodeId/children')
-  @ApiOperation({ summary: 'Liste les sous-boards (un par sous-projet) basés sur la présence de boards enfants' })
+  @ApiOperation({
+    summary:
+      'Liste les sous-boards (un par sous-projet) basés sur la présence de boards enfants',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeChildBoardDto, isArray: true })
   listChildBoards(
@@ -67,7 +75,10 @@ export class NodesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Crée un noeud racine ou enfant (le type est implicite, board créé seulement quand des sous-tâches apparaissent)' })
+  @ApiOperation({
+    summary:
+      'Crée un noeud racine ou enfant (le type est implicite, board créé seulement quand des sous-tâches apparaissent)',
+  })
   @ApiCreatedResponse({ type: NodeDto })
   createNode(
     @CurrentUser() user: AuthenticatedUser,
@@ -76,11 +87,13 @@ export class NodesController {
     return this.nodesService.createNode(dto, user.id);
   }
 
-
   @Get(':nodeId/detail')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Récupère le détail complet du noeud (assignations, sous-tâches, board + summary).' })
+  @ApiOperation({
+    summary:
+      'Récupère le détail complet du noeud (assignations, sous-tâches, board + summary).',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeDetailDto })
   getNodeDetail(@Param('nodeId') nodeId: string): Promise<NodeDetailDto> {
@@ -90,7 +103,9 @@ export class NodesController {
   @Get(':nodeId/summary')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Récupère uniquement le résumé (counts + présence board)' })
+  @ApiOperation({
+    summary: 'Récupère uniquement le résumé (counts + présence board)',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeSummaryOnlyDto })
   getNodeSummary(@Param('nodeId') nodeId: string): Promise<NodeSummaryOnlyDto> {
@@ -116,7 +131,10 @@ export class NodesController {
   @Post(':nodeId/children')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Crée une sous-tâche dans le backlog. Crée automatiquement le board + colonnes standard si absent.' })
+  @ApiOperation({
+    summary:
+      'Crée une sous-tâche dans le backlog. Crée automatiquement le board + colonnes standard si absent.',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiCreatedResponse({ type: NodeDetailDto })
   createChild(
@@ -130,7 +148,10 @@ export class NodesController {
   @Post(':nodeId/children/:childId/toggle-done')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Alterne une sous-tâche entre BACKLOG et DONE (déplacement de colonne)' })
+  @ApiOperation({
+    summary:
+      'Alterne une sous-tâche entre BACKLOG et DONE (déplacement de colonne)',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiParam({ name: 'childId', example: 'node_child' })
   @ApiOkResponse({ type: NodeDetailDto })
@@ -145,7 +166,9 @@ export class NodesController {
   @Patch(':nodeId/children/:childId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Met à jour une sous-tâche (titre / description / dueAt)' })
+  @ApiOperation({
+    summary: 'Met à jour une sous-tâche (titre / description / dueAt)',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiParam({ name: 'childId', example: 'node_child' })
   @ApiOkResponse({ type: NodeDetailDto })
@@ -161,7 +184,9 @@ export class NodesController {
   @Post(':nodeId/children/:childId/move')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Déplace une sous-tâche vers une autre colonne et position' })
+  @ApiOperation({
+    summary: 'Déplace une sous-tâche vers une autre colonne et position',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiParam({ name: 'childId', example: 'node_child' })
   @ApiOkResponse({ type: NodeDetailDto })
@@ -177,7 +202,7 @@ export class NodesController {
   @Post(':nodeId/children/reorder')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Réordonne toutes les sous-tâches d\'une colonne' })
+  @ApiOperation({ summary: "Réordonne toutes les sous-tâches d'une colonne" })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiOkResponse({ type: NodeDetailDto })
   reorderChildren(

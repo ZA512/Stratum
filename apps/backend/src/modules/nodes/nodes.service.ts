@@ -5,13 +5,23 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { ColumnBehaviorKey, MembershipStatus, Node as NodeModel, Prisma, PrismaClient } from '@prisma/client';
+import {
+  ColumnBehaviorKey,
+  MembershipStatus,
+  Node as NodeModel,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { NodeDto } from './dto/node.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
-import { NodeAssignmentDto, NodeMinimalChildDto, NodeSummaryDto } from './dto/node-detail.dto';
+import {
+  NodeAssignmentDto,
+  NodeMinimalChildDto,
+  NodeSummaryDto,
+} from './dto/node-detail.dto';
 import { NodeBreadcrumbDto } from './dto/node-breadcrumb.dto';
 import { NodeBreadcrumbItemDto } from './dto/node-breadcrumb-item.dto';
 import { NodeChildBoardDto } from './dto/node-child-board.dto';
@@ -80,7 +90,7 @@ export class NodesService {
       throw new BadRequestException('Date de livraison invalide');
     }
 
-  // requestedType legacy supprime (types désormais implicites)
+    // requestedType legacy supprime (types désormais implicites)
 
     // WIP limit (sur la colonne cible) avant creation
     if (column.wipLimit !== null) {
@@ -130,7 +140,9 @@ export class NodesService {
   ): Promise<NodeDetailDto> {
     const parent = await this.prisma.node.findUnique({
       where: { id: parentId },
-      include: { board: { include: { columns: { include: { behavior: true } } } } },
+      include: {
+        board: { include: { columns: { include: { behavior: true } } } },
+      },
     });
     if (!parent) throw new NotFoundException('Parent introuvable');
     await this.ensureUserCanWrite(parent.teamId, userId);
@@ -139,8 +151,11 @@ export class NodesService {
 
     const detail = await this.prisma.$transaction(async (tx) => {
       const { board, columns } = await this.ensureBoardWithColumns(tx, parent);
-      const backlogColumn = columns.find(c => c.behavior.key === ColumnBehaviorKey.BACKLOG);
-      if (!backlogColumn) throw new NotFoundException('Colonne backlog introuvable');
+      const backlogColumn = columns.find(
+        (c) => c.behavior.key === ColumnBehaviorKey.BACKLOG,
+      );
+      if (!backlogColumn)
+        throw new NotFoundException('Colonne backlog introuvable');
 
       if (backlogColumn.wipLimit !== null) {
         const currentCount = await tx.node.count({
@@ -191,7 +206,9 @@ export class NodesService {
   ): Promise<NodeDetailDto> {
     const parent = await this.prisma.node.findUnique({
       where: { id: parentId },
-      include: { board: { include: { columns: { include: { behavior: true } } } } },
+      include: {
+        board: { include: { columns: { include: { behavior: true } } } },
+      },
     });
     if (!parent) throw new NotFoundException('Parent introuvable');
     await this.ensureUserCanWrite(parent.teamId, userId);
@@ -205,7 +222,7 @@ export class NodesService {
       // Trouver le comportement actuel de la sous-tâche
       const currentColumn = columns.find((c) => c.id === child.columnId);
       const behaviorKey = currentColumn?.behavior.key;
-      
+
       // Determine target column based on current behavior
       let targetKey: ColumnBehaviorKey;
       if (behaviorKey === ColumnBehaviorKey.DONE) {
@@ -216,7 +233,8 @@ export class NodesService {
         targetKey = ColumnBehaviorKey.DONE;
       }
       const targetColumn = columns.find((c) => c.behavior.key === targetKey);
-  if (!targetColumn) throw new NotFoundException('Colonne cible introuvable');
+      if (!targetColumn)
+        throw new NotFoundException('Colonne cible introuvable');
 
       const aggregate = await tx.node.aggregate({
         where: { parentId: parent.id, columnId: targetColumn.id },
@@ -251,14 +269,21 @@ export class NodesService {
   async updateChildNode(
     parentId: string,
     childId: string,
-    dto: { title?: string | null; description?: string | null; dueAt?: string | null },
+    dto: {
+      title?: string | null;
+      description?: string | null;
+      dueAt?: string | null;
+    },
     userId: string,
   ): Promise<NodeDetailDto> {
-    const parent = await this.prisma.node.findUnique({ where: { id: parentId } });
+    const parent = await this.prisma.node.findUnique({
+      where: { id: parentId },
+    });
     if (!parent) throw new NotFoundException('Parent introuvable');
     await this.ensureUserCanWrite(parent.teamId, userId);
     const child = await this.prisma.node.findUnique({ where: { id: childId } });
-    if (!child || child.parentId !== parent.id) throw new NotFoundException('Sous-tache introuvable');
+    if (!child || child.parentId !== parent.id)
+      throw new NotFoundException('Sous-tache introuvable');
 
     const data: Prisma.NodeUpdateInput = {};
     if (dto.title !== undefined) {
@@ -270,7 +295,8 @@ export class NodesService {
     if (dto.description !== undefined) {
       if (dto.description === null) data.description = null;
       else {
-        if (dto.description.length > 50000) throw new BadRequestException('Description trop longue');
+        if (dto.description.length > 50000)
+          throw new BadRequestException('Description trop longue');
         data.description = dto.description;
       }
     }
@@ -278,11 +304,13 @@ export class NodesService {
       if (dto.dueAt === null) data.dueAt = null;
       else {
         const d = new Date(dto.dueAt);
-        if (Number.isNaN(d.getTime())) throw new BadRequestException('Date invalide');
+        if (Number.isNaN(d.getTime()))
+          throw new BadRequestException('Date invalide');
         data.dueAt = d;
       }
     }
-    if (Object.keys(data).length === 0) throw new BadRequestException('Aucun champ a mettre a jour');
+    if (Object.keys(data).length === 0)
+      throw new BadRequestException('Aucun champ a mettre a jour');
     await this.prisma.node.update({ where: { id: child.id }, data });
     return this.getNodeDetail(parent.id);
   }
@@ -293,15 +321,19 @@ export class NodesService {
     dto: { targetColumnId: string; position?: number },
     userId: string,
   ): Promise<NodeDetailDto> {
-    const parent = await this.prisma.node.findUnique({ where: { id: parentId } });
+    const parent = await this.prisma.node.findUnique({
+      where: { id: parentId },
+    });
     if (!parent) throw new NotFoundException('Parent introuvable');
     await this.ensureUserCanWrite(parent.teamId, userId);
     return this.prisma.$transaction(async (tx) => {
       const child = await tx.node.findUnique({ where: { id: childId } });
-      if (!child || child.parentId !== parent.id) throw new NotFoundException('Sous-tache introuvable');
+      if (!child || child.parentId !== parent.id)
+        throw new NotFoundException('Sous-tache introuvable');
       const { columns } = await this.ensureBoardWithColumns(tx, parent);
-      const targetColumn = columns.find(c => c.id === dto.targetColumnId);
-      if (!targetColumn) throw new NotFoundException('Colonne cible introuvable');
+      const targetColumn = columns.find((c) => c.id === dto.targetColumnId);
+      if (!targetColumn)
+        throw new NotFoundException('Colonne cible introuvable');
 
       const sameColumn = child.columnId === targetColumn.id;
       // WIP enforcement: si on change de colonne et que la cible a une limite
@@ -310,7 +342,9 @@ export class NodesService {
           where: { parentId: parent.id, columnId: targetColumn.id },
         });
         if (currentCount >= targetColumn.wipLimit) {
-          throw new ConflictException('Limite WIP atteinte pour la colonne cible');
+          throw new ConflictException(
+            'Limite WIP atteinte pour la colonne cible',
+          );
         }
       }
       // Fetch siblings of target column ordered
@@ -320,7 +354,7 @@ export class NodesService {
         select: { id: true, position: true },
       });
       // Remove child if currently in target list (for reorder calc)
-      const filtered = siblings.filter(s => s.id !== child.id);
+      const filtered = siblings.filter((s) => s.id !== child.id);
       const maxIndex = filtered.length;
       let desired = dto.position ?? maxIndex;
       if (desired < 0) desired = 0;
@@ -329,7 +363,7 @@ export class NodesService {
       // If moving within same column, rebuild order with placeholder at desired
       let finalOrder: string[];
       if (sameColumn) {
-        finalOrder = filtered.map(s => s.id);
+        finalOrder = filtered.map((s) => s.id);
         finalOrder.splice(desired, 0, child.id);
       } else {
         // Need also reindex old column removing child
@@ -338,19 +372,22 @@ export class NodesService {
           orderBy: { position: 'asc' },
           select: { id: true },
         });
-        const oldFiltered = oldSiblings.filter(s => s.id !== child.id);
+        const oldFiltered = oldSiblings.filter((s) => s.id !== child.id);
         // Reindex old column
         for (let i = 0; i < oldFiltered.length; i++) {
-          await tx.node.update({ where: { id: oldFiltered[i].id }, data: { position: i } });
+          await tx.node.update({
+            where: { id: oldFiltered[i].id },
+            data: { position: i },
+          });
         }
-        finalOrder = filtered.map(s => s.id);
+        finalOrder = filtered.map((s) => s.id);
         finalOrder.splice(desired, 0, child.id);
       }
       // Apply updates target column
       // Determine if moving child to IN_PROGRESS or DONE for first time markers
       const targetBehavior = targetColumn.behavior.key;
       const childFull = await tx.node.findUnique({ where: { id: child.id } });
-  let statusMeta = normalizeJson((childFull?.statusMetadata as any) ?? {}) || {};
+      const statusMeta = normalizeJson(childFull?.statusMetadata ?? {}) || {};
       const nowIso = new Date().toISOString();
       if (targetBehavior === ColumnBehaviorKey.IN_PROGRESS) {
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
@@ -360,7 +397,14 @@ export class NodesService {
       }
       for (let i = 0; i < finalOrder.length; i++) {
         const id = finalOrder[i];
-        await tx.node.update({ where: { id }, data: { position: i, columnId: targetColumn.id, statusMetadata: id === child.id ? statusMeta as any : undefined } });
+        await tx.node.update({
+          where: { id },
+          data: {
+            position: i,
+            columnId: targetColumn.id,
+            statusMetadata: id === child.id ? (statusMeta as any) : undefined,
+          },
+        });
       }
       await this.recomputeParentProgress(tx, parent.id);
       return this.getNodeDetailUsing(tx, parent.id);
@@ -372,7 +416,9 @@ export class NodesService {
     dto: { columnId: string; orderedIds: string[] },
     userId: string,
   ): Promise<NodeDetailDto> {
-    const parent = await this.prisma.node.findUnique({ where: { id: parentId } });
+    const parent = await this.prisma.node.findUnique({
+      where: { id: parentId },
+    });
     if (!parent) throw new NotFoundException('Parent introuvable');
     await this.ensureUserCanWrite(parent.teamId, userId);
     return this.prisma.$transaction(async (tx) => {
@@ -380,27 +426,42 @@ export class NodesService {
         where: { parentId: parent.id, columnId: dto.columnId },
         select: { id: true },
       });
-      const setExisting = new Set(nodes.map(n => n.id));
+      const setExisting = new Set(nodes.map((n) => n.id));
       const setProvided = new Set(dto.orderedIds);
-      if (setExisting.size !== setProvided.size || [...setExisting].some(id => !setProvided.has(id))) {
+      if (
+        setExisting.size !== setProvided.size ||
+        [...setExisting].some((id) => !setProvided.has(id))
+      ) {
         throw new BadRequestException('Liste ids incoherente');
       }
       for (let i = 0; i < dto.orderedIds.length; i++) {
-        await tx.node.update({ where: { id: dto.orderedIds[i] }, data: { position: i } });
+        await tx.node.update({
+          where: { id: dto.orderedIds[i] },
+          data: { position: i },
+        });
       }
       return this.getNodeDetail(parent.id);
     });
   }
 
-  private async recomputeParentProgress(tx: Prisma.TransactionClient, parentId: string) {
+  private async recomputeParentProgress(
+    tx: Prisma.TransactionClient,
+    parentId: string,
+  ) {
     // Récupère enfants pour calculer done/total (DONE = comportement DONE)
     const children = await tx.node.findMany({
       where: { parentId },
-      select: { id: true, column: { select: { behavior: { select: { key: true } } } } },
+      select: {
+        id: true,
+        column: { select: { behavior: { select: { key: true } } } },
+      },
     });
     const total = children.length;
     if (total === 0) {
-      await tx.node.update({ where: { id: parentId }, data: { progress: 0 } as any });
+      await tx.node.update({
+        where: { id: parentId },
+        data: { progress: 0 } as any,
+      });
       return;
     }
     let done = 0;
@@ -408,7 +469,10 @@ export class NodesService {
       if (c.column?.behavior?.key === ColumnBehaviorKey.DONE) done++;
     }
     const pct = Math.round((done / total) * 100);
-    await tx.node.update({ where: { id: parentId }, data: { progress: pct } as any });
+    await tx.node.update({
+      where: { id: parentId },
+      data: { progress: pct } as any,
+    });
   }
 
   async updateNode(
@@ -440,8 +504,7 @@ export class NodesService {
     if (dto.title !== undefined) {
       const title = dto.title.trim();
       if (!title) throw new BadRequestException('Le titre est obligatoire');
-      if (title.length > 200)
-        throw new BadRequestException('Titre trop long');
+      if (title.length > 200) throw new BadRequestException('Titre trop long');
       data.title = title;
     }
     if (dto.description !== undefined) {
@@ -468,17 +531,28 @@ export class NodesService {
       if (dto.progress < 0 || dto.progress > 100) {
         throw new BadRequestException('Progress hors limites (0-100)');
       }
-  (data as any).progress = dto.progress; // cast car typings générés n'ont peut-être pas été régénérés encore
+      (data as any).progress = dto.progress; // cast car typings générés n'ont peut-être pas été régénérés encore
     }
 
     // Blocage
     if (dto.blockedReminderEmails !== undefined) {
       if (!Array.isArray(dto.blockedReminderEmails)) {
-        throw new BadRequestException('blockedReminderEmails doit etre un tableau');
+        throw new BadRequestException(
+          'blockedReminderEmails doit etre un tableau',
+        );
       }
-      const cleaned = Array.from(new Set(dto.blockedReminderEmails.map(e=>String(e).trim().toLowerCase()).filter(Boolean)));
-      const invalid = cleaned.filter(e=> !/.+@.+\..+/.test(e));
-      if (invalid.length>0) throw new BadRequestException('Emails invalides: '+invalid.join(', '));
+      const cleaned = Array.from(
+        new Set(
+          dto.blockedReminderEmails
+            .map((e) => String(e).trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      const invalid = cleaned.filter((e) => !/.+@.+\..+/.test(e));
+      if (invalid.length > 0)
+        throw new BadRequestException(
+          'Emails invalides: ' + invalid.join(', '),
+        );
       (data as any).blockedReminderEmails = cleaned;
     }
     if (dto.blockedReminderIntervalDays !== undefined) {
@@ -486,43 +560,66 @@ export class NodesService {
         (data as any).blockedReminderIntervalDays = null;
       } else {
         const v = Number(dto.blockedReminderIntervalDays);
-        if (!Number.isInteger(v) || v < 1 || v > 365) throw new BadRequestException('blockedReminderIntervalDays invalide (1-365)');
+        if (!Number.isInteger(v) || v < 1 || v > 365)
+          throw new BadRequestException(
+            'blockedReminderIntervalDays invalide (1-365)',
+          );
         (data as any).blockedReminderIntervalDays = v;
       }
     }
     if (dto.blockedExpectedUnblockAt !== undefined) {
-      if (dto.blockedExpectedUnblockAt === null) (data as any).blockedExpectedUnblockAt = null;
+      if (dto.blockedExpectedUnblockAt === null)
+        (data as any).blockedExpectedUnblockAt = null;
       else {
         const d = new Date(dto.blockedExpectedUnblockAt);
-        if (Number.isNaN(d.getTime())) throw new BadRequestException('blockedExpectedUnblockAt invalide');
+        if (Number.isNaN(d.getTime()))
+          throw new BadRequestException('blockedExpectedUnblockAt invalide');
         (data as any).blockedExpectedUnblockAt = d;
       }
     }
     if (dto.priority !== undefined) {
-      const set = new Set(['NONE','CRITICAL','HIGH','MEDIUM','LOW','LOWEST']);
-      if (!set.has(dto.priority as any)) throw new BadRequestException('priority invalide');
+      const set = new Set([
+        'NONE',
+        'CRITICAL',
+        'HIGH',
+        'MEDIUM',
+        'LOW',
+        'LOWEST',
+      ]);
+      if (!set.has(dto.priority as any))
+        throw new BadRequestException('priority invalide');
       (data as any).priority = dto.priority as any;
     }
     if (dto.effort !== undefined) {
       if (dto.effort === null) (data as any).effort = null;
       else {
-        const set = new Set(['UNDER2MIN','XS','S','M','L','XL','XXL']);
-        if (!set.has(dto.effort as any)) throw new BadRequestException('effort invalide');
+        const set = new Set(['UNDER2MIN', 'XS', 'S', 'M', 'L', 'XL', 'XXL']);
+        if (!set.has(dto.effort as any))
+          throw new BadRequestException('effort invalide');
         (data as any).effort = dto.effort as any;
       }
     }
     if (dto.tags !== undefined) {
-      if (!Array.isArray(dto.tags)) throw new BadRequestException('tags doit etre un tableau');
-      const cleaned = dto.tags.map(t=>String(t).trim()).filter(t=>t.length>0);
-      const uniq = Array.from(new Map(cleaned.map(t=>[t.toLowerCase(), t])).values());
+      if (!Array.isArray(dto.tags))
+        throw new BadRequestException('tags doit etre un tableau');
+      const cleaned = dto.tags
+        .map((t) => String(t).trim())
+        .filter((t) => t.length > 0);
+      const uniq = Array.from(
+        new Map(cleaned.map((t) => [t.toLowerCase(), t])).values(),
+      );
       if (uniq.length > 20) throw new BadRequestException('Maximum 20 tags');
       for (const tag of uniq) {
-        if (tag.length > 32) throw new BadRequestException('Tag trop long (>32)');
+        if (tag.length > 32)
+          throw new BadRequestException('Tag trop long (>32)');
       }
       (data as any).tags = uniq;
     }
 
-    const updated = await this.prisma.node.update({ where: { id: nodeId }, data });
+    const updated = await this.prisma.node.update({
+      where: { id: nodeId },
+      data,
+    });
     return this.mapNode(updated);
   }
 
@@ -580,10 +677,10 @@ export class NodesService {
   }
 
   private async getNodeDetailUsing(
-    client: Prisma.TransactionClient | PrismaClient,
+    client: Prisma.TransactionClient,
     nodeId: string,
   ): Promise<NodeDetailDto> {
-    const node = await (client as any).node.findUnique({
+    const node = await client.node.findUnique({
       where: { id: nodeId },
       include: {
         assignments: true,
@@ -592,12 +689,19 @@ export class NodesService {
             id: true,
             title: true,
             columnId: true,
-            column: { select: { id: true, behavior: { select: { key: true } } } },
+            column: {
+              select: { id: true, behavior: { select: { key: true } } },
+            },
           },
           orderBy: { position: 'asc' },
         },
         board: {
-          select: { id: true, columns: { select: { id: true, behavior: { select: { key: true } } } } },
+          select: {
+            id: true,
+            columns: {
+              select: { id: true, behavior: { select: { key: true } } },
+            },
+          },
         },
       },
     });
@@ -622,10 +726,15 @@ export class NodesService {
     }));
 
     const summary: NodeSummaryDto | undefined = await this.buildSummary(node);
-    const board = node.board ? {
-      id: node.board.id,
-      columns: node.board.columns.map((c:any) => ({ id: c.id, behaviorKey: c.behavior?.key ?? null }))
-    } : undefined;
+    const board = node.board
+      ? {
+          id: node.board.id,
+          columns: node.board.columns.map((c: any) => ({
+            id: c.id,
+            behaviorKey: c.behavior?.key ?? null,
+          })),
+        }
+      : undefined;
 
     return {
       ...this.mapNode(node),
@@ -644,13 +753,17 @@ export class NodesService {
         const key = child.column?.behavior?.key;
         switch (key) {
           case 'BACKLOG':
-            counts.backlog++; break;
+            counts.backlog++;
+            break;
           case 'IN_PROGRESS':
-            counts.inProgress++; break;
+            counts.inProgress++;
+            break;
           case 'BLOCKED':
-            counts.blocked++; break;
+            counts.blocked++;
+            break;
           case 'DONE':
-            counts.done++; break;
+            counts.done++;
+            break;
         }
       }
       return { counts };
@@ -672,9 +785,19 @@ export class NodesService {
       where: { id: nodeId },
       include: {
         children: {
-          select: { id: true, column: { select: { behavior: { select: { key: true } } } } },
+          select: {
+            id: true,
+            column: { select: { behavior: { select: { key: true } } } },
+          },
         },
-        board: { select: { id: true, columns: { select: { id: true, behavior: { select: { key: true } } } } } },
+        board: {
+          select: {
+            id: true,
+            columns: {
+              select: { id: true, behavior: { select: { key: true } } },
+            },
+          },
+        },
       },
     });
     if (!node) throw new NotFoundException();
@@ -682,17 +805,29 @@ export class NodesService {
     return {
       id: node.id,
       hasBoard: !!node.board,
-      counts: summary?.counts || { backlog: 0, inProgress: 0, blocked: 0, done: 0 },
+      counts: summary?.counts || {
+        backlog: 0,
+        inProgress: 0,
+        blocked: 0,
+        done: 0,
+      },
     };
   }
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
     // Nouveau: on ne se base plus sur le type mais sur la présence d'un board
     const boards = await this.prisma.board.findMany({
       where: { node: { parentId: nodeId } },
-      select: { id: true, node: { select: { id: true, title: true, position: true } } },
+      select: {
+        id: true,
+        node: { select: { id: true, title: true, position: true } },
+      },
       orderBy: { node: { position: 'asc' } },
     });
-    return boards.map(b => ({ nodeId: b.node.id, boardId: b.id, name: b.node.title }));
+    return boards.map((b) => ({
+      nodeId: b.node.id,
+      boardId: b.id,
+      name: b.node.title,
+    }));
   }
   async getBreadcrumb(nodeId: string): Promise<NodeBreadcrumbDto> {
     const current = await this.prisma.node.findUnique({
@@ -760,7 +895,7 @@ export class NodesService {
     };
   }
   private async demoteToSimple(tx: Prisma.TransactionClient, node: NodeModel) {
-  if (false) {
+    if (false) {
       const childCount = await tx.node.count({ where: { parentId: node.id } });
       if (childCount > 0) {
         throw new BadRequestException(
@@ -880,9 +1015,10 @@ export class NodesService {
   private mapNode(node: NodeModel): NodeDto {
     return {
       id: node.id,
+      shortId: Number(node.shortId),
       teamId: node.teamId,
       parentId: node.parentId,
-  // type supprimé
+      // type supprimé
       title: node.title,
       description: node.description,
       path: node.path,
@@ -892,8 +1028,11 @@ export class NodesService {
       statusMetadata: normalizeJson(node.statusMetadata),
       progress: (node as any).progress ?? 0,
       blockedReminderEmails: (node as any).blockedReminderEmails ?? [],
-      blockedReminderIntervalDays: (node as any).blockedReminderIntervalDays ?? null,
-      blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt ? (node as any).blockedExpectedUnblockAt.toISOString?.() : null,
+      blockedReminderIntervalDays:
+        (node as any).blockedReminderIntervalDays ?? null,
+      blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt
+        ? (node as any).blockedExpectedUnblockAt.toISOString?.()
+        : null,
       priority: (node as any).priority ?? 'NONE',
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],
@@ -905,22 +1044,43 @@ export class NodesService {
     parent: { id: string; teamId: string },
   ): Promise<{
     board: { id: string };
-    columns: Array<{ id: string; behavior: { key: ColumnBehaviorKey }; wipLimit: number | null }>;
+    columns: Array<{
+      id: string;
+      behavior: { key: ColumnBehaviorKey };
+      wipLimit: number | null;
+    }>;
   }> {
     let board = await tx.board.findUnique({
       where: { nodeId: parent.id },
-      include: { columns: { include: { behavior: true }, orderBy: { position: 'asc' } } },
+      include: {
+        columns: { include: { behavior: true }, orderBy: { position: 'asc' } },
+      },
     });
     if (!board) {
       const created = await tx.board.create({ data: { nodeId: parent.id } });
-      const behaviors = await this.ensureDefaultColumnBehaviors(tx, parent.teamId);
+      const behaviors = await this.ensureDefaultColumnBehaviors(
+        tx,
+        parent.teamId,
+      );
       await this.createDefaultColumns(tx, created.id, behaviors);
       board = await tx.board.findUnique({
         where: { nodeId: parent.id },
-        include: { columns: { include: { behavior: true }, orderBy: { position: 'asc' } } },
+        include: {
+          columns: {
+            include: { behavior: true },
+            orderBy: { position: 'asc' },
+          },
+        },
       });
     }
     if (!board) throw new BadRequestException('Echec creation board');
-    return { board, columns: board.columns.map(c => ({ id: c.id, behavior: { key: c.behavior.key }, wipLimit: c.wipLimit })) };
+    return {
+      board,
+      columns: board.columns.map((c) => ({
+        id: c.id,
+        behavior: { key: c.behavior.key },
+        wipLimit: c.wipLimit,
+      })),
+    };
   }
 }

@@ -7,6 +7,9 @@ export class UpdateChecklistItemDto {
   @ApiPropertyOptional({ example: true })
   isDone?: boolean;
 
-  @ApiPropertyOptional({ example: 1, description: 'Nouvelle position (0-based)' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Nouvelle position (0-based)',
+  })
   position?: number;
 }

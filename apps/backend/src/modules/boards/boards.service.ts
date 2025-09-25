@@ -132,11 +132,27 @@ export class BoardsService {
       ? await this.prisma.node.findMany({
           where: { columnId: { in: columnIds } },
           orderBy: { position: 'asc' },
+          include: {
+            assignments: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    avatarUrl: true,
+                  },
+                },
+              },
+            },
+          },
         })
       : [];
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
-    const countsByParent = new Map<string, { backlog: number; inProgress: number; blocked: number; done: number }>();
+    const countsByParent = new Map<
+      string,
+      { backlog: number; inProgress: number; blocked: number; done: number }
+    >();
     if (nodes.length > 0) {
       const nodeIds = nodes.map((n) => n.id);
       const children = await this.prisma.node.findMany({
@@ -155,11 +171,20 @@ export class BoardsService {
         }
         const key = c.column?.behavior?.key;
         switch (key) {
-          case 'BACKLOG': b.backlog++; break;
-          case 'IN_PROGRESS': b.inProgress++; break;
-          case 'BLOCKED': b.blocked++; break;
-          case 'DONE': b.done++; break;
-          default: break;
+          case 'BACKLOG':
+            b.backlog++;
+            break;
+          case 'IN_PROGRESS':
+            b.inProgress++;
+            break;
+          case 'BLOCKED':
+            b.blocked++;
+            break;
+          case 'DONE':
+            b.done++;
+            break;
+          default:
+            break;
         }
       }
     }
@@ -178,6 +203,48 @@ export class BoardsService {
         nodesByColumn.set(node.columnId, []);
       }
       const bucket = nodesByColumn.get(node.columnId)!;
+      const statusMetadata = node.statusMetadata ?? null;
+      const metadata = node.metadata ?? null;
+      const estimatedDurationRaw =
+        statusMetadata && typeof statusMetadata === 'object'
+          ? (statusMetadata as Record<string, unknown>).estimatedDurationDays
+          : undefined;
+      const metadataEstimateRaw =
+        metadata && typeof metadata === 'object'
+          ? (metadata as Record<string, unknown>).estimatedDurationDays
+          : undefined;
+      const estimatedDuration = [
+        estimatedDurationRaw,
+        metadataEstimateRaw,
+      ].find((value) => typeof value === 'number' && Number.isFinite(value)) as
+        | number
+        | undefined;
+      const assignees = node.assignments
+        ? (
+            node.assignments as Array<{
+              user: {
+                id: string;
+                displayName: string;
+                avatarUrl: string | null;
+              } | null;
+            }>
+          )
+            .map((assignment) => assignment.user)
+            .filter(
+              (
+                user,
+              ): user is {
+                id: string;
+                displayName: string;
+                avatarUrl: string | null;
+              } => Boolean(user),
+            )
+            .map((user) => ({
+              id: user.id,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+            }))
+        : [];
       bucket.push({
         id: node.id,
         title: node.title,
@@ -185,11 +252,25 @@ export class BoardsService {
         position: node.position,
         parentId: node.parentId,
         dueAt: node.dueAt ? node.dueAt.toISOString() : null,
-        effort: (node as any).effort ?? null,
-        priority: (node as any).priority ?? 'NONE',
-        blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt ? (node as any).blockedExpectedUnblockAt.toISOString?.() : null,
-        tags: (node as any).tags ?? [],
-        counts: countsByParent.get(node.id) ?? { backlog: 0, inProgress: 0, blocked: 0, done: 0 },
+        shortId:
+          typeof node.shortId === 'number'
+            ? node.shortId
+            : Number(node.shortId ?? 0),
+        description: node.description ?? null,
+        effort: node.effort ?? null,
+        priority: node.priority ?? 'NONE',
+        blockedExpectedUnblockAt: node.blockedExpectedUnblockAt
+          ? node.blockedExpectedUnblockAt.toISOString?.()
+          : null,
+        tags: node.tags ?? [],
+        estimatedDurationDays: estimatedDuration ?? null,
+        assignees,
+        counts: countsByParent.get(node.id) ?? {
+          backlog: 0,
+          inProgress: 0,
+          blocked: 0,
+          done: 0,
+        },
       });
     }
 
