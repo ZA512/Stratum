@@ -233,7 +233,14 @@ export const ChildTasksSection: React.FC = () => {
             if(!c) return null;
             const isDone = c.behaviorKey === 'DONE';
             return (
-              <Reorder.Item value={id} key={id} as="div" id={`child-${id}`} className="group flex items-start gap-2 rounded px-3 py-2 bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 text-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-grab transition" whileDrag={{ scale:1.02, boxShadow:'0 4px 12px rgba(0,0,0,0.18)' }}>
+              <Reorder.Item
+                value={id}
+                key={id}
+                as="div"
+                id={`child-${id}`}
+                className="group flex items-start gap-2 rounded px-3 py-2 bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 text-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-grab transition"
+                whileDrag={{ scale:1.02, boxShadow:'0 4px 12px rgba(0,0,0,0.18)' }}
+              >
                 <button
                   type="button"
                   onMouseDown={(e)=>{ e.stopPropagation(); }}
@@ -272,7 +279,11 @@ export const ChildTasksSection: React.FC = () => {
                   className="mt-0.5 h-4 w-4 flex-shrink-0 rounded flex items-center justify-center text-[10px] border border-green-500 bg-green-500 text-white"
                   title="Remettre en Backlog"
                 >✓</button>
-                <span className="flex-1 select-text cursor-text" onDoubleClick={()=>startEdit(c.id, c.title)}>{c.title}</span>
+                {editingId === c.id ? (
+                  <input className="flex-1 border-b border-blue-500 focus:outline-none bg-transparent dark:placeholder-slate-400" autoFocus value={editingTitle} onChange={e=>setEditingTitle(e.target.value)} onBlur={()=>saveEdit(c.id)} onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault(); saveEdit(c.id);} if(e.key==='Escape'){ setEditingId(null);} }} />
+                ) : (
+                  <span className="flex-1 select-text cursor-text" onDoubleClick={()=>startEdit(c.id, c.title)}>{c.title}</span>
+                )}
               </div>
             ))}
           </div>

@@ -4,7 +4,7 @@ import { useDroppable } from '@dnd-kit/core';
 import type { BoardColumnWithNodes } from './types';
 import { BEHAVIOR_COLOR_CLASSES, BEHAVIOR_LABELS } from './constants';
 import { AddCardForm } from './AddCardForm';
-import { CardItem } from './CardItem';
+import { BoardTaskCard } from './BoardTaskCard';
 import type { BoardNode, NodeChildBoard } from '@/features/boards/boards-api';
 
 interface ColumnPanelProps {
@@ -96,7 +96,7 @@ export function ColumnPanel(props: ColumnPanelProps){
         ) : (
           <div className="space-y-3">
             {cards.map(card => (
-              <CardItem
+              <BoardTaskCard
                 key={card.id}
                 node={card}
                 columnId={column.id}
