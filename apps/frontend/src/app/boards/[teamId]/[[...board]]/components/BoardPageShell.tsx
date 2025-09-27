@@ -918,7 +918,6 @@ export function TeamBoardPage(){
                   </button>
                 </div>
               </div>
-              <p className="text-sm text-muted">Ajoutez des colonnes pour structurer votre board.</p>
             </div>
             {filtersExpanded && (
               <div className="absolute left-0 right-0 top-full z-40 mt-3">
