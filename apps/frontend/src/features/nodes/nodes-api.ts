@@ -22,6 +22,21 @@ export type UpdateNodeInput = {
   priority?: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];
+  raciResponsibleIds?: string[];
+  raciAccountableIds?: string[];
+  raciConsultedIds?: string[];
+  raciInformedIds?: string[];
+  estimatedTimeHours?: number | null;
+  actualOpexHours?: number | null;
+  actualCapexHours?: number | null;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  actualEndDate?: string | null;
+  billingStatus?: 'TO_BILL'|'BILLED'|'PAID' | null;
+  hourlyRate?: number | null;
+  plannedBudget?: number | null;
+  consumedBudgetValue?: number | null;
+  consumedBudgetPercent?: number | null;
 };
 
 export async function createNode(input: CreateNodeInput, accessToken: string): Promise<BoardNode> {

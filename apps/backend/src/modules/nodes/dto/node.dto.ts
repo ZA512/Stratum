@@ -66,4 +66,78 @@ export class NodeDto {
 
   @ApiProperty({ example: ['infra', 'urgent'], isArray: true })
   tags!: string[];
+
+  @ApiProperty({
+    type: () => NodeRaciDto,
+    description: 'Répartition RACI (listes d’IDs utilisateurs par rôle)',
+  })
+  raci!: NodeRaciDto;
+
+  @ApiProperty({
+    type: () => NodeTimeTrackingDto,
+    required: false,
+    description: 'Informations temps & effort',
+  })
+  timeTracking?: NodeTimeTrackingDto;
+
+  @ApiProperty({
+    type: () => NodeFinancialDto,
+    required: false,
+    description: 'Informations financières associées',
+  })
+  financials?: NodeFinancialDto;
+}
+
+export class NodeRaciDto {
+  @ApiProperty({ type: [String], description: 'IDs responsables (R)' })
+  responsibleIds!: string[];
+
+  @ApiProperty({ type: [String], description: 'IDs accountable (A)' })
+  accountableIds!: string[];
+
+  @ApiProperty({ type: [String], description: 'IDs consultés (C)' })
+  consultedIds!: string[];
+
+  @ApiProperty({ type: [String], description: 'IDs informés (I)' })
+  informedIds!: string[];
+}
+
+export class NodeTimeTrackingDto {
+  @ApiProperty({ example: 12, nullable: true, description: 'Temps estimé (heures)' })
+  estimatedTimeHours!: number | null;
+
+  @ApiProperty({ example: 8, nullable: true, description: 'Temps réel OPEX (heures)' })
+  actualOpexHours!: number | null;
+
+  @ApiProperty({ example: 4, nullable: true, description: 'Temps réel CAPEX (heures)' })
+  actualCapexHours!: number | null;
+
+  @ApiProperty({ example: '2025-03-01', nullable: true })
+  plannedStartDate!: string | null;
+
+  @ApiProperty({ example: '2025-03-15', nullable: true })
+  plannedEndDate!: string | null;
+
+  @ApiProperty({ example: '2025-03-18', nullable: true })
+  actualEndDate!: string | null;
+}
+
+export class NodeFinancialDto {
+  @ApiProperty({ example: 'TO_BILL', enum: ['TO_BILL', 'BILLED', 'PAID'], nullable: true })
+  billingStatus!: 'TO_BILL' | 'BILLED' | 'PAID' | null;
+
+  @ApiProperty({ example: 75, nullable: true, description: 'Taux horaire (€)' })
+  hourlyRate!: number | null;
+
+  @ApiProperty({ example: 900, nullable: true, description: 'Budget prévu (€)' })
+  plannedBudget!: number | null;
+
+  @ApiProperty({ example: 450, nullable: true, description: 'Budget consommé en valeur (€)' })
+  consumedBudgetValue!: number | null;
+
+  @ApiProperty({ example: 50, nullable: true, description: 'Budget consommé (%)' })
+  consumedBudgetPercent!: number | null;
+
+  @ApiProperty({ example: 900, nullable: true, description: 'Coût réel calculé (€)' })
+  actualCost!: number | null;
 }

@@ -12,6 +12,8 @@ export type NodeAssignment = {
   id: string;
   userId: string;
   role: string | null;
+  displayName?: string;
+  avatarUrl?: string | null;
 };
 
 export type NodeDetail = {
@@ -35,6 +37,28 @@ export type NodeDetail = {
   effort: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];
   assignments: NodeAssignment[];
+  raci: {
+    responsibleIds: string[];
+    accountableIds: string[];
+    consultedIds: string[];
+    informedIds: string[];
+  };
+  timeTracking?: {
+    estimatedTimeHours: number | null;
+    actualOpexHours: number | null;
+    actualCapexHours: number | null;
+    plannedStartDate: string | null;
+    plannedEndDate: string | null;
+    actualEndDate: string | null;
+  };
+  financials?: {
+    billingStatus: 'TO_BILL'|'BILLED'|'PAID' | null;
+    hourlyRate: number | null;
+    plannedBudget: number | null;
+    consumedBudgetValue: number | null;
+    consumedBudgetPercent: number | null;
+    actualCost: number | null;
+  };
   // checklist retirée du modèle après migration
   checklist?: undefined;
   children: NodeChild[];

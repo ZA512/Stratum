@@ -10,6 +10,12 @@ export class NodeAssignmentDto {
 
   @ApiProperty({ example: 'Owner', nullable: true })
   role!: string | null;
+
+  @ApiProperty({ example: 'Alice Martin', required: false })
+  displayName?: string;
+
+  @ApiProperty({ example: 'https://cdn/avatar.png', nullable: true, required: false })
+  avatarUrl?: string | null;
 }
 
 export class NodeMinimalChildDto {

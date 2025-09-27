@@ -12,6 +12,7 @@ import {
   AuthenticatedUser,
 } from '../auth/decorators/current-user.decorator';
 import { TeamsService } from './teams.service';
+import { TeamMemberDto } from './dto/team-member.dto';
 
 @ApiTags('Teams')
 @Controller('teams')
@@ -31,6 +32,14 @@ export class TeamsController {
   @ApiOkResponse({ type: TeamDto })
   getTeam(@Param('id') id: string): Promise<TeamDto> {
     return this.teamsService.getTeam(id);
+  }
+
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Liste les membres actifs de l’équipe' })
+  @ApiParam({ name: 'id', example: 'team_demo' })
+  @ApiOkResponse({ type: TeamMemberDto, isArray: true })
+  listMembers(@Param('id') id: string): Promise<TeamMemberDto[]> {
+    return this.teamsService.listMembers(id);
   }
 
   @Post('bootstrap')

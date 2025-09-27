@@ -3,6 +3,7 @@ import { MembershipStatus, Prisma, ColumnBehaviorKey } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TeamDto } from './dto/team.dto';
 import { randomUUID } from 'crypto';
+import { TeamMemberDto } from './dto/team-member.dto';
 
 const TEAM_DEFAULT_ORDER: Prisma.TeamOrderByWithRelationInput = {
   createdAt: 'desc',
@@ -54,6 +55,42 @@ export class TeamsService {
       membersCount: team.memberships.length,
       createdAt: team.createdAt.toISOString(),
     };
+  }
+
+  async listMembers(teamId: string): Promise<TeamMemberDto[]> {
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId },
+      select: {
+        memberships: {
+          where: { status: MembershipStatus.ACTIVE },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!team) {
+      throw new NotFoundException('Equipe introuvable');
+    }
+
+    return team.memberships
+      .map((membership) => membership.user)
+      .filter((user): user is { id: string; displayName: string; email: string; avatarUrl: string | null } => Boolean(user))
+      .map((user) => ({
+        id: user.id,
+        displayName: user.displayName,
+        email: user.email,
+        avatarUrl: user.avatarUrl ?? null,
+      }));
   }
 
   async bootstrapForUser(
