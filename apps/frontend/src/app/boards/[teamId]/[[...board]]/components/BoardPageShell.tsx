@@ -1077,8 +1077,7 @@ export function TeamBoardPage(){
             <div className="flex items-baseline justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">Colonnes du board</h2>
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => {
                     resetColumnForm();
                     setIsAddingColumn(true);
