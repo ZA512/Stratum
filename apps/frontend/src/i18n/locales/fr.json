@@ -1,0 +1,61 @@
+{
+  "common": {
+    "brand": "Stratum",
+    "loading": "Initialisation…",
+    "language": {
+      "label": "Langue",
+      "description": "Choisissez la langue utilisée dans l'interface.",
+      "english": "Anglais",
+      "french": "Français"
+    },
+    "actions": {
+      "signOut": "Déconnexion"
+    }
+  },
+  "home": {
+    "guest": {
+      "title": "Bienvenue sur Stratum",
+      "subtitle": "Connectez-vous pour accéder à vos équipes, à vos tableaux fractals et à la navigation breadcrumb.",
+      "cta": "Se connecter"
+    },
+    "header": {
+      "greeting": "Bonjour {name}",
+      "settings": "Paramètres"
+    },
+    "sections": {
+      "teamsTitle": "Vos équipes",
+      "lastCreated": "Dernière création : {date}",
+      "teamsDescription": "Les équipes actives sont synchronisées avec le module Prisma du backend. Sélectionnez-en une pour ouvrir le tableau fractal correspondant."
+    },
+    "team": {
+      "members": "{count} membre(s) actifs",
+      "createdAt": "Créée le {date}",
+      "openBoard": "Ouvrir le board"
+    },
+    "empty": {
+      "title": "Aucune équipe pour le moment",
+      "description": "Votre espace initial n'existe pas encore. Nous pouvons le créer automatiquement.",
+      "manual": "Créer mon premier espace",
+      "creating": "Création en cours…",
+      "auto": "Initialisation automatique en cours..."
+    }
+  },
+  "login": {
+    "title": "Connexion",
+    "subtitle": "Utilisez les identifiants de démo injectés par le seed Prisma.",
+    "email": "Email",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "submitting": "Connexion...",
+    "backPrompt": "Retour au tableau de bord ?",
+    "backLink": "Accéder à Stratum"
+  },
+  "settings": {
+    "title": "Paramètres utilisateur",
+    "description": "Personnalisez votre expérience. La préférence de langue remplace la détection automatique.",
+    "languageLabel": "Langue de l'interface",
+    "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
+    "success": "Langue mise à jour",
+    "back": "Retour au tableau de bord"
+  }
+}
