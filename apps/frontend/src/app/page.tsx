@@ -1,12 +1,14 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth/auth-provider";
 import { fetchTeams, bootstrapTeams, type Team } from "@/features/teams/teams-api";
+import { useTranslation, type Locale } from "@/i18n";
 
 export default function Home() {
   const { user, accessToken, initializing, logout } = useAuth();
+  const { t, locale } = useTranslation();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function Home() {
             if (!cancelled) setTeams(again);
           } catch (e) {
             if (!cancelled) {
-              setError((e as Error).message + ' (bootstrap)');
+              setError((e as Error).message + " (bootstrap)");
             }
           } finally {
             if (!cancelled) setBootstrapping(false);
@@ -70,16 +72,16 @@ export default function Home() {
   const lastUpdated = useMemo(() => {
     if (!hasTeams) return null;
     const [first] = teams;
-    return new Intl.DateTimeFormat("fr-FR", {
+    return new Intl.DateTimeFormat(intlLocaleFrom(locale), {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(first.createdAt));
-  }, [hasTeams, teams]);
+  }, [hasTeams, locale, teams]);
 
   if (initializing) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <span className="text-muted">Initialisation...</span>
+        <span className="text-muted">{t("common.loading")}</span>
       </div>
     );
   }
@@ -87,15 +89,13 @@ export default function Home() {
   if (!user) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 text-center px-6">
-        <h1 className="text-4xl font-semibold">Bienvenue sur Stratum</h1>
-        <p className="max-w-xl text-balance text-muted">
-          Connectez-vous pour acceder a vos equipes, a vos tableaux fractals et a la navigation breadcrumb.
-        </p>
+        <h1 className="text-4xl font-semibold">{t("home.guest.title")}</h1>
+        <p className="max-w-xl text-balance text-muted">{t("home.guest.subtitle")}</p>
         <Link
           href="/login"
           className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition hover:bg-accent-strong"
         >
-          Se connecter
+          {t("home.guest.cta")}
         </Link>
       </div>
     );
@@ -107,31 +107,37 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-6">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-accent">Stratum</p>
-            <h1 className="text-2xl font-semibold">Bonjour {user.displayName}</h1>
+            <h1 className="text-2xl font-semibold">{t("home.header.greeting", { name: user.displayName })}</h1>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
-          >
-            Deconnexion
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/settings"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {t("home.header.settings")}
+            </Link>
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {t("common.actions.signOut")}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-10">
         <section className="space-y-3">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-semibold">Vos equipes</h2>
+            <h2 className="text-xl font-semibold">{t("home.sections.teamsTitle")}</h2>
             {lastUpdated ? (
               <span className="text-xs uppercase tracking-wide text-muted">
-                Derniere creation : {lastUpdated}
+                {t("home.sections.lastCreated", { date: lastUpdated })}
               </span>
             ) : null}
           </div>
-          <p className="text-sm text-muted max-w-2xl">
-            Les equipes actives sont synchronisees avec le module Prisma du backend. Selectionnez-en une pour ouvrir le tableau fractal correspondant.
-          </p>
+          <p className="text-sm text-muted max-w-2xl">{t("home.sections.teamsDescription")}</p>
         </section>
 
         {error ? (
@@ -170,13 +176,13 @@ export default function Home() {
               className="group rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md transition hover:border-accent hover:shadow-accent/20"
             >
               <h3 className="text-lg font-semibold">{team.name}</h3>
-              <p className="text-sm text-muted">{team.membersCount} membre(s) actifs</p>
-              <p className="mt-2 text-xs text-muted">Creee le {formatFrenchDate(team.createdAt)}</p>
+              <p className="text-sm text-muted">{t("home.team.members", { count: team.membersCount })}</p>
+              <p className="mt-2 text-xs text-muted">{t("home.team.createdAt", { date: formatDate(team.createdAt, locale) })}</p>
               <Link
                 href={`/boards/${team.id}`}
                 className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-accent transition hover:text-accent-strong"
               >
-                Ouvrir le board
+                {t("home.team.openBoard")}
                 <span aria-hidden="true">-&gt;</span>
               </Link>
             </article>
@@ -187,8 +193,17 @@ export default function Home() {
   );
 }
 
-function formatFrenchDate(input: string) {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(new Date(input));
+const intlLocales: Record<Locale, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+};
+
+function intlLocaleFrom(locale: Locale) {
+  return intlLocales[locale] ?? "en-US";
+}
+
+function formatDate(input: string, locale: Locale) {
+  return new Intl.DateTimeFormat(intlLocaleFrom(locale), { dateStyle: "long" }).format(new Date(input));
 }
 
 function SkeletonBoardCard() {
@@ -201,14 +216,13 @@ function SkeletonBoardCard() {
   );
 }
 
-function EmptyState({ manualBootstrap, disabled, showManual }: { manualBootstrap?: ()=>Promise<void>; disabled?: boolean; showManual?: boolean; }) {
+function EmptyState({ manualBootstrap, disabled, showManual }: { manualBootstrap?: () => Promise<void>; disabled?: boolean; showManual?: boolean; }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-2xl border border-dashed border-white/10 bg-card/60 p-8 text-center space-y-4">
       <div>
-        <p className="text-lg font-semibold">Aucune equipe pour le moment</p>
-        <p className="mt-2 text-sm text-muted">
-          Votre espace initial n&apos;existe pas encore. Nous pouvons le créer automatiquement.
-        </p>
+        <p className="text-lg font-semibold">{t("home.empty.title")}</p>
+        <p className="mt-2 text-sm text-muted">{t("home.empty.description")}</p>
       </div>
       {showManual && manualBootstrap ? (
         <button
@@ -216,17 +230,12 @@ function EmptyState({ manualBootstrap, disabled, showManual }: { manualBootstrap
           disabled={disabled}
           className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-sm font-medium text-background disabled:opacity-50 hover:bg-accent-strong transition"
         >
-          {disabled ? 'Création en cours...' : 'Créer mon premier espace'}
+          {disabled ? t("home.empty.creating") : t("home.empty.manual")}
         </button>
       ) : null}
       {!showManual && (
-        <p className="text-[11px] text-muted/70">Initialisation automatique en cours...</p>
+        <p className="text-[11px] text-muted/70">{t("home.empty.auto")}</p>
       )}
     </div>
   );
 }
-
-
-
-
-
