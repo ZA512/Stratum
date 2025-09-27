@@ -22,6 +22,7 @@ interface ColumnPanelProps {
   onDelete: () => void;
   onCreateCard: (title: string) => Promise<void> | void;
   onOpenCard: (id: string) => void;
+  onOpenChildBoard?: (boardId: string) => void;
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
@@ -36,7 +37,7 @@ export function ColumnPanel(props: ColumnPanelProps){
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
     onMove, onDelete, onCreateCard, onOpenCard, onRenameCard,
     onRequestMoveCard, onRequestDeleteCard,
-    childBoards, loadingCards, showDescription
+    childBoards, loadingCards, showDescription, onOpenChildBoard
   } = props;
 
   const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || '';
@@ -102,6 +103,7 @@ export function ColumnPanel(props: ColumnPanelProps){
                 columnId={column.id}
                 childBoard={childBoards[card.id]}
                 onOpen={onOpenCard}
+                onOpenChildBoard={onOpenChildBoard}
                 onRename={onRenameCard}
                 onRequestMove={onRequestMoveCard}
                 onRequestDelete={onRequestDeleteCard}

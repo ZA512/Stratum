@@ -149,7 +149,7 @@ function BoardSkeleton(){
 
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
-  const { board, status, error, refreshActiveBoard, childBoards, teamId } = useBoardData();
+  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
 
@@ -795,7 +795,7 @@ export function TeamBoardPage(){
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+        <div className="flex items-center justify-between gap-4 px-8 py-5">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-[0.35em] text-accent">Stratum</p>
             <h1 className="text-3xl font-semibold">{board?board.name:'Board'}</h1>
@@ -809,9 +809,9 @@ export function TeamBoardPage(){
           </div>
         </div>
       </header>
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
+      <main className="flex flex-col gap-8 px-8 pt-8 pb-12 w-full">
         <section className="grid gap-6">
-          <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6">
+          <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6 w-full">
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[240px]">
@@ -1073,7 +1073,7 @@ export function TeamBoardPage(){
         {error && <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200">{error}</div>}
         {loading && <BoardSkeleton />}
         {!loading && board && (
-          <section className="space-y-4">
+          <section className="space-y-4 w-full">
             <div className="flex items-baseline justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">Colonnes du board</h2>
@@ -1112,6 +1112,7 @@ export function TeamBoardPage(){
                   onDeleteColumn={handleDeleteColumn}
                   onCreateCard={handleCreateCard}
                   onOpenCard={handleOpenCard}
+                  onOpenChildBoard={openChildBoard}
                   onRenameCard={handleRenameCard}
                   onRequestMoveCard={handleRequestMoveCard}
                   onRequestDeleteCard={handleRequestDeleteCard}

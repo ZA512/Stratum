@@ -247,4 +247,17 @@ export class NodesController {
   ): Promise<NodeDetailDto> {
     return this.nodesService.reorderChildren(nodeId, dto, user.id);
   }
+
+  @Post(':nodeId/ensure-board')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Crée le board et ses colonnes par défaut si absent (sans créer de sous-tâche)' })
+  @ApiParam({ name: 'nodeId', example: 'node_parent' })
+  @ApiOkResponse({ schema: { properties: { boardId: { type: 'string' } } } })
+  ensureBoard(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<{ boardId: string }> {
+    return this.nodesService.ensureBoardOnly(nodeId, user.id);
+  }
 }

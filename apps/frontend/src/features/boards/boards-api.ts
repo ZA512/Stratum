@@ -125,6 +125,15 @@ export async function fetchChildBoards(nodeId: string, accessToken: string): Pro
   return (await response.json()) as NodeChildBoard[];
 }
 
+export async function ensureChildBoard(nodeId: string, accessToken: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/ensure-board`, createOptions(accessToken, { method: 'POST' }));
+  if (!response.ok) {
+    await throwApiError(response, 'Impossible de créer le sous-board');
+  }
+  const payload = await response.json() as { boardId: string };
+  return payload.boardId;
+}
+
 export async function createBoardColumn(
   boardId: string,
   input: CreateBoardColumnInput,

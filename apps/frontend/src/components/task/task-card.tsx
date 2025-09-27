@@ -26,6 +26,11 @@ export interface TaskCardProps {
   fractalPath?: string; // ex: 4.0.0.1
   href?: string;
   onClick?: () => void;
+  onFractalPathClick?: () => void;
+  /** Clic sur le bouton menu (trois points) */
+  onMenuButtonClick?: () => void;
+  /** Masque le bouton menu interne (utilisé quand un menu externe est injecté) */
+  hideInternalMenuButton?: boolean;
   /**
    * Variante d'affichage:
    * - default: description visible, padding normal
@@ -54,30 +59,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   fractalPath,
   href,
   onClick,
+  onFractalPathClick,
+  onMenuButtonClick,
+  hideInternalMenuButton = false,
   variant = "default",
   className,
 }) => {
-  const Wrapper: React.ElementType = href ? "a" : "div";
-  const wrapperProps: any = href ? { href } : {};
-  if (onClick) wrapperProps.onClick = onClick;
-
   const compact = variant === "compact";
 
   return (
     <div
+      onClick={onClick}
       className={cx(
         "group relative rounded-lg bg-white dark:bg-gray-800 shadow-md ring-1 ring-gray-200 dark:ring-gray-700 hover:shadow-lg transition-shadow",
+        onClick && "cursor-pointer",
         className
       )}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); onClick(); } } : undefined}
     >
-      <Wrapper
-        {...wrapperProps}
-        aria-label={`Ouvrir la tâche #${id}`}
-        className={cx(
-          "absolute inset-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/60",
-          onClick && "cursor-pointer"
-        )}
-      />
       {/* En-tête */}
       <div className="flex items-start justify-between px-4 pt-3 pb-2">
         <div className="flex items-center gap-2">
@@ -91,13 +92,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {priority}
           </span>
         </div>
-        <button
-          type="button"
-          aria-label="Actions de la tâche"
-          className="p-1 -m-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
-        >
-          <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
-        </button>
+        {!hideInternalMenuButton && (
+          <button
+            type="button"
+            aria-label="Actions de la tâche"
+            onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
+            className="p-1 -m-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+          >
+            <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
+          </button>
+        )}
       </div>
       {/* Corps */}
       <div className={cx("px-4", compact ? "pb-2" : "pb-3")}>        
@@ -154,7 +158,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </div>
           )}
           {fractalPath && (
-            <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Version fractale">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFractalPathClick?.();
+              }}
+              className="relative z-10 flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 rounded-sm px-1 -mx-1"
+              title="Ouvrir le kanban enfant"
+            >
               <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>
               <span className="flex items-center gap-[1px] font-mono text-[11px]">
                 {(() => {
@@ -168,7 +180,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   ));
                 })()}
               </span>
-            </div>
+            </button>
           )}
         </div>
       </div>

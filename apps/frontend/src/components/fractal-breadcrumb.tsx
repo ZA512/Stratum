@@ -27,6 +27,8 @@ export interface FractalBreadcrumbProps {
   enableDescendAnimation?: boolean;
   /** Fournit une fonction pour lancer une descente: registerDescend(fn => fn(href)) */
   registerDescend?: (fn: (href: string) => void) => void;
+  /** Facteur d'overshoot vertical (remontée). 0 = pas d'overshoot. Ancien comportement ~0.6 */
+  ascendOvershootFactor?: number;
 }
 
 const DEFAULT_OFFSET_X = 56;
@@ -69,6 +71,7 @@ export function FractalBreadcrumb({
   registerDescend,
   buildHref,
   onPreNavigate,
+  ascendOvershootFactor = 0,
 }: FractalBreadcrumbProps) {
   const router = useRouter();
   const [travelTargetDepth, setTravelTargetDepth] = useState<number | null>(null);
@@ -150,7 +153,8 @@ export function FractalBreadcrumb({
       const diff = travelTargetDepth !== null ? (currentDepth - travelTargetDepth) : 0;
       const effectiveLeftPad = Math.round(offsetX * shrinkFactor);
       const dxPerLevel = offsetX - effectiveLeftPad; // composante horizontale de la diagonale
-      const yTarget = -(diff * offsetY + (diff > 0 ? offsetY * 0.6 : 0));
+  const overshoot = diff > 0 ? offsetY * Math.max(0, ascendOvershootFactor) : 0;
+  const yTarget = -(diff * offsetY + overshoot);
       const xTarget = -(diff * dxPerLevel * travelLateralFactor);
       // Animation descendante (apparition) : on part de la position inverse puis retombe à 0
       const effectiveLeftPad2 = Math.round(offsetX * shrinkFactor);

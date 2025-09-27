@@ -27,13 +27,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     };
 
     const options: StrategyOptions = {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       jwtFromRequest,
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET', 'dev-secret'),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     super(options);
   }
 

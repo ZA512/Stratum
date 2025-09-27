@@ -489,5 +489,57 @@ Ordre de priorité final résulte d’une pile de règles :
 
 Fin réflexions — à consolider dans une future RFC avant implémentation.
 
+---
+
+## 🖥️ Décision UI: Passage en largeur pleine pour le board (Full-width Columns)
+
+### Constat (avant)
+En mode centré `max-w-6xl`, un grand écran affichait 3 colonnes + 2/3 d’une quatrième. Visuellement:
+1. Impression de « coupe » arbitraire de la grille.
+2. Perte de surface utile alors que le contexte de travail (kanban) bénéficie d’une vision large.
+3. Contraste avec les usages des outils pro (Jira, Linear, Azure Boards) qui exploitent toute la largeur horizontale disponible.
+
+### Objectif
+Offrir une expérience fluide sur écrans larges: laisser le flux horizontal respirer, favoriser la comparaison cross‑colonnes, réduire le scroll horizontal.
+
+### Modifications appliquées
+- Suppression des wrappers `max-w-6xl` sur le header et le `<main>` (fichier `BoardPageShell.tsx`).
+- Padding horizontal uniforme `px-8` pour conserver des marges confortables sans créer de tunnel central.
+- Le container des filtres (bloc recherche + pills + panneau avancé) s’étend maintenant sur toute la largeur disponible (il ne « casse » plus visuellement avant les colonnes).
+- Les colonnes continuent de s’aligner dans une scroller row horizontale (`flex gap-4 overflow-x-auto` inside `ColumnList`) sans contrainte de largeur globale.
+
+### Principes UX retenus
+1. Largeur = capacité de synthèse (plus de colonnes visibles = meilleure prise de décision). 
+2. Pas de centrage artificiel pour un outil orienté productivité (contrairement à un article / lecture longue). 
+3. Les composants denses (cartes) conservent leur largeur contrôlée (≈280–320px) pour maintenir lisibilité et rythme.
+4. L’en-tête et la barre de filtres restent visuellement « ancrés » par des marges latérales constantes (éviter l’impression d’un océan vide sur ultra-wide).
+
+### État futur possible
+- Breakpoint adaptatif : au‑delà de très grands écrans (> 1920px), possibilité de densifier (réduire légèrement `gap`) ou introduire un mini‑minimap / sticky swimlane summary.
+- Toggle « Mode focus » optionnel pour revenir à un conteneur centré (ex: présentation / démo) sans retirer la logique full-width par défaut.
+
+### Revert rapide (si besoin)
+Réintroduire dans `BoardPageShell.tsx` les classes:
+```tsx
+<header className="...">
+  <div className="mx-auto max-w-6xl px-6">...</div>
+</header>
+<main className="mx-auto max-w-6xl px-6">...</main>
+```
+
+### Validation manuelle post‑changement
+1. Sur un écran large (≥ 1440px) vérifier que 4+ colonnes sont visibles entièrement sans coupure.
+2. Ouvrir / fermer le panneau filtres avancés : la largeur suit correctement.
+3. DnD entre colonnes extrêmes (gauche ↔ droite) reste fluide sans latence de scroll.
+4. Responsif : sur < 1024px, l’horizontal scroll fonctionne comme avant (aucune régression du flux). 
+
+### Risques / Observations
+- Très grands écrans : amplitude de saccade possible lors d’un drag si le pointeur traverse > 1800px (à surveiller, peut nécessiter inertie ou auto‑scroll fin). 
+- Charge cognitive : trop de colonnes visibles peut saturer — à compenser plus tard avec filtres visuels groupés (collapse de colonnes peu actives).
+
+### Statut
+Livré (27/09/2025). Aucun blocage identifié. Prochaine étape éventuelle: mode focus toggle.
+
+
 
 

@@ -10,7 +10,6 @@ import {
   MembershipStatus,
   Node as NodeModel,
   Prisma,
-  PrismaClient,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -151,7 +150,7 @@ export class NodesService {
     if (!dto.title?.trim()) throw new BadRequestException('Titre requis');
 
     const detail = await this.prisma.$transaction(async (tx) => {
-      const { board, columns } = await this.ensureBoardWithColumns(tx, parent);
+      const { columns } = await this.ensureBoardWithColumns(tx, parent);
       const backlogColumn = columns.find(
         (c) => c.behavior.key === ColumnBehaviorKey.BACKLOG,
       );
@@ -761,7 +760,7 @@ export class NodesService {
       columnId: child.columnId,
     }));
 
-    const summary: NodeSummaryDto | undefined = await this.buildSummary(node);
+    const summary: NodeSummaryDto | undefined = this.buildSummary(node);
     const board = node.board
       ? {
           id: node.board.id,
@@ -781,7 +780,7 @@ export class NodesService {
     };
   }
 
-  private async buildSummary(node: any): Promise<NodeSummaryDto | undefined> {
+  private buildSummary(node: any): NodeSummaryDto | undefined {
     // If board exists -> aggregate by column behavior
     if (node.board) {
       const counts = { backlog: 0, inProgress: 0, blocked: 0, done: 0 };
@@ -837,7 +836,7 @@ export class NodesService {
       },
     });
     if (!node) throw new NotFoundException();
-    const summary = await this.buildSummary(node);
+    const summary = this.buildSummary(node);
     return {
       id: node.id,
       hasBoard: !!node.board,
@@ -913,7 +912,6 @@ export class NodesService {
       directChildren: directChildren.length,
       totalDescendants: descendants.length,
       counts,
-
     };
   }
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
@@ -998,16 +996,8 @@ export class NodesService {
     };
   }
   private async demoteToSimple(tx: Prisma.TransactionClient, node: NodeModel) {
-    if (false) {
-      const childCount = await tx.node.count({ where: { parentId: node.id } });
-      if (childCount > 0) {
-        throw new BadRequestException(
-          'Impossible de convertir : le kanban possede encore des sous-taches',
-        );
-      }
-      await tx.column.deleteMany({ where: { board: { nodeId: node.id } } });
-      await tx.board.deleteMany({ where: { nodeId: node.id } });
-    }
+    // Suppression de la validation des sous-tâches pour permettre la conversion
+    // TODO: Réactiver si besoin avec une logique appropriée
 
     // Legacy checklist déjà supprimée du schema
 
@@ -1185,5 +1175,24 @@ export class NodesService {
         wipLimit: c.wipLimit,
       })),
     };
+  }
+
+  async ensureBoardOnly(nodeId: string, userId: string): Promise<{ boardId: string }> {
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node) throw new NotFoundException('Noeud introuvable');
+    await this.ensureUserCanWrite(node.teamId, userId);
+    const existing = await this.prisma.board.findUnique({ where: { nodeId: node.id } });
+    if (existing) return { boardId: existing.id };
+    // Crée board + colonnes défaut dans une transaction réutilisant helpers
+    const createdId = await this.prisma.$transaction(async (tx) => {
+      let board = await tx.board.findUnique({ where: { nodeId: node.id } });
+      if (!board) {
+        board = await tx.board.create({ data: { nodeId: node.id } });
+        const behaviors = await this.ensureDefaultColumnBehaviors(tx, node.teamId);
+        await this.createDefaultColumns(tx, board.id, behaviors);
+      }
+      return board.id;
+    });
+    return { boardId: createdId };
   }
 }

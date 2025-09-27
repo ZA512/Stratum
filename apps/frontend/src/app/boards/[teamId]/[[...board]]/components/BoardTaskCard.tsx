@@ -3,13 +3,16 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-card';
+import { useAuth } from '@/features/auth/auth-provider';
+import { ensureChildBoard } from '@/features/boards/boards-api';
 import type { BoardNode } from '@/features/boards/boards-api';
 
 interface BoardTaskCardProps {
   node: BoardNode;
   columnId: string;
   childBoard?: { boardId: string } | undefined;
-  onOpen: (id: string) => void;
+  onOpen: (id: string) => void;              // ouvre le drawer tâche
+  onOpenChildBoard?: (boardId: string) => void; // navigation vers sous-board
   onRename?: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMove: (node: BoardNode) => void;
   onRequestDelete: (node: BoardNode) => void;
@@ -35,11 +38,12 @@ function truncateDescription(description: string | null | undefined, maxLength =
   return `${trimmed.slice(0, maxLength).trimEnd()}…`;
 }
 
-export function BoardTaskCard({ node, columnId, childBoard, onOpen, onRename, onRequestMove, onRequestDelete, showDescription }: BoardTaskCardProps) {
+export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildBoard, onRename, onRequestMove, onRequestDelete, showDescription }: BoardTaskCardProps) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
     data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
   });
+  const { accessToken } = useAuth();
   
   const style: React.CSSProperties = { 
     transform: CSS.Transform.toString(transform), 
@@ -50,6 +54,7 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onRename, on
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(node.title);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [fractalLoading, setFractalLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -143,8 +148,32 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onRename, on
         complexity={complexity}
         fractalPath={fractalPath}
         onClick={() => onOpen(node.id)}
+        onFractalPathClick={async () => {
+          if (!onOpenChildBoard || fractalLoading) return;
+            // Si déjà présent
+          if (childBoard) {
+            onOpenChildBoard(childBoard.boardId);
+            return;
+          }
+          if (!accessToken) return;
+          try {
+            setFractalLoading(true);
+            const boardId = await ensureChildBoard(node.id, accessToken);
+            onOpenChildBoard(boardId);
+          } catch (e) {
+            // TODO: brancher un toast d'erreur si disponible
+          } finally {
+            setFractalLoading(false);
+          }
+        }}
+        onMenuButtonClick={() => setMenuOpen(prev => !prev)}
         className="cursor-grab active:cursor-grabbing"
       />
+      {fractalLoading && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 z-40">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+        </div>
+      )}
       
       {/* Menu contextuel overlay */}
       {menuOpen && (
@@ -163,6 +192,17 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onRename, on
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
           >
             ✏️ <span>Éditer la tâche</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              closeMenu();
+              setEditing(true);
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+          >
+            📝 <span>Modifier le titre</span>
           </button>
           <button
             type="button"
@@ -206,23 +246,7 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onRename, on
         </div>
       )}
       
-      {/* Bouton menu customisé (remplace celui du TaskCard) */}
-      <div className="absolute right-3 top-3">
-        <button
-          ref={menuButtonRef}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen(prev => !prev);
-          }}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 transition"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          aria-label="Actions carte"
-        >
-          <span className="material-icons-outlined" style={{ fontSize: 18 }}>more_horiz</span>
-        </button>
-      </div>
+      {/* Bouton menu customisé retiré : on utilise celui du TaskCard via delegation */}
     </div>
   );
 }
