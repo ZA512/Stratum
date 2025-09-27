@@ -24,6 +24,7 @@ export interface TaskCardProps {
   lateness?: number; // ex: -6 -> retard
   complexity?: string; // XL, L, M...
   fractalPath?: string; // ex: 4.0.0.1
+  progress?: number;
   href?: string;
   onClick?: () => void;
   onFractalPathClick?: () => void;
@@ -35,9 +36,10 @@ export interface TaskCardProps {
    * Variante d'affichage:
    * - default: description visible, padding normal
    * - compact: description masquée, padding vertical réduit
-   */
+  */
   variant?: "default" | "compact";
   className?: string;
+  assigneeTooltip?: string;
 }
 
 // Helper palette (conserver les couleurs existantes)
@@ -57,6 +59,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   lateness,
   complexity,
   fractalPath,
+  progress,
   href,
   onClick,
   onFractalPathClick,
@@ -64,6 +67,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   hideInternalMenuButton = false,
   variant = "default",
   className,
+  assigneeTooltip,
 }) => {
   const compact = variant === "compact";
 
@@ -114,7 +118,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
-          <div className="flex -space-x-2">
+          <div
+            className="flex -space-x-2"
+            title={assigneeTooltip ?? undefined}
+            aria-label={assigneeTooltip ?? undefined}
+          >
             {assignees.slice(0, 4).map(a => (
               <div
                 key={a.id}
@@ -151,6 +159,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
         </div>
         <div className="col-span-5 flex items-center justify-end gap-4">
+          {typeof progress === "number" && progress > 0 && (
+            <div
+              className="flex items-center gap-2 min-w-[72px]"
+              title={`Progression ${Math.min(Math.max(progress, 0), 100)}%`}
+            >
+              <div className="relative h-2 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 dark:bg-emerald-400"
+                  style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                {Math.min(Math.max(Math.round(progress), 0), 100)}%
+              </span>
+            </div>
+          )}
           {complexity && (
             <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>

@@ -72,6 +72,13 @@ pm run seed:reset (drop + migrate + seed) pour synchroniser les environnements.
 - [x] Documentation : journaliser l’état d’avancement du lot contextuel/suppression et préciser le suivi du déplacement multi-board restant.
 - [ ] Déplacement multi-board : construire l’arborescence de sélection et sécuriser les règles d’exclusion descendants.
 
+## 🗓️ Tâches courantes - 02/10/2025
+- [x] Drawer tâche : ajout des champs RACI multi-sélection (R, A, C, I) et synchronisation avec l’API équipes.
+- [x] Drawer tâche : mode expert avec onglets « Classique » / « Temps & coût », suivi temps/budgets (estimations, OPEX, CAPEX, taux horaire, budgets) et calcul du coût réel.
+- [x] Cartes kanban : affichage progression (%) et infobulle RACI consolidée sur la vue board.
+- [x] Paramètre board : persistance du mode expert et intégration dans le filtre (toggle disponible côté board UI settings).
+- [ ] Tests automatisés : ajouter la couverture sur la validation numérique et la persistance RACI.
+
 ℹ️ Notes :
 - `npm run prisma:migrate --workspace backend -- --name add_node_short_id` échoue ici faute de `DATABASE_URL`; migration SQL créée manuellement.
 - Les filtres/menus avancés restent à planifier après finalisation du Lot 1.
@@ -175,29 +182,15 @@ Historique récent (résumé):
 - Backend: enum Prisma Priority + champ Node.priority (default NONE), DTO/Service (validation).
 - Front: sélecteur simple dans TaskDrawer; badge sur carte (couleur par niveau) en option.
 
-3) RACI (4 zones d’assignation par rôle)
-- Rôles: R (Responsible), A (Accountable), C (Consulted), I (Informed).
-- UI: input type select2-like (recherche, chips, suppression par croix, multi-valeurs) pour chaque rôle.
-- Backend: soit enrichir NodeAssignment avec un champ roleRaci, soit stocker dans `statusMetadata`/`metadata` (clé `raci: { R:[], A:[], C:[], I:[] }`) pour un premier jet.
-- Front: champ multi-sélection avec auto-complétion des utilisateurs de l’équipe (à définir: endpoint de recherche users).
+3) ~~RACI (4 zones d’assignation par rôle)~~ ✅
+   - Implémenté backend (DTO/services) + drawer front (multi-sélection avec recherche, puces retirables, chargement membres d’équipe).
+   - Persisté via `updateNode` (payload RACI) avec recalcul du diff tracking.
 
-4) Mode Expert (onglets Tâche / Temps)
-- Activation: toggle “mode expert” dans le Kanban.
-- Onglet Temps: deux blocs
-  - Bloc Temps et effort
-    • Temps estimé (heures)
-    • Temps réel saisi OPEX
-    • Temps réel saisi CAPEX
-    • Date début / Date fin prévue
-    • Date réelle de fin
-    • Statut facturation: À facturer / Facturé / Payé
-  - Bloc Coûts et budgets
-    • Taux horaire (auto ou manuel)
-    • Coût réel = temps réel × taux horaire (auto)
-    • Budget prévu (optionnel)
-    • Budget consommé (% ou €)
-- Backend: champs dédiés dans Node (ou objet `statusMetadata.time` pour un POC), validations numériques et dates.
-- Front: onglets dans le drawer; persistance via updateNode.
+4) ~~Mode Expert (onglets Tâche / Temps)~~ ✅
+   - Toggle disponible dans les filtres du board (persisté) ouvrant les onglets « Classique » / « Temps & coût ».
+   - Bloc Temps & effort : estimations, temps réels OPEX/CAPEX, planning, statut facturation.
+   - Bloc Coûts & budgets : taux horaire, coût réel calculé, budget prévu et consommé (€, %).
+   - Validation des saisies numériques (virgule/point) et mapping complet côté backend/front.
 
 5) Effort (taille)
 - Valeurs: <2min, XS, S, M, L, XL, XXL (voir mapping couleurs ci‑dessous).
@@ -211,12 +204,11 @@ Historique récent (résumé):
 
 🧩 Découpage technique proposé (ordre suggéré)
 - [x] A. Largeur drawer (UI-only) — appliqué: sm 640px, md 720px, lg 840px
-- [ ] B. Priorité (Prisma + DTO + UI simple)
- - [x] B. Priorité (Prisma + DTO + UI simple) — migration: add_priority_to_node, UI select dans drawer
-- [ ] C. Effort (Prisma + DTO + UI simple)
-- [ ] D. Tags (MVP: String[] + UI chips)
-- [ ] E. RACI (MVP via metadata; UI chips + futur endpoint users)
-- [ ] F. Mode Expert (onglets + champs temps/coûts en metadata; future normalisation Prisma)
+- [x] B. Priorité (Prisma + DTO + UI simple) — migration: add_priority_to_node, UI select dans drawer
+- [x] C. Effort (Prisma + DTO + UI simple)
+- [x] D. Tags (MVP: String[] + UI chips)
+- [x] E. RACI (MVP via metadata; UI chips + endpoint users équipe)
+- [x] F. Mode Expert (onglets + champs temps/coûts en metadata; future normalisation Prisma)
 
 ---
 

@@ -55,4 +55,106 @@ export class UpdateNodeDto {
     isArray: true,
   })
   tags?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'IDs des responsables (R) pour la matrice RACI',
+  })
+  raciResponsibleIds?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'IDs des Accountable (A) pour la matrice RACI',
+  })
+  raciAccountableIds?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'IDs des Consulted (C) pour la matrice RACI',
+  })
+  raciConsultedIds?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'IDs des Informed (I) pour la matrice RACI',
+  })
+  raciInformedIds?: string[];
+
+  @ApiPropertyOptional({
+    example: 12,
+    nullable: true,
+    description: 'Temps estimé (heures)'
+  })
+  estimatedTimeHours?: number | null;
+
+  @ApiPropertyOptional({
+    example: 8,
+    nullable: true,
+    description: 'Temps réel OPEX (heures)'
+  })
+  actualOpexHours?: number | null;
+
+  @ApiPropertyOptional({
+    example: 4,
+    nullable: true,
+    description: 'Temps réel CAPEX (heures)'
+  })
+  actualCapexHours?: number | null;
+
+  @ApiPropertyOptional({
+    example: '2025-03-01',
+    nullable: true,
+    description: 'Date de début prévue (YYYY-MM-DD)',
+  })
+  plannedStartDate?: string | null;
+
+  @ApiPropertyOptional({
+    example: '2025-03-15',
+    nullable: true,
+    description: 'Date de fin prévue (YYYY-MM-DD)',
+  })
+  plannedEndDate?: string | null;
+
+  @ApiPropertyOptional({
+    example: '2025-03-18',
+    nullable: true,
+    description: 'Date de fin réelle (YYYY-MM-DD)',
+  })
+  actualEndDate?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'TO_BILL',
+    enum: ['TO_BILL', 'BILLED', 'PAID'],
+    nullable: true,
+    description: 'Statut de facturation',
+  })
+  billingStatus?: 'TO_BILL' | 'BILLED' | 'PAID' | null;
+
+  @ApiPropertyOptional({
+    example: 75,
+    nullable: true,
+    description: 'Taux horaire appliqué (€)'
+  })
+  hourlyRate?: number | null;
+
+  @ApiPropertyOptional({
+    example: 900,
+    nullable: true,
+    description: 'Budget prévu (€)'
+  })
+  plannedBudget?: number | null;
+
+  @ApiPropertyOptional({
+    example: 450,
+    nullable: true,
+    description: 'Budget consommé en valeur (€)'
+  })
+  consumedBudgetValue?: number | null;
+
+  @ApiPropertyOptional({
+    example: 50,
+    nullable: true,
+    description: 'Budget consommé en pourcentage (%)'
+  })
+  consumedBudgetPercent?: number | null;
 }

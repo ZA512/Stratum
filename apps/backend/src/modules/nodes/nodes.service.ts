@@ -38,6 +38,60 @@ function normalizeJson(
   return null;
 }
 
+const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
+
+type RaciRole = 'R' | 'A' | 'C' | 'I';
+
+type ExtractedMetadata = {
+  raw: Record<string, any>;
+  raci: {
+    responsibleIds: string[];
+    accountableIds: string[];
+    consultedIds: string[];
+    informedIds: string[];
+  };
+  timeTracking: {
+    estimatedTimeHours: number | null;
+    actualOpexHours: number | null;
+    actualCapexHours: number | null;
+    plannedStartDate: string | null;
+    plannedEndDate: string | null;
+    actualEndDate: string | null;
+  };
+  financials: {
+    billingStatus: 'TO_BILL' | 'BILLED' | 'PAID' | null;
+    hourlyRate: number | null;
+    plannedBudget: number | null;
+    consumedBudgetValue: number | null;
+    consumedBudgetPercent: number | null;
+    actualCost: number | null;
+  };
+};
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const set = new Set<string>();
+  for (const entry of value) {
+    if (entry === null || entry === undefined) continue;
+    const str = String(entry).trim();
+    if (str) set.add(str);
+  }
+  return Array.from(set.values());
+}
+
+function toNumberOrNull(value: unknown): number | null {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return null;
+  return num;
+}
+
+function toDateStringOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed;
+}
+
 @Injectable()
 export class NodesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -494,7 +548,22 @@ export class NodesService {
       dto.blockedExpectedUnblockAt === undefined &&
       dto.priority === undefined &&
       dto.effort === undefined &&
-      dto.tags === undefined
+      dto.tags === undefined &&
+      dto.raciResponsibleIds === undefined &&
+      dto.raciAccountableIds === undefined &&
+      dto.raciConsultedIds === undefined &&
+      dto.raciInformedIds === undefined &&
+      dto.estimatedTimeHours === undefined &&
+      dto.actualOpexHours === undefined &&
+      dto.actualCapexHours === undefined &&
+      dto.plannedStartDate === undefined &&
+      dto.plannedEndDate === undefined &&
+      dto.actualEndDate === undefined &&
+      dto.billingStatus === undefined &&
+      dto.hourlyRate === undefined &&
+      dto.plannedBudget === undefined &&
+      dto.consumedBudgetValue === undefined &&
+      dto.consumedBudgetPercent === undefined
     ) {
       throw new BadRequestException('Aucun champ a mettre a jour');
     }
@@ -616,10 +685,207 @@ export class NodesService {
       (data as any).tags = uniq;
     }
 
-    const updated = await this.prisma.node.update({
-      where: { id: nodeId },
-      data,
-    });
+    const extractedMetadata = this.extractMetadata(node);
+    const metadata: Record<string, any> = { ...extractedMetadata.raw };
+    const nextRaci = {
+      R: [...extractedMetadata.raci.responsibleIds],
+      A: [...extractedMetadata.raci.accountableIds],
+      C: [...extractedMetadata.raci.consultedIds],
+      I: [...extractedMetadata.raci.informedIds],
+    };
+    const nextTimeTracking = { ...extractedMetadata.timeTracking };
+    const { actualCost: _ignoredActualCost, ...financialStore } =
+      extractedMetadata.financials;
+    const nextFinancials = { ...financialStore };
+
+    let metadataChanged = false;
+    let timeTrackingChanged = false;
+    let financialsChanged = false;
+    let shouldUpdateAssignments = false;
+
+    const sanitizeIds = (value: string[] | undefined): string[] =>
+      toStringArray(value ?? []);
+
+    const parseHours = (
+      value: number | null | undefined,
+      field: string,
+    ): number | null => {
+      if (value === undefined) return null;
+      if (value === null) return null;
+      const parsed = toNumberOrNull(value);
+      if (parsed === null)
+        throw new BadRequestException(`${field} invalide`);
+      if (parsed < 0)
+        throw new BadRequestException(`${field} doit être positif`);
+      return parsed;
+    };
+
+    const parseAmount = (
+      value: number | null | undefined,
+      field: string,
+    ): number | null => {
+      if (value === undefined) return null;
+      if (value === null) return null;
+      const parsed = toNumberOrNull(value);
+      if (parsed === null)
+        throw new BadRequestException(`${field} invalide`);
+      if (parsed < 0)
+        throw new BadRequestException(`${field} doit être positif`);
+      return parsed;
+    };
+
+    if (
+      dto.raciResponsibleIds !== undefined ||
+      dto.raciAccountableIds !== undefined ||
+      dto.raciConsultedIds !== undefined ||
+      dto.raciInformedIds !== undefined
+    ) {
+      shouldUpdateAssignments = true;
+      const responsible =
+        dto.raciResponsibleIds !== undefined
+          ? sanitizeIds(dto.raciResponsibleIds)
+          : nextRaci.R;
+      const accountable =
+        dto.raciAccountableIds !== undefined
+          ? sanitizeIds(dto.raciAccountableIds)
+          : nextRaci.A;
+      const consulted =
+        dto.raciConsultedIds !== undefined
+          ? sanitizeIds(dto.raciConsultedIds)
+          : nextRaci.C;
+      const informed =
+        dto.raciInformedIds !== undefined
+          ? sanitizeIds(dto.raciInformedIds)
+          : nextRaci.I;
+
+      nextRaci.R = responsible;
+      nextRaci.A = accountable;
+      nextRaci.C = consulted;
+      nextRaci.I = informed;
+      metadata.raci = { R: responsible, A: accountable, C: consulted, I: informed };
+      metadataChanged = true;
+    }
+
+    if (dto.estimatedTimeHours !== undefined) {
+      const value = dto.estimatedTimeHours === null
+        ? null
+        : parseHours(dto.estimatedTimeHours, 'Temps estimé');
+      nextTimeTracking.estimatedTimeHours = value;
+      timeTrackingChanged = true;
+    }
+    if (dto.actualOpexHours !== undefined) {
+      const value = dto.actualOpexHours === null
+        ? null
+        : parseHours(dto.actualOpexHours, 'Temps réel OPEX');
+      nextTimeTracking.actualOpexHours = value;
+      timeTrackingChanged = true;
+    }
+    if (dto.actualCapexHours !== undefined) {
+      const value = dto.actualCapexHours === null
+        ? null
+        : parseHours(dto.actualCapexHours, 'Temps réel CAPEX');
+      nextTimeTracking.actualCapexHours = value;
+      timeTrackingChanged = true;
+    }
+    if (dto.plannedStartDate !== undefined) {
+      const parsed = dto.plannedStartDate === null
+        ? null
+        : toDateStringOrNull(dto.plannedStartDate);
+      if (dto.plannedStartDate !== null && parsed === null)
+        throw new BadRequestException('Date de début prévue invalide');
+      nextTimeTracking.plannedStartDate = parsed;
+      timeTrackingChanged = true;
+    }
+    if (dto.plannedEndDate !== undefined) {
+      const parsed = dto.plannedEndDate === null
+        ? null
+        : toDateStringOrNull(dto.plannedEndDate);
+      if (dto.plannedEndDate !== null && parsed === null)
+        throw new BadRequestException('Date de fin prévue invalide');
+      nextTimeTracking.plannedEndDate = parsed;
+      timeTrackingChanged = true;
+    }
+    if (dto.actualEndDate !== undefined) {
+      const parsed = dto.actualEndDate === null
+        ? null
+        : toDateStringOrNull(dto.actualEndDate);
+      if (dto.actualEndDate !== null && parsed === null)
+        throw new BadRequestException('Date de fin réelle invalide');
+      nextTimeTracking.actualEndDate = parsed;
+      timeTrackingChanged = true;
+    }
+
+    if (dto.billingStatus !== undefined) {
+      if (
+        dto.billingStatus !== null &&
+        !BILLING_STATUS_VALUES.has(dto.billingStatus)
+      ) {
+        throw new BadRequestException('Statut de facturation invalide');
+      }
+      nextFinancials.billingStatus = dto.billingStatus ?? null;
+      financialsChanged = true;
+    }
+    if (dto.hourlyRate !== undefined) {
+      const value = dto.hourlyRate === null
+        ? null
+        : parseAmount(dto.hourlyRate, 'Taux horaire');
+      nextFinancials.hourlyRate = value;
+      financialsChanged = true;
+    }
+    if (dto.plannedBudget !== undefined) {
+      const value = dto.plannedBudget === null
+        ? null
+        : parseAmount(dto.plannedBudget, 'Budget prévu');
+      nextFinancials.plannedBudget = value;
+      financialsChanged = true;
+    }
+    if (dto.consumedBudgetValue !== undefined) {
+      const value = dto.consumedBudgetValue === null
+        ? null
+        : parseAmount(dto.consumedBudgetValue, 'Budget consommé');
+      nextFinancials.consumedBudgetValue = value;
+      financialsChanged = true;
+    }
+    if (dto.consumedBudgetPercent !== undefined) {
+      const value = dto.consumedBudgetPercent === null
+        ? null
+        : parseAmount(dto.consumedBudgetPercent, 'Budget consommé (%)');
+      nextFinancials.consumedBudgetPercent = value;
+      financialsChanged = true;
+    }
+
+    if (timeTrackingChanged) {
+      metadata.timeTracking = { ...nextTimeTracking };
+      metadataChanged = true;
+    }
+    if (financialsChanged) {
+      metadata.financials = { ...nextFinancials };
+      metadataChanged = true;
+    }
+    if (metadataChanged) {
+      (data as any).metadata = metadata as Prisma.InputJsonValue;
+    }
+
+    const desiredRaci: Record<RaciRole, string[]> = {
+      R: nextRaci.R,
+      A: nextRaci.A,
+      C: nextRaci.C,
+      I: nextRaci.I,
+    };
+
+    const updated = shouldUpdateAssignments
+      ? await this.prisma.$transaction(async (tx) => {
+          const nodeUpdate = await tx.node.update({
+            where: { id: nodeId },
+            data,
+          });
+          await this.syncRaciAssignments(tx, nodeId, desiredRaci);
+          return nodeUpdate;
+        })
+      : await this.prisma.node.update({
+          where: { id: nodeId },
+          data,
+        });
     return this.mapNode(updated);
   }
 
@@ -718,7 +984,13 @@ export class NodesService {
     const node = await client.node.findUnique({
       where: { id: nodeId },
       include: {
-        assignments: true,
+        assignments: {
+          include: {
+            user: {
+              select: { id: true, displayName: true, avatarUrl: true },
+            },
+          },
+        },
         children: {
           select: {
             id: true,
@@ -745,11 +1017,19 @@ export class NodesService {
       throw new NotFoundException();
     }
 
-    const assignments: NodeAssignmentDto[] = node.assignments.map(
+    const assignmentsSource = node.assignments as Array<{
+      id: string;
+      userId: string;
+      role: string | null;
+      user: { displayName: string; avatarUrl: string | null } | null;
+    }>;
+    const assignments: NodeAssignmentDto[] = assignmentsSource.map(
       (assignment) => ({
         id: assignment.id,
         userId: assignment.userId,
         role: assignment.role ?? null,
+        displayName: assignment.user?.displayName,
+        avatarUrl: assignment.user?.avatarUrl ?? null,
       }),
     );
 
@@ -1106,6 +1386,7 @@ export class NodesService {
   }
 
   private mapNode(node: NodeModel): NodeDto {
+    const metadata = this.extractMetadata(node);
     return {
       id: node.id,
       shortId: Number(node.shortId ?? 0),
@@ -1129,7 +1410,168 @@ export class NodesService {
       priority: (node as any).priority ?? 'NONE',
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],
+      raci: metadata.raci,
+      timeTracking: metadata.timeTracking,
+      financials: metadata.financials,
     };
+  }
+
+  private extractMetadata(node: NodeModel): ExtractedMetadata {
+    const rawRoot =
+      node.metadata &&
+      typeof node.metadata === 'object' &&
+      !Array.isArray(node.metadata)
+        ? { ...(node.metadata as Record<string, any>) }
+        : {};
+
+    const raciRaw =
+      rawRoot.raci && typeof rawRoot.raci === 'object' && !Array.isArray(rawRoot.raci)
+        ? { ...(rawRoot.raci as Record<string, any>) }
+        : {};
+    const timeRaw =
+      rawRoot.timeTracking &&
+      typeof rawRoot.timeTracking === 'object' &&
+      !Array.isArray(rawRoot.timeTracking)
+        ? { ...(rawRoot.timeTracking as Record<string, any>) }
+        : {};
+    const financialRaw =
+      rawRoot.financials &&
+      typeof rawRoot.financials === 'object' &&
+      !Array.isArray(rawRoot.financials)
+        ? { ...(rawRoot.financials as Record<string, any>) }
+        : {};
+
+    rawRoot.raci = raciRaw;
+    rawRoot.timeTracking = timeRaw;
+    rawRoot.financials = financialRaw;
+
+    const responsibleIds = toStringArray(
+      raciRaw.R ?? raciRaw.responsible ?? raciRaw.responsibleIds ?? [],
+    );
+    const accountableIds = toStringArray(
+      raciRaw.A ?? raciRaw.accountable ?? raciRaw.accountableIds ?? [],
+    );
+    const consultedIds = toStringArray(
+      raciRaw.C ?? raciRaw.consulted ?? raciRaw.consultedIds ?? [],
+    );
+    const informedIds = toStringArray(
+      raciRaw.I ?? raciRaw.informed ?? raciRaw.informedIds ?? [],
+    );
+
+    const estimatedTimeHours = toNumberOrNull(
+      timeRaw.estimatedTimeHours ?? timeRaw.estimatedHours ?? null,
+    );
+    const actualOpexHours = toNumberOrNull(
+      timeRaw.actualOpexHours ?? timeRaw.opexHours ?? null,
+    );
+    const actualCapexHours = toNumberOrNull(
+      timeRaw.actualCapexHours ?? timeRaw.capexHours ?? null,
+    );
+    const plannedStartDate = toDateStringOrNull(
+      timeRaw.plannedStartDate ?? timeRaw.startDate ?? timeRaw.plannedStartAt ?? null,
+    );
+    const plannedEndDate = toDateStringOrNull(
+      timeRaw.plannedEndDate ?? timeRaw.endDate ?? timeRaw.plannedEndAt ?? null,
+    );
+    const actualEndDate = toDateStringOrNull(
+      timeRaw.actualEndDate ?? timeRaw.realEndDate ?? timeRaw.actualEndAt ?? null,
+    );
+
+    const billingRaw =
+      typeof financialRaw.billingStatus === 'string'
+        ? financialRaw.billingStatus.toUpperCase()
+        : null;
+    const billingStatus = BILLING_STATUS_VALUES.has(billingRaw ?? '')
+      ? (billingRaw as 'TO_BILL' | 'BILLED' | 'PAID')
+      : null;
+    const hourlyRate = toNumberOrNull(
+      financialRaw.hourlyRate ?? financialRaw.rate ?? null,
+    );
+    const plannedBudget = toNumberOrNull(
+      financialRaw.plannedBudget ?? financialRaw.budgetPlanned ?? null,
+    );
+    const consumedBudgetValue = toNumberOrNull(
+      financialRaw.consumedBudgetValue ?? financialRaw.budgetConsumedValue ?? null,
+    );
+    const consumedBudgetPercent = toNumberOrNull(
+      financialRaw.consumedBudgetPercent ?? financialRaw.budgetConsumedPercent ?? null,
+    );
+
+    const totalHours =
+      (actualOpexHours ?? 0) + (actualCapexHours ?? 0);
+    const actualCost =
+      hourlyRate !== null ? Math.round(totalHours * hourlyRate * 100) / 100 : null;
+
+    return {
+      raw: rawRoot,
+      raci: {
+        responsibleIds,
+        accountableIds,
+        consultedIds,
+        informedIds,
+      },
+      timeTracking: {
+        estimatedTimeHours,
+        actualOpexHours,
+        actualCapexHours,
+        plannedStartDate,
+        plannedEndDate,
+        actualEndDate,
+      },
+      financials: {
+        billingStatus,
+        hourlyRate,
+        plannedBudget,
+        consumedBudgetValue,
+        consumedBudgetPercent,
+        actualCost,
+      },
+    };
+  }
+
+  private async syncRaciAssignments(
+    tx: Prisma.TransactionClient,
+    nodeId: string,
+    desired: Record<RaciRole, string[]>,
+  ): Promise<void> {
+    const roles: RaciRole[] = ['R', 'A', 'C', 'I'];
+    const existing = await tx.nodeAssignment.findMany({
+      where: { nodeId, role: { in: roles } },
+      select: { id: true, role: true, userId: true },
+    });
+
+    const desiredSet = new Set<string>();
+    for (const role of roles) {
+      for (const userId of desired[role]) {
+        desiredSet.add(`${role}|${userId}`);
+      }
+    }
+
+    const toDelete: string[] = [];
+    const existingMap = new Map<string, string>();
+    for (const assignment of existing) {
+      const role = (assignment.role ?? '').toUpperCase();
+      if (role === 'R' || role === 'A' || role === 'C' || role === 'I') {
+        const key = `${role}|${assignment.userId}`;
+        existingMap.set(key, assignment.id);
+        if (!desiredSet.has(key)) {
+          toDelete.push(assignment.id);
+        }
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await tx.nodeAssignment.deleteMany({ where: { id: { in: toDelete } } });
+    }
+
+    for (const entry of desiredSet) {
+      if (!existingMap.has(entry)) {
+        const [role, userId] = entry.split('|') as [RaciRole, string];
+        await tx.nodeAssignment.create({
+          data: { nodeId, userId, role },
+        });
+      }
+    }
   }
 
   private async ensureBoardWithColumns(

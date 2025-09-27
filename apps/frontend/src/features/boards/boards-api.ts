@@ -20,6 +20,13 @@ export type BoardNode = {
   tags?: string[];
   estimatedDurationDays?: number | null;
   assignees?: { id: string; displayName: string; avatarUrl: string | null }[];
+  progress?: number;
+  raci?: {
+    responsible: { id: string; displayName: string; avatarUrl: string | null }[];
+    accountable: { id: string; displayName: string; avatarUrl: string | null }[];
+    consulted: { id: string; displayName: string; avatarUrl: string | null }[];
+    informed: { id: string; displayName: string; avatarUrl: string | null }[];
+  };
 };
 
 export type BoardColumn = {

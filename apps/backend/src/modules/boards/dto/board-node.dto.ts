@@ -73,4 +73,24 @@ export class BoardNodeDto {
 
   @ApiProperty({ type: () => [BoardNodeAssigneeDto], required: false })
   assignees?: BoardNodeAssigneeDto[];
+
+  @ApiProperty({ example: 45 })
+  progress?: number;
+
+  @ApiProperty({ type: () => BoardNodeRaciDto, required: false })
+  raci?: BoardNodeRaciDto;
+}
+
+class BoardNodeRaciDto {
+  @ApiProperty({ type: () => [BoardNodeAssigneeDto] })
+  responsible!: BoardNodeAssigneeDto[];
+
+  @ApiProperty({ type: () => [BoardNodeAssigneeDto] })
+  accountable!: BoardNodeAssigneeDto[];
+
+  @ApiProperty({ type: () => [BoardNodeAssigneeDto] })
+  consulted!: BoardNodeAssigneeDto[];
+
+  @ApiProperty({ type: () => [BoardNodeAssigneeDto] })
+  informed!: BoardNodeAssigneeDto[];
 }
