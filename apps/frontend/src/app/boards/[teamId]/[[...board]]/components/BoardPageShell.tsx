@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, FormEvent, useMemo, useEffect } from 'react';
+import React, { useState, FormEvent, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
@@ -11,6 +11,127 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
+
+type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
+type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
+const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
+type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+
+const PRIORITY_OPTIONS: Array<{ value: PriorityValue; label: string }> = [
+  { value: 'CRITICAL', label: 'Critique' },
+  { value: 'HIGH', label: 'Haute' },
+  { value: 'MEDIUM', label: 'Moyenne' },
+  { value: 'LOW', label: 'Basse' },
+  { value: 'LOWEST', label: 'Très basse' },
+  { value: 'NONE', label: 'Aucune' },
+];
+
+const PRIORITY_LABELS: Record<PriorityValue, string> = PRIORITY_OPTIONS.reduce((acc, option) => {
+  acc[option.value] = option.label;
+  return acc;
+}, {} as Record<PriorityValue, string>);
+
+const EFFORT_OPTIONS: Array<{ value: EffortValue; label: string }> = [
+  { value: 'UNDER2MIN', label: '< 2 min' },
+  { value: 'XS', label: 'XS' },
+  { value: 'S', label: 'S' },
+  { value: 'M', label: 'M' },
+  { value: 'L', label: 'L' },
+  { value: 'XL', label: 'XL' },
+  { value: 'XXL', label: 'XXL' },
+];
+
+const EFFORT_LABELS: Record<EffortValue, string> = EFFORT_OPTIONS.reduce((acc, option) => {
+  acc[option.value] = option.label;
+  return acc;
+}, {} as Record<EffortValue, string>);
+
+const TOKEN_REGEX = /[@#!]"[^"]*"|[@#!][^\s"]+|"[^"]+"|[^\s]+/g;
+
+type ParsedSearchQuery = {
+  hasQuery: boolean;
+  textTerms: string[];
+  mentionTerms: string[];
+  priorityValues: PriorityValue[];
+  shortIdTerms: string[];
+};
+
+const normalizeSearchString = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const parseSearchQuery = (raw: string): ParsedSearchQuery => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { hasQuery: false, textTerms: [], mentionTerms: [], priorityValues: [], shortIdTerms: [] };
+  }
+
+  const tokens = trimmed.match(TOKEN_REGEX) ?? [];
+  const textTerms: string[] = [];
+  const mentionTerms: string[] = [];
+  const priorityValues = new Set<PriorityValue>();
+  const shortIdTerms: string[] = [];
+
+  for (const token of tokens) {
+    if (!token) continue;
+    let prefix: '@' | '!' | '#' | null = null;
+    let content = token;
+    if (content.startsWith('@') || content.startsWith('!') || content.startsWith('#')) {
+      prefix = content[0] as '@' | '!' | '#';
+      content = content.slice(1);
+    }
+
+    if (content.startsWith('"') && content.endsWith('"') && content.length >= 2) {
+      content = content.slice(1, -1);
+    }
+
+    const normalizedContent = normalizeSearchString(content);
+
+    if (prefix === '@') {
+      if (normalizedContent) {
+        mentionTerms.push(normalizedContent);
+      }
+      continue;
+    }
+
+    if (prefix === '!') {
+      if (!normalizedContent) continue;
+      const matches = PRIORITY_OPTIONS.filter((option) => {
+        const normalizedLabel = normalizeSearchString(option.label);
+        const normalizedValue = normalizeSearchString(option.value);
+        return normalizedLabel.includes(normalizedContent) || normalizedValue.includes(normalizedContent);
+      });
+      if (matches.length > 0) {
+        matches.forEach((match) => priorityValues.add(match.value));
+        continue;
+      }
+      // if nothing matched, treat as general text token
+    }
+
+    if (prefix === '#') {
+      const digits = content.replace(/[^0-9]/g, '');
+      if (digits) {
+        shortIdTerms.push(digits);
+        continue;
+      }
+      // fallback to text token if no digits
+    }
+
+    if (!normalizedContent) continue;
+    if (normalizedContent.length < 3) continue;
+    textTerms.push(normalizedContent);
+  }
+
+  return {
+    hasQuery: textTerms.length > 0 || mentionTerms.length > 0 || priorityValues.size > 0 || shortIdTerms.length > 0,
+    textTerms,
+    mentionTerms,
+    priorityValues: Array.from(priorityValues),
+    shortIdTerms,
+  };
+};
 
 function BoardSkeleton(){
   return (
@@ -55,31 +176,34 @@ export function TeamBoardPage(){
   const [optimisticColumns,setOptimisticColumns] = useState<BoardColumnWithNodes[] | null>(null);
   const [draggingCard,setDraggingCard] = useState<{ id:string; title:string } | null>(null);
   const UNASSIGNED_TOKEN = '__UNASSIGNED__';
-  const PRIORITY_OPTIONS: Array<{ value: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST'; label: string }> = [
-    { value: 'CRITICAL', label: 'Critique' },
-    { value: 'HIGH', label: 'Haute' },
-    { value: 'MEDIUM', label: 'Moyenne' },
-    { value: 'LOW', label: 'Basse' },
-    { value: 'LOWEST', label: 'Très basse' },
-    { value: 'NONE', label: 'Aucune' },
-  ];
   const [hideDone,setHideDone] = useState(false);
   const [showDescriptions, setShowDescriptions] = useState(true);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const [selectedPriorities, setSelectedPriorities] = useState<Array<'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST'>>([]);
+  const [selectedPriorities, setSelectedPriorities] = useState<PriorityValue[]>([]);
+  const [selectedEfforts, setSelectedEfforts] = useState<EffortFilterValue[]>([]);
   const [filterMine, setFilterMine] = useState(false);
   const [filterHasChildren, setFilterHasChildren] = useState(false);
   const [sortPriority, setSortPriority] = useState(false);
   const [sortDueDate, setSortDueDate] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [filtersHydrated, setFiltersHydrated] = useState(false);
+  const searchBlurTimeout = useRef<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardNode | null>(null);
   const [deletePreview, setDeletePreview] = useState<NodeDeletePreview | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
+  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+  const advancedFiltersActive =
+    selectedAssignees.length > 0 ||
+    selectedPriorities.length > 0 ||
+    selectedEfforts.length > 0 ||
+    hideDone ||
+    filterHasChildren;
 
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
@@ -89,9 +213,26 @@ export function TeamBoardPage(){
   }, [rawColumns, hideDone]);
 
   useEffect(() => {
+    return () => {
+      if (searchBlurTimeout.current !== null) {
+        window.clearTimeout(searchBlurTimeout.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const handle = window.setTimeout(() => {
       const trimmed = searchDraft.trim();
-      setSearchQuery(trimmed.length >= 3 ? trimmed : '');
+      if (!trimmed) {
+        setSearchQuery('');
+        return;
+      }
+      const containsSpecialToken = /[@#!]/.test(trimmed);
+      if (trimmed.length >= 3 || containsSpecialToken) {
+        setSearchQuery(trimmed);
+      } else {
+        setSearchQuery('');
+      }
     }, 300);
     return () => window.clearTimeout(handle);
   }, [searchDraft]);
@@ -105,6 +246,7 @@ export function TeamBoardPage(){
 
     setSelectedAssignees([]);
     setSelectedPriorities([]);
+    setSelectedEfforts([]);
     setFilterMine(false);
     setFilterHasChildren(false);
     setSortPriority(false);
@@ -122,6 +264,7 @@ export function TeamBoardPage(){
           showDescriptions?: unknown;
           selectedAssignees?: unknown;
           selectedPriorities?: unknown;
+          selectedEfforts?: unknown;
           filterMine?: unknown;
           filterHasChildren?: unknown;
           sortPriority?: unknown;
@@ -145,6 +288,21 @@ export function TeamBoardPage(){
           )
         )
           setSelectedPriorities(parsed.selectedPriorities);
+        if (
+          Array.isArray(parsed.selectedEfforts) &&
+          parsed.selectedEfforts.every(
+            (value) =>
+              value === NO_EFFORT_TOKEN ||
+              value === 'UNDER2MIN' ||
+              value === 'XS' ||
+              value === 'S' ||
+              value === 'M' ||
+              value === 'L' ||
+              value === 'XL' ||
+              value === 'XXL'
+          )
+        )
+          setSelectedEfforts(parsed.selectedEfforts);
         if (typeof parsed.filterMine === 'boolean') setFilterMine(parsed.filterMine);
         if (typeof parsed.filterHasChildren === 'boolean')
           setFilterHasChildren(parsed.filterHasChildren);
@@ -153,7 +311,13 @@ export function TeamBoardPage(){
         if (typeof parsed.search === 'string') {
           setSearchDraft(parsed.search);
           const trimmed = parsed.search.trim();
-          setSearchQuery(trimmed.length >= 3 ? trimmed : '');
+          if (!trimmed) {
+            setSearchQuery('');
+          } else if (trimmed.length >= 3 || /[@#!]/.test(trimmed)) {
+            setSearchQuery(trimmed);
+          } else {
+            setSearchQuery('');
+          }
         }
       } catch {
         // Ignore corrupted payloads; defaults already applied.
@@ -170,6 +334,7 @@ export function TeamBoardPage(){
       showDescriptions,
       selectedAssignees,
       selectedPriorities,
+      selectedEfforts,
       filterMine,
       filterHasChildren,
       sortPriority,
@@ -181,7 +346,7 @@ export function TeamBoardPage(){
     } catch {
       // Storage may be unavailable (quota, private mode); fail silently.
     }
-  }, [storageKey, filtersHydrated, hideDone, showDescriptions, selectedAssignees, selectedPriorities, filterMine, filterHasChildren, sortPriority, sortDueDate, searchDraft]);
+  }, [storageKey, filtersHydrated, hideDone, showDescriptions, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, filterHasChildren, sortPriority, sortDueDate, searchDraft]);
 
   const allAssignees = useMemo(() => {
     const map = new Map<string, { id: string; displayName: string }>();
@@ -200,16 +365,101 @@ export function TeamBoardPage(){
     return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' }));
   }, [board?.columns]);
 
+  const mentionContext = useMemo(() => {
+    if (!searchFocused) return null;
+    const match = searchDraft.match(/(?:^|\s)(@(?:"[^"]*|[^\s@]*))$/);
+    if (!match) return null;
+    const token = match[1];
+    const base = searchDraft.slice(0, searchDraft.length - token.length);
+    let query = token.slice(1);
+    if (query.startsWith('"')) {
+      query = query.slice(1);
+    }
+    query = query.replace(/"$/g, '');
+    return { base, query };
+  }, [searchDraft, searchFocused]);
+
+  const mentionSuggestions = useMemo(() => {
+    if (!mentionContext) return [] as Array<{ id: string; displayName: string }>;
+    const normalizedQuery = normalizeSearchString(mentionContext.query);
+    if (!normalizedQuery) return allAssignees;
+    return allAssignees.filter((assignee) =>
+      normalizeSearchString(assignee.displayName).includes(normalizedQuery)
+    );
+  }, [mentionContext, allAssignees]);
+
+  const handleMentionSelect = (displayName: string) => {
+    if (!mentionContext) return;
+    const baseNeedsSpace = mentionContext.base.length > 0 && !/\s$/.test(mentionContext.base);
+    const prefix = baseNeedsSpace ? `${mentionContext.base} ` : mentionContext.base;
+    const nextDraft = `${prefix}@"${displayName}" `;
+    setSearchDraft(nextDraft);
+  };
+
+  useEffect(() => {
+    if (!filtersExpanded) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setFiltersExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filtersExpanded]);
+
   const displayedColumns: BoardColumnWithNodes[] | undefined = useMemo(() => {
     if (!effectiveColumns) return effectiveColumns;
 
-    const priorityWeight: Record<'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST', number> = {
+    const priorityWeight: Record<PriorityValue, number> = {
       CRITICAL: 0,
       HIGH: 1,
       MEDIUM: 2,
       LOW: 3,
       LOWEST: 4,
       NONE: 5,
+    };
+
+    const matchesSearch = (card: BoardNode) => {
+      if (!parsedSearch.hasQuery) return true;
+      const priorityValue = (card.priority ?? 'NONE') as PriorityValue;
+      const effortValue = card.effort ?? null;
+      const normalizedTitle = normalizeSearchString(card.title);
+      const normalizedDescription = normalizeSearchString(card.description ?? '');
+      const normalizedPriorityLabel = normalizeSearchString(PRIORITY_LABELS[priorityValue] ?? '');
+      const normalizedPriorityValue = normalizeSearchString(priorityValue);
+      const normalizedEffortLabel = effortValue ? normalizeSearchString(EFFORT_LABELS[effortValue]) : '';
+      const normalizedEffortValue = effortValue ? normalizeSearchString(effortValue) : '';
+      const normalizedId = (card.id ?? '').toLowerCase();
+      const shortId = card.shortId ? String(card.shortId) : '';
+      const haystacks = [
+        normalizedTitle,
+        normalizedDescription,
+        normalizedPriorityLabel,
+        normalizedPriorityValue,
+        normalizedEffortLabel,
+        normalizedEffortValue,
+        normalizedId,
+      ];
+      if (shortId) haystacks.push(shortId);
+      if (!parsedSearch.textTerms.every((term) => haystacks.some((value) => value.includes(term)))) {
+        return false;
+      }
+      if (parsedSearch.shortIdTerms.length > 0) {
+        if (!shortId) return false;
+        if (!parsedSearch.shortIdTerms.every((term) => shortId.includes(term))) return false;
+      }
+      if (parsedSearch.priorityValues.length > 0 && !parsedSearch.priorityValues.includes(priorityValue)) {
+        return false;
+      }
+      if (parsedSearch.mentionTerms.length > 0) {
+        const normalizedAssignees = (card.assignees ?? []).map((assignee) =>
+          normalizeSearchString(assignee.displayName)
+        );
+        if (!parsedSearch.mentionTerms.every((term) => normalizedAssignees.some((name) => name.includes(term)))) {
+          return false;
+        }
+      }
+      return true;
     };
 
     return effectiveColumns.map((column) => {
@@ -229,7 +479,16 @@ export function TeamBoardPage(){
       }
 
       if (selectedPriorities.length > 0) {
-        filtered = filtered.filter((card) => selectedPriorities.includes(card.priority ?? 'NONE'));
+        filtered = filtered.filter((card) => selectedPriorities.includes((card.priority ?? 'NONE') as PriorityValue));
+      }
+
+      if (selectedEfforts.length > 0) {
+        filtered = filtered.filter((card) => {
+          const effort = card.effort ?? null;
+          return selectedEfforts.some((value) =>
+            value === NO_EFFORT_TOKEN ? effort === null : effort === value
+          );
+        });
       }
 
       if (filterMine && user?.id) {
@@ -240,25 +499,15 @@ export function TeamBoardPage(){
         filtered = filtered.filter((card) => Boolean(childBoards[card.id]));
       }
 
-      if (searchQuery) {
-        const needle = searchQuery.toLowerCase();
-        filtered = filtered.filter((card) => {
-          const title = card.title.toLowerCase();
-          const description = (card.description ?? '').toLowerCase();
-          const shortId = typeof card.shortId === 'number' ? `#${card.shortId}` : '';
-          return (
-            title.includes(needle) ||
-            description.includes(needle) ||
-            shortId.toLowerCase().includes(needle)
-          );
-        });
+      if (parsedSearch.hasQuery) {
+        filtered = filtered.filter((card) => matchesSearch(card));
       }
 
       if (sortPriority || sortDueDate) {
         filtered = [...filtered].sort((a, b) => {
           if (sortPriority) {
-            const pa = priorityWeight[a.priority ?? 'NONE'];
-            const pb = priorityWeight[b.priority ?? 'NONE'];
+            const pa = priorityWeight[(a.priority ?? 'NONE') as PriorityValue];
+            const pb = priorityWeight[(b.priority ?? 'NONE') as PriorityValue];
             if (pa !== pb) return pa - pb;
           }
           if (sortDueDate) {
@@ -276,7 +525,7 @@ export function TeamBoardPage(){
 
       return { ...column, nodes: filtered };
     });
-  }, [effectiveColumns, selectedAssignees, selectedPriorities, filterMine, user?.id, filterHasChildren, childBoards, searchQuery, sortPriority, sortDueDate]);
+  }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate]);
 
   const resetColumnForm = () => { setColumnName(''); setColumnBehavior('BACKLOG'); setColumnWip(''); setColumnError(null); };
 
@@ -441,21 +690,43 @@ export function TeamBoardPage(){
     setSelectedAssignees((prev) => prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]);
   };
 
-  const togglePriority = (value: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST') => {
+  const togglePriority = (value: PriorityValue) => {
     setSelectedPriorities((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
   };
 
-  const hasActiveFilters = selectedAssignees.length > 0 || selectedPriorities.length > 0 || filterMine || filterHasChildren || Boolean(searchQuery) || sortPriority || sortDueDate;
+  const toggleEffort = (value: EffortFilterValue) => {
+    setSelectedEfforts((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
+  };
+
+  const pillClass = (active: boolean) =>
+    `rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition ${
+      active ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
+    }`;
+
+  const hasActiveFilters =
+    selectedAssignees.length > 0 ||
+    selectedPriorities.length > 0 ||
+    selectedEfforts.length > 0 ||
+    filterMine ||
+    filterHasChildren ||
+    parsedSearch.hasQuery ||
+    sortPriority ||
+    sortDueDate ||
+    hideDone ||
+    !showDescriptions;
 
   const resetFilters = () => {
     setSelectedAssignees([]);
     setSelectedPriorities([]);
+    setSelectedEfforts([]);
     setFilterMine(false);
     setFilterHasChildren(false);
     setSortPriority(false);
     setSortDueDate(false);
     setSearchDraft('');
     setSearchQuery('');
+    setHideDone(false);
+    setShowDescriptions(true);
   };
 
   // --- Drag & Drop (cartes) ---
@@ -540,128 +811,242 @@ export function TeamBoardPage(){
       </header>
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
         <section className="grid gap-6">
-          <div className="rounded-2xl border border-white/10 bg-card/70 p-6">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <p className="text-sm text-muted">Ajoutez des colonnes pour structurer votre board.</p>
-              {!isAddingColumn && (
-                <button onClick={()=>setIsAddingColumn(true)} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-background transition hover:bg-accent-strong">Nouvelle colonne</button>
-              )}
-              <div className="flex flex-wrap items-center gap-4 text-xs text-muted select-none">
-
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="accent-accent" checked={hideDone} onChange={e=>setHideDone(e.target.checked)} />
-                  Masquer colonnes DONE
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" className="accent-accent" checked={showDescriptions} onChange={e=>setShowDescriptions(e.target.checked)} />
-                  Description on/off
-                </label>
-              </div>
-              <div className="mt-4 space-y-4 text-xs">
-                <div className="flex flex-wrap items-center gap-3">
+          <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[240px]">
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    <span className="text-[10px] uppercase tracking-wide">Recherche</span>
+                    <input
+                      type="search"
+                      value={searchDraft}
+                      onChange={(event) => setSearchDraft(event.target.value)}
+                      onFocus={() => {
+                        if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                        setSearchFocused(true);
+                      }}
+                      onBlur={() => {
+                        if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                        searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                      }}
+                      placeholder="Titre, description, #id, @utilisateur, !priorité…"
+                      className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                      aria-label="Recherche textuelle et filtres rapides"
+                    />
+                    <span className="text-[10px] text-muted">Min. 3 caractères ou utilisez @, !, #.</span>
+                  </label>
+                  {mentionContext && (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
+                      <ul className="max-h-56 overflow-y-auto py-2 text-sm">
+                        {mentionSuggestions.length > 0 ? (
+                          mentionSuggestions.map((assignee) => (
+                            <li key={assignee.id}>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  handleMentionSelect(assignee.displayName);
+                                }}
+                                className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-muted transition hover:bg-white/5 hover:text-foreground"
+                              >
+                                <span>{assignee.displayName}</span>
+                              </button>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="px-4 py-2 text-xs text-muted">Aucun utilisateur trouvé</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
                     type="button"
-                    onClick={()=> setFilterMine((prev) => !prev)}
-                    className={`rounded-full border px-3 py-1 font-semibold tracking-wide transition ${filterMine ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                    onClick={() => setFilterMine((prev) => !prev)}
+                    className={pillClass(filterMine)}
                     aria-pressed={filterMine}
                   >
                     Mes tâches
                   </button>
                   <button
                     type="button"
-                    onClick={()=> setFilterHasChildren((prev) => !prev)}
-                    className={`rounded-full border px-3 py-1 font-semibold tracking-wide transition ${filterHasChildren ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                    aria-pressed={filterHasChildren}
+                    onClick={() => setSortPriority((prev) => !prev)}
+                    className={pillClass(sortPriority)}
+                    aria-pressed={sortPriority}
                   >
-                    Avec sous-kanban
+                    Tri prio
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortDueDate((prev) => !prev)}
+                    className={pillClass(sortDueDate)}
+                    aria-pressed={sortDueDate}
+                  >
+                    Tri échéance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDescriptions((prev) => !prev)}
+                    className={pillClass(showDescriptions)}
+                    aria-pressed={showDescriptions}
+                  >
+                    Descriptif {showDescriptions ? 'on' : 'off'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
                   {hasActiveFilters && (
                     <button
                       type="button"
                       onClick={resetFilters}
-                      className="rounded-full border border-white/15 px-3 py-1 font-semibold tracking-wide text-muted transition hover:border-accent hover:text-foreground"
+                      className="text-xs font-semibold text-muted transition hover:text-foreground"
                     >
                       Réinitialiser
                     </button>
                   )}
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <label className="flex flex-col gap-1 text-muted">
-                    <span className="uppercase tracking-wide">Recherche</span>
-                    <input
-                      type="search"
-                      value={searchDraft}
-                      onChange={(event) => setSearchDraft(event.target.value)}
-                      placeholder="Titre, description, #id"
-                      className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                    <span className="text-[10px] text-muted">Min. 3 caractères</span>
-                  </label>
-                  <fieldset className="flex flex-col gap-2 text-muted">
-                    <legend className="text-[10px] uppercase tracking-wide">Assignés</legend>
-                    <div className="flex flex-wrap gap-2">
-                      <label className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedAssignees.includes(UNASSIGNED_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
-                        <input
-                          type="checkbox"
-                          className="accent-accent"
-                          checked={selectedAssignees.includes(UNASSIGNED_TOKEN)}
-                          onChange={() => toggleAssignee(UNASSIGNED_TOKEN)}
-                        />
-                        Aucun
-                      </label>
-                      {allAssignees.length === 0 && (
-                        <span className="rounded-full border border-dashed border-white/15 px-3 py-1 text-muted">Aucun utilisateur assigné</span>
-                      )}
-                      {allAssignees.map((assignee) => (
-                        <label
-                          key={assignee.id}
-                          className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedAssignees.includes(assignee.id) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="accent-accent"
-                            checked={selectedAssignees.includes(assignee.id)}
-                            onChange={() => toggleAssignee(assignee.id)}
-                          />
-                          {assignee.displayName}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <fieldset className="flex flex-col gap-2 text-muted">
-                    <legend className="text-[10px] uppercase tracking-wide">Priorité</legend>
-                    <div className="flex flex-wrap gap-2">
-                      {PRIORITY_OPTIONS.map((option) => (
-                        <label
-                          key={option.value}
-                          className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedPriorities.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="accent-accent"
-                            checked={selectedPriorities.includes(option.value)}
-                            onChange={() => togglePriority(option.value)}
-                          />
-                          {option.label}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-muted">
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" className="accent-accent" checked={sortPriority} onChange={(event) => setSortPriority(event.target.checked)} />
-                    Tri priorité (CRITICAL → NONE)
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" className="accent-accent" checked={sortDueDate} onChange={(event) => setSortDueDate(event.target.checked)} />
-                    Tri échéance (plus proche en premier)
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFiltersExpanded((prev) => !prev)}
+                    className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
+                    aria-expanded={filtersExpanded}
+                    aria-label={filtersExpanded ? 'Masquer les filtres avancés' : 'Afficher les filtres avancés'}
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
+                    </svg>
+                    {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
+                  </button>
                 </div>
               </div>
+              <p className="text-sm text-muted">Ajoutez des colonnes pour structurer votre board.</p>
             </div>
+            {filtersExpanded && (
+              <div className="absolute left-0 right-0 top-full z-40 mt-3">
+                <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-white/15 bg-surface/95 shadow-2xl backdrop-blur">
+                  <div className="flex items-start justify-between gap-4 px-6 py-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Filtres avancés</h3>
+                      <p className="text-xs text-muted">Combinez assignés, priorités, efforts et options d’affichage.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {hasActiveFilters && (
+                        <button
+                          type="button"
+                          onClick={resetFilters}
+                          className="text-xs font-semibold text-muted transition hover:text-foreground"
+                        >
+                          Réinitialiser
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFiltersExpanded(false)}
+                        className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <section className="text-xs">
+                        <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
+                        <div className="mt-3 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                          <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(UNASSIGNED_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
+                            <input
+                              type="checkbox"
+                              className="accent-accent"
+                              checked={selectedAssignees.includes(UNASSIGNED_TOKEN)}
+                              onChange={() => toggleAssignee(UNASSIGNED_TOKEN)}
+                            />
+                            Aucun
+                          </label>
+                          {allAssignees.length === 0 ? (
+                            <span className="col-span-full rounded-xl border border-dashed border-white/15 px-3 py-2 text-center text-muted">Aucun utilisateur assigné</span>
+                          ) : (
+                            allAssignees.map((assignee) => (
+                              <label
+                                key={assignee.id}
+                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(assignee.id) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="accent-accent"
+                                  checked={selectedAssignees.includes(assignee.id)}
+                                  onChange={() => toggleAssignee(assignee.id)}
+                                />
+                                {assignee.displayName}
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </section>
+                      <section className="space-y-6 text-xs">
+                        <div>
+                          <h4 className="text-[11px] uppercase tracking-wide text-muted">Priorités</h4>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {PRIORITY_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedPriorities.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="accent-accent"
+                                  checked={selectedPriorities.includes(option.value)}
+                                  onChange={() => togglePriority(option.value)}
+                                />
+                                {option.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-[11px] uppercase tracking-wide text-muted">Efforts</h4>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <label className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(NO_EFFORT_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
+                              <input
+                                type="checkbox"
+                                className="accent-accent"
+                                checked={selectedEfforts.includes(NO_EFFORT_TOKEN)}
+                                onChange={() => toggleEffort(NO_EFFORT_TOKEN)}
+                              />
+                              Sans effort
+                            </label>
+                            {EFFORT_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="accent-accent"
+                                  checked={selectedEfforts.includes(option.value)}
+                                  onChange={() => toggleEffort(option.value)}
+                                />
+                                {option.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </section>
+                      <section className="flex flex-col gap-3 text-xs md:col-span-2">
+                        <label className="flex items-center gap-2 text-muted">
+                          <input type="checkbox" className="accent-accent" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />
+                          Masquer les colonnes DONE
+                        </label>
+                        <label className="flex items-center gap-2 text-muted">
+                          <input type="checkbox" className="accent-accent" checked={filterHasChildren} onChange={(event) => setFilterHasChildren(event.target.checked)} />
+                          Avec sous-kanban
+                        </label>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {isAddingColumn && (
-              <form onSubmit={handleSubmitColumn} className="mt-5 grid gap-4 md:grid-cols-2">
+              <form onSubmit={handleSubmitColumn} className="mt-6 grid gap-4 md:grid-cols-2">
                 <label className="text-xs text-muted">Nom
                   <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
                 </label>
@@ -691,7 +1076,22 @@ export function TeamBoardPage(){
         {!loading && board && (
           <section className="space-y-4">
             <div className="flex items-baseline justify-between">
-              <h2 className="text-xl font-semibold">Colonnes du board</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold">Colonnes du board</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetColumnForm();
+                    setIsAddingColumn(true);
+                    setFiltersExpanded(false);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
+                  title="Ajouter une colonne"
+                  aria-label="Ajouter une colonne"
+                >
+                  +
+                </button>
+              </div>
               <span className="text-xs uppercase tracking-wide text-muted">
                 {detailLoading? 'Actualisation…': board.columns.length===0? 'Aucune colonne': `${board.columns.length} colonne(s)`}
               </span>
