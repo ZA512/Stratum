@@ -2,6 +2,7 @@
 
 import React from "react";
 import { BoardDataProvider, useBoardData } from "@/features/boards/board-data-provider";
+import { BoardUiSettingsProvider } from "@/features/boards/board-ui-settings";
 import { FractalBreadcrumb } from "@/components/fractal-breadcrumb";
 import { TaskDrawerProvider } from "@/features/nodes/task-drawer/TaskDrawerContext";
 import { TaskDrawer } from "@/features/nodes/task-drawer/TaskDrawer";
@@ -31,10 +32,12 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
 export default function TeamBoardsLayout({ children }: { children: React.ReactNode }) {
   return (
     <BoardDataProvider>
-      <TaskDrawerProvider>
-        <TeamBoardsShell>{children}</TeamBoardsShell>
-        <TaskDrawer />
-      </TaskDrawerProvider>
+      <BoardUiSettingsProvider>
+        <TaskDrawerProvider>
+          <TeamBoardsShell>{children}</TeamBoardsShell>
+          <TaskDrawer />
+        </TaskDrawerProvider>
+      </BoardUiSettingsProvider>
     </BoardDataProvider>
   );
 }

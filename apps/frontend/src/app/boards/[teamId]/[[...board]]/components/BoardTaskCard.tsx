@@ -103,10 +103,32 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
     node.priority === 'MEDIUM' ? 'Medium' :
     'Low';
 
-  const assignees: TaskAssignee[] = (node.assignees ?? []).map(a => ({
+  const responsibleMembers = node.raci?.responsible ?? node.assignees ?? [];
+  const assignees: TaskAssignee[] = responsibleMembers.map(a => ({
     id: a.id,
     initials: getInitials(a.displayName),
   }));
+
+  const raciTooltip = useMemo(() => {
+    if (!node.raci) {
+      if (!node.assignees || node.assignees.length === 0) return undefined;
+      const names = node.assignees.map((member) => member.displayName).join(', ');
+      return names ? `R : ${names}` : undefined;
+    }
+    const groups: Array<{ label: string; entries: { displayName: string }[] }> = [
+      { label: 'R', entries: node.raci.responsible ?? [] },
+      { label: 'A', entries: node.raci.accountable ?? [] },
+      { label: 'C', entries: node.raci.consulted ?? [] },
+      { label: 'I', entries: node.raci.informed ?? [] },
+    ];
+    const lines = groups.map(({ label, entries }) => {
+      if (!entries || entries.length === 0) {
+        return `${label} : -`;
+      }
+      return `${label} : ${entries.map((entry) => entry.displayName).join(', ')}`;
+    });
+    return lines.join('\n');
+  }, [node.raci, node.assignees]);
 
   const lateness = useMemo(() => {
     if (!node.dueAt) return undefined;
@@ -144,9 +166,11 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
         title={editing ? '' : title}
         description={description}
         assignees={assignees}
+        assigneeTooltip={raciTooltip}
         lateness={lateness}
         complexity={complexity}
         fractalPath={fractalPath}
+        progress={typeof node.progress === 'number' ? node.progress : undefined}
         onClick={() => onOpen(node.id)}
         onFractalPathClick={async () => {
           if (!onOpenChildBoard || fractalLoading) return;

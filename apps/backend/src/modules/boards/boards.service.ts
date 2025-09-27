@@ -147,8 +147,10 @@ export class BoardsService {
             tags: true,
             metadata: true,
             statusMetadata: true,
+            progress: true,
             assignments: {
               select: {
+                role: true,
                 user: {
                   select: {
                     id: true,
@@ -233,32 +235,38 @@ export class BoardsService {
       ].find((value) => typeof value === 'number' && Number.isFinite(value)) as
         | number
         | undefined;
-      const assignees = node.assignments
-        ? (
-            node.assignments as Array<{
-              user: {
-                id: string;
-                displayName: string;
-                avatarUrl: string | null;
-              } | null;
-            }>
-          )
-            .map((assignment) => assignment.user)
-            .filter(
-              (
-                user,
-              ): user is {
-                id: string;
-                displayName: string;
-                avatarUrl: string | null;
-              } => Boolean(user),
-            )
-            .map((user) => ({
-              id: user.id,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-            }))
-        : [];
+      const assignments = (node.assignments ?? []) as Array<{
+        role: string | null;
+        user: {
+          id: string;
+          displayName: string;
+          avatarUrl: string | null;
+        } | null;
+      }>;
+
+      const raciBuckets = {
+        R: [] as { id: string; displayName: string; avatarUrl: string | null }[],
+        A: [] as { id: string; displayName: string; avatarUrl: string | null }[],
+        C: [] as { id: string; displayName: string; avatarUrl: string | null }[],
+        I: [] as { id: string; displayName: string; avatarUrl: string | null }[],
+      };
+
+      for (const assignment of assignments) {
+        if (!assignment.user) continue;
+        const role = (assignment.role ?? '').toUpperCase();
+        if (role === 'R' || role === 'A' || role === 'C' || role === 'I') {
+          const bucket = raciBuckets[role];
+          if (!bucket.some((entry) => entry.id === assignment.user!.id)) {
+            bucket.push({
+              id: assignment.user.id,
+              displayName: assignment.user.displayName,
+              avatarUrl: assignment.user.avatarUrl,
+            });
+          }
+        }
+      }
+
+      const assignees = raciBuckets.R;
       bucket.push({
         id: node.id,
         title: node.title,
@@ -279,6 +287,13 @@ export class BoardsService {
         tags: node.tags ?? [],
         estimatedDurationDays: estimatedDuration ?? null,
         assignees,
+        progress: typeof node.progress === 'number' ? node.progress : 0,
+        raci: {
+          responsible: raciBuckets.R,
+          accountable: raciBuckets.A,
+          consulted: raciBuckets.C,
+          informed: raciBuckets.I,
+        },
         counts: countsByParent.get(node.id) ?? {
           backlog: 0,
           inProgress: 0,
