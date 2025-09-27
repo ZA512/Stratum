@@ -4,10 +4,12 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useTranslation } from "@/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("alice@stratum.dev");
   const [password, setPassword] = useState("stratum");
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +35,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card/80 p-8 shadow-xl backdrop-blur">
         <div className="mb-6 space-y-2 text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-accent">Stratum</p>
-          <h1 className="text-2xl font-semibold">Connexion</h1>
-          <p className="text-sm text-muted">Utilisez les identifiants de demo injectes par le seed Prisma.</p>
+          <h1 className="text-2xl font-semibold">{t("login.title")}</h1>
+          <p className="text-sm text-muted">{t("login.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <label className="block space-y-2 text-sm">
-            <span className="text-muted">Email</span>
+            <span className="text-muted">{t("login.email")}</span>
             <input
               type="email"
               value={email}
@@ -52,7 +54,7 @@ export default function LoginPage() {
           </label>
 
           <label className="block space-y-2 text-sm">
-            <span className="text-muted">Mot de passe</span>
+            <span className="text-muted">{t("login.password")}</span>
             <input
               type="password"
               value={password}
@@ -75,14 +77,14 @@ export default function LoginPage() {
             disabled={isSubmitting}
             className="w-full rounded-full bg-accent px-4 py-3 text-sm font-semibold text-background transition hover:bg-accent-strong disabled:opacity-60"
           >
-            {isSubmitting ? "Connexion..." : "Se connecter"}
+            {isSubmitting ? t("login.submitting") : t("login.submit")}
           </button>
         </form>
 
         <p className="mt-8 text-center text-sm text-muted">
-          <span>Retour au tableau de bord ? </span>
+          <span>{t("login.backPrompt")}</span>{" "}
           <Link href="/" className="text-accent hover:text-accent-strong">
-            Acceder a Stratum
+            {t("login.backLink")}
           </Link>
         </p>
       </div>

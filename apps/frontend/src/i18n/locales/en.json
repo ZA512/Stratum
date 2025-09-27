@@ -1,0 +1,61 @@
+{
+  "common": {
+    "brand": "Stratum",
+    "loading": "Loading…",
+    "language": {
+      "label": "Language",
+      "description": "Choose the language used across the interface.",
+      "english": "English",
+      "french": "French"
+    },
+    "actions": {
+      "signOut": "Sign out"
+    }
+  },
+  "home": {
+    "guest": {
+      "title": "Welcome to Stratum",
+      "subtitle": "Sign in to access your teams, fractal boards, and breadcrumb navigation.",
+      "cta": "Sign in"
+    },
+    "header": {
+      "greeting": "Hello {name}",
+      "settings": "Settings"
+    },
+    "sections": {
+      "teamsTitle": "Your teams",
+      "lastCreated": "Last creation: {date}",
+      "teamsDescription": "Active teams are synchronised with the backend Prisma module. Select one to open its fractal board."
+    },
+    "team": {
+      "members": "{count} active member(s)",
+      "createdAt": "Created on {date}",
+      "openBoard": "Open the board"
+    },
+    "empty": {
+      "title": "No team yet",
+      "description": "Your initial workspace does not exist yet. We can create it automatically.",
+      "manual": "Create my first workspace",
+      "creating": "Creating workspace…",
+      "auto": "Automatic initialisation in progress…"
+    }
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Use the demo credentials provided by the Prisma seed.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "backPrompt": "Back to the dashboard?",
+    "backLink": "Access Stratum"
+  },
+  "settings": {
+    "title": "User settings",
+    "description": "Personalise your experience. Language preference overrides automatic detection.",
+    "languageLabel": "Interface language",
+    "languageHelp": "Your preference is saved on this device.",
+    "success": "Language updated",
+    "back": "Back to the dashboard"
+  }
+}
