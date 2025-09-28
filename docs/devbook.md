@@ -399,6 +399,106 @@ Tests manuels conseillés:
 4. Définir `blockedExpectedUnblockAt` à hier → badge rouge visible; ajuster à futur → badge disparaît.
 
 Pistes next:
+ 
+### 2025-09-28 – Uniformisation largeur colonnes & simplification progression (Board)
+
+Objectifs:
+1. Stabiliser la grille visuelle: toutes les colonnes ont exactement la même largeur quelle que soit la longueur des titres ou la présence de description.
+2. Réduire la charge visuelle par carte: suppression de la barre de progression (bruit et densité sur petit format) au profit d’un pourcentage compact.
+3. Préparer un futur mode « compact » sans introduire de décalages dynamiques (slots réservés / placeholders).
+
+Implémentation:
+- `ColumnPanel.tsx`: remplacement `min-w / max-w` par `w-[320px]` (valeur de référence). Cette constante pourra être factorisée dans un token Tailwind si on ajoute un mode densité.
+- `task-card.tsx`: suppression du conteneur barre; ajout d’un bloc fixe (min-w 42px) affichant `NN%` ou `--` si aucune progression. Alignement garanti entre cartes.
+- Footer TaskCard conservé en grid 12 colonnes; l’ordre relatif des autres items (complexité, fractal path) reste stable.
+
+Raisons:
+- Ergonomie: les variations de largeur perturbent la lecture horizontale et la mémoire spatiale.
+- Performance cognitive: barre + pourcentage doublonnent l’information; garder le nombre suffit à ce stade.
+
+Pistes futures:
+- Introduire un mode densité réduite (280px) piloté par préférence utilisateur (`localStorage`).
+- Revenir à une jauge minimaliste (mini-sparkline) seulement si la progression devient un signal clé (ex: > 30% des cartes suivies par progression incrémentale).
+- Exposer `COLUMN_WIDTH` via CSS custom property pour adaptation responsive conditionnelle.
+
+Impacts tests manuels:
+1. Vérifier absence de “saut” lors du toggle description on/off.
+2. Vérifier DnD: la hitbox reste identique (aucun shrink inattendu).
+3. Vérifier accessibilité: le pourcentage a un `title` (tooltip) lorsque présent et un fallback `--` sinon.
+
+Statut: DONE.
+
+### 2025-09-28 – Stabilisation barre filtres (bouton Réinitialiser)
+
+Problème: l’apparition/disparition du bouton « Réinitialiser » décalait les autres commandes (pillules et bouton filtres avancés), générant un “layout shift” irritant.
+
+Solution: retrait du bouton de la rangée principale; insertion d’un bouton positionné absolument en bas à droite du conteneur de la barre (`absolute bottom-3 right-4`).
+
+Effets:
+* Plus aucun déplacement horizontal lors de l’activation/désactivation de filtres.
+* Visibilité suffisante (contraste + hover) sans polluer l’espace des filtres rapides.
+* Accessibilité: rôle conservé (bouton standard). Pas d’aria supplémentaire requis.
+
+Points futurs éventuels:
+* Ajouter raccourci clavier (ex: Alt+R) pour reset rapide.
+* Afficher compteur de filtres actifs à côté de l’icône (déjà pastille, peut évoluer en badge numérique).
+
+Statut: DONE.
+
+### 2025-09-28 – Toggle Mode Expert & Tooltip RACI custom
+
+Objectifs:
+1. Rendre activable le mode expert déjà câblé (temps, coûts, onglets) sans manipulation manuelle du localStorage.
+2. Améliorer la lisibilité du RACI sur les cartes via un tooltip multi‑ligne stable (éviter limitations du `title` natif).
+
+Implémentation:
+- Barre filtres (`BoardPageShell.tsx`): ajout d’une pillule `Expert on/off` utilisant `useBoardUiSettings()` (persistance locale par équipe).
+- `task-card.tsx`: remplacement de l’attribut `title` pour les avatars par un tooltip custom accessible (role=tooltip, `aria-describedby`). Ouverture au survol/focus, fermeture au blur/mouseleave. Rendu multi‑ligne via `whitespace-pre-line`.
+
+Accessibilité:
+- Navigation clavier: focus sur le premier avatar déclenche l’affichage; sortie (blur) le ferme.
+- Pas de piège focus: tooltip purement décoratif (pas focusable).
+
+Limites & pistes:
+- Pas encore de delay ou d’animation (peut être ajouté si besoin).
+- Fermeture sur scroll non gérée (considérée acceptable pour MVP; possibilité d’écouter `scroll` parent si nécessaire).
+
+Statut: DONE.
+
+### 2025-09-28 – Redirection automatique session expirée
+
+Problème: l’utilisateur restait bloqué sur une page avec erreurs réseau après expiration / invalidation de session, sans retour automatique au login.
+
+Solution:
+* `auth-provider.tsx`: au montage, si aucune session locale et route != /login → redirection `/login?next=...`.
+* `logout()` accepte maintenant `{ returnTo }` et redirige vers `/login?next=`.
+* Wrapper `handleApi` (BoardPageShell) déclenche `logout()` sur 401 détecté.
+* Page login: après succès, si param `next` commençant par `/`, redirection vers cette cible; sinon `/`.
+
+Avantages: UX cohérente, pas de confusion “network error”, deep-link conservé.
+
+Prochaines pistes: interceptor fetch global, rafraîchissement silencieux sur onglets multiples (BroadcastChannel).
+
+Statut: DONE.
+
+### 2025-09-28 – Tooltip RACI anti‑flicker
+
+Amélioration UX mineure du tooltip custom RACI sur les avatars des cartes.
+
+Changements:
+* Délai d’ouverture: 150 ms avant affichage (évite les apparitions/disparitions rapides lors de simples traversées de la souris).
+* Fermeture sur scroll fenêtre (suppression immédiate du tooltip pour éviter qu’il flotte hors contexte après un scroll violent).
+* Implémentation: timer + `useEffect` d’abonnement scroll dans `task-card.tsx`.
+
+Motivation:
+* Réduction du bruit visuel quand on survole simplement la zone d’avatars en allant cliquer ailleurs.
+* Conformité avec patterns de tooltips “intent-based” (délai modéré < 200 ms).
+
+Pistes futures:
+* Détection de scroll parent spécifique plutôt que globale window si virtualisation introduite.
+* Ajout d’une légère animation fade/scale (actuellement apparition instantanée pour clarté).
+
+Statut: DONE.
 - Index de recherche Tag → filtre par tag sur board.
 - Couleur/tag count sur carte (limiter bruit visuel, peut-être groupé sous un popover). 
 - Batch recalcul progress (éviter recalcul complet si ±1 change). 

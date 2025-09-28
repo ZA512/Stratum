@@ -6,8 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace backend",
-    "dev:backend": "npm run dev --workspace backend",
+  "dev": "npm run dev --workspace backend",
+  "dev:backend": "npm --prefix apps/backend run start:dev",
     "dev:frontend": "npm run dev --workspace frontend",
     "build": "npm run build --workspaces",
     "build:backend": "npm run build --workspace backend",

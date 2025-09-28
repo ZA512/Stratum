@@ -32,7 +32,7 @@ type AuthContextValue = {
   refreshToken: string | null;
   initializing: boolean;
   login: (input: LoginInput) => Promise<void>;
-  logout: () => void;
+  logout: (opts?: { returnTo?: string }) => void;
 };
 
 const STORAGE_KEY = "stratum_auth_session_v1";
@@ -146,17 +146,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed: AuthSession = JSON.parse(raw);
         setSession(parsed);
-        // Sync cookie si rafraichissement
         setCookie(ACCESS_COOKIE, parsed.tokens.accessToken, 7);
-        // Planifier un auto-refresh si une session existe
         scheduleNextRefresh(parsed);
+      } else {
+        // Si aucune session et pas déjà sur /login -> redirection (on conserve l'URL visée)
+        const path = window.location.pathname;
+        if (!path.startsWith('/login')) {
+          const next = encodeURIComponent(path + window.location.search + window.location.hash);
+          router.replace(`/login?next=${next}`);
+        }
       }
     } catch (error) {
       console.warn("Impossible de lire la session locale", error);
     } finally {
       setInitializing(false);
     }
-  }, [scheduleNextRefresh]);
+  }, [scheduleNextRefresh, router]);
 
   // (persistSession déplacé plus haut)
 
@@ -180,11 +185,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     scheduleNextRefresh(nextSession);
   }, [persistSession, scheduleNextRefresh]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback((opts?: { returnTo?: string }) => {
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    const next = opts?.returnTo ? opts.returnTo : current;
     setSession(null);
     persistSession(null);
-    // Redirection immediate cote client
-    router.replace("/login");
+    router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [persistSession, router]);
 
   // Rafraichir à la reprise de focus si proche de l'expiration d'accès

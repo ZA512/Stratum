@@ -45,7 +45,8 @@ export function ColumnPanel(props: ColumnPanelProps){
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id, data: { type: 'column' } });
 
   return (
-    <div className={`min-w-[280px] max-w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative`}>
+    // Largeur fixe pour uniformiser toutes les colonnes
+    <div className={`w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative`}>
       <div className={`absolute left-0 top-0 h-1 w-full rounded-t-2xl ${colorClass}`} />
       <header className="flex items-start justify-between gap-3 pb-2 border-b border-white/10">
         <div>

@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useId, useRef, useEffect, useCallback } from "react";
 
 // utilitaire léger pour concaténer des classes sans dépendance externe
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -71,6 +71,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const compact = variant === "compact";
 
+  const [raciOpen, setRaciOpen] = useState(false);
+  const raciTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const raciTooltipId = useId();
+  const clearTimer = () => { if(raciTimerRef.current){ window.clearTimeout(raciTimerRef.current); raciTimerRef.current=null; } };
+  const handleRaciOpen = () => {
+    if(raciOpen) return;
+    clearTimer();
+    raciTimerRef.current = window.setTimeout(()=>{ if(mountedRef.current) setRaciOpen(true); },150) as unknown as number;
+  };
+  const handleRaciClose = useCallback(() => { clearTimer(); setRaciOpen(false); }, []);
+
+  useEffect(()=>()=>{ mountedRef.current=false; clearTimer(); },[]);
+
+  useEffect(()=>{
+    if(!raciOpen) return;
+    const onScroll = () => { handleRaciClose(); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [raciOpen, handleRaciClose]);
+
   return (
     <div
       onClick={onClick}
@@ -119,9 +140,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
           <div
-            className="flex -space-x-2"
-            title={assigneeTooltip ?? undefined}
-            aria-label={assigneeTooltip ?? undefined}
+            className="relative flex -space-x-2"
+            onMouseEnter={assigneeTooltip ? handleRaciOpen : undefined}
+            onMouseLeave={assigneeTooltip ? handleRaciClose : undefined}
+            onFocus={assigneeTooltip ? handleRaciOpen : undefined}
+            onBlur={assigneeTooltip ? handleRaciClose : undefined}
+            aria-describedby={assigneeTooltip && raciOpen ? raciTooltipId : undefined}
           >
             {assignees.slice(0, 4).map(a => (
               <div
@@ -136,6 +160,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {assignees.length > 4 && (
               <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
                 <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
+              </div>
+            )}
+            {assigneeTooltip && raciOpen && (
+              <div
+                id={raciTooltipId}
+                role="tooltip"
+                className="absolute left-0 top-full z-30 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+              >
+                {assigneeTooltip}
               </div>
             )}
           </div>
@@ -159,22 +192,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
         </div>
         <div className="col-span-5 flex items-center justify-end gap-4">
-          {typeof progress === "number" && progress > 0 && (
-            <div
-              className="flex items-center gap-2 min-w-[72px]"
-              title={`Progression ${Math.min(Math.max(progress, 0), 100)}%`}
-            >
-              <div className="relative h-2 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 dark:bg-emerald-400"
-                  style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
-                />
-              </div>
-              <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
-                {Math.min(Math.max(Math.round(progress), 0), 100)}%
-              </span>
-            </div>
-          )}
+          {/* Slot progression (fixe) - on garde seulement le pourcentage */}
+          <div
+            className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+            title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
+            aria-label="Progression"
+          >
+            {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
+          </div>
           {complexity && (
             <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>

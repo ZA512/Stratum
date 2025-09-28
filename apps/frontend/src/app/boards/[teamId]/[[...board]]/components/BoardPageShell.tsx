@@ -11,6 +11,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
+import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
@@ -152,6 +153,7 @@ export function TeamBoardPage(){
   const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
+  const { expertMode, setExpertMode } = useBoardUiSettings();
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -533,16 +535,19 @@ export function TeamBoardPage(){
   async function handleApi<T>(op:()=>Promise<T>, opts?: { success?: string; warnWip?: string; }) {
     try {
       const result = await op();
-      if(opts?.success) success(opts.success);
+      if (opts?.success) success(opts.success);
       return result;
-    } catch(e){
-      const err = e as Error & { message?: string };
-      const msg = (err?.message||'').toLowerCase();
-      if(msg.includes('401') || msg.includes('unauthorized')) {
-        toastError('Session expirée');
+    } catch (e) {
+      const err = e as Error & { status?: number; message?: string };
+      const msg = (err?.message || '').toLowerCase();
+      // Détection 401 élargie (status ou message)
+      if (err.status === 401 || msg.includes('401') || msg.includes('unauthorized')) {
+        toastError('Session expirée – redirection…');
+        // logout() effectue déjà la redirection vers /login
         logout();
-      } else if(msg.includes('wip')) {
-        // WIP spécifique → warning style (utilise error toast pour l'instant faute de canal distinct)
+        return Promise.reject(err);
+      }
+      if (msg.includes('wip')) {
         toastError(opts?.warnWip || 'Limite WIP atteinte');
       } else {
         toastError(err.message || 'Erreur inattendue');
@@ -893,17 +898,19 @@ export function TeamBoardPage(){
                   >
                     Descriptif {showDescriptions ? 'on' : 'off'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpertMode(!expertMode)}
+                    className={pillClass(expertMode)}
+                    aria-pressed={expertMode}
+                    aria-label={expertMode ? 'Désactiver mode expert' : 'Activer mode expert'}
+                    title={expertMode ? 'Mode expert actif (temps, coûts, onglets)' : 'Activer mode expert (temps, coûts)'}
+                  >
+                    Expert {expertMode ? 'on' : 'off'}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {hasActiveFilters && (
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="text-xs font-semibold text-muted transition hover:text-foreground"
-                    >
-                      Réinitialiser
-                    </button>
-                  )}
+                  {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
                   <button
                     type="button"
                     onClick={() => setFiltersExpanded((prev) => !prev)}
@@ -919,6 +926,16 @@ export function TeamBoardPage(){
                 </div>
               </div>
             </div>
+            {/* Bouton Réinitialiser repositionné en bas à droite pour éviter tout shift visuel */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-white/15 px-4 py-1 text-[11px] font-semibold tracking-wide text-muted shadow-sm transition hover:border-accent hover:text-foreground hover:bg-accent/10"
+              >
+                Réinitialiser
+              </button>
+            )}
             {filtersExpanded && (
               <div className="absolute left-0 right-0 top-full z-40 mt-3">
                 <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-white/15 bg-surface/95 shadow-2xl backdrop-blur">
