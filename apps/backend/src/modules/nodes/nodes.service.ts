@@ -28,6 +28,11 @@ import { UpdateNodeDto } from './dto/update-node.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
 import { NodeSummaryOnlyDto } from './dto/node-summary-only.dto';
 import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
+import {
+  InviteNodeCollaboratorDto,
+  NodeShareCollaboratorDto,
+  NodeShareSummaryDto,
+} from './dto/node-share.dto';
 
 function normalizeJson(
   value: Prisma.JsonValue | null,
@@ -39,8 +44,22 @@ function normalizeJson(
 }
 
 const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type RaciRole = 'R' | 'A' | 'C' | 'I';
+
+type ShareCollaborator = {
+  userId: string;
+  addedById: string | null;
+  addedAt: string | null;
+};
+
+type ShareInvitation = {
+  email: string;
+  invitedById: string | null;
+  invitedAt: string | null;
+  status: 'PENDING' | 'ACCEPTED';
+};
 
 type ExtractedMetadata = {
   raw: Record<string, any>;
@@ -66,6 +85,10 @@ type ExtractedMetadata = {
     consumedBudgetPercent: number | null;
     actualCost: number | null;
   };
+  share: {
+    collaborators: ShareCollaborator[];
+    invitations: ShareInvitation[];
+  };
 };
 
 function toStringArray(value: unknown): string[] {
@@ -90,6 +113,96 @@ function toDateStringOrNull(value: unknown): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed;
+}
+
+function normalizeShare(
+  rawRoot: Record<string, any>,
+): { collaborators: ShareCollaborator[]; invitations: ShareInvitation[] } {
+  const shareRaw =
+    rawRoot.share && typeof rawRoot.share === 'object' && !Array.isArray(rawRoot.share)
+      ? { ...(rawRoot.share as Record<string, any>) }
+      : {};
+
+  const collaborators: ShareCollaborator[] = [];
+  const collaboratorRaw = Array.isArray((shareRaw as any).collaborators)
+    ? (shareRaw as any).collaborators
+    : [];
+  for (const entry of collaboratorRaw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const userIdRaw = (entry as any).userId;
+    const userId = typeof userIdRaw === 'string' ? userIdRaw.trim() : String(userIdRaw ?? '').trim();
+    if (!userId) continue;
+    const addedByIdRaw = (entry as any).addedById;
+    const addedById = typeof addedByIdRaw === 'string' && addedByIdRaw.trim()
+      ? addedByIdRaw.trim()
+      : null;
+    const addedAtRaw = (entry as any).addedAt;
+    let addedAt: string | null = null;
+    if (typeof addedAtRaw === 'string' && addedAtRaw.trim()) {
+      const parsed = new Date(addedAtRaw);
+      addedAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+    collaborators.push({ userId, addedById, addedAt });
+  }
+
+  const invitations: ShareInvitation[] = [];
+  const invitationsRaw = Array.isArray((shareRaw as any).invitations)
+    ? (shareRaw as any).invitations
+    : [];
+  for (const entry of invitationsRaw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const emailRaw = (entry as any).email;
+    const email = typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
+    if (!email) continue;
+    const invitedByRaw = (entry as any).invitedById;
+    const invitedById = typeof invitedByRaw === 'string' && invitedByRaw.trim()
+      ? invitedByRaw.trim()
+      : null;
+    const invitedAtRaw = (entry as any).invitedAt;
+    let invitedAt: string | null = null;
+    if (typeof invitedAtRaw === 'string' && invitedAtRaw.trim()) {
+      const parsed = new Date(invitedAtRaw);
+      invitedAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+    const statusRaw = (entry as any).status;
+    const status =
+      typeof statusRaw === 'string' && ['PENDING', 'ACCEPTED'].includes(statusRaw.toUpperCase())
+        ? (statusRaw.toUpperCase() as 'PENDING' | 'ACCEPTED')
+        : 'PENDING';
+    invitations.push({ email, invitedById, invitedAt, status });
+  }
+
+  rawRoot.share = {
+    collaborators: collaborators.map((collab) => ({
+      userId: collab.userId,
+      addedById: collab.addedById,
+      addedAt: collab.addedAt,
+    })),
+    invitations: invitations.map((invite) => ({
+      email: invite.email,
+      invitedById: invite.invitedById,
+      invitedAt: invite.invitedAt,
+      status: invite.status,
+    })),
+  };
+
+  return { collaborators, invitations };
+}
+
+function writeShareBack(metadata: ExtractedMetadata) {
+  metadata.raw.share = {
+    collaborators: metadata.share.collaborators.map((collab) => ({
+      userId: collab.userId,
+      addedById: collab.addedById,
+      addedAt: collab.addedAt,
+    })),
+    invitations: metadata.share.invitations.map((invite) => ({
+      email: invite.email,
+      invitedById: invite.invitedById,
+      invitedAt: invite.invitedAt,
+      status: invite.status,
+    })),
+  };
 }
 
 @Injectable()
@@ -1194,6 +1307,141 @@ export class NodesService {
       counts,
     };
   }
+
+  async listNodeCollaborators(
+    nodeId: string,
+    userId: string,
+  ): Promise<NodeShareSummaryDto> {
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+    return this.buildNodeShareSummary(node, userId);
+  }
+
+  async addNodeCollaborator(
+    nodeId: string,
+    dto: InviteNodeCollaboratorDto,
+    userId: string,
+  ): Promise<NodeShareSummaryDto> {
+    const email = dto?.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Email obligatoire');
+    }
+    if (!EMAIL_REGEX.test(email)) {
+      throw new BadRequestException('Email invalide');
+    }
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const currentSummary = await this.buildNodeShareSummary(node, userId);
+    if (
+      currentSummary.collaborators.some((collab) => {
+        if (!collab.email) return false;
+        return collab.email.toLowerCase() === email;
+      })
+    ) {
+      throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
+    }
+
+    const metadata = this.extractMetadata(node);
+    if (
+      metadata.share.invitations.some((invite) => invite.email === email)
+    ) {
+      throw new ConflictException(
+        'Une invitation est déjà en attente pour cet email',
+      );
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    const nowIso = new Date().toISOString();
+
+    if (existingUser) {
+      if (existingUser.id === userId) {
+        throw new ConflictException('Vous êtes déjà collaborateur de cette tâche');
+      }
+
+      const alreadyDirect = metadata.share.collaborators.some(
+        (collab) => collab.userId === existingUser.id,
+      );
+      if (alreadyDirect) {
+        throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
+      }
+
+      const membership = await this.prisma.membership.findFirst({
+        where: {
+          teamId: node.teamId,
+          userId: existingUser.id,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+
+      if (membership) {
+        metadata.share.collaborators.push({
+          userId: existingUser.id,
+          addedById: userId,
+          addedAt: nowIso,
+        });
+        writeShareBack(metadata);
+        await this.prisma.node.update({
+          where: { id: node.id },
+          data: { metadata: metadata.raw as Prisma.InputJsonValue },
+        });
+        const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
+        return this.buildNodeShareSummary(nextNode, userId);
+      }
+    }
+
+    metadata.share.invitations.push({
+      email,
+      invitedById: userId,
+      invitedAt: nowIso,
+      status: 'PENDING',
+    });
+    writeShareBack(metadata);
+
+    await this.prisma.node.update({
+      where: { id: node.id },
+      data: { metadata: metadata.raw as Prisma.InputJsonValue },
+    });
+
+    const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
+    return this.buildNodeShareSummary(nextNode, userId);
+  }
+
+  async removeNodeCollaborator(
+    nodeId: string,
+    targetUserId: string,
+    userId: string,
+  ): Promise<NodeShareSummaryDto> {
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const metadata = this.extractMetadata(node);
+    const initialLength = metadata.share.collaborators.length;
+    metadata.share.collaborators = metadata.share.collaborators.filter(
+      (collab) => collab.userId !== targetUserId,
+    );
+
+    if (metadata.share.collaborators.length === initialLength) {
+      throw new NotFoundException('Collaborateur non trouvé');
+    }
+
+    writeShareBack(metadata);
+    await this.prisma.node.update({
+      where: { id: node.id },
+      data: { metadata: metadata.raw as Prisma.InputJsonValue },
+    });
+
+    const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
+    return this.buildNodeShareSummary(nextNode, userId);
+  }
+
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
     // Nouveau: on ne se base plus sur le type mais sur la présence d'un board
     const boards = await this.prisma.board.findMany({
@@ -1416,6 +1664,161 @@ export class NodesService {
     };
   }
 
+  private async buildNodeShareSummary(
+    node: NodeModel,
+    requestingUserId: string,
+  ): Promise<NodeShareSummaryDto> {
+    const metadata = this.extractMetadata(node);
+
+    const aggregated = new Map<
+      string,
+      {
+        userId: string;
+        accessType: 'OWNER' | 'DIRECT' | 'INHERITED' | 'SELF';
+        viaNodes: { nodeId: string; title: string }[];
+        addedAt: string | null;
+        addedById: string | null;
+      }
+    >();
+
+    const priority: Record<'OWNER' | 'DIRECT' | 'INHERITED' | 'SELF', number> = {
+      OWNER: 4,
+      DIRECT: 3,
+      SELF: 2,
+      INHERITED: 1,
+    };
+
+    const addCollaborator = (
+      userId: string,
+      accessType: 'OWNER' | 'DIRECT' | 'INHERITED' | 'SELF',
+      opts: {
+        viaNode?: { nodeId: string; title: string };
+        addedAt?: string | null;
+        addedById?: string | null;
+      } = {},
+    ) => {
+      if (!userId) return;
+      const existing = aggregated.get(userId);
+      if (!existing) {
+        aggregated.set(userId, {
+          userId,
+          accessType,
+          viaNodes: opts.viaNode ? [opts.viaNode] : [],
+          addedAt: opts.addedAt ?? null,
+          addedById: opts.addedById ?? null,
+        });
+        return;
+      }
+
+      if (opts.viaNode) {
+        const hasVia = existing.viaNodes.some(
+          (via) => via.nodeId === opts.viaNode!.nodeId,
+        );
+        if (!hasVia) existing.viaNodes.push(opts.viaNode);
+      }
+      if (!existing.addedAt && opts.addedAt) existing.addedAt = opts.addedAt;
+      if (!existing.addedById && opts.addedById)
+        existing.addedById = opts.addedById;
+
+      if (priority[accessType] > priority[existing.accessType]) {
+        existing.accessType = accessType;
+      }
+    };
+
+    if (node.createdById) {
+      const createdAtIso =
+        node.createdAt instanceof Date
+          ? node.createdAt.toISOString()
+          : null;
+      addCollaborator(node.createdById, 'OWNER', { addedAt: createdAtIso });
+    }
+
+    for (const collab of metadata.share.collaborators) {
+      addCollaborator(collab.userId, 'DIRECT', {
+        addedAt: collab.addedAt,
+        addedById: collab.addedById,
+      });
+    }
+
+    const pathSegments = node.path.split('/').filter(Boolean);
+    const ancestorIds = pathSegments.slice(0, Math.max(pathSegments.length - 1, 0));
+    if (ancestorIds.length > 0) {
+      const ancestors = await this.prisma.node.findMany({
+        where: { id: { in: ancestorIds } },
+        select: { id: true, title: true, metadata: true },
+      });
+      const order = new Map(ancestorIds.map((id, index) => [id, index]));
+      ancestors.sort(
+        (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
+      );
+      for (const ancestor of ancestors) {
+        const ancestorRaw =
+          ancestor.metadata &&
+          typeof ancestor.metadata === 'object' &&
+          !Array.isArray(ancestor.metadata)
+            ? { ...(ancestor.metadata as Record<string, any>) }
+            : {};
+        const share = normalizeShare(ancestorRaw);
+        for (const collab of share.collaborators) {
+          addCollaborator(collab.userId, 'INHERITED', {
+            viaNode: { nodeId: ancestor.id, title: ancestor.title },
+          });
+        }
+      }
+    }
+
+    if (!aggregated.has(requestingUserId)) {
+      addCollaborator(requestingUserId, 'SELF');
+    }
+
+    const relatedUserIds = new Set<string>();
+    for (const entry of aggregated.values()) {
+      relatedUserIds.add(entry.userId);
+      if (entry.addedById) relatedUserIds.add(entry.addedById);
+    }
+
+    const users = relatedUserIds.size
+      ? await this.prisma.user.findMany({
+          where: { id: { in: Array.from(relatedUserIds) } },
+          select: { id: true, displayName: true, email: true, avatarUrl: true },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.id, user]));
+
+    const ordered = Array.from(aggregated.values()).sort((a, b) => {
+      const diff = priority[b.accessType] - priority[a.accessType];
+      if (diff !== 0) return diff;
+      const nameA = (userMap.get(a.userId)?.displayName ?? a.userId).toLowerCase();
+      const nameB = (userMap.get(b.userId)?.displayName ?? b.userId).toLowerCase();
+      return nameA.localeCompare(nameB, 'fr');
+    });
+
+    const collaborators: NodeShareCollaboratorDto[] = ordered.map((entry) => {
+      const info = userMap.get(entry.userId);
+      return {
+        userId: entry.userId,
+        displayName: info?.displayName ?? entry.userId,
+        email: info?.email ?? '',
+        avatarUrl: info?.avatarUrl ?? null,
+        accessType: entry.accessType,
+        viaNodes: entry.viaNodes,
+        addedAt: entry.addedAt,
+        addedById: entry.addedById,
+      };
+    });
+
+    return {
+      nodeId: node.id,
+      collaborators,
+      invitations: metadata.share.invitations.map((invite) => ({
+        email: invite.email,
+        invitedAt: invite.invitedAt,
+        invitedById: invite.invitedById,
+        status: invite.status,
+      })),
+    };
+  }
+
   private extractMetadata(node: NodeModel): ExtractedMetadata {
     const rawRoot =
       node.metadata &&
@@ -1444,6 +1847,7 @@ export class NodesService {
     rawRoot.raci = raciRaw;
     rawRoot.timeTracking = timeRaw;
     rawRoot.financials = financialRaw;
+    const shareNormalized = normalizeShare(rawRoot);
 
     const responsibleIds = toStringArray(
       raciRaw.R ?? raciRaw.responsible ?? raciRaw.responsibleIds ?? [],
@@ -1525,6 +1929,10 @@ export class NodesService {
         consumedBudgetValue,
         consumedBudgetPercent,
         actualCost,
+      },
+      share: {
+        collaborators: shareNormalized.collaborators,
+        invitations: shareNormalized.invitations,
       },
     };
   }

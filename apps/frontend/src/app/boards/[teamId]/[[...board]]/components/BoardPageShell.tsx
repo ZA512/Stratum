@@ -158,6 +158,8 @@ export function TeamBoardPage(){
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
 
+  const showBoardControls = true;
+
   // New column form state
   const [isAddingColumn,setIsAddingColumn] = useState(false);
   const [columnName,setColumnName] = useState('');
@@ -815,278 +817,284 @@ export function TeamBoardPage(){
         </div>
       </header>
       <main className="flex flex-col gap-8 px-8 pt-8 pb-12 w-full">
-        <section className="grid gap-6">
-          <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6 w-full">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[240px]">
-                  <label className="flex flex-col gap-1 text-xs text-muted">
-                    <span className="text-[10px] uppercase tracking-wide">Recherche</span>
-                    <input
-                      type="search"
-                      value={searchDraft}
-                      onChange={(event) => setSearchDraft(event.target.value)}
-                      onFocus={() => {
-                        if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                        setSearchFocused(true);
-                      }}
-                      onBlur={() => {
-                        if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                        searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                      }}
-                      placeholder="Titre, description, #id, @utilisateur, !priorité…"
-                      className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                      aria-label="Recherche textuelle et filtres rapides"
-                    />
-                    <span className="text-[10px] text-muted">Min. 3 caractères ou utilisez @, !, #.</span>
-                  </label>
-                  {mentionContext && (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
-                      <ul className="max-h-56 overflow-y-auto py-2 text-sm">
-                        {mentionSuggestions.length > 0 ? (
-                          mentionSuggestions.map((assignee) => (
-                            <li key={assignee.id}>
-                              <button
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  handleMentionSelect(assignee.displayName);
-                                }}
-                                className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-muted transition hover:bg-white/5 hover:text-foreground"
-                              >
-                                <span>{assignee.displayName}</span>
-                              </button>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="px-4 py-2 text-xs text-muted">Aucun utilisateur trouvé</li>
+        {(showBoardControls || isAddingColumn) && (
+          <section className="grid gap-6">
+            <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6 w-full">
+              {showBoardControls && (
+                <>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="relative flex-1 min-w-[240px]">
+                        <label className="flex flex-col gap-1 text-xs text-muted">
+                          <span className="text-[10px] uppercase tracking-wide">Recherche</span>
+                          <input
+                            type="search"
+                            value={searchDraft}
+                            onChange={(event) => setSearchDraft(event.target.value)}
+                            onFocus={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              setSearchFocused(true);
+                            }}
+                            onBlur={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                            }}
+                            placeholder="Titre, description, #id, @utilisateur, !priorité…"
+                            className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                            aria-label="Recherche textuelle et filtres rapides"
+                          />
+                          <span className="text-[10px] text-muted">Min. 3 caractères ou utilisez @, !, #.</span>
+                        </label>
+                        {mentionContext && (
+                          <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
+                            <ul className="max-h-56 overflow-y-auto py-2 text-sm">
+                              {mentionSuggestions.length > 0 ? (
+                                mentionSuggestions.map((assignee) => (
+                                  <li key={assignee.id}>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        handleMentionSelect(assignee.displayName);
+                                      }}
+                                      className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-muted transition hover:bg-white/5 hover:text-foreground"
+                                    >
+                                      <span>{assignee.displayName}</span>
+                                    </button>
+                                  </li>
+                                ))
+                              ) : (
+                                <li className="px-4 py-2 text-xs text-muted">Aucun utilisateur trouvé</li>
+                              )}
+                            </ul>
+                          </div>
                         )}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setFilterMine((prev) => !prev)}
-                    className={pillClass(filterMine)}
-                    aria-pressed={filterMine}
-                  >
-                    Mes tâches
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortPriority((prev) => !prev)}
-                    className={pillClass(sortPriority)}
-                    aria-pressed={sortPriority}
-                  >
-                    Tri prio
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortDueDate((prev) => !prev)}
-                    className={pillClass(sortDueDate)}
-                    aria-pressed={sortDueDate}
-                  >
-                    Tri échéance
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowDescriptions((prev) => !prev)}
-                    className={pillClass(showDescriptions)}
-                    aria-pressed={showDescriptions}
-                  >
-                    Descriptif {showDescriptions ? 'on' : 'off'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpertMode(!expertMode)}
-                    className={pillClass(expertMode)}
-                    aria-pressed={expertMode}
-                    aria-label={expertMode ? 'Désactiver mode expert' : 'Activer mode expert'}
-                    title={expertMode ? 'Mode expert actif (temps, coûts, onglets)' : 'Activer mode expert (temps, coûts)'}
-                  >
-                    Expert {expertMode ? 'on' : 'off'}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
-                  <button
-                    type="button"
-                    onClick={() => setFiltersExpanded((prev) => !prev)}
-                    className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
-                    aria-expanded={filtersExpanded}
-                    aria-label={filtersExpanded ? 'Masquer les filtres avancés' : 'Afficher les filtres avancés'}
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
-                    </svg>
-                    {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* Bouton Réinitialiser repositionné en bas à droite pour éviter tout shift visuel */}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-white/15 px-4 py-1 text-[11px] font-semibold tracking-wide text-muted shadow-sm transition hover:border-accent hover:text-foreground hover:bg-accent/10"
-              >
-                Réinitialiser
-              </button>
-            )}
-            {filtersExpanded && (
-              <div className="absolute left-0 right-0 top-full z-40 mt-3">
-                <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-white/15 bg-surface/95 shadow-2xl backdrop-blur">
-                  <div className="flex items-start justify-between gap-4 px-6 py-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Filtres avancés</h3>
-                      <p className="text-xs text-muted">Combinez assignés, priorités, efforts et options d’affichage.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {hasActiveFilters && (
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
                         <button
                           type="button"
-                          onClick={resetFilters}
-                          className="text-xs font-semibold text-muted transition hover:text-foreground"
+                          onClick={() => setFilterMine((prev) => !prev)}
+                          className={pillClass(filterMine)}
+                          aria-pressed={filterMine}
                         >
-                          Réinitialiser
+                          Mes tâches
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setFiltersExpanded(false)}
-                        className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-                      >
-                        Fermer
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortPriority((prev) => !prev)}
+                          className={pillClass(sortPriority)}
+                          aria-pressed={sortPriority}
+                        >
+                          Tri prio
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortDueDate((prev) => !prev)}
+                          className={pillClass(sortDueDate)}
+                          aria-pressed={sortDueDate}
+                        >
+                          Tri échéance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDescriptions((prev) => !prev)}
+                          className={pillClass(showDescriptions)}
+                          aria-pressed={showDescriptions}
+                        >
+                          Descriptif {showDescriptions ? 'on' : 'off'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpertMode(!expertMode)}
+                          className={pillClass(expertMode)}
+                          aria-pressed={expertMode}
+                          aria-label={expertMode ? 'Désactiver mode expert' : 'Activer mode expert'}
+                          title={expertMode ? 'Mode expert actif (temps, coûts, onglets)' : 'Activer mode expert (temps, coûts)'}
+                        >
+                          Expert {expertMode ? 'on' : 'off'}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
+                        <button
+                          type="button"
+                          onClick={() => setFiltersExpanded((prev) => !prev)}
+                          className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
+                          aria-expanded={filtersExpanded}
+                          aria-label={filtersExpanded ? 'Masquer les filtres avancés' : 'Afficher les filtres avancés'}
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
+                          </svg>
+                          {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <section className="text-xs">
-                        <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
-                        <div className="mt-3 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-                          <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(UNASSIGNED_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
-                            <input
-                              type="checkbox"
-                              className="accent-accent"
-                              checked={selectedAssignees.includes(UNASSIGNED_TOKEN)}
-                              onChange={() => toggleAssignee(UNASSIGNED_TOKEN)}
-                            />
-                            Aucun
-                          </label>
-                          {allAssignees.length === 0 ? (
-                            <span className="col-span-full rounded-xl border border-dashed border-white/15 px-3 py-2 text-center text-muted">Aucun utilisateur assigné</span>
-                          ) : (
-                            allAssignees.map((assignee) => (
-                              <label
-                                key={assignee.id}
-                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(assignee.id) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                  {/* Bouton Réinitialiser repositionné en bas à droite pour éviter tout shift visuel */}
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-white/15 px-4 py-1 text-[11px] font-semibold tracking-wide text-muted shadow-sm transition hover:border-accent hover:text-foreground hover:bg-accent/10"
+                    >
+                      Réinitialiser
+                    </button>
+                  )}
+                  {filtersExpanded && (
+                    <div className="absolute left-0 right-0 top-full z-40 mt-3">
+                      <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-white/15 bg-surface/95 shadow-2xl backdrop-blur">
+                        <div className="flex items-start justify-between gap-4 px-6 py-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">Filtres avancés</h3>
+                            <p className="text-xs text-muted">Combinez assignés, priorités, efforts et options d’affichage.</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {hasActiveFilters && (
+                              <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="text-xs font-semibold text-muted transition hover:text-foreground"
                               >
-                                <input
-                                  type="checkbox"
-                                  className="accent-accent"
-                                  checked={selectedAssignees.includes(assignee.id)}
-                                  onChange={() => toggleAssignee(assignee.id)}
-                                />
-                                {assignee.displayName}
-                              </label>
-                            ))
-                          )}
-                        </div>
-                      </section>
-                      <section className="space-y-6 text-xs">
-                        <div>
-                          <h4 className="text-[11px] uppercase tracking-wide text-muted">Priorités</h4>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {PRIORITY_OPTIONS.map((option) => (
-                              <label
-                                key={option.value}
-                                className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedPriorities.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="accent-accent"
-                                  checked={selectedPriorities.includes(option.value)}
-                                  onChange={() => togglePriority(option.value)}
-                                />
-                                {option.label}
-                              </label>
-                            ))}
+                                Réinitialiser
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setFiltersExpanded(false)}
+                              className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
+                            >
+                              Fermer
+                            </button>
                           </div>
                         </div>
-                        <div>
-                          <h4 className="text-[11px] uppercase tracking-wide text-muted">Efforts</h4>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <label className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(NO_EFFORT_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
-                              <input
-                                type="checkbox"
-                                className="accent-accent"
-                                checked={selectedEfforts.includes(NO_EFFORT_TOKEN)}
-                                onChange={() => toggleEffort(NO_EFFORT_TOKEN)}
-                              />
-                              Sans effort
-                            </label>
-                            {EFFORT_OPTIONS.map((option) => (
-                              <label
-                                key={option.value}
-                                className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="accent-accent"
-                                  checked={selectedEfforts.includes(option.value)}
-                                  onChange={() => toggleEffort(option.value)}
-                                />
-                                {option.label}
+                        <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
+                          <div className="grid gap-6 md:grid-cols-2">
+                            <section className="text-xs">
+                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
+                              <div className="mt-3 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                                <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(UNASSIGNED_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
+                                  <input
+                                    type="checkbox"
+                                    className="accent-accent"
+                                    checked={selectedAssignees.includes(UNASSIGNED_TOKEN)}
+                                    onChange={() => toggleAssignee(UNASSIGNED_TOKEN)}
+                                  />
+                                  Aucun
+                                </label>
+                                {allAssignees.length === 0 ? (
+                                  <span className="col-span-full rounded-xl border border-dashed border-white/15 px-3 py-2 text-center text-muted">Aucun utilisateur assigné</span>
+                                ) : (
+                                  allAssignees.map((assignee) => (
+                                    <label
+                                      key={assignee.id}
+                                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(assignee.id) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="accent-accent"
+                                        checked={selectedAssignees.includes(assignee.id)}
+                                        onChange={() => toggleAssignee(assignee.id)}
+                                      />
+                                      {assignee.displayName}
+                                    </label>
+                                  ))
+                                )}
+                              </div>
+                            </section>
+                            <section className="space-y-6 text-xs">
+                              <div>
+                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Priorités</h4>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {PRIORITY_OPTIONS.map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedPriorities.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="accent-accent"
+                                        checked={selectedPriorities.includes(option.value)}
+                                        onChange={() => togglePriority(option.value)}
+                                      />
+                                      {option.label}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Efforts</h4>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <label className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(NO_EFFORT_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
+                                    <input
+                                      type="checkbox"
+                                      className="accent-accent"
+                                      checked={selectedEfforts.includes(NO_EFFORT_TOKEN)}
+                                      onChange={() => toggleEffort(NO_EFFORT_TOKEN)}
+                                    />
+                                    Sans effort
+                                  </label>
+                                  {EFFORT_OPTIONS.map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="accent-accent"
+                                        checked={selectedEfforts.includes(option.value)}
+                                        onChange={() => toggleEffort(option.value)}
+                                      />
+                                      {option.label}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            </section>
+                            <section className="flex flex-col gap-3 text-xs md:col-span-2">
+                              <label className="flex items-center gap-2 text-muted">
+                                <input type="checkbox" className="accent-accent" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />
+                                Masquer les colonnes DONE
                               </label>
-                            ))}
+                              <label className="flex items-center gap-2 text-muted">
+                                <input type="checkbox" className="accent-accent" checked={filterHasChildren} onChange={(event) => setFilterHasChildren(event.target.checked)} />
+                                Avec sous-kanban
+                              </label>
+                            </section>
                           </div>
                         </div>
-                      </section>
-                      <section className="flex flex-col gap-3 text-xs md:col-span-2">
-                        <label className="flex items-center gap-2 text-muted">
-                          <input type="checkbox" className="accent-accent" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />
-                          Masquer les colonnes DONE
-                        </label>
-                        <label className="flex items-center gap-2 text-muted">
-                          <input type="checkbox" className="accent-accent" checked={filterHasChildren} onChange={(event) => setFilterHasChildren(event.target.checked)} />
-                          Avec sous-kanban
-                        </label>
-                      </section>
+                      </div>
                     </div>
+                  )}
+                </>
+              )}
+              {isAddingColumn && (
+                <form onSubmit={handleSubmitColumn} className={`${showBoardControls ? 'mt-6' : ''} grid gap-4 md:grid-cols-2`}>
+                  <label className="text-xs text-muted">Nom
+                    <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
+                  </label>
+                  <label className="text-xs text-muted">Comportement
+                    <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+                      <option value="BACKLOG">Backlog</option>
+                      <option value="IN_PROGRESS">En cours</option>
+                      <option value="BLOCKED">Bloqué</option>
+                      <option value="DONE">Terminé</option>
+                      <option value="CUSTOM">Custom</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-muted">WIP (optionnel)
+                    <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder="Illimité" className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
+                  </label>
+                  <div className="flex items-center gap-3 pt-4">
+                    <button disabled={columnSubmitting} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-background disabled:opacity-60">{columnSubmitting?'Création…':'Créer'}</button>
+                    <button type="button" onClick={()=>{ setIsAddingColumn(false); resetColumnForm(); }} className="text-sm text-muted hover:text-foreground">Annuler</button>
                   </div>
-                </div>
-              </div>
-            )}
-            {isAddingColumn && (
-              <form onSubmit={handleSubmitColumn} className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="text-xs text-muted">Nom
-                  <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
-                </label>
-                <label className="text-xs text-muted">Comportement
-                  <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
-                    <option value="BACKLOG">Backlog</option>
-                    <option value="IN_PROGRESS">En cours</option>
-                    <option value="BLOCKED">Bloqué</option>
-                    <option value="DONE">Terminé</option>
-                    <option value="CUSTOM">Custom</option>
-                  </select>
-                </label>
-                <label className="text-xs text-muted">WIP (optionnel)
-                  <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder="Illimité" className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
-                </label>
-                <div className="flex items-center gap-3 pt-4">
-                  <button disabled={columnSubmitting} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-background disabled:opacity-60">{columnSubmitting?'Création…':'Créer'}</button>
-                  <button type="button" onClick={()=>{ setIsAddingColumn(false); resetColumnForm(); }} className="text-sm text-muted hover:text-foreground">Annuler</button>
-                </div>
-                {columnError && <p className="text-sm text-red-300 col-span-2">{columnError}</p>}
-              </form>
-            )}
-          </div>
-        </section>
+                  {columnError && <p className="text-sm text-red-300 col-span-2">{columnError}</p>}
+                </form>
+              )}
+            </div>
+          </section>
+        )}
         {error && <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200">{error}</div>}
         {loading && <BoardSkeleton />}
         {!loading && board && (

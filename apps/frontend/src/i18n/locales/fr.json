@@ -18,6 +18,8 @@
       "subtitle": "Connectez-vous pour accéder à vos équipes, à vos tableaux fractals et à la navigation breadcrumb.",
       "cta": "Se connecter"
     },
+    "redirecting": "Redirection vers votre kanban…",
+    "loadingTeams": "Chargement de votre espace…",
     "header": {
       "greeting": "Bonjour {name}",
       "settings": "Paramètres"

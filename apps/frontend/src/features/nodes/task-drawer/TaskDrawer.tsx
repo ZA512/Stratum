@@ -10,6 +10,13 @@ import { useToast } from '@/components/toast/ToastProvider';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { fetchTeamMembers, type TeamMember } from '@/features/teams/team-members-api';
+import {
+  fetchNodeCollaborators,
+  inviteNodeCollaborator,
+  removeNodeCollaborator,
+  type NodeCollaborator as SharedNodeCollaborator,
+  type NodeCollaboratorInvitation,
+} from '@/features/nodes/node-collaborators-api';
 // Icône close inline pour éviter dépendance externe
 const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -166,7 +173,7 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
 export const TaskDrawer: React.FC = () => {
   const { openedNodeId, close } = useTaskDrawer();
   const { detail, loading, error, refresh } = useTaskDetail();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
   const { teamId } = useBoardData();
@@ -231,11 +238,18 @@ export const TaskDrawer: React.FC = () => {
   const [plannedBudget, setPlannedBudget] = useState<string>('');
   const [consumedBudgetValue, setConsumedBudgetValue] = useState<string>('');
   const [consumedBudgetPercent, setConsumedBudgetPercent] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'classic' | 'time'>('classic');
+  const [activeTab, setActiveTab] = useState<'details' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const membersMap = useMemo(() => new Map(teamMembers.map(member => [member.id, member])), [teamMembers]);
+  const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
+  const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
+  const [collaboratorsError, setCollaboratorsError] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [removingCollaboratorId, setRemovingCollaboratorId] = useState<string | null>(null);
   const computedActualCost = useMemo(() => {
     const parseValue = (raw: string) => {
       const trimmed = raw.trim();
@@ -317,7 +331,7 @@ export const TaskDrawer: React.FC = () => {
           consumedBudgetPercent: detail.financials?.consumedBudgetPercent ?? null,
         },
       });
-      setActiveTab('classic');
+      setActiveTab('details');
     } else {
       setTitle('');
       setDescription('');
@@ -344,7 +358,7 @@ export const TaskDrawer: React.FC = () => {
       setPlannedBudget('');
       setConsumedBudgetValue('');
       setConsumedBudgetPercent('');
-      setActiveTab('classic');
+      setActiveTab('details');
       setInitialSnapshot(null);
     }
   }, [detail]);
@@ -383,10 +397,46 @@ export const TaskDrawer: React.FC = () => {
   }, [teamId, accessToken]);
 
   useEffect(() => {
-    if (!expertMode) {
-      setActiveTab('classic');
+    if (!detail?.id || !accessToken) {
+      setCollaborators([]);
+      setCollaboratorInvites([]);
+      setCollaboratorsError(null);
+      setInviteEmail('');
+      setCollaboratorsLoading(false);
+      return;
     }
-  }, [expertMode]);
+    let cancelled = false;
+    setCollaboratorsLoading(true);
+    setCollaboratorsError(null);
+    fetchNodeCollaborators(detail.id, accessToken)
+      .then((response) => {
+        if (cancelled) return;
+        setCollaborators(response.collaborators);
+        setCollaboratorInvites(response.invitations);
+      })
+      .catch((fetchError) => {
+        if (cancelled) return;
+        const message =
+          fetchError instanceof Error
+            ? fetchError.message
+            : 'Erreur lors du chargement des collaborateurs';
+        setCollaboratorsError(message);
+        setCollaborators([]);
+        setCollaboratorInvites([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCollaboratorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.id, accessToken]);
+
+  useEffect(() => {
+    if (!expertMode && activeTab === 'time') {
+      setActiveTab('details');
+    }
+  }, [expertMode, activeTab]);
 
   const hasDirty = useMemo(() => {
     if (!initialSnapshot) return false;
@@ -748,22 +798,27 @@ export const TaskDrawer: React.FC = () => {
               )}
               {!loading && detail && (
                 <div className="space-y-6">
-                  {expertMode && (
-                    <div className="flex gap-2 rounded border border-white/10 bg-surface/40 p-1 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('classic')}
-                        className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'classic' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                      >Classique</button>
+                  <div className="flex gap-2 rounded border border-white/10 bg-surface/40 p-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('details')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    >Détails</button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('collaborators')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    >Collaborateurs</button>
+                    {expertMode && (
                       <button
                         type="button"
                         onClick={() => setActiveTab('time')}
                         className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
                       >Temps & coût</button>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {(!expertMode || activeTab === 'classic') && (
+                  {activeTab === 'details' && (
                     <div className="space-y-6">
                       <section className="space-y-2">
                         <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</h3>
@@ -995,6 +1050,180 @@ export const TaskDrawer: React.FC = () => {
                       })()}
 
                       <ChildTasksSection />
+                    </div>
+                  )}
+
+                  {activeTab === 'collaborators' && (
+                    <div className="space-y-4">
+                      <section className="space-y-2">
+                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Gestion des accès</h3>
+                        <p className="text-sm text-muted">
+                          Invitez des collaborateurs pour leur donner accès à cette tâche dans leur propre kanban. Les accès hérités via un parent sont signalés automatiquement.
+                        </p>
+                      </section>
+                      <section className="space-y-3">
+                        <div className="space-y-2">
+                          <label className="flex flex-col gap-2 rounded border border-white/10 bg-surface/60 p-3 text-sm">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ajouter un collaborateur</span>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                              <input
+                                type="email"
+                                value={inviteEmail}
+                                onChange={(event) => setInviteEmail(event.target.value)}
+                                placeholder="email@exemple.com"
+                                className="flex-1 rounded border border-white/10 bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                                disabled={inviteSubmitting}
+                                aria-label="Email du collaborateur à inviter"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!detail?.id || !accessToken) return;
+                                  const trimmedEmail = inviteEmail.trim();
+                                  if (!trimmedEmail) {
+                                    toastError('Veuillez saisir un email');
+                                    return;
+                                  }
+                                  setInviteSubmitting(true);
+                                  inviteNodeCollaborator(detail.id, { email: trimmedEmail }, accessToken)
+                                    .then((response) => {
+                                      setCollaborators(response.collaborators);
+                                      setCollaboratorInvites(response.invitations);
+                                      setCollaboratorsError(null);
+                                      setInviteEmail('');
+                                      success('Collaborateur ajouté');
+                                    })
+                                    .catch((inviteError) => {
+                                      const message = inviteError instanceof Error ? inviteError.message : "Impossible d&apos;ajouter le collaborateur";
+                                      toastError(message);
+                                    })
+                                    .finally(() => {
+                                      setInviteSubmitting(false);
+                                    });
+                                }}
+                                disabled={!inviteEmail.trim() || inviteSubmitting}
+                                className="whitespace-nowrap rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {inviteSubmitting ? 'Ajout…' : 'Inviter'}
+                              </button>
+                            </div>
+                            <p className="text-xs text-muted">
+                              L’adresse doit correspondre à un compte Stratum. Un membre de l’équipe sera ajouté directement, sinon une invitation restera en attente.
+                            </p>
+                            {membersError && (
+                              <span className="text-xs text-red-400">{membersError}</span>
+                            )}
+                          </label>
+                        </div>
+                        <div className="space-y-3">
+                          {collaboratorsLoading ? (
+                            <div className="space-y-2">
+                              {Array.from({ length: 3 }).map((_, index) => (
+                                <div key={index} className="animate-pulse rounded border border-white/10 bg-surface/60 p-3">
+                                  <div className="h-4 w-1/3 rounded bg-white/10" />
+                                  <div className="mt-2 h-3 w-1/2 rounded bg-white/5" />
+                                </div>
+                              ))}
+                            </div>
+                          ) : collaboratorsError ? (
+                            <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                              {collaboratorsError}
+                            </div>
+                          ) : collaborators.length === 0 ? (
+                            <p className="text-sm text-muted">Aucun collaborateur pour le moment.</p>
+                          ) : (
+                            <ul className="space-y-3">
+                              {collaborators.map((collab) => {
+                                const addedBy = collab.addedById ? membersMap.get(collab.addedById)?.displayName ?? collab.addedById : null;
+                                const addedAtLabel = collab.addedAt ? new Date(collab.addedAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+                                return (
+                                  <li
+                                    key={collab.userId}
+                                    className="rounded border border-white/10 bg-surface/60 p-3"
+                                  >
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="space-y-1">
+                                        <p className="text-sm font-medium text-foreground">{collab.displayName}</p>
+                                        <p className="text-xs text-muted">{collab.email}</p>
+                                        <div className="flex flex-wrap gap-2 text-[11px] text-muted">
+                                          <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 uppercase tracking-wide">
+                                            {collab.accessType === 'OWNER'
+                                              ? 'Propriétaire'
+                                              : collab.accessType === 'DIRECT'
+                                                ? 'Direct'
+                                                : collab.accessType === 'INHERITED'
+                                                  ? 'Hérité'
+                                                  : 'Moi'}
+                                          </span>
+                                          {collab.viaNodes.map((via) => (
+                                            <span
+                                              key={via.nodeId}
+                                              className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5"
+                                            >
+                                              Via {via.title}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        {addedAtLabel && (
+                                          <p className="text-[11px] text-muted">
+                                            Ajouté le {addedAtLabel}
+                                            {addedBy ? ` par ${addedBy}` : ''}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {collab.accessType === 'DIRECT' && collab.userId !== user?.id ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (!detail?.id || !accessToken) return;
+                                            setRemovingCollaboratorId(collab.userId);
+                                            removeNodeCollaborator(detail.id, collab.userId, accessToken)
+                                              .then((response) => {
+                                                setCollaborators(response.collaborators);
+                                                setCollaboratorInvites(response.invitations);
+                                                setCollaboratorsError(null);
+                                                success('Collaborateur retiré');
+                                              })
+                                              .catch((removeError) => {
+                                                const message = removeError instanceof Error ? removeError.message : "Impossible de retirer le collaborateur";
+                                                toastError(message);
+                                              })
+                                              .finally(() => {
+                                                setRemovingCollaboratorId(null);
+                                              });
+                                          }}
+                                          disabled={removingCollaboratorId === collab.userId}
+                                          className="self-start rounded border border-white/10 px-3 py-1 text-xs font-medium text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {removingCollaboratorId === collab.userId ? 'Suppression…' : 'Retirer'}
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                        {collaboratorInvites.length > 0 && (
+                          <section className="space-y-2">
+                            <h4 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Invitations en attente</h4>
+                            <ul className="space-y-2 text-sm text-muted">
+                              {collaboratorInvites.map((invite) => (
+                                <li key={`${invite.email}-${invite.invitedAt ?? 'pending'}`} className="rounded border border-white/10 bg-surface/40 px-3 py-2">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-medium text-foreground">{invite.email}</span>
+                                    <span className="text-xs text-muted">
+                                      Statut : {invite.status === 'PENDING' ? 'En attente' : 'Acceptée'}
+                                      {invite.invitedAt ? ` • Envoyée le ${new Date(invite.invitedAt).toLocaleDateString('fr-FR', { dateStyle: 'medium' })}` : ''}
+                                    </span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        )}
+                      </section>
                     </div>
                   )}
 

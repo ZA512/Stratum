@@ -32,6 +32,10 @@ import { CreateChildNodeDto } from './dto/create-child-node.dto';
 import { UpdateChildNodeDto } from './dto/update-child-node.dto';
 import { MoveChildNodeDto } from './dto/move-child-node.dto';
 import { ReorderChildrenDto } from './dto/reorder-children.dto';
+import {
+  InviteNodeCollaboratorDto,
+  NodeShareSummaryDto,
+} from './dto/node-share.dto';
 import { NodesService } from './nodes.service';
 import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
 
@@ -128,6 +132,48 @@ export class NodesController {
     @Param('nodeId') nodeId: string,
   ): Promise<NodeDeletePreviewDto> {
     return this.nodesService.getDeletePreview(nodeId, user.id);
+  }
+
+  @Get(':nodeId/collaborators')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Liste les collaborateurs d\'une tâche (directs + hérités)' })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: NodeShareSummaryDto })
+  listCollaborators(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<NodeShareSummaryDto> {
+    return this.nodesService.listNodeCollaborators(nodeId, user.id);
+  }
+
+  @Post(':nodeId/collaborators')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite un collaborateur sur la tâche par email' })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: NodeShareSummaryDto })
+  inviteCollaborator(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Body() dto: InviteNodeCollaboratorDto,
+  ): Promise<NodeShareSummaryDto> {
+    return this.nodesService.addNodeCollaborator(nodeId, dto, user.id);
+  }
+
+  @Delete(':nodeId/collaborators/:userId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Retire un collaborateur direct de la tâche' })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiParam({ name: 'userId', example: 'user_guest' })
+  @ApiOkResponse({ type: NodeShareSummaryDto })
+  removeCollaborator(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Param('userId') targetUserId: string,
+  ): Promise<NodeShareSummaryDto> {
+    return this.nodesService.removeNodeCollaborator(nodeId, targetUserId, user.id);
   }
 
   @Patch(':nodeId')
