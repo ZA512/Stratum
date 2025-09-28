@@ -243,11 +243,14 @@ export const TaskDrawer: React.FC = () => {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const membersMap = useMemo(() => new Map(teamMembers.map(member => [member.id, member])), [teamMembers]);
+  // IMPORTANT: déclarer le state 'collaborators' AVANT le useMemo qui l'utilise.
+  // Sinon, le corps du useMemo est exécuté alors que la constante 'collaborators' est encore dans sa TDZ
+  // (temporal dead zone), provoquant: "can't access lexical declaration 'collaborators' before initialization".
+  const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
   const availableCollaboratorOptions = useMemo(
     () => teamMembers.filter((member) => !collaborators.some((collab) => collab.userId === member.id)),
     [teamMembers, collaborators],
   );
-  const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
   const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
   const [collaboratorsError, setCollaboratorsError] = useState<string | null>(null);

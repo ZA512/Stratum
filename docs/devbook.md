@@ -582,6 +582,12 @@ showToast("Consolidation … [Annuler] [Garder séparé]")
 - [ ] **Fallback absence** : si aucune donnée RACI -> pas de listeners (évite coût inutile).
 - [ ] **Test manuel** : survol avatars avec / sans données RACI; vérifier fermeture lors d'un scroll.
 
+## Incident: ReferenceError collaborators (TaskDrawer)
+- [ ] **Symptôme**: Runtime ReferenceError `can't access lexical declaration 'collaborators' before initialization` ligne useMemo(availableCollaboratorOptions).
+- [ ] **Cause réelle**: ordre des déclarations: le `useMemo` évalué avant que `const [collaborators] = useState()` ne soit initialisé (TDZ JS). Aucune relation avec Prisma/migration.
+- [ ] **Correctif**: déplacer la déclaration `useState(collaborators)` au-dessus du `useMemo` qui dépend de `collaborators`.
+- [ ] **Prévention**: règle linter souhaitée (eslint react-hooks / exhaustive-deps ne couvre pas la TDZ). Ajouter guideline: déclarer tous les `useState` avant les `useMemo` les consommant.
+
 
 
 
