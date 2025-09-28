@@ -499,138 +499,78 @@ Pistes futures:
 * Ajout d’une légère animation fade/scale (actuellement apparition instantanée pour clarté).
 
 Statut: DONE.
-- Index de recherche Tag → filtre par tag sur board.
-- Couleur/tag count sur carte (limiter bruit visuel, peut-être groupé sous un popover). 
-- Batch recalcul progress (éviter recalcul complet si ±1 change). 
-
 
 ---
 
-## 🧪 Réflexions UX à formaliser (Cartes & Filtres Kanban)
+## Section : Inviter ou partager ou utilisateur
 
-### 1. Contenu visible d’une carte sur le board
-- ID court de la tâche: format `#44` (affiché avant le titre ou en overlay discret en haut à gauche / style monospace gris).
-- Menu contextuel (3 points, coin supérieur droit) ouvrant un sous‑menu :
-  1. (Icône crayon) « Éditer la tâche » — doublon avec double‑clic accepté (redondance = discoverability).
-  2. (Icône flèches multidirection / dossier déplacé) « Déplacer dans un autre kanban » → ouvre une popup avec arborescence des kanbans parents/frères (ex: `Projets`, `Projets > SIEM`, `Projets > SIEM > Décommissionnement`). Règle: on ne peut pas déplacer vers un de ses descendants pour éviter cycles.
-  3. (Icône poubelle rouge) « Supprimer la tâche » → modal de confirmation listant :
-     - Option A: supprimer uniquement cette tâche.
-     - Option B: supprimer récursivement (afficher total agrégé & distribution type compteur 1.5.1.45 coloré pour matérialiser l’impact).
+### Règles de base
 
-### 2. Corps de la carte
-- Titre (tronqué multi‑ligne contrôlée: 2 lignes max avec ellipsis CSS).
-- Extrait description: X premiers caractères (limite ~90–120) optionnel selon un toggle global « Description on/off » dans la barre d’outils du board (préférence volatile locale / future persistance utilisateur).
-- Avatar assigné (cercle bas gauche) :
-  - Si image utilisateur → image.
-  - Sinon initiales: première lettre prénom + première lettre nom (uppercase).
-- Indicateur d’échéance à droite de l’avatar :
-  - Calcul: `delta = (dueDate - today)` en jours. Affichage sous forme `-11` (jours restants) / `+1` (jours dépassés).
-  - Couleurs par défaut (si pas d’estimation durée):
-    - > 7 jours: vert.
-    - 3–7 jours: orange.
-    - ≤ 2 jours ou dépassé (delta <= 2 ou delta > 0 en positif) : rouge.
-  - Ajustement si estimation (durée) renseignée (ex: 7j) : on décale les bornes en soustrayant la durée. Exemple: estimation = 7j ⇒ seuil orange = 14 jours restants, seuil rouge = 7 jours restants. Formule générique: `seuilOrange = 7 + estimatedDays`, `seuilRouge = 2 + estimatedDays` (à affiner avec UX). Tooltip: `21/10/2025 estimation 7j` sinon juste la date formatée.
-- Compteur enfants `a.b.c.d` (Backlog / En cours / Bloqué / Fait) en bas à droite (déjà implémenté) + icône kanban cliquable devant pour accéder au sous-board.
+- [ ] **Vérité globale** : Un nœud (tâche/projet) a un statut et un contenu uniques, partagés par tous les invités.
+- [ ] **Rangement local** : Chaque utilisateur peut organiser une tâche partagée dans n’importe quel kanban ou colonne de son choix. Le placement d’un nœud dans un kanban n’affecte pas les autres utilisateurs.
+- [ ] **Atterrissage des partages** : L’utilisateur choisit un dossier d’arrivée par défaut (racine ou kanban choisi). Option "Demander à chaque partage" disponible.
+- [ ] **Synchronisation des statuts** : La synchro se fait par comportement (`backlog`, `en_cours`, `bloque`, `revue/test`, `termine`, `annule`).
+- [ ] **"Terminé" protégé** : Un nœud parent ne passe `termine` que si 100% de sa descendance est `termine`.
 
-### 3. Filtres (aucun bouton « valider » — réactif immédiat)
-- Par utilisateur (multi‑sélection + option « Aucun » => tous). Ajouter un filtre rapide « Mes tâches » (auto = user connecté).
-- Par priorité (multi‑sélection; prévoir tri cohérent si priorité filtrée + option ordre personnalisé).
-- Par recherche textuelle (saisie > = 3 caractères pour déclencher; debounce ~300ms) sur : titre + description + tags + éventuellement ID (#44).
-- Filtre rapide « Avec sous-kanban » (affiche uniquement les cartes ayant des enfants / un board attaché). Terme alternatif à tester: « Conteneurs » / « Nœuds parents ».
-- (Plus tard) Filtre par tags (multi + opérateur ET / OU configurable ? MVP = OU).
+### Invitations & héritage
 
-### 4. Tri / Ordonnancement intra-colonne
-Ordre de priorité final résulte d’une pile de règles :
-1. Tri manuel (drag & drop) = couche la plus basse (persisté position).
-2. Si tri utilisateur « par priorité » activé → regrouper par niveau (CRITICAL → LOWEST → NONE) tout en conservant l’ordre relatif interne existant par groupe.
-3. Option « trier par échéance » : sous‑tri (après regroupement priorité) sur dueAt asc (nulls en bas). Combinaison possible: priorité primaire, deadline secondaire.
-4. Future surcharge : tri par effort ou progression (non prioritaire pour l’instant).
+- [ ] **Accès hérité** : Inviter sur un parent donne accès à tout son sous-arbre.
+- [ ] **Dé-doublonnage à l’invite** : Si l’invité a déjà l’accès via un parent, l’invitation est bloquée avec un message explicatif.
 
-### 5. Options d’affichage
-- Toggle global « Description » (afficher/masquer extraits).
-- (Futur) Toggle « Avatars » ou mode compact mobile.
-- (Futur) Densité: confortable / compacte (padding vertical, height cartes).
+### Cas limites
 
-### 6. Données supplémentaires nécessaires (gap analysis)
-- Estimation (durée) champ non encore présent (à introduire: `estimatedDays` float ou heures). Peut vivre dans `statusMetadata.time.estimatedDays` en MVP.
-- Assignation principale (owner) vs multi assignments: choisir un champ `primaryAssigneeId` ou dériver du premier assignment.
-- Soft-delete stratégie si suppression cascade: journal d’audit (hors scope MVP mais noter besoin).
+- [ ] **Parent partagé après enfant** : Consolidation par défaut avec option "Annuler" ou "Garder séparé".
+- [ ] **Sous-tâche partagée après tâche** : Prévenir que le partage est inutile si l’accès est déjà hérité.
+- [ ] **Alias volontaire** : L’utilisateur peut créer un deuxième montage du même nœud avec badge "Alias".
 
-### 7. Sécurité & contraintes
-- Déplacement cross-board: vérifier droits d’écriture sur team cible (même team obligatoirement ? sinon migration appartenance?). MVP: restreindre à même team.
-- Suppression récursive: transaction + calcul agrégé préalable (SELECT COUNT + group by colonne comportement) pour afficher distribution avant confirmation.
+### UX à l’ouverture & messages
 
-### 8. Performance & Implémentation progressive
-Étapes proposées:
-1. Surface UI du menu contextuel (sans actions lourdes) + action Edit existante.
-2. Ajout modale déplacement (lecture arborescence: BFS depuis root team, exclure descendants du node courant).
-3. Badge échéance dynamique (sans ajustement estimation) puis itération avec estimation.
-4. Filtres utilisateurs / priorité / texte.
-5. Toggle description + préférence en localStorage.
-6. Suppression récursive (back + modal).
-7. Ajustements estimation / recalibrage couleurs.
+- [ ] **Toast d’arrivée** : Infini jusqu’à fermeture, indique le partage et la destination.
+- [ ] **Modale d’invitation** : Affiche l’état d’accès du destinataire et empêche les doublons inutiles.
 
-### 9. Risques / Points à clarifier
-- Empilage de badges (priorité, effort, overdue, tags) risque surcharge visuelle → prévoir fusion future.
-- Tri + filtrage + DnD: s’assurer que le tri virtuel n’écrase pas la position persistée (appliquer transformations présentation seulement, ne pas PATCH tant qu’utilisateur ne réordonne pas explicitement en mode « manuel »).
-- Localisation: codes jours restants (`-11`, `+3`) indépendants de locale (OK), tooltips localisés.
+### Scénarios → Résultat attendu
 
-### 10. Glossaire rapide
-- Overdue: dueAt passée (delta >= 0 => rouge).
-- Estimated shift: élargissement des seuils de couleur basé sur estimation.
+| Scénario | Résultat |
+|----------|----------|
+| Parent partagé après enfant | Consolidation par défaut avec toast persistant |
+| Enfant partagé après parent | Accès direct confirmé sans nouveau montage |
+| Alias volontaire | Badge "Alias" + lien "Aller à l’original" |
 
-Fin réflexions — à consolider dans une future RFC avant implémentation.
+### Implémentation technique
 
----
+#### Modèle de données
 
-## 🖥️ Décision UI: Passage en largeur pleine pour le board (Full-width Columns)
+- `node(id, parent_id, status, …)` — vérité globale.
+- `mount(id, user_id, node_id, local_parent_mount_id nullable, order)` — placements locaux (alias).
+- `access(node_id, principal_id, mode: direct|inherited, role)` — droits.
+- `board_prefs(user_id|team_id, mapping: {behavior: column_id})`.
 
-### Constat (avant)
-En mode centré `max-w-6xl`, un grand écran affichait 3 colonnes + 2/3 d’une quatrième. Visuellement:
-1. Impression de « coupe » arbitraire de la grille.
-2. Perte de surface utile alors que le contexte de travail (kanban) bénéficie d’une vision large.
-3. Contraste avec les usages des outils pro (Jira, Linear, Azure Boards) qui exploitent toute la largeur horizontale disponible.
+#### Endpoints API
 
-### Objectif
-Offrir une expérience fluide sur écrans larges: laisser le flux horizontal respirer, favoriser la comparaison cross‑colonnes, réduire le scroll horizontal.
+- `POST /nodes/:id/share` : Partager un nœud avec un utilisateur.
+- `POST /nodes/:id/invite` : Inviter un utilisateur sur un nœud.
+- `PATCH /nodes/:id/status` : Modifier le statut d’un nœud.
+- `GET /nodes/:id/access` : Voir les droits d’accès.
 
-### Modifications appliquées
-- Suppression des wrappers `max-w-6xl` sur le header et le `<main>` (fichier `BoardPageShell.tsx`).
-- Padding horizontal uniforme `px-8` pour conserver des marges confortables sans créer de tunnel central.
-- Le container des filtres (bloc recherche + pills + panneau avancé) s’étend maintenant sur toute la largeur disponible (il ne « casse » plus visuellement avant les colonnes).
-- Les colonnes continuent de s’aligner dans une scroller row horizontale (`flex gap-4 overflow-x-auto` inside `ColumnList`) sans contrainte de largeur globale.
+#### Algorithmes clés
 
-### Principes UX retenus
-1. Largeur = capacité de synthèse (plus de colonnes visibles = meilleure prise de décision). 
-2. Pas de centrage artificiel pour un outil orienté productivité (contrairement à un article / lecture longue). 
-3. Les composants denses (cartes) conservent leur largeur contrôlée (≈280–320px) pour maintenir lisibilité et rythme.
-4. L’en-tête et la barre de filtres restent visuellement « ancrés » par des marges latérales constantes (éviter l’impression d’un océan vide sur ultra-wide).
+- **Réception d’une invitation**
 
-### État futur possible
-- Breakpoint adaptatif : au‑delà de très grands écrans (> 1920px), possibilité de densifier (réduire légèrement `gap`) ou introduire un mini‑minimap / sticky swimlane summary.
-- Toggle « Mode focus » optionnel pour revenir à un conteneur centré (ex: présentation / démo) sans retirer la logique full-width par défaut.
+```typescript
+if hasAccessViaAncestor(user, node): block_invite()  // déjà couvert par héritage
+grantDirectAccess(user, node)
+dest = user.shareLanding()  // racine ou kanban choisi
+if hasMount(user, node): toast("Accès direct confirmé"); return
+createMount(user, node, dest)
 
-### Revert rapide (si besoin)
-Réintroduire dans `BoardPageShell.tsx` les classes:
-```tsx
-<header className="...">
-  <div className="mx-auto max-w-6xl px-6">...</div>
-</header>
-<main className="mx-auto max-w-6xl px-6">...</main>
+// consolidation si parent reçu après enfants
+for child in mountedDescendants(user, node):
+    moveMountUnder(child, mountOf(user,node))
+showToast("Consolidation … [Annuler] [Garder séparé]")
 ```
 
-### Validation manuelle post‑changement
-1. Sur un écran large (≥ 1440px) vérifier que 4+ colonnes sont visibles entièrement sans coupure.
-2. Ouvrir / fermer le panneau filtres avancés : la largeur suit correctement.
-3. DnD entre colonnes extrêmes (gauche ↔ droite) reste fluide sans latence de scroll.
-4. Responsif : sur < 1024px, l’horizontal scroll fonctionne comme avant (aucune régression du flux). 
-
-### Risques / Observations
-- Très grands écrans : amplitude de saccade possible lors d’un drag si le pointeur traverse > 1800px (à surveiller, peut nécessiter inertie ou auto‑scroll fin). 
-- Charge cognitive : trop de colonnes visibles peut saturer — à compenser plus tard avec filtres visuels groupés (collapse de colonnes peu actives).
-
-### Statut
-Livré (27/09/2025). Aucun blocage identifié. Prochaine étape éventuelle: mode focus toggle.
+- **Changement de statut** → emit event; chaque client place le nœud dans sa colonne préférée du même comportement.
+- **Dé-doublonnage recherche/notifications** → `SELECT DISTINCT node_id …`.
 
 
 
