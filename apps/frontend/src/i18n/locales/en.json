@@ -18,6 +18,8 @@
       "subtitle": "Sign in to access your teams, fractal boards, and breadcrumb navigation.",
       "cta": "Sign in"
     },
+    "redirecting": "Redirecting to your board…",
+    "loadingTeams": "Loading your workspace…",
     "header": {
       "greeting": "Hello {name}",
       "settings": "Settings"
