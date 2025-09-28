@@ -39,7 +39,13 @@ export interface TaskCardProps {
   */
   variant?: "default" | "compact";
   className?: string;
+  /** Tooltip RACI déjà calculé (multi-ligne). Si absent on utilisera raci*Ids pour un fallback minimal. */
   assigneeTooltip?: string;
+  /** Fallback listes d'IDs R/A/C/I (héritage possible d'anciennes intégrations) */
+  responsibleIds?: string[];
+  accountableIds?: string[];
+  consultedIds?: string[];
+  informedIds?: string[];
 }
 
 // Helper palette (conserver les couleurs existantes)
@@ -68,6 +74,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   variant = "default",
   className,
   assigneeTooltip,
+  responsibleIds,
+  accountableIds,
+  consultedIds,
+  informedIds,
 }) => {
   const compact = variant === "compact";
 
@@ -76,7 +86,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const mountedRef = useRef(true);
   const raciTooltipId = useId();
   const clearTimer = () => { if(raciTimerRef.current){ window.clearTimeout(raciTimerRef.current); raciTimerRef.current=null; } };
+  // Tooltip effectif = assigneeTooltip (préféré) sinon construction minimale depuis listes d'IDs si fournies
+  const computedTooltip = React.useMemo(()=>{
+    if (assigneeTooltip && assigneeTooltip.trim().length > 0) return assigneeTooltip;
+    const lines: string[] = [];
+    const build = (label: string, arr?: string[]) => {
+      if (!arr) return;
+      lines.push(`${label} : ${arr.length ? arr.join(', ') : '-'}`);
+    };
+    build('R', responsibleIds);
+    build('A', accountableIds);
+    build('C', consultedIds);
+    build('I', informedIds);
+    return lines.length ? lines.join('\n') : undefined;
+  }, [assigneeTooltip, responsibleIds, accountableIds, consultedIds, informedIds]);
+
   const handleRaciOpen = () => {
+    if(!computedTooltip) return; // rien à afficher
     if(raciOpen) return;
     clearTimer();
     raciTimerRef.current = window.setTimeout(()=>{ if(mountedRef.current) setRaciOpen(true); },150) as unknown as number;
@@ -141,11 +167,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="col-span-7 flex items-center gap-3 min-w-0">
           <div
             className="relative flex -space-x-2"
-            onMouseEnter={assigneeTooltip ? handleRaciOpen : undefined}
-            onMouseLeave={assigneeTooltip ? handleRaciClose : undefined}
-            onFocus={assigneeTooltip ? handleRaciOpen : undefined}
-            onBlur={assigneeTooltip ? handleRaciClose : undefined}
-            aria-describedby={assigneeTooltip && raciOpen ? raciTooltipId : undefined}
+            onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
+            onMouseLeave={computedTooltip ? handleRaciClose : undefined}
+            onFocus={computedTooltip ? handleRaciOpen : undefined}
+            onBlur={computedTooltip ? handleRaciClose : undefined}
+            aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
           >
             {assignees.slice(0, 4).map(a => (
               <div
@@ -162,13 +188,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
               </div>
             )}
-            {assigneeTooltip && raciOpen && (
+            {computedTooltip && raciOpen && (
               <div
                 id={raciTooltipId}
                 role="tooltip"
                 className="absolute left-0 top-full z-30 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
               >
-                {assigneeTooltip}
+                {computedTooltip}
               </div>
             )}
           </div>

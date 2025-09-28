@@ -572,6 +572,16 @@ showToast("Consolidation … [Annuler] [Garder séparé]")
 - **Changement de statut** → emit event; chaque client place le nœud dans sa colonne préférée du même comportement.
 - **Dé-doublonnage recherche/notifications** → `SELECT DISTINCT node_id …`.
 
+## Restauration Tooltip RACI
+
+- [ ] **Cause disparition** : refactoring intermédiaire — dépendance sur `assigneeTooltip` uniquement, absence de fallback lorsque les props RACI ID legacy étaient fournies sans la chaîne calculée.
+- [ ] **Correctif** : ajout d'un `computedTooltip` qui :
+  - privilégie la valeur `assigneeTooltip` si déjà calculée par un composant parent (multi-ligne avec noms complets)
+  - sinon reconstruit un tooltip minimal depuis `responsibleIds | accountableIds | consultedIds | informedIds`
+- [ ] **Accessibilité** : `aria-describedby` actif uniquement quand ouvert; délai ouverture 150ms; fermeture sur scroll & blur.
+- [ ] **Fallback absence** : si aucune donnée RACI -> pas de listeners (évite coût inutile).
+- [ ] **Test manuel** : survol avatars avec / sans données RACI; vérifier fermeture lors d'un scroll.
+
 
 
 
