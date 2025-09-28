@@ -158,7 +158,8 @@ export function TeamBoardPage(){
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
 
-  const showBoardControls = false;
+
+  const showBoardControls = true;
 
   // New column form state
   const [isAddingColumn,setIsAddingColumn] = useState(false);

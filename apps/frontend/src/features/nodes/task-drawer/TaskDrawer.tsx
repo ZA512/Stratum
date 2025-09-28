@@ -243,15 +243,14 @@ export const TaskDrawer: React.FC = () => {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const membersMap = useMemo(() => new Map(teamMembers.map(member => [member.id, member])), [teamMembers]);
-  const availableCollaboratorOptions = useMemo(
-    () => teamMembers.filter((member) => !collaborators.some((collab) => collab.userId === member.id)),
-    [teamMembers, collaborators],
-  );
+
   const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
   const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
   const [collaboratorsError, setCollaboratorsError] = useState<string | null>(null);
-  const [selectedCollaboratorId, setSelectedCollaboratorId] = useState('');
+
+  const [inviteEmail, setInviteEmail] = useState('');
+
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [removingCollaboratorId, setRemovingCollaboratorId] = useState<string | null>(null);
   const computedActualCost = useMemo(() => {
@@ -405,7 +404,8 @@ export const TaskDrawer: React.FC = () => {
       setCollaborators([]);
       setCollaboratorInvites([]);
       setCollaboratorsError(null);
-      setSelectedCollaboratorId('');
+
+      setInviteEmail('');
       setCollaboratorsLoading(false);
       return;
     }
@@ -440,6 +440,7 @@ export const TaskDrawer: React.FC = () => {
     if (!expertMode && activeTab === 'time') {
       setActiveTab('details');
     }
+
   }, [expertMode, activeTab]);
 
   const hasDirty = useMemo(() => {
@@ -1070,30 +1071,35 @@ export const TaskDrawer: React.FC = () => {
                           <label className="flex flex-col gap-2 rounded border border-white/10 bg-surface/60 p-3 text-sm">
                             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ajouter un collaborateur</span>
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                              <select
-                                value={selectedCollaboratorId}
-                                onChange={(event) => setSelectedCollaboratorId(event.target.value)}
+
+                              <input
+                                type="email"
+                                value={inviteEmail}
+                                onChange={(event) => setInviteEmail(event.target.value)}
+                                placeholder="email@exemple.com"
                                 className="flex-1 rounded border border-white/10 bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                                disabled={inviteSubmitting || membersLoading || availableCollaboratorOptions.length === 0}
-                              >
-                                <option value="">Sélectionner une personne…</option>
-                                {availableCollaboratorOptions.map((member) => (
-                                  <option key={member.id} value={member.id}>
-                                    {member.displayName}
-                                  </option>
-                                ))}
-                              </select>
+                                disabled={inviteSubmitting}
+                                aria-label="Email du collaborateur à inviter"
+                              />
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (!detail?.id || !accessToken || !selectedCollaboratorId) return;
+                                  if (!detail?.id || !accessToken) return;
+                                  const trimmedEmail = inviteEmail.trim();
+                                  if (!trimmedEmail) {
+                                    toastError('Veuillez saisir un email');
+                                    return;
+                                  }
                                   setInviteSubmitting(true);
-                                  inviteNodeCollaborator(detail.id, { userId: selectedCollaboratorId }, accessToken)
+                                  inviteNodeCollaborator(detail.id, { email: trimmedEmail }, accessToken)
+
                                     .then((response) => {
                                       setCollaborators(response.collaborators);
                                       setCollaboratorInvites(response.invitations);
                                       setCollaboratorsError(null);
-                                      setSelectedCollaboratorId('');
+
+                                      setInviteEmail('');
+
                                       success('Collaborateur ajouté');
                                     })
                                     .catch((inviteError) => {
@@ -1104,21 +1110,22 @@ export const TaskDrawer: React.FC = () => {
                                       setInviteSubmitting(false);
                                     });
                                 }}
-                                disabled={!selectedCollaboratorId || inviteSubmitting}
+
+                                disabled={!inviteEmail.trim() || inviteSubmitting}
+
                                 className="whitespace-nowrap rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {inviteSubmitting ? 'Ajout…' : 'Inviter'}
                               </button>
                             </div>
-                            {membersLoading && (
-                              <span className="text-xs text-muted">Chargement de l&apos;équipe…</span>
-                            )}
+
+                            <p className="text-xs text-muted">
+                              L’adresse doit correspondre à un compte Stratum. Un membre de l’équipe sera ajouté directement, sinon une invitation restera en attente.
+                            </p>
                             {membersError && (
                               <span className="text-xs text-red-400">{membersError}</span>
                             )}
-                            {!membersLoading && !membersError && availableCollaboratorOptions.length === 0 && (
-                              <span className="text-xs text-muted">Tous les membres de l&apos;équipe ont déjà accès.</span>
-                            )}
+
                           </label>
                         </div>
                         <div className="space-y-3">
