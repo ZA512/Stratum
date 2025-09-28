@@ -243,11 +243,14 @@ export const TaskDrawer: React.FC = () => {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const membersMap = useMemo(() => new Map(teamMembers.map(member => [member.id, member])), [teamMembers]);
+
   const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
   const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
   const [collaboratorsError, setCollaboratorsError] = useState<string | null>(null);
+
   const [inviteEmail, setInviteEmail] = useState('');
+
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [removingCollaboratorId, setRemovingCollaboratorId] = useState<string | null>(null);
   const computedActualCost = useMemo(() => {
@@ -401,6 +404,7 @@ export const TaskDrawer: React.FC = () => {
       setCollaborators([]);
       setCollaboratorInvites([]);
       setCollaboratorsError(null);
+
       setInviteEmail('');
       setCollaboratorsLoading(false);
       return;
@@ -436,6 +440,7 @@ export const TaskDrawer: React.FC = () => {
     if (!expertMode && activeTab === 'time') {
       setActiveTab('details');
     }
+
   }, [expertMode, activeTab]);
 
   const hasDirty = useMemo(() => {
@@ -1066,6 +1071,7 @@ export const TaskDrawer: React.FC = () => {
                           <label className="flex flex-col gap-2 rounded border border-white/10 bg-surface/60 p-3 text-sm">
                             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ajouter un collaborateur</span>
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
                               <input
                                 type="email"
                                 value={inviteEmail}
@@ -1086,11 +1092,14 @@ export const TaskDrawer: React.FC = () => {
                                   }
                                   setInviteSubmitting(true);
                                   inviteNodeCollaborator(detail.id, { email: trimmedEmail }, accessToken)
+
                                     .then((response) => {
                                       setCollaborators(response.collaborators);
                                       setCollaboratorInvites(response.invitations);
                                       setCollaboratorsError(null);
+
                                       setInviteEmail('');
+
                                       success('Collaborateur ajouté');
                                     })
                                     .catch((inviteError) => {
@@ -1101,18 +1110,22 @@ export const TaskDrawer: React.FC = () => {
                                       setInviteSubmitting(false);
                                     });
                                 }}
+
                                 disabled={!inviteEmail.trim() || inviteSubmitting}
+
                                 className="whitespace-nowrap rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {inviteSubmitting ? 'Ajout…' : 'Inviter'}
                               </button>
                             </div>
+
                             <p className="text-xs text-muted">
                               L’adresse doit correspondre à un compte Stratum. Un membre de l’équipe sera ajouté directement, sinon une invitation restera en attente.
                             </p>
                             {membersError && (
                               <span className="text-xs text-red-400">{membersError}</span>
                             )}
+
                           </label>
                         </div>
                         <div className="space-y-3">

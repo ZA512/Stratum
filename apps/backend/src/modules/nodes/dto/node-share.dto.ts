@@ -63,6 +63,8 @@ export class NodeShareSummaryDto {
 }
 
 export class InviteNodeCollaboratorDto {
+
   @ApiProperty({ example: 'invitee@example.com' })
   email!: string;
+
 }

@@ -1323,6 +1323,7 @@ export class NodesService {
     dto: InviteNodeCollaboratorDto,
     userId: string,
   ): Promise<NodeShareSummaryDto> {
+
     const email = dto?.email?.trim().toLowerCase();
     if (!email) {
       throw new BadRequestException('Email obligatoire');
@@ -1330,6 +1331,7 @@ export class NodesService {
     if (!EMAIL_REGEX.test(email)) {
       throw new BadRequestException('Email invalide');
     }
+
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) throw new NotFoundException();
     await this.ensureUserCanWrite(node.teamId, userId);
@@ -1401,6 +1403,7 @@ export class NodesService {
       invitedById: userId,
       invitedAt: nowIso,
       status: 'PENDING',
+
     });
     writeShareBack(metadata);
 

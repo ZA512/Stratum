@@ -42,7 +42,9 @@ export async function fetchNodeCollaborators(
 
 export async function inviteNodeCollaborator(
   nodeId: string,
+
   payload: { email: string },
+
   accessToken: string,
 ): Promise<NodeCollaboratorsResponse> {
   const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/collaborators`, {

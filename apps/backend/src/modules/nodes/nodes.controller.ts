@@ -151,6 +151,7 @@ export class NodesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite un collaborateur sur la tâche par email' })
+
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeShareSummaryDto })
   inviteCollaborator(
