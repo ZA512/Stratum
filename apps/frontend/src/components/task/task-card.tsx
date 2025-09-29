@@ -46,6 +46,12 @@ export interface TaskCardProps {
   accountableIds?: string[];
   consultedIds?: string[];
   informedIds?: string[];
+  showId?: boolean;
+  showPriority?: boolean;
+  showAssignees?: boolean;
+  showDueDate?: boolean;
+  showProgress?: boolean;
+  showEffort?: boolean;
 }
 
 // Helper palette (conserver les couleurs existantes)
@@ -66,7 +72,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   complexity,
   fractalPath,
   progress,
-  href,
+  href: _href,
   onClick,
   onFractalPathClick,
   onMenuButtonClick,
@@ -78,7 +84,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   accountableIds,
   consultedIds,
   informedIds,
+  showId = true,
+  showPriority = true,
+  showAssignees = true,
+  showDueDate = true,
+  showProgress = true,
+  showEffort = true,
 }) => {
+  void _href;
   const compact = variant === "compact";
 
   const [raciOpen, setRaciOpen] = useState(false);
@@ -133,15 +146,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* En-tête */}
       <div className="flex items-start justify-between px-4 pt-3 pb-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>
-          <span
-            className={cx(
-              "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
-              priorityBadgeClasses[priority]
-            )}
-          >
-            {priority}
-          </span>
+          {showId && (
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>
+          )}
+          {showPriority && (
+            <span
+              className={cx(
+                "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
+                priorityBadgeClasses[priority]
+              )}
+            >
+              {priority}
+            </span>
+          )}
         </div>
         {!hideInternalMenuButton && (
           <button
@@ -165,40 +182,42 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
-          <div
-            className="relative flex -space-x-2"
-            onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
-            onMouseLeave={computedTooltip ? handleRaciClose : undefined}
-            onFocus={computedTooltip ? handleRaciOpen : undefined}
-            onBlur={computedTooltip ? handleRaciClose : undefined}
-            aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
-          >
-            {assignees.slice(0, 4).map(a => (
-              <div
-                key={a.id}
-                className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
-                style={a.color ? { backgroundColor: a.color } : undefined}
-                title={a.initials}
-              >
-                <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
-              </div>
-            ))}
-            {assignees.length > 4 && (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
-                <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
-              </div>
-            )}
-            {computedTooltip && raciOpen && (
-              <div
-                id={raciTooltipId}
-                role="tooltip"
-                className="absolute left-0 top-full z-30 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
-              >
-                {computedTooltip}
-              </div>
-            )}
-          </div>
-          {typeof lateness === "number" && (
+          {showAssignees && (
+            <div
+              className="relative flex -space-x-2"
+              onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
+              onMouseLeave={computedTooltip ? handleRaciClose : undefined}
+              onFocus={computedTooltip ? handleRaciOpen : undefined}
+              onBlur={computedTooltip ? handleRaciClose : undefined}
+              aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
+            >
+              {assignees.slice(0, 4).map(a => (
+                <div
+                  key={a.id}
+                  className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
+                  style={a.color ? { backgroundColor: a.color } : undefined}
+                  title={a.initials}
+                >
+                  <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
+                </div>
+              ))}
+              {assignees.length > 4 && (
+                <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
+                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
+                </div>
+              )}
+              {computedTooltip && raciOpen && (
+                <div
+                  id={raciTooltipId}
+                  role="tooltip"
+                  className="absolute left-0 top-full z-30 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+                >
+                  {computedTooltip}
+                </div>
+              )}
+            </div>
+          )}
+          {showDueDate && typeof lateness === "number" && (
             <div className={cx(
               "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
               // Très en retard (< -7 jours) : rouge vif
@@ -219,14 +238,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </div>
         <div className="col-span-5 flex items-center justify-end gap-4">
           {/* Slot progression (fixe) - on garde seulement le pourcentage */}
-          <div
-            className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
-            title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
-            aria-label="Progression"
-          >
-            {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
-          </div>
-          {complexity && (
+          {showProgress && (
+            <div
+              className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+              title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
+              aria-label="Progression"
+            >
+              {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
+            </div>
+          )}
+          {showEffort && complexity && (
             <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>
               <span className="text-xs font-medium">{complexity}</span>
