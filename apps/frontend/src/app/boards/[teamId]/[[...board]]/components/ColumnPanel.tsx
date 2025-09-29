@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
-import { useDroppable } from '@dnd-kit/core';
-import type { BoardColumnWithNodes } from './types';
+import { useDroppable, type DraggableSyntheticListeners, type DraggableAttributes } from '@dnd-kit/core';
+import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { BEHAVIOR_COLOR_CLASSES, BEHAVIOR_LABELS } from './constants';
 import { AddCardForm } from './AddCardForm';
 import { BoardTaskCard } from './BoardTaskCard';
@@ -21,48 +21,76 @@ interface ColumnPanelProps {
   onMove: (direction: -1|1) => void;
   onDelete: () => void;
   onCreateCard: (title: string) => Promise<void> | void;
-  onOpenCard: (id: string) => void;
-  onOpenChildBoard?: (boardId: string) => void;
+  onOpenCard: (id: string) => void;              // ouvre le drawer tâche
+  onOpenChildBoard?: (boardId: string) => void; // navigation vers sous-board
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
   childBoards: Record<string, NodeChildBoard>;
   loadingCards: boolean;
-  showDescription: boolean;
+  displayOptions: CardDisplayOptions;
+  dragStyle?: React.CSSProperties;
+  dragHandleListeners?: DraggableSyntheticListeners;
+  dragHandleAttributes?: DraggableAttributes;
+  dragHandleRef?: (element: HTMLElement | null) => void;
+  isColumnDragging?: boolean;
 }
 
-export function ColumnPanel(props: ColumnPanelProps){
+export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(function ColumnPanel(props, ref) {
   const {
     column, cards, isEditing, isFirst, isLast, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
     onMove, onDelete, onCreateCard, onOpenCard, onRenameCard,
     onRequestMoveCard, onRequestDeleteCard,
-    childBoards, loadingCards, showDescription, onOpenChildBoard
+    childBoards, loadingCards, displayOptions, onOpenChildBoard,
+    dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
+    isColumnDragging,
   } = props;
 
   const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || '';
   // Zone de drop par colonne (utile quand aucune carte)
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id, data: { type: 'column' } });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id, data: { type: 'column-drop' } });
+  const activatorAttributes = dragHandleAttributes ?? ({} as DraggableAttributes);
+  const activatorListeners = dragHandleListeners ?? ({} as DraggableSyntheticListeners);
+  const handleRef = (node: HTMLButtonElement | null) => {
+    dragHandleRef?.(node);
+  };
 
   return (
     // Largeur fixe pour uniformiser toutes les colonnes
-    <div className={`w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative`}>
+    <div
+      ref={ref}
+      style={dragStyle}
+      className={`w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative ${isColumnDragging ? 'ring-2 ring-accent/40 ring-offset-2 ring-offset-background' : ''}`}
+    >
       <div className={`absolute left-0 top-0 h-1 w-full rounded-t-2xl ${colorClass}`} />
       <header className="flex items-start justify-between gap-3 pb-2 border-b border-white/10">
         <div>
           <h3 className="text-lg font-semibold">{column.name}</h3>
           <p className="text-[11px] uppercase tracking-wide text-muted">{BEHAVIOR_LABELS[column.behaviorKey as keyof typeof BEHAVIOR_LABELS] || column.behaviorKey}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <span className="rounded-full border border-white/10 bg-surface/70 px-3 py-1 text-[11px] uppercase tracking-wide text-muted" title={typeof column.wipLimit==='number'?`Limite WIP ${column.wipLimit}`:'Pas de limite WIP'}>
-            {typeof column.wipLimit==='number'?`WIP ${column.wipLimit}`:'∞'}
-          </span>
+        <div className="flex items-start gap-2">
           <button
-            onClick={()=> isEditing? onCancelEdit(): onRequestEdit(column.id)}
-            className="rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground"
+            type="button"
+            ref={handleRef}
+            {...activatorAttributes}
+            {...activatorListeners}
+            className="rounded-full border border-white/10 bg-surface/70 px-2 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground cursor-grab active:cursor-grabbing"
+            aria-label="Déplacer la colonne"
           >
-            {isEditing? 'Fermer':'Gérer'}
+            ⠿
           </button>
+          <div className="flex flex-col items-end gap-2">
+            <span className="rounded-full border border-white/10 bg-surface/70 px-3 py-1 text-[11px] uppercase tracking-wide text-muted" title={typeof column.wipLimit==='number'?`Limite WIP ${column.wipLimit}`:'Pas de limite WIP'}>
+              {typeof column.wipLimit==='number'?`WIP ${column.wipLimit}`:'∞'}
+            </span>
+            <button
+              onClick={()=> isEditing? onCancelEdit(): onRequestEdit(column.id)}
+              className="rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {isEditing? 'Fermer':'Gérer'}
+            </button>
+          </div>
         </div>
       </header>
       {isEditing && editingValues && (
@@ -92,7 +120,7 @@ export function ColumnPanel(props: ColumnPanelProps){
           {editingValues.error && <p className="text-xs text-red-300">{editingValues.error}</p>}
         </form>
       )}
-  <div className={`mt-4 rounded-xl transition ${isOver? 'ring-2 ring-accent/50 ring-offset-2 ring-offset-background':''}`} ref={setDropRef}>
+      <div className={`mt-4 rounded-xl transition ${isOver? 'ring-2 ring-accent/50 ring-offset-2 ring-offset-background':''}`} ref={setDropRef}>
         {cards.length === 0 ? (
           <p className={`min-h-[48px] rounded-xl border border-dashed ${isOver? 'border-accent/60 bg-accent/10':'border-white/10 bg-surface/40'} px-4 py-4 text-sm text-muted`}>Aucune carte</p>
         ) : (
@@ -108,7 +136,7 @@ export function ColumnPanel(props: ColumnPanelProps){
                 onRename={onRenameCard}
                 onRequestMove={onRequestMoveCard}
                 onRequestDelete={onRequestDeleteCard}
-                showDescription={showDescription}
+                displayOptions={displayOptions}
               />
             ))}
           </div>
@@ -119,4 +147,4 @@ export function ColumnPanel(props: ColumnPanelProps){
       </div>
     </div>
   );
-}
+});

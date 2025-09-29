@@ -9,7 +9,7 @@ import { createNode, updateNode, moveChildNode, deleteNode as apiDeleteNode, fet
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
-import type { BoardColumnWithNodes } from './types';
+import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 
@@ -17,6 +17,26 @@ type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
 const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
 type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+
+const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
+  showShortId: true,
+  showPriority: true,
+  showOwner: true,
+  showDueDate: true,
+  showProgress: true,
+  showEffort: true,
+  showDescription: true,
+};
+
+const DISPLAY_TOGGLE_CONFIG: Array<{ key: keyof CardDisplayOptions; label: string }> = [
+  { key: 'showShortId', label: 'Identifiant' },
+  { key: 'showPriority', label: 'Priorité' },
+  { key: 'showOwner', label: 'Propriétaire' },
+  { key: 'showDueDate', label: 'Échéance' },
+  { key: 'showProgress', label: 'Progression' },
+  { key: 'showEffort', label: 'Effort' },
+  { key: 'showDescription', label: 'Description' },
+];
 
 const PRIORITY_OPTIONS: Array<{ value: PriorityValue; label: string }> = [
   { value: 'CRITICAL', label: 'Critique' },
@@ -182,7 +202,7 @@ export function TeamBoardPage(){
   const [draggingCard,setDraggingCard] = useState<{ id:string; title:string } | null>(null);
   const UNASSIGNED_TOKEN = '__UNASSIGNED__';
   const [hideDone,setHideDone] = useState(false);
-  const [showDescriptions, setShowDescriptions] = useState(true);
+  const [displayOptions, setDisplayOptions] = useState<CardDisplayOptions>(() => ({ ...CARD_DISPLAY_DEFAULTS }));
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<PriorityValue[]>([]);
   const [selectedEfforts, setSelectedEfforts] = useState<EffortFilterValue[]>([]);
@@ -259,7 +279,7 @@ export function TeamBoardPage(){
     setSearchDraft('');
     setSearchQuery('');
     setHideDone(false);
-    setShowDescriptions(true);
+    setDisplayOptions({ ...CARD_DISPLAY_DEFAULTS });
 
     const raw = window.localStorage.getItem(storageKey);
     if (raw) {
@@ -267,6 +287,7 @@ export function TeamBoardPage(){
         const parsed = JSON.parse(raw) as {
           hideDone?: unknown;
           showDescriptions?: unknown;
+          displayOptions?: unknown;
           selectedAssignees?: unknown;
           selectedPriorities?: unknown;
           selectedEfforts?: unknown;
@@ -277,8 +298,18 @@ export function TeamBoardPage(){
           search?: unknown;
         };
         if (typeof parsed.hideDone === 'boolean') setHideDone(parsed.hideDone);
-        if (typeof parsed.showDescriptions === 'boolean')
-          setShowDescriptions(parsed.showDescriptions);
+        if (parsed.displayOptions && typeof parsed.displayOptions === 'object') {
+          const nextDisplay = { ...CARD_DISPLAY_DEFAULTS };
+          for (const key of Object.keys(nextDisplay) as Array<keyof CardDisplayOptions>) {
+            const value = (parsed.displayOptions as Record<string, unknown>)[key];
+            if (typeof value === 'boolean') {
+              nextDisplay[key] = value;
+            }
+          }
+          setDisplayOptions(nextDisplay);
+        } else if (typeof parsed.showDescriptions === 'boolean') {
+          setDisplayOptions((prev) => ({ ...prev, showDescription: parsed.showDescriptions as boolean }));
+        }
         if (Array.isArray(parsed.selectedAssignees) && parsed.selectedAssignees.every((value) => typeof value === 'string'))
           setSelectedAssignees(parsed.selectedAssignees);
         if (
@@ -336,7 +367,8 @@ export function TeamBoardPage(){
     if (typeof window === 'undefined') return;
     const payload = {
       hideDone,
-      showDescriptions,
+      displayOptions,
+      showDescriptions: displayOptions.showDescription,
       selectedAssignees,
       selectedPriorities,
       selectedEfforts,
@@ -351,7 +383,7 @@ export function TeamBoardPage(){
     } catch {
       // Storage may be unavailable (quota, private mode); fail silently.
     }
-  }, [storageKey, filtersHydrated, hideDone, showDescriptions, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, filterHasChildren, sortPriority, sortDueDate, searchDraft]);
+  }, [storageKey, filtersHydrated, hideDone, displayOptions, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, filterHasChildren, sortPriority, sortDueDate, searchDraft]);
 
   const allAssignees = useMemo(() => {
     const map = new Map<string, { id: string; displayName: string }>();
@@ -706,11 +738,16 @@ export function TeamBoardPage(){
     setSelectedEfforts((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
   };
 
+  const toggleDisplayOption = (key: keyof CardDisplayOptions) => {
+    setDisplayOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const pillClass = (active: boolean) =>
     `rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition ${
       active ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
     }`;
 
+  const displayTweaksActive = Object.values(displayOptions).some((value) => !value);
   const hasActiveFilters =
     selectedAssignees.length > 0 ||
     selectedPriorities.length > 0 ||
@@ -721,7 +758,7 @@ export function TeamBoardPage(){
     sortPriority ||
     sortDueDate ||
     hideDone ||
-    !showDescriptions;
+    displayTweaksActive;
 
   const resetFilters = () => {
     setSelectedAssignees([]);
@@ -734,31 +771,81 @@ export function TeamBoardPage(){
     setSearchDraft('');
     setSearchQuery('');
     setHideDone(false);
-    setShowDescriptions(true);
+    setDisplayOptions({ ...CARD_DISPLAY_DEFAULTS });
   };
 
   // --- Drag & Drop (cartes) ---
   const onDragStart = (event:DragStartEvent) => {
     const { active } = event;
-    if(!active) return;
+    if(!active){
+      setDraggingCard(null);
+      return;
+    }
     const data = active.data.current as { columnId?: string; type?: string; node?: { id:string; title:string } } | undefined;
-    if(data?.node){
+    if(data?.type === 'card' && data.node){
       setDraggingCard({ id: data.node.id, title: data.node.title });
+    } else {
+      setDraggingCard(null);
     }
   };
+
+  const handleColumnDrop = async (activeColumnId: string, targetColumnId: string) => {
+    if (!board || !accessToken) return;
+    if (activeColumnId === targetColumnId) return;
+    const base = optimisticColumns
+      ? structuredClone(optimisticColumns) as BoardColumnWithNodes[]
+      : structuredClone(board.columns) as BoardColumnWithNodes[];
+    const fromIndex = base.findIndex((c) => c.id === activeColumnId);
+    const toIndex = base.findIndex((c) => c.id === targetColumnId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const snapshot = structuredClone(base) as BoardColumnWithNodes[];
+    const reordered = arrayMove(base, fromIndex, toIndex);
+    setOptimisticColumns(reordered);
+    try {
+      await handleApi(() => updateBoardColumn(board.id, activeColumnId, { position: toIndex }, accessToken));
+      await refreshActiveBoard();
+      setOptimisticColumns(null);
+    } catch {
+      setOptimisticColumns(snapshot);
+    }
+  };
+
   const onDragEnd = async (event:DragEndEvent) => {
-    if(!accessToken || !board) return;
     const { active, over } = event;
-    if(!active || !over) return;
+    const activeType = (active?.data.current as { type?: string } | undefined)?.type;
+    if (activeType === 'board-column') {
+      setDraggingCard(null);
+      if (!active || !over) return;
+      const overType = (over.data.current as { type?: string } | undefined)?.type;
+      const targetColumnId = overType === 'board-column' ? String(over.id) : null;
+      if (targetColumnId) {
+        await handleColumnDrop(String(active.id), targetColumnId);
+      }
+      return;
+    }
+    if(!accessToken || !board){
+      setDraggingCard(null);
+      return;
+    }
+    if(!active || !over){
+      setDraggingCard(null);
+      return;
+    }
     const activeId = String(active.id);
     const overId = String(over.id);
-    if(activeId === overId) return;
+    if(activeId === overId){
+      setDraggingCard(null);
+      return;
+    }
     const activeColId = (active.data.current as { columnId?: string } | undefined)?.columnId;
     let overColId = (over.data.current as { columnId?: string; type?: string } | undefined)?.columnId;
-    if(!overColId && (over.data.current as { type?: string } | undefined)?.type === 'column') {
+    if(!overColId && (over.data.current as { type?: string } | undefined)?.type === 'column-drop') {
       overColId = over.id as string;
     }
-    if(!activeColId) return;
+    if(!activeColId){
+      setDraggingCard(null);
+      return;
+    }
     // Determine source & target columns from effective snapshot
     const currentCols = effectiveColumns ? structuredClone(effectiveColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
     const sourceCol = currentCols.find(c=>c.id===activeColId);
@@ -770,10 +857,21 @@ export function TeamBoardPage(){
       if(possible) overColId = possible.id;
     }
     const finalTargetCol = overColId ? currentCols.find(c=>c.id===overColId) : undefined;
-    if(!sourceCol || !finalTargetCol) return;
+    if(!sourceCol || !finalTargetCol){
+      setDraggingCard(null);
+      return;
+    }
     const sourceIndex = sourceCol.nodes?.findIndex(n=>n.id===activeId) ?? -1;
-    if(sourceIndex === -1) return;
+    if(sourceIndex === -1){
+      setDraggingCard(null);
+      return;
+    }
     const moving = sourceCol.nodes![sourceIndex];
+    const parentId = moving.parentId ?? board?.nodeId ?? null;
+    if (!parentId) {
+      setDraggingCard(null);
+      return;
+    }
     let targetIndex:number;
     if(sourceCol.id === finalTargetCol.id){
       // Reorder within same column
@@ -792,12 +890,21 @@ export function TeamBoardPage(){
     const snapshot = optimisticColumns ? structuredClone(optimisticColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
     setOptimisticColumns(currentCols);
     try {
-      await handleApi(()=>moveChildNode(moving.parentId || moving.id, moving.id, { targetColumnId: finalTargetCol.id, position: targetIndex }, accessToken), { success: 'Tâche déplacée', warnWip: 'Limite WIP atteinte' });
+      await handleApi(() =>
+        moveChildNode(
+          parentId,
+          moving.id,
+          { targetColumnId: finalTargetCol.id, position: targetIndex },
+          accessToken,
+        ),
+        { success: 'Tâche déplacée', warnWip: 'Limite WIP atteinte' }
+      );
       await refreshActiveBoard();
       setOptimisticColumns(null);
     } catch {
       setOptimisticColumns(snapshot); // rollback
     }
+    setDraggingCard(null);
   };
 
   return (
@@ -895,14 +1002,6 @@ export function TeamBoardPage(){
                           aria-pressed={sortDueDate}
                         >
                           Tri échéance
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowDescriptions((prev) => !prev)}
-                          className={pillClass(showDescriptions)}
-                          aria-pressed={showDescriptions}
-                        >
-                          Descriptif {showDescriptions ? 'on' : 'off'}
                         </button>
                         <button
                           type="button"
@@ -1062,6 +1161,22 @@ export function TeamBoardPage(){
                                 Avec sous-kanban
                               </label>
                             </section>
+                            <section className="space-y-3 text-xs md:col-span-2">
+                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Affichage des cartes</h4>
+                              <div className="flex flex-wrap gap-2">
+                                {DISPLAY_TOGGLE_CONFIG.map(({ key, label }) => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => toggleDisplayOption(key)}
+                                    className={pillClass(displayOptions[key])}
+                                    aria-pressed={displayOptions[key]}
+                                  >
+                                    {label} {displayOptions[key] ? 'on' : 'off'}
+                                  </button>
+                                ))}
+                              </div>
+                            </section>
                           </div>
                         </div>
                       </div>
@@ -1128,7 +1243,7 @@ export function TeamBoardPage(){
                   editingColumnId={editingColumnId}
                   editingValues={{ name: editingName, wip: editingWip, submitting: editingSubmitting, error: editingError }}
                   loadingCards={detailLoading}
-                  showDescriptions={showDescriptions}
+                  displayOptions={displayOptions}
                   onRequestEdit={handleOpenColumnEditorById}
                   onCancelEdit={handleCancelEditColumn}
                   onSubmitEdit={handleUpdateColumn}

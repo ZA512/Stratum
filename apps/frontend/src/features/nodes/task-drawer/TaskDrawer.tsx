@@ -176,7 +176,7 @@ export const TaskDrawer: React.FC = () => {
   const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
-  const { teamId } = useBoardData();
+  const { teamId, refreshActiveBoard } = useBoardData();
 
   // Form state
   const [saving, setSaving] = useState(false);
@@ -637,6 +637,7 @@ export const TaskDrawer: React.FC = () => {
       payload.raciInformedIds = rInformed;
 
       await updateNode(detail.id, payload, accessToken);
+      await refreshActiveBoard();
       success('Tâche mise à jour');
       setInitialSnapshot({
         title: title.trim()||'',

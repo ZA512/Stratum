@@ -6,6 +6,7 @@ import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-ca
 import { useAuth } from '@/features/auth/auth-provider';
 import { ensureChildBoard } from '@/features/boards/boards-api';
 import type { BoardNode } from '@/features/boards/boards-api';
+import type { CardDisplayOptions } from './types';
 
 interface BoardTaskCardProps {
   node: BoardNode;
@@ -16,7 +17,7 @@ interface BoardTaskCardProps {
   onRename?: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMove: (node: BoardNode) => void;
   onRequestDelete: (node: BoardNode) => void;
-  showDescription: boolean;
+  displayOptions: CardDisplayOptions;
 }
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
@@ -38,7 +39,7 @@ function truncateDescription(description: string | null | undefined, maxLength =
   return `${trimmed.slice(0, maxLength).trimEnd()}…`;
 }
 
-export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildBoard, onRename, onRequestMove, onRequestDelete, showDescription }: BoardTaskCardProps) {
+export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildBoard, onRename, onRequestMove, onRequestDelete, displayOptions }: BoardTaskCardProps) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
     data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
@@ -107,13 +108,14 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
   const assignees: TaskAssignee[] = responsibleMembers.map(a => ({
     id: a.id,
     initials: getInitials(a.displayName),
+    displayName: a.displayName,
   }));
 
   const raciTooltip = useMemo(() => {
     if (!node.raci) {
       if (!node.assignees || node.assignees.length === 0) return undefined;
       const names = node.assignees.map((member) => member.displayName).join(', ');
-      return names ? `R : ${names}` : undefined;
+      return names ? `R ${names}` : undefined;
     }
     const groups: Array<{ label: string; entries: { displayName: string }[] }> = [
       { label: 'R', entries: node.raci.responsible ?? [] },
@@ -123,9 +125,9 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
     ];
     const lines = groups.map(({ label, entries }) => {
       if (!entries || entries.length === 0) {
-        return `${label} : -`;
+        return `${label} -`;
       }
-      return `${label} : ${entries.map((entry) => entry.displayName).join(', ')}`;
+      return `${label} ${entries.map((entry) => entry.displayName).join(', ')}`;
     });
     return lines.join('\n');
   }, [node.raci, node.assignees]);
@@ -156,7 +158,7 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
   const shortIdLabel = typeof node.shortId === 'number' && Number.isFinite(node.shortId) && node.shortId > 0 ? 
     node.shortId : node.id;
 
-  const description = showDescription ? truncateDescription(node.description) : undefined;
+  const description = displayOptions.showDescription ? truncateDescription(node.description) : undefined;
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -171,6 +173,12 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
         complexity={complexity}
         fractalPath={fractalPath}
         progress={typeof node.progress === 'number' ? node.progress : undefined}
+        showId={displayOptions.showShortId}
+        showPriority={displayOptions.showPriority}
+        showAssignees={displayOptions.showOwner}
+        showDueDate={displayOptions.showDueDate}
+        showProgress={displayOptions.showProgress}
+        showEffort={displayOptions.showEffort}
         onClick={() => onOpen(node.id)}
         onFractalPathClick={async () => {
           if (!onOpenChildBoard || fractalLoading) return;
@@ -184,7 +192,7 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
             setFractalLoading(true);
             const boardId = await ensureChildBoard(node.id, accessToken);
             onOpenChildBoard(boardId);
-          } catch (e) {
+          } catch {
             // TODO: brancher un toast d'erreur si disponible
           } finally {
             setFractalLoading(false);
