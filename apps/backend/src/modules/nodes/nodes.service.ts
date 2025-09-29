@@ -44,6 +44,7 @@ function normalizeJson(
 }
 
 const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type RaciRole = 'R' | 'A' | 'C' | 'I';
 
@@ -1322,49 +1323,87 @@ export class NodesService {
     dto: InviteNodeCollaboratorDto,
     userId: string,
   ): Promise<NodeShareSummaryDto> {
-    if (!dto?.userId || !dto.userId.trim()) {
-      throw new BadRequestException('userId obligatoire');
+
+    const email = dto?.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Email obligatoire');
     }
-    const targetUserId = dto.userId.trim();
+    if (!EMAIL_REGEX.test(email)) {
+      throw new BadRequestException('Email invalide');
+    }
+
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) throw new NotFoundException();
     await this.ensureUserCanWrite(node.teamId, userId);
 
-    if (targetUserId === userId) {
-      throw new ConflictException('Vous êtes déjà collaborateur de cette tâche');
-    }
-
-    const existingUser = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { id: true },
-    });
-    if (!existingUser) {
-      throw new NotFoundException('Utilisateur introuvable');
-    }
-
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        teamId: node.teamId,
-        userId: targetUserId,
-        status: MembershipStatus.ACTIVE,
-      },
-    });
-    if (!membership) {
-      throw new BadRequestException(
-        "Cet utilisateur n'appartient pas à l'équipe",
-      );
-    }
-
     const currentSummary = await this.buildNodeShareSummary(node, userId);
-    if (currentSummary.collaborators.some((c) => c.userId === targetUserId)) {
+    if (
+      currentSummary.collaborators.some((collab) => {
+        if (!collab.email) return false;
+        return collab.email.toLowerCase() === email;
+      })
+    ) {
       throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
     }
 
     const metadata = this.extractMetadata(node);
-    metadata.share.collaborators.push({
-      userId: targetUserId,
-      addedById: userId,
-      addedAt: new Date().toISOString(),
+    if (
+      metadata.share.invitations.some((invite) => invite.email === email)
+    ) {
+      throw new ConflictException(
+        'Une invitation est déjà en attente pour cet email',
+      );
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    const nowIso = new Date().toISOString();
+
+    if (existingUser) {
+      if (existingUser.id === userId) {
+        throw new ConflictException('Vous êtes déjà collaborateur de cette tâche');
+      }
+
+      const alreadyDirect = metadata.share.collaborators.some(
+        (collab) => collab.userId === existingUser.id,
+      );
+      if (alreadyDirect) {
+        throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
+      }
+
+      const membership = await this.prisma.membership.findFirst({
+        where: {
+          teamId: node.teamId,
+          userId: existingUser.id,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+
+      if (membership) {
+        metadata.share.collaborators.push({
+          userId: existingUser.id,
+          addedById: userId,
+          addedAt: nowIso,
+        });
+        writeShareBack(metadata);
+        await this.prisma.node.update({
+          where: { id: node.id },
+          data: { metadata: metadata.raw as Prisma.InputJsonValue },
+        });
+        const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
+        return this.buildNodeShareSummary(nextNode, userId);
+      }
+    }
+
+    metadata.share.invitations.push({
+      email,
+      invitedById: userId,
+      invitedAt: nowIso,
+      status: 'PENDING',
+
     });
     writeShareBack(metadata);
 
