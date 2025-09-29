@@ -867,6 +867,11 @@ export function TeamBoardPage(){
       return;
     }
     const moving = sourceCol.nodes![sourceIndex];
+    const parentId = moving.parentId ?? board?.nodeId ?? null;
+    if (!parentId) {
+      setDraggingCard(null);
+      return;
+    }
     let targetIndex:number;
     if(sourceCol.id === finalTargetCol.id){
       // Reorder within same column
@@ -885,7 +890,15 @@ export function TeamBoardPage(){
     const snapshot = optimisticColumns ? structuredClone(optimisticColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
     setOptimisticColumns(currentCols);
     try {
-      await handleApi(()=>moveChildNode(moving.parentId || moving.id, moving.id, { targetColumnId: finalTargetCol.id, position: targetIndex }, accessToken), { success: 'Tâche déplacée', warnWip: 'Limite WIP atteinte' });
+      await handleApi(() =>
+        moveChildNode(
+          parentId,
+          moving.id,
+          { targetColumnId: finalTargetCol.id, position: targetIndex },
+          accessToken,
+        ),
+        { success: 'Tâche déplacée', warnWip: 'Limite WIP atteinte' }
+      );
       await refreshActiveBoard();
       setOptimisticColumns(null);
     } catch {

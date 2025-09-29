@@ -11,6 +11,7 @@ export interface TaskAssignee {
   id: string;
   initials: string; // 2 lettres
   color?: string; // optionnel background override
+  displayName?: string;
 }
 
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
@@ -196,7 +197,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   key={a.id}
                   className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
                   style={a.color ? { backgroundColor: a.color } : undefined}
-                  title={a.initials}
+                  title={a.displayName || computedTooltip || a.initials}
                 >
                   <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
                 </div>

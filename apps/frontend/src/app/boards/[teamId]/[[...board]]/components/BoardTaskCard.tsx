@@ -108,6 +108,7 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
   const assignees: TaskAssignee[] = responsibleMembers.map(a => ({
     id: a.id,
     initials: getInitials(a.displayName),
+    displayName: a.displayName,
   }));
 
   const raciTooltip = useMemo(() => {
