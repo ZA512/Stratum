@@ -9,7 +9,8 @@
       "french": "French"
     },
     "actions": {
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "settings": "Settings"
     }
   },
   "home": {
@@ -50,7 +51,28 @@
     "submit": "Sign in",
     "submitting": "Signing in…",
     "backPrompt": "Back to the dashboard?",
-    "backLink": "Access Stratum"
+    "backLink": "Access Stratum",
+    "noAccount": "New to Stratum?",
+    "createAccount": "Create an account"
+  },
+  "register": {
+    "title": "Create an account",
+    "subtitle": "Fill in the form to join Stratum.",
+    "displayName": "Full name",
+    "displayNamePlaceholder": "Alice Example",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "submit": "Create account",
+    "submitting": "Creating account…",
+    "success": "Account created! You can now sign in.",
+    "backPrompt": "Want to go back?",
+    "backLink": "Return to the dashboard",
+    "haveAccount": "Already registered?",
+    "signIn": "Sign in",
+    "errors": {
+      "passwordMismatch": "Passwords do not match."
+    }
   },
   "settings": {
     "title": "User settings",

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, FormEvent, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
@@ -12,6 +13,7 @@ import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
+import { useTranslation } from '@/i18n';
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
@@ -198,6 +200,7 @@ export function TeamBoardPage(){
   const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
+  const { t } = useTranslation();
   const { expertMode, setExpertMode } = useBoardUiSettings();
 
   const loading = status==='loading' && !board;
@@ -967,7 +970,20 @@ export function TeamBoardPage(){
               <p className="text-sm font-semibold">{user?.displayName}</p>
               <p className="text-[11px] uppercase tracking-[0.35em] text-muted">Équipe {teamId}</p>
             </div>
-            <button onClick={() => logout()} className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground">Déconnexion</button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/settings"
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              >
+                {t("common.actions.settings")}
+              </Link>
+              <button
+                onClick={() => logout()}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              >
+                {t("common.actions.signOut")}
+              </button>
+            </div>
           </div>
         </div>
       </header>
