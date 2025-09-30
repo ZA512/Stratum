@@ -135,11 +135,10 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
       ].join('\n');
     }
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
       console.debug('[RACI tooltip]', { nodeId: node.id, hasRaci: !!node.raci, assigneesCount: node.assignees?.length || 0, tooltip: result, showOwner: displayOptions.showOwner });
     }
     return result;
-  }, [node.raci, node.assignees, displayOptions.showOwner]);
+  }, [node.raci, node.assignees, node.id, displayOptions.showOwner]);
 
   const lateness = useMemo(() => {
     if (!node.dueAt) return undefined;
@@ -170,7 +169,13 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
   const description = displayOptions.showDescription ? truncateDescription(node.description) : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="relative"
+    >
       <TaskCard
         id={shortIdLabel}
         priority={priority}
