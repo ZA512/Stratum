@@ -102,7 +102,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const clearTimer = () => { if(raciTimerRef.current){ window.clearTimeout(raciTimerRef.current); raciTimerRef.current=null; } };
   // Tooltip effectif = assigneeTooltip (préféré) sinon construction minimale depuis listes d'IDs si fournies
   const computedTooltip = React.useMemo(()=>{
-    if (assigneeTooltip && assigneeTooltip.trim().length > 0) return assigneeTooltip;
+    if (assigneeTooltip && assigneeTooltip.trim().length > 0) {
+      // Debug: always show RACI tooltip even if all empty
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[TaskCard] computedTooltip from assigneeTooltip:', assigneeTooltip);
+      }
+      return assigneeTooltip;
+    }
     const lines: string[] = [];
     const build = (label: string, arr?: string[]) => {
       if (!arr) return;
@@ -185,23 +192,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="col-span-7 flex items-center gap-3 min-w-0">
           {showAssignees && (
             <div
-              className="relative flex -space-x-2"
+              className="relative flex -space-x-2 min-w-[28px]"
               onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
               onMouseLeave={computedTooltip ? handleRaciClose : undefined}
               onFocus={computedTooltip ? handleRaciOpen : undefined}
               onBlur={computedTooltip ? handleRaciClose : undefined}
               aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
             >
-              {assignees.slice(0, 4).map(a => (
-                <div
-                  key={a.id}
-                  className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
-                  style={a.color ? { backgroundColor: a.color } : undefined}
-                  title={a.displayName || computedTooltip || a.initials}
-                >
-                  <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
+              {assignees.length === 0 && computedTooltip ? (
+                <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-gray-200 dark:bg-gray-700">
+                  <span className="text-xs font-bold text-gray-500 dark:text-gray-400">?</span>
                 </div>
-              ))}
+              ) : (
+                assignees.slice(0, 4).map(a => (
+                  <div
+                    key={a.id}
+                    className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
+                    style={a.color ? { backgroundColor: a.color } : undefined}
+                    // Supprime title natif pour éviter conflit avec tooltip multi-ligne
+                    aria-label={a.displayName || a.initials}
+                  >
+                    <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
+                  </div>
+                ))
+              )}
               {assignees.length > 4 && (
                 <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
                   <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
@@ -211,7 +225,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <div
                   id={raciTooltipId}
                   role="tooltip"
-                  className="absolute left-0 top-full z-30 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+                  className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
                 >
                   {computedTooltip}
                 </div>

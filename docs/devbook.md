@@ -588,6 +588,19 @@ showToast("Consolidation … [Annuler] [Garder séparé]")
 - [ ] **Correctif**: déplacer la déclaration `useState(collaborators)` au-dessus du `useMemo` qui dépend de `collaborators`.
 - [ ] **Prévention**: règle linter souhaitée (eslint react-hooks / exhaustive-deps ne couvre pas la TDZ). Ajouter guideline: déclarer tous les `useState` avant les `useMemo` les consommant.
 
+## Multi-colonnes même comportement (analyse déplacement)
+- [ ] **Symptôme observé** : déplacement d'une carte vers une colonne renommée (ex « En test » comportement IN_PROGRESS) semble la placer dans une autre colonne (ex « Bloqué »).
+- [ ] **Constat code front** : envoi direct de `targetColumnId` -> pas de remapping local par behavior.
+- [ ] **Backend** : `moveChildNode` recherche la colonne par id et ne re-map pas sur le behavior; repositionne uniquement les positions siblings.
+- [ ] **Hypothèses** : (1) confusion d'ID (renommage vs nouvelle colonne), (2) rollback silencieux suite erreur mutation, (3) ancien ordre colonne rechargé après drop, (4) zone de drop renvoie mauvais id.
+- [ ] **Prochain debug** : ajouter logs dans `onDragEnd` (moving.id, activeColId, finalTargetCol.id, finalTargetCol.name) + vérifier réponse réseau `/move`.
+- [ ] **Prévention** : instrumentation légère + tests e2e drag multi-colonnes même behavior.
+
+## Tooltip RACI amélioré
+- [ ] **Format** : lignes uniquement pour rôles non vides; tri alphabétique; pattern `R : nom1, nom2`.
+- [ ] **Fallback** : si pas de RACI structuré mais des assignés => ils sont listés comme R.
+- [ ] **Accessibilité** : inchangé (hérité TaskCard tooltip custom).
+
 
 
 

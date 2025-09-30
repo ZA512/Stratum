@@ -6,7 +6,7 @@ import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { createBoardColumn, updateBoardColumn, deleteBoardColumn, type UpdateBoardColumnInput } from '@/features/boards/boards-api';
 import { createNode, updateNode, moveChildNode, deleteNode as apiDeleteNode, fetchNodeDeletePreview, type NodeDeletePreview } from '@/features/nodes/nodes-api';
-import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay } from '@dnd-kit/core';
+import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
@@ -26,6 +26,31 @@ const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showProgress: true,
   showEffort: true,
   showDescription: true,
+};
+
+// --- Stratégie de collision personnalisée ---
+// Problème observé: lorsqu'on dépose une carte sur une colonne vide (ex: "En Test"),
+// closestCorners retourne parfois une carte d'une colonne adjacente (ex: Bloqué), entraînant un routage erroné.
+// Solution: on tente d'abord pointerWithin (zones sous le pointeur). Si une zone colonne (type 'column-drop') est présente,
+// on la priorise. Sinon on retombe sur l'algo closestCorners d'origine.
+const collisionDetectionStrategy: CollisionDetection = (args) => {
+  // Collisions directes sous le pointeur
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    // Prioriser explicitement les zones de colonnes (column-drop) pour les colonnes vides
+    pointerCollisions.sort((a, b) => {
+      const aContainer = args.droppableContainers.find(c => c.id === a.id);
+      const bContainer = args.droppableContainers.find(c => c.id === b.id);
+      const aType = (aContainer?.data?.current as { type?: string } | undefined)?.type;
+      const bType = (bContainer?.data?.current as { type?: string } | undefined)?.type;
+      const aScore = aType === 'column-drop' ? 0 : 1;
+      const bScore = bType === 'column-drop' ? 0 : 1;
+      return aScore - bScore;
+    });
+    return pointerCollisions;
+  }
+  // Fallback comportement existant
+  return closestCorners(args);
 };
 
 const DISPLAY_TOGGLE_CONFIG: Array<{ key: keyof CardDisplayOptions; label: string }> = [
@@ -831,32 +856,54 @@ export function TeamBoardPage(){
       setDraggingCard(null);
       return;
     }
-    const activeId = String(active.id);
-    const overId = String(over.id);
+  const activeId = String(active.id);
+  const overId = String(over.id);
     if(activeId === overId){
       setDraggingCard(null);
       return;
     }
     const activeColId = (active.data.current as { columnId?: string } | undefined)?.columnId;
-    let overColId = (over.data.current as { columnId?: string; type?: string } | undefined)?.columnId;
-    if(!overColId && (over.data.current as { type?: string } | undefined)?.type === 'column-drop') {
+    let overColId: string | undefined;
+    
+    // Determine source & target columns from effective snapshot
+    const currentCols = effectiveColumns ? structuredClone(effectiveColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
+    
+    // Détermination robuste de la colonne cible
+    const overData = over.data.current as { columnId?: string; type?: string } | undefined;
+    if (overData?.columnId) {
+      // Drop sur une carte -> utilise sa columnId
+      overColId = overData.columnId;
+    } else if (overData?.type === 'column-drop') {
+      // Drop sur zone vide colonne -> over.id = column.id
       overColId = over.id as string;
+    } else {
+      // Fallback: over.id pourrait être directement un column.id
+      const possibleCol = currentCols.find(c => c.id === overId);
+      if (possibleCol) overColId = possibleCol.id;
     }
-    if(!activeColId){
+    
+    if(!activeColId || !overColId){
       setDraggingCard(null);
       return;
     }
-    // Determine source & target columns from effective snapshot
-    const currentCols = effectiveColumns ? structuredClone(effectiveColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
+    
     const sourceCol = currentCols.find(c=>c.id===activeColId);
-    const targetCol = overColId ? currentCols.find(c=>c.id===overColId) : undefined;
-    // If over is a card, we might need its column
-    if(!targetCol){
-      // maybe overId is a column id
-      const possible = currentCols.find(c=>c.id===overId);
-      if(possible) overColId = possible.id;
+    const finalTargetCol = currentCols.find(c=>c.id===overColId);
+    
+    if (process.env.NODE_ENV !== 'production') {
+      // Debug drag columns
+      // eslint-disable-next-line no-console
+      console.debug('[DnD] dragEnd', {
+        movingCardId: activeId,
+        activeColId,
+        overRawId: overId,
+        overData,
+        derivedOverColId: overColId,
+        sourceCol: sourceCol ? { id: sourceCol.id, name: sourceCol.name } : null,
+        finalTargetCol: finalTargetCol ? { id: finalTargetCol.id, name: finalTargetCol.name } : null,
+        allColumns: currentCols.map(c => ({ id: c.id, name: c.name, behaviorKey: c.behaviorKey })),
+      });
     }
-    const finalTargetCol = overColId ? currentCols.find(c=>c.id===overColId) : undefined;
     if(!sourceCol || !finalTargetCol){
       setDraggingCard(null);
       return;
@@ -920,7 +967,7 @@ export function TeamBoardPage(){
               <p className="text-sm font-semibold">{user?.displayName}</p>
               <p className="text-[11px] uppercase tracking-[0.35em] text-muted">Équipe {teamId}</p>
             </div>
-            <button onClick={logout} className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground">Déconnexion</button>
+            <button onClick={() => logout()} className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground">Déconnexion</button>
           </div>
         </div>
       </header>
@@ -1236,7 +1283,7 @@ export function TeamBoardPage(){
               </span>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
-              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+              <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                 <ColumnList
                   columns={displayedColumns}
                   childBoards={childBoards}

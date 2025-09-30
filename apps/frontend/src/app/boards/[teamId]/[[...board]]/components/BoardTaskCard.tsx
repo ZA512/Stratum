@@ -112,25 +112,34 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
   }));
 
   const raciTooltip = useMemo(() => {
+    // Toujours 4 lignes (R, A, C, I). Format demandé: 'R nom prénom, nom prénom' (sans deux-points) ou 'R -' si vide.
+    const buildLine = (label: string, list: { displayName: string }[] | undefined) => {
+      const names = (list || [])
+        .map(e => e.displayName)
+        .filter(Boolean)
+        .sort((a,b)=> a.localeCompare(b,'fr',{sensitivity:'base'}));
+      return names.length ? `${label} ${names.join(', ')}` : `${label} -`;
+    };
+    let result: string;
     if (!node.raci) {
-      if (!node.assignees || node.assignees.length === 0) return undefined;
-      const names = node.assignees.map((member) => member.displayName).join(', ');
-      return names ? `R ${names}` : undefined;
+      // Fallback: tout le monde en R, autres vides
+      const rNames = (node.assignees||[]).map(a=>a.displayName).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+      const rLine = rNames.length ? `R ${rNames.join(', ')}` : 'R -';
+      result = [rLine, 'A -', 'C -', 'I -'].join('\n');
+    } else {
+      result = [
+        buildLine('R', node.raci.responsible),
+        buildLine('A', node.raci.accountable),
+        buildLine('C', node.raci.consulted),
+        buildLine('I', node.raci.informed),
+      ].join('\n');
     }
-    const groups: Array<{ label: string; entries: { displayName: string }[] }> = [
-      { label: 'R', entries: node.raci.responsible ?? [] },
-      { label: 'A', entries: node.raci.accountable ?? [] },
-      { label: 'C', entries: node.raci.consulted ?? [] },
-      { label: 'I', entries: node.raci.informed ?? [] },
-    ];
-    const lines = groups.map(({ label, entries }) => {
-      if (!entries || entries.length === 0) {
-        return `${label} -`;
-      }
-      return `${label} ${entries.map((entry) => entry.displayName).join(', ')}`;
-    });
-    return lines.join('\n');
-  }, [node.raci, node.assignees]);
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.debug('[RACI tooltip]', { nodeId: node.id, hasRaci: !!node.raci, assigneesCount: node.assignees?.length || 0, tooltip: result, showOwner: displayOptions.showOwner });
+    }
+    return result;
+  }, [node.raci, node.assignees, displayOptions.showOwner]);
 
   const lateness = useMemo(() => {
     if (!node.dueAt) return undefined;
