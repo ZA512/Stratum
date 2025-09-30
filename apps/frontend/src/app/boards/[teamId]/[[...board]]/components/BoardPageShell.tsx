@@ -15,6 +15,7 @@ import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { useTranslation } from '@/i18n';
 
+
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
 const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
@@ -430,6 +431,23 @@ export function TeamBoardPage(){
     return Array.from(map.values()).sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' }));
   }, [board?.columns]);
 
+  const assigneeOptions = useMemo(
+    () => [
+      {
+        id: UNASSIGNED_TOKEN,
+        label: 'Aucun assigné',
+        description: 'Inclure les tâches sans responsable',
+        searchText: 'aucun sans assignation non assignée',
+      },
+      ...allAssignees.map((assignee) => ({
+        id: assignee.id,
+        label: assignee.displayName,
+        searchText: assignee.displayName,
+      })),
+    ],
+    [allAssignees],
+  );
+
   const mentionContext = useMemo(() => {
     if (!searchFocused) return null;
     const match = searchDraft.match(/(?:^|\s)(@(?:"[^"]*|[^\s@]*))$/);
@@ -752,10 +770,6 @@ export function TeamBoardPage(){
       setDeleteError((err as Error).message);
       setDeleteSubmitting(null);
     }
-  };
-
-  const toggleAssignee = (id: string) => {
-    setSelectedAssignees((prev) => prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]);
   };
 
   const togglePriority = (value: PriorityValue) => {
@@ -1133,37 +1147,22 @@ export function TeamBoardPage(){
                         </div>
                         <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
                           <div className="grid gap-6 md:grid-cols-2">
-                            <section className="text-xs">
-                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
-                              <div className="mt-3 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-                                <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(UNASSIGNED_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
-                                  <input
-                                    type="checkbox"
-                                    className="accent-accent"
-                                    checked={selectedAssignees.includes(UNASSIGNED_TOKEN)}
-                                    onChange={() => toggleAssignee(UNASSIGNED_TOKEN)}
-                                  />
-                                  Aucun
-                                </label>
-                                {allAssignees.length === 0 ? (
-                                  <span className="col-span-full rounded-xl border border-dashed border-white/15 px-3 py-2 text-center text-muted">Aucun utilisateur assigné</span>
-                                ) : (
-                                  allAssignees.map((assignee) => (
-                                    <label
-                                      key={assignee.id}
-                                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${selectedAssignees.includes(assignee.id) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="accent-accent"
-                                        checked={selectedAssignees.includes(assignee.id)}
-                                        onChange={() => toggleAssignee(assignee.id)}
-                                      />
-                                      {assignee.displayName}
-                                    </label>
-                                  ))
-                                )}
+                            <section className="space-y-3 text-xs">
+                              <div className="space-y-2">
+                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
+                                <MultiSelectCombo
+                                  options={assigneeOptions}
+                                  selectedIds={selectedAssignees}
+                                  onChange={setSelectedAssignees}
+                                  placeholder="Choisir des utilisateurs à filtrer"
+                                  searchPlaceholder="Rechercher un utilisateur…"
+                                  emptyMessage="Aucun utilisateur assigné"
+                                  noResultsMessage="Aucun utilisateur trouvé"
+                                />
                               </div>
+                              <p className="text-[11px] text-muted">
+                                Ajoutez « Aucun assigné » pour isoler les tâches sans responsable ou combinez plusieurs membres.
+                              </p>
                             </section>
                             <section className="space-y-6 text-xs">
                               <div>
