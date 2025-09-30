@@ -578,6 +578,213 @@ export class NodesService {
     });
   }
 
+  async moveNodeToBoard(
+    nodeId: string,
+    dto: { targetBoardId: string; targetColumnId: string; position?: number },
+    userId: string,
+  ): Promise<NodeDto> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: {
+        id: true,
+        teamId: true,
+        parentId: true,
+        columnId: true,
+        position: true,
+        path: true,
+        depth: true,
+        statusMetadata: true,
+      },
+    });
+    if (!node) throw new NotFoundException('Tâche introuvable');
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const board = await this.prisma.board.findUnique({
+      where: { id: dto.targetBoardId },
+      include: {
+        node: { select: { id: true, path: true, depth: true, teamId: true } },
+        columns: {
+          select: {
+            id: true,
+            position: true,
+            wipLimit: true,
+            behavior: { select: { key: true } },
+          },
+        },
+      },
+    });
+    if (!board || !board.node)
+      throw new NotFoundException('Board cible introuvable');
+
+    await this.ensureUserCanWrite(board.node.teamId, userId);
+
+    if (board.node.teamId !== node.teamId) {
+      throw new BadRequestException(
+        'Déplacement vers une autre équipe non supporté',
+      );
+    }
+
+    if (board.node.id === node.id || board.node.path.startsWith(node.path + '/')) {
+      throw new BadRequestException(
+        'Impossible de déplacer une tâche dans son propre sous-kanban',
+      );
+    }
+
+    const targetColumn = board.columns.find(
+      (column) => column.id === dto.targetColumnId,
+    );
+    if (!targetColumn)
+      throw new NotFoundException('Colonne cible introuvable');
+
+    if (node.parentId === board.node.id && node.columnId === targetColumn.id) {
+      await this.moveChildNode(
+        board.node.id,
+        node.id,
+        { targetColumnId: targetColumn.id, position: dto.position },
+        userId,
+      );
+      const refreshed = await this.prisma.node.findUnique({
+        where: { id: node.id },
+      });
+      if (!refreshed) throw new NotFoundException('Tâche introuvable');
+      return this.mapNode(refreshed);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const freshNode = await tx.node.findUnique({
+        where: { id: node.id },
+        select: {
+          id: true,
+          teamId: true,
+          parentId: true,
+          columnId: true,
+          position: true,
+          path: true,
+          depth: true,
+          statusMetadata: true,
+        },
+      });
+      if (!freshNode) throw new NotFoundException('Tâche introuvable');
+      if (!freshNode.columnId)
+        throw new BadRequestException('Colonne source introuvable');
+
+      if (targetColumn.wipLimit !== null) {
+        const count = await tx.node.count({
+          where: { parentId: board.node.id, columnId: targetColumn.id },
+        });
+        if (count >= targetColumn.wipLimit) {
+          throw new ConflictException(
+            'Limite WIP atteinte pour la colonne cible',
+          );
+        }
+      }
+
+      const sourceParentId = freshNode.parentId;
+      const sourceColumnId = freshNode.columnId;
+      const sourcePath = freshNode.path;
+      const sourceDepth = freshNode.depth;
+
+      const descendants = await tx.node.findMany({
+        where: { path: { startsWith: sourcePath + '/' } },
+        select: { id: true, path: true, depth: true },
+      });
+
+      const siblingsTarget = await tx.node.findMany({
+        where: { parentId: board.node.id, columnId: targetColumn.id },
+        select: { id: true, position: true },
+        orderBy: { position: 'asc' },
+      });
+      const filteredTarget = siblingsTarget.filter((sibling) => sibling.id !== node.id);
+
+      let targetPosition =
+        dto.position !== undefined ? Math.floor(dto.position) : filteredTarget.length;
+      if (targetPosition < 0) targetPosition = 0;
+      if (targetPosition > filteredTarget.length)
+        targetPosition = filteredTarget.length;
+
+      for (let index = filteredTarget.length - 1; index >= 0; index--) {
+        const sibling = filteredTarget[index];
+        if (sibling.position >= targetPosition) {
+          await tx.node.update({
+            where: { id: sibling.id },
+            data: { position: sibling.position + 1 },
+          });
+        }
+      }
+
+      if (sourceParentId) {
+        const sourceSiblings = await tx.node.findMany({
+          where: { parentId: sourceParentId, columnId: sourceColumnId },
+          select: { id: true, position: true },
+          orderBy: { position: 'asc' },
+        });
+        let nextPosition = 0;
+        for (const sibling of sourceSiblings) {
+          if (sibling.id === node.id) continue;
+          if (sibling.position !== nextPosition) {
+            await tx.node.update({
+              where: { id: sibling.id },
+              data: { position: nextPosition },
+            });
+          }
+          nextPosition++;
+        }
+      }
+
+      const newPath = `${board.node.path}/${node.id}`;
+      const depthDelta = board.node.depth + 1 - sourceDepth;
+
+      const statusMeta = normalizeJson(freshNode.statusMetadata) || {};
+      const nowIso = new Date().toISOString();
+      const behaviorKey = targetColumn.behavior.key;
+      if (behaviorKey === ColumnBehaviorKey.IN_PROGRESS) {
+        if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
+      } else if (behaviorKey === ColumnBehaviorKey.DONE) {
+        if (!('doneAt' in statusMeta)) statusMeta.doneAt = nowIso;
+        if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
+      }
+
+      const updated = await tx.node.update({
+        where: { id: node.id },
+        data: {
+          parentId: board.node.id,
+          teamId: board.node.teamId,
+          columnId: targetColumn.id,
+          position: targetPosition,
+          path: newPath,
+          depth: board.node.depth + 1,
+          statusMetadata: statusMeta as Prisma.JsonValue,
+        },
+      });
+
+      const oldPrefix = sourcePath + '/';
+      const newPrefix = newPath + '/';
+      for (const descendant of descendants) {
+        const suffix = descendant.path.slice(oldPrefix.length);
+        const updatedPath = newPrefix + suffix;
+        await tx.node.update({
+          where: { id: descendant.id },
+          data: {
+            path: updatedPath,
+            depth: descendant.depth + depthDelta,
+            teamId: board.node.teamId,
+          },
+        });
+      }
+
+      await this.recomputeParentProgress(tx, board.node.id);
+      if (sourceParentId && sourceParentId !== board.node.id) {
+        try {
+          await this.recomputeParentProgress(tx, sourceParentId);
+        } catch {
+          /* parent possiblement supprimé */
+        }
+      }
+
+      return this.mapNode(updated as NodeModel);
+    });
+  }
+
   async reorderChildren(
     parentId: string,
     dto: { columnId: string; orderedIds: string[] },

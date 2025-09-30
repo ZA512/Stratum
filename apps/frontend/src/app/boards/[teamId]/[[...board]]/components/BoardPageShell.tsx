@@ -13,7 +13,7 @@ import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
-import { useTranslation } from '@/i18n';
+import { MoveCardDialog } from './MoveCardDialog';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -246,6 +246,7 @@ export function TeamBoardPage(){
   const [filtersHydrated, setFiltersHydrated] = useState(false);
   const searchBlurTimeout = useRef<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardNode | null>(null);
+  const [moveTarget, setMoveTarget] = useState<BoardNode | null>(null);
   const [deletePreview, setDeletePreview] = useState<NodeDeletePreview | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
@@ -716,7 +717,11 @@ export function TeamBoardPage(){
     if(!accessToken) return; await handleApi(()=>updateNode(id,{ title: newTitle }, accessToken)); };
 
   const handleRequestMoveCard = (node: BoardNode) => {
-    toastError(`Déplacement multi-board non disponible pour «${node.title}» pour le moment.`);
+    if (!board) {
+      toastError('Kanban actif indisponible pour le déplacement.');
+      return;
+    }
+    setMoveTarget(node);
   };
 
   const handleRequestDeleteCard = (node: BoardNode) => {
@@ -909,7 +914,6 @@ export function TeamBoardPage(){
     
     if (process.env.NODE_ENV !== 'production') {
       // Debug drag columns
-      // eslint-disable-next-line no-console
       console.debug('[DnD] dragEnd', {
         movingCardId: activeId,
         activeColId,
@@ -1396,6 +1400,22 @@ export function TeamBoardPage(){
             </div>
           </div>
         </div>
+      )}
+      {moveTarget && board && teamId && (
+        <MoveCardDialog
+          teamId={teamId}
+          node={moveTarget}
+          currentBoardId={board.id}
+          onClose={() => setMoveTarget(null)}
+          onSuccess={async () => {
+            try {
+              await refreshActiveBoard();
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Actualisation du kanban impossible';
+              toastError(message);
+            }
+          }}
+        />
       )}
     </div>
   );

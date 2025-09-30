@@ -31,6 +31,7 @@ import { UpdateNodeDto } from './dto/update-node.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
 import { UpdateChildNodeDto } from './dto/update-child-node.dto';
 import { MoveChildNodeDto } from './dto/move-child-node.dto';
+import { MoveNodeBoardDto } from './dto/move-node-board.dto';
 import { ReorderChildrenDto } from './dto/reorder-children.dto';
 import {
   InviteNodeCollaboratorDto,
@@ -279,6 +280,23 @@ export class NodesController {
     @Body() dto: MoveChildNodeDto,
   ): Promise<NodeDetailDto> {
     return this.nodesService.moveChildNode(nodeId, childId, dto, user.id);
+  }
+
+  @Post(':nodeId/move-board')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Déplace une tâche vers un autre board (changement de parent/colonne)',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_child' })
+  @ApiOkResponse({ type: NodeDto })
+  moveNodeToBoard(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Body() dto: MoveNodeBoardDto,
+  ): Promise<NodeDto> {
+    return this.nodesService.moveNodeToBoard(nodeId, dto, user.id);
   }
 
   @Post(':nodeId/children/reorder')

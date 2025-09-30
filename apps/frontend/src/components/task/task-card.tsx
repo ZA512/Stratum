@@ -105,7 +105,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (assigneeTooltip && assigneeTooltip.trim().length > 0) {
       // Debug: always show RACI tooltip even if all empty
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
         console.debug('[TaskCard] computedTooltip from assigneeTooltip:', assigneeTooltip);
       }
       return assigneeTooltip;

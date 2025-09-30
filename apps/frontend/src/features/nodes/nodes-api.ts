@@ -170,6 +170,28 @@ export async function moveChildNode(parentId: string, childId: string, input: { 
   return (await response.json()) as NodeDetail;
 }
 
+export type MoveNodeToBoardInput = {
+  targetBoardId: string;
+  targetColumnId: string;
+  position?: number;
+};
+
+export async function moveNodeToBoard(
+  nodeId: string,
+  input: MoveNodeToBoardInput,
+  accessToken: string,
+): Promise<NodeDetail> {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/move-board`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de deplacer la tache vers un autre kanban");
+  }
+  return (await response.json()) as NodeDetail;
+}
+
 export type NodeDeletePreview = {
   id: string;
   hasChildren: boolean;
