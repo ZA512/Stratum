@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 // Routes publiques (auth, assets)
 const PUBLIC_PATHS = [
   '/(auth)/login',
+  '/(auth)/register',
   '/login',
+  '/register',
   '/_next',
   '/favicon',
   '/api/auth',

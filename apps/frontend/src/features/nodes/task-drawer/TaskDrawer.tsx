@@ -17,6 +17,7 @@ import {
   type NodeCollaborator as SharedNodeCollaborator,
   type NodeCollaboratorInvitation,
 } from '@/features/nodes/node-collaborators-api';
+import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
 // Icône close inline pour éviter dépendance externe
 const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -61,44 +62,27 @@ const Skeleton: React.FC = () => (
 interface MemberMultiSelectProps {
   label: string;
   members: TeamMember[];
-  membersMap: Map<string, TeamMember>;
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  disabled?: boolean;
 }
 
 const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
   label,
   members,
-  membersMap,
   selectedIds,
   onChange,
+  disabled = false,
 }) => {
-  const [query, setQuery] = useState('');
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredMembers = useMemo(() => {
-    if (!normalizedQuery) return members;
-    return members.filter((member) => {
-      const name = member.displayName.toLowerCase();
-      const email = member.email.toLowerCase();
-      return (
-        name.includes(normalizedQuery) ||
-        email.includes(normalizedQuery)
-      );
-    });
-  }, [members, normalizedQuery]);
-
-  const toggleMember = useCallback((id: string) => {
-    if (selectedIds.includes(id)) {
-      onChange(selectedIds.filter((value) => value !== id));
-    } else {
-      onChange([...selectedIds, id]);
-    }
-  }, [selectedIds, onChange]);
-
-  const removeMember = useCallback((id: string) => {
-    onChange(selectedIds.filter((value) => value !== id));
-  }, [selectedIds, onChange]);
+  const options = useMemo(
+    () => members.map((member) => ({
+      id: member.id,
+      label: member.displayName,
+      description: member.email,
+      searchText: `${member.displayName} ${member.email}`,
+    })),
+    [members],
+  );
 
   return (
     <div className="space-y-2">
@@ -109,63 +93,22 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
             type="button"
             onClick={() => onChange([])}
             className="text-[11px] text-slate-500 transition hover:text-foreground"
+            disabled={disabled}
           >
             Effacer
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {selectedIds.length === 0 && (
-          <span className="text-[11px] text-slate-500">Aucun membre sélectionné</span>
-        )}
-        {selectedIds.map((id) => {
-          const member = membersMap.get(id);
-          const display = member?.displayName ?? id;
-          return (
-            <span
-              key={id}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-surface/80 px-2 py-0.5 text-xs text-foreground"
-            >
-              {display}
-              <button
-                type="button"
-                onClick={() => removeMember(id)}
-                className="text-[10px] text-slate-400 transition hover:text-foreground"
-                aria-label={`Retirer ${display}`}
-              >
-                ×
-              </button>
-            </span>
-          );
-        })}
-      </div>
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Rechercher par nom ou email"
-        className="w-full rounded border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+      <MultiSelectCombo
+        options={options}
+        selectedIds={selectedIds}
+        onChange={onChange}
+        placeholder="Sélectionner des membres"
+        searchPlaceholder="Rechercher un membre…"
+        emptyMessage="Aucun membre disponible"
+        noResultsMessage="Aucun membre trouvé"
+        disabled={disabled}
       />
-      <div className="max-h-40 overflow-y-auto rounded border border-white/10 bg-surface/60">
-        {filteredMembers.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted">Aucun résultat</p>
-        ) : (
-          filteredMembers.map((member) => {
-            const active = selectedIds.includes(member.id);
-            return (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() => toggleMember(member.id)}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition ${active ? 'bg-accent/10 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
-              >
-                <span>{member.displayName}</span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">{member.email}</span>
-              </button>
-            );
-          })
-        )}
-      </div>
     </div>
   );
 };
@@ -981,30 +924,30 @@ export const TaskDrawer: React.FC = () => {
                           <MemberMultiSelect
                             label="R : Responsable"
                             members={teamMembers}
-                            membersMap={membersMap}
                             selectedIds={rResponsible}
                             onChange={setRResponsible}
+                            disabled={saving}
                           />
                           <MemberMultiSelect
                             label="A : Accountable"
                             members={teamMembers}
-                            membersMap={membersMap}
                             selectedIds={rAccountable}
                             onChange={setRAccountable}
+                            disabled={saving}
                           />
                           <MemberMultiSelect
                             label="C : Consulted"
                             members={teamMembers}
-                            membersMap={membersMap}
                             selectedIds={rConsulted}
                             onChange={setRConsulted}
+                            disabled={saving}
                           />
                           <MemberMultiSelect
                             label="I : Informed"
                             members={teamMembers}
-                            membersMap={membersMap}
                             selectedIds={rInformed}
                             onChange={setRInformed}
+                            disabled={saving}
                           />
                         </div>
                       </section>

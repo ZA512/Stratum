@@ -169,13 +169,18 @@ export default function Home() {
           ? t("home.bootstrappingAction", "Initialisation en cours…")
           : t("home.bootstrapCta", "Initialiser mon kanban")}
       </button>
-      <button
-        type="button"
-        onClick={logout}
-        className="text-xs text-muted underline-offset-2 hover:underline"
-      >
-        {t("common.actions.signOut")}
-      </button>
+      <div className="flex items-center gap-3 text-xs text-muted">
+        <Link href="/settings" className="underline-offset-2 hover:underline">
+          {t("common.actions.settings")}
+        </Link>
+        <button
+          type="button"
+          onClick={logout}
+          className="underline-offset-2 hover:underline"
+        >
+          {t("common.actions.signOut")}
+        </button>
+      </div>
     </div>
   );
 }
