@@ -9,7 +9,8 @@
       "french": "Français"
     },
     "actions": {
-      "signOut": "Déconnexion"
+      "signOut": "Déconnexion",
+      "settings": "Paramétrage"
     }
   },
   "home": {
@@ -50,7 +51,28 @@
     "submit": "Se connecter",
     "submitting": "Connexion...",
     "backPrompt": "Retour au tableau de bord ?",
-    "backLink": "Accéder à Stratum"
+    "backLink": "Accéder à Stratum",
+    "noAccount": "Nouveau sur Stratum ?",
+    "createAccount": "Créer un compte"
+  },
+  "register": {
+    "title": "Inscription",
+    "subtitle": "Créez votre espace Stratum en quelques secondes.",
+    "displayName": "Nom complet",
+    "displayNamePlaceholder": "Alice Exemple",
+    "email": "Email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmez le mot de passe",
+    "submit": "Créer mon compte",
+    "submitting": "Création du compte...",
+    "success": "Compte créé ! Vous pouvez maintenant vous connecter.",
+    "backPrompt": "Revenir en arrière ?",
+    "backLink": "Retourner au tableau de bord",
+    "haveAccount": "Vous avez déjà un compte ?",
+    "signIn": "Se connecter",
+    "errors": {
+      "passwordMismatch": "Les mots de passe ne correspondent pas."
+    }
   },
   "settings": {
     "title": "Paramètres utilisateur",

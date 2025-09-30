@@ -11,6 +11,33 @@ type LoginResponse = {
   refreshExpiresAt: string;
 };
 
+type RegisterInput = {
+  email: string;
+  password: string;
+  displayName: string;
+};
+
+export async function registerRequest(input: RegisterInput): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const payload = await safeParseError(response);
+    const message = payload?.message ?? "Impossible de créer le compte";
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+
+  // Certains environnements renvoient un corps vide après l'inscription.
+  // On ne force donc pas la lecture du payload et on se contente du statut HTTP.
+}
+
 export async function loginRequest(email: string, password: string): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",

@@ -87,12 +87,20 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-8 text-center text-sm text-muted">
-          <span>{t("login.backPrompt")}</span>{" "}
-          <Link href="/" className="text-accent hover:text-accent-strong">
-            {t("login.backLink")}
-          </Link>
-        </p>
+        <div className="mt-8 space-y-3 text-center text-sm text-muted">
+          <p>
+            <span>{t("login.backPrompt")}</span>{" "}
+            <Link href="/" className="text-accent hover:text-accent-strong">
+              {t("login.backLink")}
+            </Link>
+          </p>
+          <p>
+            <span>{t("login.noAccount")}</span>{" "}
+            <Link href="/register" className="text-accent hover:text-accent-strong">
+              {t("login.createAccount")}
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
