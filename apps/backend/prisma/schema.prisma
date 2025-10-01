@@ -224,6 +224,13 @@ model Comment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   metadata    Json?
+  notifyResponsible Boolean  @default(true)
+  notifyAccountable Boolean  @default(true)
+  notifyConsulted   Boolean  @default(true)
+  notifyInformed    Boolean  @default(true)
+  notifyProject     Boolean  @default(false)
+  notifySubProject  Boolean  @default(false)
+  mentions          String[] @default([])
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)

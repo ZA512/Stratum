@@ -26,6 +26,7 @@ import { NodeDto } from './dto/node.dto';
 import { NodeBreadcrumbDto } from './dto/node-breadcrumb.dto';
 import { NodeChildBoardDto } from './dto/node-child-board.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
+import { CreateNodeCommentDto, NodeCommentDto } from './dto/node-comment.dto';
 import { NodeSummaryOnlyDto } from './dto/node-summary-only.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
@@ -138,7 +139,9 @@ export class NodesController {
   @Get(':nodeId/collaborators')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Liste les collaborateurs d\'une tâche (directs + hérités)' })
+  @ApiOperation({
+    summary: "Liste les collaborateurs d'une tâche (directs + hérités)",
+  })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeShareSummaryDto })
   listCollaborators(
@@ -148,11 +151,23 @@ export class NodesController {
     return this.nodesService.listNodeCollaborators(nodeId, user.id);
   }
 
+  @Get(':nodeId/comments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Liste les commentaires d'une tâche" })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: NodeCommentDto, isArray: true })
+  listComments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<NodeCommentDto[]> {
+    return this.nodesService.listNodeComments(nodeId, user.id);
+  }
+
   @Post(':nodeId/collaborators')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite un collaborateur sur la tâche par email' })
-
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeShareSummaryDto })
   inviteCollaborator(
@@ -161,6 +176,23 @@ export class NodesController {
     @Body() dto: InviteNodeCollaboratorDto,
   ): Promise<NodeShareSummaryDto> {
     return this.nodesService.addNodeCollaborator(nodeId, dto, user.id);
+  }
+
+  @Post(':nodeId/comments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Ajoute un commentaire et prépare les notifications correspondantes',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiCreatedResponse({ type: NodeCommentDto })
+  createComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Body() dto: CreateNodeCommentDto,
+  ): Promise<NodeCommentDto> {
+    return this.nodesService.createNodeComment(nodeId, dto, user.id);
   }
 
   @Delete(':nodeId/collaborators/:userId')
@@ -175,7 +207,11 @@ export class NodesController {
     @Param('nodeId') nodeId: string,
     @Param('userId') targetUserId: string,
   ): Promise<NodeShareSummaryDto> {
-    return this.nodesService.removeNodeCollaborator(nodeId, targetUserId, user.id);
+    return this.nodesService.removeNodeCollaborator(
+      nodeId,
+      targetUserId,
+      user.id,
+    );
   }
 
   @Patch(':nodeId')
@@ -316,7 +352,10 @@ export class NodesController {
   @Post(':nodeId/ensure-board')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Crée le board et ses colonnes par défaut si absent (sans créer de sous-tâche)' })
+  @ApiOperation({
+    summary:
+      'Crée le board et ses colonnes par défaut si absent (sans créer de sous-tâche)',
+  })
   @ApiParam({ name: 'nodeId', example: 'node_parent' })
   @ApiOkResponse({ schema: { properties: { boardId: { type: 'string' } } } })
   ensureBoard(

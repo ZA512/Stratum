@@ -4,6 +4,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useTaskDrawer } from './TaskDrawerContext';
 import { useTaskDetail } from './useTaskDetail';
 import { ChildTasksSection } from './ChildTasksSection';
+import { CommentsSection } from './CommentsSection';
 import { updateNode, type UpdateNodeInput } from '@/features/nodes/nodes-api';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useToast } from '@/components/toast/ToastProvider';
@@ -192,7 +193,7 @@ export const TaskDrawer: React.FC = () => {
   const [plannedBudget, setPlannedBudget] = useState<string>('');
   const [consumedBudgetValue, setConsumedBudgetValue] = useState<string>('');
   const [consumedBudgetPercent, setConsumedBudgetPercent] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'details' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -822,6 +823,11 @@ export const TaskDrawer: React.FC = () => {
                     >📋 Détails</button>
                     <button
                       type="button"
+                      onClick={() => setActiveTab('comments')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'comments' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    >💬 Commentaires</button>
+                    <button
+                      type="button"
                       onClick={() => setActiveTab('planning')}
                       className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
                     >📅 Planning</button>
@@ -906,6 +912,14 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
                     </div>
+                  )}
+
+                  {activeTab === 'comments' && (
+                    <CommentsSection
+                      members={teamMembers}
+                      membersLoading={membersLoading}
+                      membersError={membersError}
+                    />
                   )}
 
                   {activeTab === 'planning' && (

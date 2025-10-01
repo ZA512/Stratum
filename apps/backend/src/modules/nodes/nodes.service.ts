@@ -12,10 +12,13 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { NodeDto } from './dto/node.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
+import { CreateNodeCommentDto, NodeCommentDto } from './dto/node-comment.dto';
 import {
   NodeAssignmentDto,
   NodeMinimalChildDto,
@@ -115,11 +118,14 @@ function toDateStringOrNull(value: unknown): string | null {
   return trimmed;
 }
 
-function normalizeShare(
-  rawRoot: Record<string, any>,
-): { collaborators: ShareCollaborator[]; invitations: ShareInvitation[] } {
+function normalizeShare(rawRoot: Record<string, any>): {
+  collaborators: ShareCollaborator[];
+  invitations: ShareInvitation[];
+} {
   const shareRaw =
-    rawRoot.share && typeof rawRoot.share === 'object' && !Array.isArray(rawRoot.share)
+    rawRoot.share &&
+    typeof rawRoot.share === 'object' &&
+    !Array.isArray(rawRoot.share)
       ? { ...(rawRoot.share as Record<string, any>) }
       : {};
 
@@ -129,14 +135,18 @@ function normalizeShare(
     : [];
   for (const entry of collaboratorRaw) {
     if (!entry || typeof entry !== 'object') continue;
-    const userIdRaw = (entry as any).userId;
-    const userId = typeof userIdRaw === 'string' ? userIdRaw.trim() : String(userIdRaw ?? '').trim();
+    const userIdRaw = entry.userId;
+    const userId =
+      typeof userIdRaw === 'string'
+        ? userIdRaw.trim()
+        : String(userIdRaw ?? '').trim();
     if (!userId) continue;
-    const addedByIdRaw = (entry as any).addedById;
-    const addedById = typeof addedByIdRaw === 'string' && addedByIdRaw.trim()
-      ? addedByIdRaw.trim()
-      : null;
-    const addedAtRaw = (entry as any).addedAt;
+    const addedByIdRaw = entry.addedById;
+    const addedById =
+      typeof addedByIdRaw === 'string' && addedByIdRaw.trim()
+        ? addedByIdRaw.trim()
+        : null;
+    const addedAtRaw = entry.addedAt;
     let addedAt: string | null = null;
     if (typeof addedAtRaw === 'string' && addedAtRaw.trim()) {
       const parsed = new Date(addedAtRaw);
@@ -151,22 +161,25 @@ function normalizeShare(
     : [];
   for (const entry of invitationsRaw) {
     if (!entry || typeof entry !== 'object') continue;
-    const emailRaw = (entry as any).email;
-    const email = typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
+    const emailRaw = entry.email;
+    const email =
+      typeof emailRaw === 'string' ? emailRaw.trim().toLowerCase() : '';
     if (!email) continue;
-    const invitedByRaw = (entry as any).invitedById;
-    const invitedById = typeof invitedByRaw === 'string' && invitedByRaw.trim()
-      ? invitedByRaw.trim()
-      : null;
-    const invitedAtRaw = (entry as any).invitedAt;
+    const invitedByRaw = entry.invitedById;
+    const invitedById =
+      typeof invitedByRaw === 'string' && invitedByRaw.trim()
+        ? invitedByRaw.trim()
+        : null;
+    const invitedAtRaw = entry.invitedAt;
     let invitedAt: string | null = null;
     if (typeof invitedAtRaw === 'string' && invitedAtRaw.trim()) {
       const parsed = new Date(invitedAtRaw);
       invitedAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
     }
-    const statusRaw = (entry as any).status;
+    const statusRaw = entry.status;
     const status =
-      typeof statusRaw === 'string' && ['PENDING', 'ACCEPTED'].includes(statusRaw.toUpperCase())
+      typeof statusRaw === 'string' &&
+      ['PENDING', 'ACCEPTED'].includes(statusRaw.toUpperCase())
         ? (statusRaw.toUpperCase() as 'PENDING' | 'ACCEPTED')
         : 'PENDING';
     invitations.push({ email, invitedById, invitedAt, status });
@@ -624,7 +637,10 @@ export class NodesService {
       );
     }
 
-    if (board.node.id === node.id || board.node.path.startsWith(node.path + '/')) {
+    if (
+      board.node.id === node.id ||
+      board.node.path.startsWith(node.path + '/')
+    ) {
       throw new BadRequestException(
         'Impossible de déplacer une tâche dans son propre sous-kanban',
       );
@@ -633,8 +649,7 @@ export class NodesService {
     const targetColumn = board.columns.find(
       (column) => column.id === dto.targetColumnId,
     );
-    if (!targetColumn)
-      throw new NotFoundException('Colonne cible introuvable');
+    if (!targetColumn) throw new NotFoundException('Colonne cible introuvable');
 
     if (node.parentId === board.node.id && node.columnId === targetColumn.id) {
       await this.moveChildNode(
@@ -694,10 +709,14 @@ export class NodesService {
         select: { id: true, position: true },
         orderBy: { position: 'asc' },
       });
-      const filteredTarget = siblingsTarget.filter((sibling) => sibling.id !== node.id);
+      const filteredTarget = siblingsTarget.filter(
+        (sibling) => sibling.id !== node.id,
+      );
 
       let targetPosition =
-        dto.position !== undefined ? Math.floor(dto.position) : filteredTarget.length;
+        dto.position !== undefined
+          ? Math.floor(dto.position)
+          : filteredTarget.length;
       if (targetPosition < 0) targetPosition = 0;
       if (targetPosition > filteredTarget.length)
         targetPosition = filteredTarget.length;
@@ -781,7 +800,7 @@ export class NodesService {
         }
       }
 
-      return this.mapNode(updated as NodeModel);
+      return this.mapNode(updated);
     });
   }
 
@@ -1059,8 +1078,7 @@ export class NodesService {
       if (value === undefined) return null;
       if (value === null) return null;
       const parsed = toNumberOrNull(value);
-      if (parsed === null)
-        throw new BadRequestException(`${field} invalide`);
+      if (parsed === null) throw new BadRequestException(`${field} invalide`);
       if (parsed < 0)
         throw new BadRequestException(`${field} doit être positif`);
       return parsed;
@@ -1073,8 +1091,7 @@ export class NodesService {
       if (value === undefined) return null;
       if (value === null) return null;
       const parsed = toNumberOrNull(value);
-      if (parsed === null)
-        throw new BadRequestException(`${field} invalide`);
+      if (parsed === null) throw new BadRequestException(`${field} invalide`);
       if (parsed < 0)
         throw new BadRequestException(`${field} doit être positif`);
       return parsed;
@@ -1108,53 +1125,64 @@ export class NodesService {
       nextRaci.A = accountable;
       nextRaci.C = consulted;
       nextRaci.I = informed;
-      metadata.raci = { R: responsible, A: accountable, C: consulted, I: informed };
+      metadata.raci = {
+        R: responsible,
+        A: accountable,
+        C: consulted,
+        I: informed,
+      };
       metadataChanged = true;
     }
 
     if (dto.estimatedTimeHours !== undefined) {
-      const value = dto.estimatedTimeHours === null
-        ? null
-        : parseHours(dto.estimatedTimeHours, 'Temps estimé');
+      const value =
+        dto.estimatedTimeHours === null
+          ? null
+          : parseHours(dto.estimatedTimeHours, 'Temps estimé');
       nextTimeTracking.estimatedTimeHours = value;
       timeTrackingChanged = true;
     }
     if (dto.actualOpexHours !== undefined) {
-      const value = dto.actualOpexHours === null
-        ? null
-        : parseHours(dto.actualOpexHours, 'Temps réel OPEX');
+      const value =
+        dto.actualOpexHours === null
+          ? null
+          : parseHours(dto.actualOpexHours, 'Temps réel OPEX');
       nextTimeTracking.actualOpexHours = value;
       timeTrackingChanged = true;
     }
     if (dto.actualCapexHours !== undefined) {
-      const value = dto.actualCapexHours === null
-        ? null
-        : parseHours(dto.actualCapexHours, 'Temps réel CAPEX');
+      const value =
+        dto.actualCapexHours === null
+          ? null
+          : parseHours(dto.actualCapexHours, 'Temps réel CAPEX');
       nextTimeTracking.actualCapexHours = value;
       timeTrackingChanged = true;
     }
     if (dto.plannedStartDate !== undefined) {
-      const parsed = dto.plannedStartDate === null
-        ? null
-        : toDateStringOrNull(dto.plannedStartDate);
+      const parsed =
+        dto.plannedStartDate === null
+          ? null
+          : toDateStringOrNull(dto.plannedStartDate);
       if (dto.plannedStartDate !== null && parsed === null)
         throw new BadRequestException('Date de début prévue invalide');
       nextTimeTracking.plannedStartDate = parsed;
       timeTrackingChanged = true;
     }
     if (dto.plannedEndDate !== undefined) {
-      const parsed = dto.plannedEndDate === null
-        ? null
-        : toDateStringOrNull(dto.plannedEndDate);
+      const parsed =
+        dto.plannedEndDate === null
+          ? null
+          : toDateStringOrNull(dto.plannedEndDate);
       if (dto.plannedEndDate !== null && parsed === null)
         throw new BadRequestException('Date de fin prévue invalide');
       nextTimeTracking.plannedEndDate = parsed;
       timeTrackingChanged = true;
     }
     if (dto.actualEndDate !== undefined) {
-      const parsed = dto.actualEndDate === null
-        ? null
-        : toDateStringOrNull(dto.actualEndDate);
+      const parsed =
+        dto.actualEndDate === null
+          ? null
+          : toDateStringOrNull(dto.actualEndDate);
       if (dto.actualEndDate !== null && parsed === null)
         throw new BadRequestException('Date de fin réelle invalide');
       nextTimeTracking.actualEndDate = parsed;
@@ -1172,30 +1200,34 @@ export class NodesService {
       financialsChanged = true;
     }
     if (dto.hourlyRate !== undefined) {
-      const value = dto.hourlyRate === null
-        ? null
-        : parseAmount(dto.hourlyRate, 'Taux horaire');
+      const value =
+        dto.hourlyRate === null
+          ? null
+          : parseAmount(dto.hourlyRate, 'Taux horaire');
       nextFinancials.hourlyRate = value;
       financialsChanged = true;
     }
     if (dto.plannedBudget !== undefined) {
-      const value = dto.plannedBudget === null
-        ? null
-        : parseAmount(dto.plannedBudget, 'Budget prévu');
+      const value =
+        dto.plannedBudget === null
+          ? null
+          : parseAmount(dto.plannedBudget, 'Budget prévu');
       nextFinancials.plannedBudget = value;
       financialsChanged = true;
     }
     if (dto.consumedBudgetValue !== undefined) {
-      const value = dto.consumedBudgetValue === null
-        ? null
-        : parseAmount(dto.consumedBudgetValue, 'Budget consommé');
+      const value =
+        dto.consumedBudgetValue === null
+          ? null
+          : parseAmount(dto.consumedBudgetValue, 'Budget consommé');
       nextFinancials.consumedBudgetValue = value;
       financialsChanged = true;
     }
     if (dto.consumedBudgetPercent !== undefined) {
-      const value = dto.consumedBudgetPercent === null
-        ? null
-        : parseAmount(dto.consumedBudgetPercent, 'Budget consommé (%)');
+      const value =
+        dto.consumedBudgetPercent === null
+          ? null
+          : parseAmount(dto.consumedBudgetPercent, 'Budget consommé (%)');
       nextFinancials.consumedBudgetPercent = value;
       financialsChanged = true;
     }
@@ -1356,6 +1388,19 @@ export class NodesService {
             },
           },
         },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -1397,13 +1442,283 @@ export class NodesService {
         }
       : undefined;
 
+    const comments = await this.mapCommentRecords(
+      client,
+      node.comments as Array<{
+        id: string;
+        nodeId: string;
+        body: string;
+        createdAt: Date;
+        notifyResponsible: boolean;
+        notifyAccountable: boolean;
+        notifyConsulted: boolean;
+        notifyInformed: boolean;
+        notifyProject: boolean;
+        notifySubProject: boolean;
+        mentions: string[];
+        author: {
+          id: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          email?: string | null;
+        } | null;
+      }>,
+    );
+
     return {
       ...this.mapNode(node),
       assignments,
       children,
       summary,
       board,
+      comments,
     };
+  }
+
+  private async mapCommentRecords(
+    client: Prisma.TransactionClient | PrismaService,
+    comments: Array<{
+      id: string;
+      nodeId: string;
+      body: string;
+      createdAt: Date;
+      notifyResponsible: boolean;
+      notifyAccountable: boolean;
+      notifyConsulted: boolean;
+      notifyInformed: boolean;
+      notifyProject: boolean;
+      notifySubProject: boolean;
+      mentions: string[];
+      author: {
+        id: string;
+        displayName: string | null;
+        avatarUrl: string | null;
+        email?: string | null;
+      } | null;
+    }>,
+  ): Promise<NodeCommentDto[]> {
+    if (!comments.length) return [];
+    const mentionIds = new Set<string>();
+    for (const comment of comments) {
+      for (const mentionId of comment.mentions ?? []) {
+        if (mentionId) mentionIds.add(mentionId);
+      }
+    }
+    const mentionUsers = mentionIds.size
+      ? await client.user.findMany({
+          where: { id: { in: Array.from(mentionIds) } },
+          select: { id: true, displayName: true, email: true },
+        })
+      : [];
+    const mentionMap = new Map(mentionUsers.map((user) => [user.id, user]));
+
+    return comments.map((comment) => ({
+      id: comment.id,
+      nodeId: comment.nodeId,
+      body: comment.body,
+      createdAt: comment.createdAt.toISOString(),
+      notify: {
+        responsible: comment.notifyResponsible ?? true,
+        accountable: comment.notifyAccountable ?? true,
+        consulted: comment.notifyConsulted ?? true,
+        informed: comment.notifyInformed ?? true,
+        project: comment.notifyProject ?? false,
+        subProject: comment.notifySubProject ?? false,
+      },
+      mentions: (comment.mentions ?? []).map((mentionId) => {
+        const info = mentionMap.get(mentionId);
+        return {
+          userId: mentionId,
+          displayName: info?.displayName ?? mentionId,
+          email: info?.email ?? '',
+        };
+      }),
+      author: {
+        id: comment.author?.id ?? 'unknown',
+        displayName:
+          comment.author?.displayName ?? comment.author?.id ?? 'Utilisateur',
+        avatarUrl: comment.author?.avatarUrl ?? null,
+      },
+    }));
+  }
+
+  private async dispatchCommentNotifications(
+    node: NodeModel,
+    comment: {
+      id: string;
+      body: string;
+      notifyResponsible: boolean;
+      notifyAccountable: boolean;
+      notifyConsulted: boolean;
+      notifyInformed: boolean;
+      notifyProject: boolean;
+      notifySubProject: boolean;
+      mentions: string[];
+      author: {
+        id: string;
+        displayName: string | null;
+        email?: string | null;
+      } | null;
+    },
+  ): Promise<void> {
+    try {
+      const metadata = this.extractMetadata(node);
+      const recipientIds = new Set<string>();
+      if (comment.notifyResponsible ?? true) {
+        for (const id of metadata.raci.responsibleIds) recipientIds.add(id);
+      }
+      if (comment.notifyAccountable ?? true) {
+        for (const id of metadata.raci.accountableIds) recipientIds.add(id);
+      }
+      if (comment.notifyConsulted ?? true) {
+        for (const id of metadata.raci.consultedIds) recipientIds.add(id);
+      }
+      if (comment.notifyInformed ?? true) {
+        for (const id of metadata.raci.informedIds) recipientIds.add(id);
+      }
+
+      if (comment.notifyProject ?? false) {
+        const shareSummary = await this.buildNodeShareSummary(
+          node,
+          comment.author?.id ?? '',
+        );
+        for (const collab of shareSummary.collaborators) {
+          if (collab.userId) recipientIds.add(collab.userId);
+        }
+      }
+
+      if (comment.notifySubProject ?? false) {
+        const descendants = await this.prisma.node.findMany({
+          where: {
+            teamId: node.teamId,
+            path: { startsWith: node.path ? `${node.path}/` : `${node.id}/` },
+          },
+          select: {
+            metadata: true,
+            createdById: true,
+          },
+        });
+        for (const descendant of descendants) {
+          if (descendant.createdById) recipientIds.add(descendant.createdById);
+          const raw =
+            descendant.metadata &&
+            typeof descendant.metadata === 'object' &&
+            !Array.isArray(descendant.metadata)
+              ? { ...(descendant.metadata as Record<string, any>) }
+              : {};
+          const share = normalizeShare(raw);
+          for (const collab of share.collaborators) {
+            if (collab.userId) recipientIds.add(collab.userId);
+          }
+        }
+      }
+
+      for (const mention of comment.mentions ?? []) {
+        if (mention) recipientIds.add(mention);
+      }
+
+      const authorId = comment.author?.id ?? '';
+      if (authorId) recipientIds.delete(authorId);
+      recipientIds.delete('');
+
+      if (!recipientIds.size) {
+        await this.logCommentEmail({
+          node,
+          comment,
+          recipients: [],
+        });
+        return;
+      }
+
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: Array.from(recipientIds) } },
+        select: { id: true, email: true, displayName: true },
+      });
+
+      const dedupedRecipients: Array<{
+        userId: string;
+        email: string;
+        displayName: string;
+      }> = [];
+      const emailSet = new Set<string>();
+      for (const user of users) {
+        const email = user.email?.trim();
+        if (!email) continue;
+        if (emailSet.has(email)) continue;
+        emailSet.add(email);
+        dedupedRecipients.push({
+          userId: user.id,
+          email,
+          displayName: user.displayName ?? user.id,
+        });
+      }
+
+      await this.logCommentEmail({
+        node,
+        comment,
+        recipients: dedupedRecipients,
+      });
+    } catch (error) {
+      // Le logging des mails ne doit jamais bloquer la création du commentaire
+      console.error("Erreur lors de la simulation d'envoi de mail", error);
+    }
+  }
+
+  private async logCommentEmail(params: {
+    node: NodeModel;
+    comment: {
+      id: string;
+      body: string;
+      notifyResponsible: boolean;
+      notifyAccountable: boolean;
+      notifyConsulted: boolean;
+      notifyInformed: boolean;
+      notifyProject: boolean;
+      notifySubProject: boolean;
+      author: {
+        id: string;
+        displayName: string | null;
+        email?: string | null;
+      } | null;
+    };
+    recipients: Array<{ userId: string; email: string; displayName: string }>;
+  }): Promise<void> {
+    const logDir = join(process.cwd(), 'apps', 'backend', 'logs');
+    const logPath = join(logDir, 'mail.log');
+    const entry = {
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      type: 'node-comment-notification',
+      node: {
+        id: params.node.id,
+        title: params.node.title,
+      },
+      comment: {
+        id: params.comment.id,
+        body: params.comment.body,
+        authorId: params.comment.author?.id ?? null,
+        authorDisplayName: params.comment.author?.displayName ?? null,
+      },
+      notify: {
+        responsible: params.comment.notifyResponsible ?? true,
+        accountable: params.comment.notifyAccountable ?? true,
+        consulted: params.comment.notifyConsulted ?? true,
+        informed: params.comment.notifyInformed ?? true,
+        project: params.comment.notifyProject ?? false,
+        subProject: params.comment.notifySubProject ?? false,
+      },
+      recipients: params.recipients,
+    };
+
+    try {
+      await fs.mkdir(logDir, { recursive: true });
+      await fs.appendFile(logPath, JSON.stringify(entry) + '\n', 'utf8');
+    } catch (error) {
+      console.error(
+        "Impossible d'écrire dans le fichier de log des mails",
+        error,
+      );
+    }
   }
 
   private buildSummary(node: any): NodeSummaryDto | undefined {
@@ -1556,7 +1871,6 @@ export class NodesService {
     dto: InviteNodeCollaboratorDto,
     userId: string,
   ): Promise<NodeShareSummaryDto> {
-
     const email = dto?.email?.trim().toLowerCase();
     if (!email) {
       throw new BadRequestException('Email obligatoire');
@@ -1580,9 +1894,7 @@ export class NodesService {
     }
 
     const metadata = this.extractMetadata(node);
-    if (
-      metadata.share.invitations.some((invite) => invite.email === email)
-    ) {
+    if (metadata.share.invitations.some((invite) => invite.email === email)) {
       throw new ConflictException(
         'Une invitation est déjà en attente pour cet email',
       );
@@ -1597,7 +1909,9 @@ export class NodesService {
 
     if (existingUser) {
       if (existingUser.id === userId) {
-        throw new ConflictException('Vous êtes déjà collaborateur de cette tâche');
+        throw new ConflictException(
+          'Vous êtes déjà collaborateur de cette tâche',
+        );
       }
 
       const alreadyDirect = metadata.share.collaborators.some(
@@ -1636,7 +1950,6 @@ export class NodesService {
       invitedById: userId,
       invitedAt: nowIso,
       status: 'PENDING',
-
     });
     writeShareBack(metadata);
 
@@ -1676,6 +1989,112 @@ export class NodesService {
 
     const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
     return this.buildNodeShareSummary(nextNode, userId);
+  }
+
+  async listNodeComments(
+    nodeId: string,
+    userId: string,
+  ): Promise<NodeCommentDto[]> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      include: {
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+    return this.mapCommentRecords(
+      this.prisma,
+      node.comments as Array<{
+        id: string;
+        nodeId: string;
+        body: string;
+        createdAt: Date;
+        notifyResponsible: boolean;
+        notifyAccountable: boolean;
+        notifyConsulted: boolean;
+        notifyInformed: boolean;
+        notifyProject: boolean;
+        notifySubProject: boolean;
+        mentions: string[];
+        author: {
+          id: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          email?: string | null;
+        } | null;
+      }>,
+    );
+  }
+
+  async createNodeComment(
+    nodeId: string,
+    dto: CreateNodeCommentDto,
+    userId: string,
+  ): Promise<NodeCommentDto> {
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node) throw new NotFoundException();
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const body = dto.body?.trim();
+    if (!body) {
+      throw new BadRequestException('Le commentaire est obligatoire');
+    }
+    if (body.length > 5000) {
+      throw new BadRequestException(
+        'Commentaire trop long (max 5000 caractères)',
+      );
+    }
+
+    const mentions = Array.from(
+      new Set(
+        (dto.mentions ?? [])
+          .map((mention) => mention?.trim())
+          .filter((mention): mention is string => !!mention),
+      ),
+    );
+
+    const comment = await this.prisma.comment.create({
+      data: {
+        nodeId,
+        authorId: userId,
+        body,
+        notifyResponsible: dto.notifyResponsible ?? true,
+        notifyAccountable: dto.notifyAccountable ?? true,
+        notifyConsulted: dto.notifyConsulted ?? true,
+        notifyInformed: dto.notifyInformed ?? true,
+        notifyProject: dto.notifyProject ?? false,
+        notifySubProject: dto.notifySubProject ?? false,
+        mentions,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await this.dispatchCommentNotifications(node, comment);
+
+    const mapped = await this.mapCommentRecords(this.prisma, [comment]);
+    return mapped[0];
   }
 
   async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
@@ -1922,12 +2341,13 @@ export class NodesService {
       }
     >();
 
-    const priority: Record<'OWNER' | 'DIRECT' | 'INHERITED' | 'SELF', number> = {
-      OWNER: 4,
-      DIRECT: 3,
-      SELF: 2,
-      INHERITED: 1,
-    };
+    const priority: Record<'OWNER' | 'DIRECT' | 'INHERITED' | 'SELF', number> =
+      {
+        OWNER: 4,
+        DIRECT: 3,
+        SELF: 2,
+        INHERITED: 1,
+      };
 
     const addCollaborator = (
       userId: string,
@@ -1968,9 +2388,7 @@ export class NodesService {
 
     if (node.createdById) {
       const createdAtIso =
-        node.createdAt instanceof Date
-          ? node.createdAt.toISOString()
-          : null;
+        node.createdAt instanceof Date ? node.createdAt.toISOString() : null;
       addCollaborator(node.createdById, 'OWNER', { addedAt: createdAtIso });
     }
 
@@ -1982,16 +2400,17 @@ export class NodesService {
     }
 
     const pathSegments = node.path.split('/').filter(Boolean);
-    const ancestorIds = pathSegments.slice(0, Math.max(pathSegments.length - 1, 0));
+    const ancestorIds = pathSegments.slice(
+      0,
+      Math.max(pathSegments.length - 1, 0),
+    );
     if (ancestorIds.length > 0) {
       const ancestors = await this.prisma.node.findMany({
         where: { id: { in: ancestorIds } },
         select: { id: true, title: true, metadata: true },
       });
       const order = new Map(ancestorIds.map((id, index) => [id, index]));
-      ancestors.sort(
-        (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
-      );
+      ancestors.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
       for (const ancestor of ancestors) {
         const ancestorRaw =
           ancestor.metadata &&
@@ -2029,8 +2448,12 @@ export class NodesService {
     const ordered = Array.from(aggregated.values()).sort((a, b) => {
       const diff = priority[b.accessType] - priority[a.accessType];
       if (diff !== 0) return diff;
-      const nameA = (userMap.get(a.userId)?.displayName ?? a.userId).toLowerCase();
-      const nameB = (userMap.get(b.userId)?.displayName ?? b.userId).toLowerCase();
+      const nameA = (
+        userMap.get(a.userId)?.displayName ?? a.userId
+      ).toLowerCase();
+      const nameB = (
+        userMap.get(b.userId)?.displayName ?? b.userId
+      ).toLowerCase();
       return nameA.localeCompare(nameB, 'fr');
     });
 
@@ -2069,7 +2492,9 @@ export class NodesService {
         : {};
 
     const raciRaw =
-      rawRoot.raci && typeof rawRoot.raci === 'object' && !Array.isArray(rawRoot.raci)
+      rawRoot.raci &&
+      typeof rawRoot.raci === 'object' &&
+      !Array.isArray(rawRoot.raci)
         ? { ...(rawRoot.raci as Record<string, any>) }
         : {};
     const timeRaw =
@@ -2113,13 +2538,19 @@ export class NodesService {
       timeRaw.actualCapexHours ?? timeRaw.capexHours ?? null,
     );
     const plannedStartDate = toDateStringOrNull(
-      timeRaw.plannedStartDate ?? timeRaw.startDate ?? timeRaw.plannedStartAt ?? null,
+      timeRaw.plannedStartDate ??
+        timeRaw.startDate ??
+        timeRaw.plannedStartAt ??
+        null,
     );
     const plannedEndDate = toDateStringOrNull(
       timeRaw.plannedEndDate ?? timeRaw.endDate ?? timeRaw.plannedEndAt ?? null,
     );
     const actualEndDate = toDateStringOrNull(
-      timeRaw.actualEndDate ?? timeRaw.realEndDate ?? timeRaw.actualEndAt ?? null,
+      timeRaw.actualEndDate ??
+        timeRaw.realEndDate ??
+        timeRaw.actualEndAt ??
+        null,
     );
 
     const billingRaw =
@@ -2136,16 +2567,21 @@ export class NodesService {
       financialRaw.plannedBudget ?? financialRaw.budgetPlanned ?? null,
     );
     const consumedBudgetValue = toNumberOrNull(
-      financialRaw.consumedBudgetValue ?? financialRaw.budgetConsumedValue ?? null,
+      financialRaw.consumedBudgetValue ??
+        financialRaw.budgetConsumedValue ??
+        null,
     );
     const consumedBudgetPercent = toNumberOrNull(
-      financialRaw.consumedBudgetPercent ?? financialRaw.budgetConsumedPercent ?? null,
+      financialRaw.consumedBudgetPercent ??
+        financialRaw.budgetConsumedPercent ??
+        null,
     );
 
-    const totalHours =
-      (actualOpexHours ?? 0) + (actualCapexHours ?? 0);
+    const totalHours = (actualOpexHours ?? 0) + (actualCapexHours ?? 0);
     const actualCost =
-      hourlyRate !== null ? Math.round(totalHours * hourlyRate * 100) / 100 : null;
+      hourlyRate !== null
+        ? Math.round(totalHours * hourlyRate * 100) / 100
+        : null;
 
     return {
       raw: rawRoot,
@@ -2268,18 +2704,26 @@ export class NodesService {
     };
   }
 
-  async ensureBoardOnly(nodeId: string, userId: string): Promise<{ boardId: string }> {
+  async ensureBoardOnly(
+    nodeId: string,
+    userId: string,
+  ): Promise<{ boardId: string }> {
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) throw new NotFoundException('Noeud introuvable');
     await this.ensureUserCanWrite(node.teamId, userId);
-    const existing = await this.prisma.board.findUnique({ where: { nodeId: node.id } });
+    const existing = await this.prisma.board.findUnique({
+      where: { nodeId: node.id },
+    });
     if (existing) return { boardId: existing.id };
     // Crée board + colonnes défaut dans une transaction réutilisant helpers
     const createdId = await this.prisma.$transaction(async (tx) => {
       let board = await tx.board.findUnique({ where: { nodeId: node.id } });
       if (!board) {
         board = await tx.board.create({ data: { nodeId: node.id } });
-        const behaviors = await this.ensureDefaultColumnBehaviors(tx, node.teamId);
+        const behaviors = await this.ensureDefaultColumnBehaviors(
+          tx,
+          node.teamId,
+        );
         await this.createDefaultColumns(tx, board.id, behaviors);
       }
       return board.id;

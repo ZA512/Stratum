@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { NodeDto } from './node.dto';
+import { NodeCommentDto } from './node-comment.dto';
 
 export class NodeAssignmentDto {
   @ApiProperty({ example: 'assign_1' })
@@ -14,7 +15,11 @@ export class NodeAssignmentDto {
   @ApiProperty({ example: 'Alice Martin', required: false })
   displayName?: string;
 
-  @ApiProperty({ example: 'https://cdn/avatar.png', nullable: true, required: false })
+  @ApiProperty({
+    example: 'https://cdn/avatar.png',
+    nullable: true,
+    required: false,
+  })
   avatarUrl?: string | null;
 }
 
@@ -78,4 +83,7 @@ export class NodeDetailDto extends NodeDto {
     },
   })
   board?: { id: string; columns: { id: string; behaviorKey: string | null }[] };
+
+  @ApiProperty({ type: NodeCommentDto, isArray: true })
+  comments!: NodeCommentDto[];
 }
