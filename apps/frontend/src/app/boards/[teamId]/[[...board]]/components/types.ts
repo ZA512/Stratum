@@ -13,4 +13,5 @@ export type CardDisplayOptions = {
   showProgress: boolean;
   showEffort: boolean;
   showDescription: boolean;
+  columnHeight: 'auto' | 'fixed';
 };

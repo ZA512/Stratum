@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useId } from 'react';
 import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -48,6 +48,12 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
+  const [raciOpen, setRaciOpen] = useState(false);
+  const raciTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const raciTooltipId = useId();
+  const clearRaciTimer = () => { if(raciTimerRef.current){ window.clearTimeout(raciTimerRef.current); raciTimerRef.current=null; } };
+
   useEffect(()=>{ setTitle(node.title); },[node.id,node.title]);
 
   const save = async () => {
@@ -66,6 +72,23 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
     setCounts(node.counts ?? null);
     setEffort(node.effort ?? null);
   }, [node.id, node.counts, node.effort]);
+
+  useEffect(()=>()=>{ mountedRef.current=false; clearRaciTimer(); },[]);
+
+  const handleRaciClose = useCallback(() => { clearRaciTimer(); setRaciOpen(false); }, []);
+
+  const handleRaciOpen = useCallback(() => {
+    if(raciOpen) return;
+    clearRaciTimer();
+    raciTimerRef.current = window.setTimeout(()=>{ if(mountedRef.current) setRaciOpen(true); },150) as unknown as number;
+  }, [raciOpen]);
+
+  useEffect(()=>{
+    if(!raciOpen) return;
+    const onScroll = () => { handleRaciClose(); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [raciOpen, handleRaciClose]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -99,6 +122,28 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
   const assignees = node.assignees ?? [];
   const primaryAssignee = assignees.length > 0 ? assignees[0] : null;
   const assigneeInitials = primaryAssignee ? getInitials(primaryAssignee.displayName) : '';
+
+  // Construire le tooltip RACI complet
+  const raciTooltip = useMemo(() => {
+    const buildLine = (label: string, list: { displayName: string }[] | undefined) => {
+      const names = (list || [])
+        .map(e => e.displayName)
+        .filter(Boolean)
+        .sort((a,b)=> a.localeCompare(b,'fr',{sensitivity:'base'}));
+      return names.length ? `${label} ${names.join(', ')}` : `${label} -`;
+    };
+    if (!node.raci) {
+      const rNames = (node.assignees||[]).map(a=>a.displayName).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+      const rLine = rNames.length ? `R ${rNames.join(', ')}` : 'R -';
+      return [rLine, 'A -', 'C -', 'I -'].join('\n');
+    }
+    return [
+      buildLine('R', node.raci.responsible),
+      buildLine('A', node.raci.accountable),
+      buildLine('C', node.raci.consulted),
+      buildLine('I', node.raci.informed),
+    ].join('\n');
+  }, [node.raci, node.assignees]);
 
   const dueInfo = useMemo(() => {
     if (!node.dueAt) return null;
@@ -150,11 +195,11 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
   }, [node.blockedExpectedUnblockAt]);
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="rounded-xl border border-white/10 bg-surface/80 p-4 transition hover:border-accent/60 cursor-default relative" onDoubleClick={()=> onOpen(node.id)}>
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="rounded-xl border border-white/10 bg-surface/80 p-4 transition hover:border-accent/60 cursor-default relative pointer-events-none" onDoubleClick={()=> onOpen(node.id)}>
       {shortIdLabel && (
         <span className="absolute left-3 top-3 text-[11px] font-mono uppercase tracking-wide text-muted">{shortIdLabel}</span>
       )}
-      <div className="absolute right-2 top-2 flex items-center gap-2">
+      <div className="absolute right-2 top-2 flex items-center gap-2 pointer-events-auto">
         {( (node.priority && node.priority !== 'NONE') || effort) && (
           <div className="flex flex-col items-end gap-1 z-10">
             {node.priority && node.priority !== 'NONE' && (
@@ -248,7 +293,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
           )}
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 pointer-events-auto">
         <div className="flex items-start justify-between gap-3">
           <div className="w-full min-w-0">
             {!editing && (
@@ -270,31 +315,48 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
           <p className="text-xs leading-snug text-muted">{descriptionExcerpt}</p>
         )}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3">
+      <div className="mt-4 flex items-center justify-between gap-3 pointer-events-auto">
         <div className="flex items-center gap-2">
-          {primaryAssignee ? (
-            <span
-              className="relative inline-flex h-8 w-8 overflow-hidden rounded-full border border-white/15 bg-white/10 text-xs font-semibold uppercase text-foreground"
-              title={`Assigné à ${primaryAssignee.displayName}`}
-              aria-label={`Assigné à ${primaryAssignee.displayName}`}
-            >
-              {primaryAssignee.avatarUrl ? (
-                <Image
-                  src={primaryAssignee.avatarUrl}
-                  alt={primaryAssignee.displayName}
-                  width={32}
-                  height={32}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center">{assigneeInitials || '??'}</span>
-              )}
-            </span>
-          ) : (
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/20 text-[10px] uppercase text-muted" aria-label="Aucun assigné">
-              --
-            </span>
-          )}
+          <div
+            className="relative"
+            onMouseEnter={handleRaciOpen}
+            onMouseLeave={handleRaciClose}
+            onFocus={handleRaciOpen}
+            onBlur={handleRaciClose}
+            aria-describedby={raciOpen ? raciTooltipId : undefined}
+          >
+            {primaryAssignee ? (
+              <span
+                className="relative inline-flex h-8 w-8 overflow-hidden rounded-full border border-white/15 bg-white/10 text-xs font-semibold uppercase text-foreground"
+                aria-label={`Assigné à ${primaryAssignee.displayName}`}
+              >
+                {primaryAssignee.avatarUrl ? (
+                  <Image
+                    src={primaryAssignee.avatarUrl}
+                    alt={primaryAssignee.displayName}
+                    width={32}
+                    height={32}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">{assigneeInitials || '??'}</span>
+                )}
+              </span>
+            ) : (
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/20 text-[10px] uppercase text-muted" aria-label="Aucun assigné">
+                --
+              </span>
+            )}
+            {raciOpen && (
+              <div
+                id={raciTooltipId}
+                role="tooltip"
+                className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+              >
+                {raciTooltip}
+              </div>
+            )}
+          </div>
           {dueInfo && (
             <span
               className={`inline-flex min-w-[2.75rem] justify-center rounded-full border px-2 py-1 text-[11px] font-semibold ${dueInfo.classes}`}

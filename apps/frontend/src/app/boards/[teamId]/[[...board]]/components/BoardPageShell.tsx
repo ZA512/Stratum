@@ -5,6 +5,7 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
+import { useTranslation } from '@/i18n';
 import { createBoardColumn, updateBoardColumn, deleteBoardColumn, type UpdateBoardColumnInput } from '@/features/boards/boards-api';
 import { createNode, updateNode, moveChildNode, deleteNode as apiDeleteNode, fetchNodeDeletePreview, type NodeDeletePreview } from '@/features/nodes/nodes-api';
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
@@ -14,6 +15,7 @@ import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
+import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -29,6 +31,7 @@ const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showProgress: true,
   showEffort: true,
   showDescription: true,
+  columnHeight: 'auto',
 };
 
 // --- Stratégie de collision personnalisée ---
@@ -332,8 +335,12 @@ export function TeamBoardPage(){
           const nextDisplay = { ...CARD_DISPLAY_DEFAULTS };
           for (const key of Object.keys(nextDisplay) as Array<keyof CardDisplayOptions>) {
             const value = (parsed.displayOptions as Record<string, unknown>)[key];
-            if (typeof value === 'boolean') {
-              nextDisplay[key] = value;
+            if (key === 'columnHeight') {
+              if (value === 'auto' || value === 'fixed') {
+                nextDisplay[key] = value;
+              }
+            } else if (typeof value === 'boolean') {
+              nextDisplay[key] = value as boolean & ('auto' | 'fixed');
             }
           }
           setDisplayOptions(nextDisplay);
@@ -1228,6 +1235,27 @@ export function TeamBoardPage(){
                               </label>
                             </section>
                             <section className="space-y-3 text-xs md:col-span-2">
+                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Hauteur des colonnes</h4>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setDisplayOptions(prev => ({ ...prev, columnHeight: 'auto' }))}
+                                  className={pillClass(displayOptions.columnHeight === 'auto')}
+                                  aria-pressed={displayOptions.columnHeight === 'auto'}
+                                >
+                                  Colonnes à l'infini (auto)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDisplayOptions(prev => ({ ...prev, columnHeight: 'fixed' }))}
+                                  className={pillClass(displayOptions.columnHeight === 'fixed')}
+                                  aria-pressed={displayOptions.columnHeight === 'fixed'}
+                                >
+                                  Hauteur limitée avec scroll
+                                </button>
+                              </div>
+                            </section>
+                            <section className="space-y-3 text-xs md:col-span-2">
                               <h4 className="text-[11px] uppercase tracking-wide text-muted">Affichage des cartes</h4>
                               <div className="flex flex-wrap gap-2">
                                 {DISPLAY_TOGGLE_CONFIG.map(({ key, label }) => (
@@ -1235,8 +1263,8 @@ export function TeamBoardPage(){
                                     key={key}
                                     type="button"
                                     onClick={() => toggleDisplayOption(key)}
-                                    className={pillClass(displayOptions[key])}
-                                    aria-pressed={displayOptions[key]}
+                                    className={pillClass(displayOptions[key] as boolean)}
+                                    aria-pressed={displayOptions[key] as boolean}
                                   >
                                     {label} {displayOptions[key] ? 'on' : 'off'}
                                   </button>

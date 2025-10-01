@@ -17,6 +17,13 @@ export class UpdateNodeDto {
   progress?: number;
 
   @ApiPropertyOptional({
+    example: 'En attente de validation du budget par la direction financière',
+    description: 'Description de ce qui est attendu pour débloquer la tâche',
+    nullable: true,
+  })
+  blockedReason?: string | null;
+
+  @ApiPropertyOptional({
     example: ['attente@exemple.com', 'support@exemple.com'],
     description: 'Emails à relancer automatiquement (si bloqué)',
   })
@@ -35,6 +42,19 @@ export class UpdateNodeDto {
     nullable: true,
   })
   blockedExpectedUnblockAt?: string | null;
+
+  @ApiPropertyOptional({
+    example: '2025-01-20T09:00:00.000Z',
+    description: 'Date d\'entrée dans le statut bloqué (auto-set)',
+    nullable: true,
+  })
+  blockedSince?: string | null;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Indique si le blocage est résolu (arrête les relances)',
+  })
+  isBlockResolved?: boolean;
 
   @ApiPropertyOptional({
     example: 'HIGH',

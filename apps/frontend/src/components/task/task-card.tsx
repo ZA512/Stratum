@@ -103,10 +103,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   // Tooltip effectif = assigneeTooltip (préféré) sinon construction minimale depuis listes d'IDs si fournies
   const computedTooltip = React.useMemo(()=>{
     if (assigneeTooltip && assigneeTooltip.trim().length > 0) {
-      // Debug: always show RACI tooltip even if all empty
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('[TaskCard] computedTooltip from assigneeTooltip:', assigneeTooltip);
-      }
       return assigneeTooltip;
     }
     const lines: string[] = [];
@@ -121,12 +117,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     return lines.length ? lines.join('\n') : undefined;
   }, [assigneeTooltip, responsibleIds, accountableIds, consultedIds, informedIds]);
 
-  const handleRaciOpen = () => {
+  const handleRaciOpen = useCallback(() => {
     if(!computedTooltip) return; // rien à afficher
     if(raciOpen) return;
     clearTimer();
     raciTimerRef.current = window.setTimeout(()=>{ if(mountedRef.current) setRaciOpen(true); },150) as unknown as number;
-  };
+  }, [computedTooltip, raciOpen]);
+  
   const handleRaciClose = useCallback(() => { clearTimer(); setRaciOpen(false); }, []);
 
   useEffect(()=>()=>{ mountedRef.current=false; clearTimer(); },[]);
@@ -189,7 +186,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
-          {showAssignees && (
+          {showAssignees && assignees.length > 0 && (
             <div
               className="relative flex -space-x-2 min-w-[28px]"
               onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
@@ -198,23 +195,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               onBlur={computedTooltip ? handleRaciClose : undefined}
               aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
             >
-              {assignees.length === 0 && computedTooltip ? (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-gray-200 dark:bg-gray-700">
-                  <span className="text-xs font-bold text-gray-500 dark:text-gray-400">?</span>
+              {assignees.slice(0, 4).map(a => (
+                <div
+                  key={a.id}
+                  className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
+                  style={a.color ? { backgroundColor: a.color } : undefined}
+                  // Supprime title natif pour éviter conflit avec tooltip multi-ligne
+                  aria-label={a.displayName || a.initials}
+                >
+                  <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
                 </div>
-              ) : (
-                assignees.slice(0, 4).map(a => (
-                  <div
-                    key={a.id}
-                    className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
-                    style={a.color ? { backgroundColor: a.color } : undefined}
-                    // Supprime title natif pour éviter conflit avec tooltip multi-ligne
-                    aria-label={a.displayName || a.initials}
-                  >
-                    <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
-                  </div>
-                ))
-              )}
+              ))}
               {assignees.length > 4 && (
                 <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
                   <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>

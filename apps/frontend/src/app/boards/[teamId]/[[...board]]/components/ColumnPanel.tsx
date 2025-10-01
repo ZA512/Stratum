@@ -120,7 +120,13 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
           {editingValues.error && <p className="text-xs text-red-300">{editingValues.error}</p>}
         </form>
       )}
-      <div className={`mt-4 rounded-xl transition ${isOver? 'ring-2 ring-accent/50 ring-offset-2 ring-offset-background':''}`} ref={setDropRef}>
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <AddCardForm onCreate={onCreateCard} disabled={loadingCards} />
+      </div>
+      <div 
+        className={`mt-4 rounded-xl transition ${isOver? 'ring-2 ring-accent/50 ring-offset-2 ring-offset-background':''} ${displayOptions.columnHeight === 'fixed' ? 'max-h-[calc(100vh-400px)] overflow-y-auto scrollbar-thin scrollbar-thumb-accent/40 scrollbar-track-transparent hover:scrollbar-thumb-accent/60' : ''}`} 
+        ref={setDropRef}
+      >
         {cards.length === 0 ? (
           <p className={`min-h-[48px] rounded-xl border border-dashed ${isOver? 'border-accent/60 bg-accent/10':'border-white/10 bg-surface/40'} px-4 py-4 text-sm text-muted`}>Aucune carte</p>
         ) : (
@@ -141,9 +147,6 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
             ))}
           </div>
         )}
-      </div>
-      <div className="mt-4 border-t border-white/10 pt-4">
-        <AddCardForm onCreate={onCreateCard} disabled={loadingCards} />
       </div>
     </div>
   );

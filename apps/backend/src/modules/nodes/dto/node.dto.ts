@@ -100,6 +100,9 @@ export class NodeDto {
   @ApiProperty({ example: 40 })
   progress!: number; // 0-100
 
+  @ApiProperty({ example: 'En attente validation budget', nullable: true })
+  blockedReason!: string | null;
+
   @ApiProperty({ example: ['personne@example.com'], isArray: true })
   blockedReminderEmails!: string[];
 
@@ -108,6 +111,12 @@ export class NodeDto {
 
   @ApiProperty({ example: '2025-02-10T10:00:00.000Z', nullable: true })
   blockedExpectedUnblockAt!: string | null;
+
+  @ApiProperty({ example: '2025-01-20T09:00:00.000Z', nullable: true })
+  blockedSince!: string | null;
+
+  @ApiProperty({ example: false })
+  isBlockResolved!: boolean;
 
   @ApiProperty({
     example: 'HIGH',

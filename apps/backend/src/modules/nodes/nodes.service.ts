@@ -753,7 +753,7 @@ export class NodesService {
           position: targetPosition,
           path: newPath,
           depth: board.node.depth + 1,
-          statusMetadata: statusMeta as Prisma.JsonValue,
+          statusMetadata: statusMeta as any,
         },
       });
 
@@ -863,9 +863,12 @@ export class NodesService {
       dto.description === undefined &&
       dto.dueAt === undefined &&
       dto.progress === undefined &&
+      dto.blockedReason === undefined &&
       dto.blockedReminderEmails === undefined &&
       dto.blockedReminderIntervalDays === undefined &&
       dto.blockedExpectedUnblockAt === undefined &&
+      dto.blockedSince === undefined &&
+      dto.isBlockResolved === undefined &&
       dto.priority === undefined &&
       dto.effort === undefined &&
       dto.tags === undefined &&
@@ -924,6 +927,16 @@ export class NodesService {
     }
 
     // Blocage
+    if (dto.blockedReason !== undefined) {
+      if (dto.blockedReason === null) {
+        (data as any).blockedReason = null;
+      } else {
+        const reason = dto.blockedReason.trim();
+        if (reason.length > 5000)
+          throw new BadRequestException('blockedReason trop long (max 5000)');
+        (data as any).blockedReason = reason;
+      }
+    }
     if (dto.blockedReminderEmails !== undefined) {
       if (!Array.isArray(dto.blockedReminderEmails)) {
         throw new BadRequestException(
@@ -965,6 +978,19 @@ export class NodesService {
           throw new BadRequestException('blockedExpectedUnblockAt invalide');
         (data as any).blockedExpectedUnblockAt = d;
       }
+    }
+    if (dto.blockedSince !== undefined) {
+      if (dto.blockedSince === null) {
+        (data as any).blockedSince = null;
+      } else {
+        const d = new Date(dto.blockedSince);
+        if (Number.isNaN(d.getTime()))
+          throw new BadRequestException('blockedSince invalide');
+        (data as any).blockedSince = d;
+      }
+    }
+    if (dto.isBlockResolved !== undefined) {
+      (data as any).isBlockResolved = Boolean(dto.isBlockResolved);
     }
     if (dto.priority !== undefined) {
       const set = new Set([
@@ -1859,12 +1885,17 @@ export class NodesService {
       dueAt: node.dueAt ? node.dueAt.toISOString() : null,
       statusMetadata: normalizeJson(node.statusMetadata),
       progress: (node as any).progress ?? 0,
+      blockedReason: (node as any).blockedReason ?? null,
       blockedReminderEmails: (node as any).blockedReminderEmails ?? [],
       blockedReminderIntervalDays:
         (node as any).blockedReminderIntervalDays ?? null,
       blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt
         ? (node as any).blockedExpectedUnblockAt.toISOString?.()
         : null,
+      blockedSince: (node as any).blockedSince
+        ? (node as any).blockedSince.toISOString?.()
+        : null,
+      isBlockResolved: (node as any).isBlockResolved ?? false,
       priority: (node as any).priority ?? 'NONE',
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],

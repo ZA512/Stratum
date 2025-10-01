@@ -107,9 +107,12 @@ model Node {
   priority        Priority          @default(NONE)
   effort          Effort?
   tags            String[]          @default([])
-  blockedReminderEmails      String[]          @default([])
+  blockedReason               String?           @db.Text
+  blockedReminderEmails       String[]          @default([])
   blockedReminderIntervalDays Int?
   blockedExpectedUnblockAt    DateTime?
+  blockedSince                DateTime?
+  isBlockResolved             Boolean           @default(false)
   statusMetadata  Json?
   metadata        Json?
   dueAt           DateTime?
