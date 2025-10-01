@@ -16,6 +16,31 @@ export type NodeAssignment = {
   avatarUrl?: string | null;
 };
 
+export type NodeComment = {
+  id: string;
+  nodeId: string;
+  body: string;
+  createdAt: string;
+  author: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  notify: {
+    responsible: boolean;
+    accountable: boolean;
+    consulted: boolean;
+    informed: boolean;
+    project: boolean;
+    subProject: boolean;
+  };
+  mentions: {
+    userId: string;
+    displayName: string;
+    email: string;
+  }[];
+};
+
 export type NodeDetail = {
   id: string;
   shortId: number;
@@ -71,4 +96,5 @@ export type NodeDetail = {
     };
   };
   board?: { id: string; columns: { id: string; behaviorKey: string | null }[] };
+  comments: NodeComment[];
 };
