@@ -137,6 +137,13 @@ export const TaskDrawer: React.FC = () => {
     priority: Priority;
     effort: Effort;
     tags: string[];
+    blocked: {
+      reason: string;
+      emails: string[];
+      interval: string;
+      eta: string;
+      isResolved: boolean;
+    };
     raci: { R: string[]; A: string[]; C: string[]; I: string[] };
     timeTracking: {
       estimatedTimeHours: number | null;
@@ -161,9 +168,13 @@ export const TaskDrawer: React.FC = () => {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   // Blocage
-  const [blockedEmails, setBlockedEmails] = useState<string>('');
-  const [blockedInterval, setBlockedInterval] = useState<string>('');
-  const [blockedEta, setBlockedEta] = useState<string>('');
+  const [blockedReason, setBlockedReason] = useState('');
+  const [blockedEmails, setBlockedEmails] = useState<string[]>([]);
+  const [blockedEmailInput, setBlockedEmailInput] = useState('');
+  const [blockedSince, setBlockedSince] = useState<string | null>(null);
+  const [isBlockResolved, setIsBlockResolved] = useState(false);
+  const [blockedInterval, setBlockedInterval] = useState('');
+  const [blockedEta, setBlockedEta] = useState('');
   // RACI
   const [rResponsible, setRResponsible] = useState<string[]>([]);
   const [rAccountable, setRAccountable] = useState<string[]>([]);
@@ -181,7 +192,7 @@ export const TaskDrawer: React.FC = () => {
   const [plannedBudget, setPlannedBudget] = useState<string>('');
   const [consumedBudgetValue, setConsumedBudgetValue] = useState<string>('');
   const [consumedBudgetPercent, setConsumedBudgetPercent] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'details' | 'collaborators' | 'time'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -217,6 +228,26 @@ export const TaskDrawer: React.FC = () => {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(computedActualCost);
   }, [computedActualCost]);
 
+  const addBlockedEmail = useCallback(() => {
+    const email = blockedEmailInput.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /.+@.+\..+/;
+    if (!emailRegex.test(email)) {
+      toastError('Email invalide');
+      return;
+    }
+    if (blockedEmails.includes(email)) {
+      setBlockedEmailInput('');
+      return;
+    }
+    setBlockedEmails((prev) => [...prev, email]);
+    setBlockedEmailInput('');
+  }, [blockedEmailInput, blockedEmails, toastError]);
+
+  const removeBlockedEmail = useCallback((email: string) => {
+    setBlockedEmails((prev) => prev.filter((value) => value !== email));
+  }, []);
+
   // Sync form when detail loads or node changes
   useEffect(() => {
     if (detail) {
@@ -228,10 +259,14 @@ export const TaskDrawer: React.FC = () => {
       setPriority(detail.priority ?? 'NONE');
       setEffort(detail.effort ?? null);
       setTags(detail.tags || []);
-      // Blocage -> map values
-      setBlockedEmails((detail.blockedReminderEmails||[]).join(', '));
-      setBlockedInterval(detail.blockedReminderIntervalDays!=null? String(detail.blockedReminderIntervalDays):'');
-      setBlockedEta(detail.blockedExpectedUnblockAt? detail.blockedExpectedUnblockAt.substring(0,10):'');
+  // Blocage -> map values
+  setBlockedReason((detail as any).blockedReason || '');
+  setBlockedEmails(detail.blockedReminderEmails || []);
+  setBlockedEmailInput('');
+  setBlockedInterval(detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '');
+  setBlockedEta(detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '');
+  setBlockedSince((detail as any).blockedSince || null);
+  setIsBlockResolved((detail as any).isBlockResolved || false);
       setRResponsible(detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : []);
       setRAccountable(detail.raci?.accountableIds ? [...detail.raci.accountableIds] : []);
       setRConsulted(detail.raci?.consultedIds ? [...detail.raci.consultedIds] : []);
@@ -255,6 +290,13 @@ export const TaskDrawer: React.FC = () => {
         priority: detail.priority ?? 'NONE',
         effort: detail.effort ?? null,
         tags: detail.tags ?? [],
+        blocked: {
+          reason: ((detail as any).blockedReason as string | undefined) ?? '',
+          emails: detail.blockedReminderEmails ? [...detail.blockedReminderEmails] : [],
+          interval: detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '',
+          eta: detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '',
+          isResolved: ((detail as any).isBlockResolved as boolean | undefined) ?? false,
+        },
         raci: {
           R: detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : [],
           A: detail.raci?.accountableIds ? [...detail.raci.accountableIds] : [],
@@ -286,9 +328,13 @@ export const TaskDrawer: React.FC = () => {
       setPriority('NONE');
       setEffort(null);
       setTags([]);
-      setBlockedEmails('');
+  setBlockedReason('');
+  setBlockedEmails([]);
+  setBlockedEmailInput('');
       setBlockedInterval('');
       setBlockedEta('');
+  setBlockedSince(null);
+  setIsBlockResolved(false);
       setRResponsible([]);
       setRAccountable([]);
       setRConsulted([]);
@@ -416,13 +462,18 @@ export const TaskDrawer: React.FC = () => {
       progress !== initialSnapshot.progress ||
       priority !== initialSnapshot.priority ||
       (effort || null) !== (initialSnapshot.effort ?? null) ||
-      blockedEmails.trim() !== (detail?.blockedReminderEmails || []).join(', ') ||
-      (blockedInterval || '') !== (detail?.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '') ||
-      (blockedEta || '') !== (detail?.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0, 10) : '') ||
       !arraysEqual(tags, initialSnapshot.tags)
     ) {
       return true;
     }
+
+    const sortedBlocked = [...blockedEmails].map((email) => email.toLowerCase()).sort();
+    const sortedSnapshotBlocked = [...initialSnapshot.blocked.emails].map((email) => email.toLowerCase()).sort();
+    if (JSON.stringify(sortedBlocked) !== JSON.stringify(sortedSnapshotBlocked)) return true;
+    if (blockedReason.trim() !== initialSnapshot.blocked.reason.trim()) return true;
+    if (blockedInterval.trim() !== initialSnapshot.blocked.interval.trim()) return true;
+    if (blockedEta.trim() !== initialSnapshot.blocked.eta.trim()) return true;
+    if (isBlockResolved !== initialSnapshot.blocked.isResolved) return true;
 
     if (
       !arraysEqual(rResponsible, initialSnapshot.raci.R) ||
@@ -465,13 +516,12 @@ export const TaskDrawer: React.FC = () => {
     progress,
     priority,
     effort,
+    tags,
     blockedEmails,
+    blockedReason,
     blockedInterval,
     blockedEta,
-    detail?.blockedReminderEmails,
-    detail?.blockedReminderIntervalDays,
-    detail?.blockedExpectedUnblockAt,
-    tags,
+    isBlockResolved,
     rResponsible,
     rAccountable,
     rConsulted,
@@ -520,10 +570,20 @@ export const TaskDrawer: React.FC = () => {
       payload.priority = priority;
       payload.effort = effort;
       // Blocage
-      const emails = blockedEmails.split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
-      if (emails.length>0) payload.blockedReminderEmails = emails;
-      if (blockedInterval.trim()!=='') payload.blockedReminderIntervalDays = Number(blockedInterval);
-      if (blockedEta.trim()!=='') payload.blockedExpectedUnblockAt = new Date(blockedEta + 'T00:00:00Z').toISOString();
+  (payload as any).blockedReason = blockedReason.trim() || null;
+      payload.blockedReminderEmails = [...blockedEmails];
+  (payload as any).isBlockResolved = isBlockResolved;
+      if (blockedInterval.trim() === '') {
+        payload.blockedReminderIntervalDays = null;
+      } else {
+        const intervalValue = Number(blockedInterval);
+        payload.blockedReminderIntervalDays = Number.isNaN(intervalValue) ? null : intervalValue;
+      }
+      if (blockedEta.trim() === '') {
+        payload.blockedExpectedUnblockAt = null;
+      } else {
+        payload.blockedExpectedUnblockAt = new Date(blockedEta + 'T00:00:00Z').toISOString();
+      }
       payload.tags = tags;
 
       const parseNumberField = (raw: string, label: string): number | null => {
@@ -590,6 +650,13 @@ export const TaskDrawer: React.FC = () => {
         priority,
         effort,
         tags: [...tags],
+        blocked: {
+          reason: blockedReason.trim(),
+          emails: [...blockedEmails],
+          interval: blockedInterval,
+          eta: blockedEta,
+          isResolved: isBlockResolved,
+        },
         raci: {
           R: [...rResponsible],
           A: [...rAccountable],
@@ -752,25 +819,40 @@ export const TaskDrawer: React.FC = () => {
                       type="button"
                       onClick={() => setActiveTab('details')}
                       className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >Détails</button>
+                    >📋 Détails</button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('planning')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    >📅 Planning</button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('raci')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'raci' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    >👥 RACI</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('collaborators')}
                       className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >Collaborateurs</button>
+                    >🤝 Accès</button>
                     {expertMode && (
                       <button
                         type="button"
                         onClick={() => setActiveTab('time')}
                         className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                      >Temps & coût</button>
+                      >⏱️ Temps</button>
                     )}
                   </div>
 
                   {activeTab === 'details' && (
-                    <div className="space-y-6">
-                      <section className="space-y-2">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Description</h3>
+                    <div className="space-y-5">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📝</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Description
+                          </h3>
+                        </div>
                         <textarea
                           value={description}
                           onChange={(e) => { setDescription(e.target.value); }}
@@ -781,8 +863,23 @@ export const TaskDrawer: React.FC = () => {
                         />
                       </section>
 
-                      <section className="space-y-3">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Progression</h3>
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🎯</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Sous-tâches
+                          </h3>
+                        </div>
+                        <ChildTasksSection />
+                      </section>
+
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📊</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Progression
+                          </h3>
+                        </div>
                         <div className="flex items-center gap-3">
                           <input
                             type="range"
@@ -798,19 +895,34 @@ export const TaskDrawer: React.FC = () => {
                             min={0}
                             max={100}
                             value={progress}
-                            onChange={(e)=>{ const v=parseInt(e.target.value,10); if(!Number.isNaN(v)) setProgress(Math.min(100,Math.max(0,v))); }}
+                            onChange={(e)=>{
+                              const v = parseInt(e.target.value, 10);
+                              if (!Number.isNaN(v)) setProgress(Math.min(100, Math.max(0, v)));
+                            }}
                             className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-center"
                             disabled={saving}
                           />
                           <span className="text-xs text-slate-500">%</span>
                         </div>
                       </section>
+                    </div>
+                  )}
 
-                      <section className="space-y-3">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Planification</h3>
+                  {activeTab === 'planning' && (
+                    <div className="space-y-5">
+                      <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📅</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Planification
+                          </h3>
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            Echéance
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-base">📆</span>
+                              Echéance
+                            </span>
                             <input
                               type="date"
                               value={dueAt}
@@ -820,7 +932,10 @@ export const TaskDrawer: React.FC = () => {
                             />
                           </label>
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            Priorité
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-base">⚡</span>
+                              Priorité
+                            </span>
                             <select
                               value={priority}
                               onChange={(e)=> setPriority(e.target.value as Priority)}
@@ -836,7 +951,10 @@ export const TaskDrawer: React.FC = () => {
                             </select>
                           </label>
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            Effort
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-base">⏱️</span>
+                              Effort
+                            </span>
                             <select
                               value={effort ?? ''}
                               onChange={(e)=> setEffort(e.target.value ? (e.target.value as Exclude<Effort, null>) : null)}
@@ -856,8 +974,13 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
 
-                      <section className="space-y-2">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Tags</h3>
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🏷️</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Tags
+                          </h3>
+                        </div>
                         <div className="flex flex-wrap gap-2 mb-2">
                           {tags.map(t => (
                             <span key={t} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-xs text-slate-700 dark:text-slate-200">
@@ -912,78 +1035,107 @@ export const TaskDrawer: React.FC = () => {
                         <p className="text-[11px] text-slate-500">Entrée pour ajouter. Max 20, longueur ≤32. Doublons ignorés.</p>
                       </section>
 
-                      <section className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">RACI</h3>
-                          {membersLoading && <span className="text-[11px] text-slate-500">Chargement…</span>}
-                        </div>
-                        {membersError && (
-                          <p className="text-[11px] text-red-600 dark:text-red-400">{membersError}</p>
-                        )}
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <MemberMultiSelect
-                            label="R : Responsable"
-                            members={teamMembers}
-                            selectedIds={rResponsible}
-                            onChange={setRResponsible}
-                            disabled={saving}
-                          />
-                          <MemberMultiSelect
-                            label="A : Accountable"
-                            members={teamMembers}
-                            selectedIds={rAccountable}
-                            onChange={setRAccountable}
-                            disabled={saving}
-                          />
-                          <MemberMultiSelect
-                            label="C : Consulted"
-                            members={teamMembers}
-                            selectedIds={rConsulted}
-                            onChange={setRConsulted}
-                            disabled={saving}
-                          />
-                          <MemberMultiSelect
-                            label="I : Informed"
-                            members={teamMembers}
-                            selectedIds={rInformed}
-                            onChange={setRInformed}
-                            disabled={saving}
-                          />
-                        </div>
-                      </section>
-
                       {detail.board && detail.board.columns && (()=>{
                         const currentCol = detail.board.columns.find(c=>c.id===detail.columnId);
                         const isBlocked = currentCol?.behaviorKey === 'BLOCKED';
                         if(!isBlocked) return null;
+
                         return (
-                          <section className="space-y-3">
-                            <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Blocage</h3>
-                            <label className="block text-xs text-slate-500 dark:text-slate-400">Emails à relancer (séparés par virgule)
-                              <input
-                                type="text"
-                                value={blockedEmails}
-                                onChange={e=>setBlockedEmails(e.target.value)}
-                                className="mt-1 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
-                                placeholder="ex: attente@exemple.com, support@exemple.com"
+                          <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🚫</span>
+                              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                                Blocage
+                              </h3>
+                            </div>
+
+                            <label className="block text-xs text-slate-500 dark:text-slate-400">
+                              <span className="mb-1 flex items-center gap-1.5">
+                                <span className="text-base">📝</span>
+                                Qu'est-ce qui est attendu ?
+                              </span>
+                              <textarea
+                                value={blockedReason}
+                                onChange={e=>setBlockedReason(e.target.value)}
+                                rows={3}
+                                className="mt-1 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                placeholder="Décrivez ce qui est attendu pour débloquer cette tâche..."
                                 disabled={saving}
                               />
                             </label>
-                            <div className="flex flex-wrap gap-4">
+
+                            <div className="space-y-2">
+                              <label className="block text-xs text-slate-500 dark:text-slate-400">
+                                <span className="mb-1 flex items-center gap-1.5">
+                                  <span className="text-base">📧</span>
+                                  Email(s) du/des bloqueur(s)
+                                </span>
+                                <div className="space-y-2">
+                                  {blockedEmails.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {blockedEmails.map((email) => (
+                                        <span
+                                          key={email}
+                                          className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-0.5 text-xs text-emerald-800 dark:text-emerald-200"
+                                        >
+                                          {email}
+                                          <button
+                                            type="button"
+                                            onClick={() => removeBlockedEmail(email)}
+                                            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200"
+                                            disabled={saving}
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <input
+                                    type="email"
+                                    value={blockedEmailInput}
+                                    onChange={e=>setBlockedEmailInput(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        addBlockedEmail();
+                                      }
+                                    }}
+                                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                    placeholder="ajouter@exemple.com (Entrée pour ajouter)"
+                                    disabled={saving}
+                                  />
+                                </div>
+                              </label>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
                               <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                Intervalle (jours)
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={365}
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-base">⏰</span>
+                                  Relance automatique
+                                </span>
+                                <select
                                   value={blockedInterval}
                                   onChange={e=>setBlockedInterval(e.target.value)}
                                   className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
                                   disabled={saving}
-                                />
+                                >
+                                  <option value="">Jamais</option>
+                                  <option value="1">Tous les jours</option>
+                                  <option value="2">Tous les 2 jours</option>
+                                  <option value="3">Tous les 3 jours</option>
+                                  <option value="5">Tous les 5 jours</option>
+                                  <option value="7">Toutes les semaines</option>
+                                  <option value="14">Toutes les 2 semaines</option>
+                                </select>
                               </label>
+
                               <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                Date estimée de fin
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-base">📅</span>
+                                  Date estimée déblocage
+                                </span>
                                 <input
                                   type="date"
                                   value={blockedEta}
@@ -993,201 +1145,348 @@ export const TaskDrawer: React.FC = () => {
                                 />
                               </label>
                             </div>
-                            <p className="text-[11px] text-slate-500">Nous pourrons inclure un lien d’estimation dans les emails envoyés automatiquement.</p>
+
+                            {blockedSince && (
+                              <p className="text-xs text-slate-500">
+                                📌 Bloqué depuis : <strong>{new Date(blockedSince).toLocaleDateString('fr-FR', { dateStyle: 'long' })}</strong>
+                              </p>
+                            )}
+
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={isBlockResolved}
+                                onChange={e=>setIsBlockResolved(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40"
+                                disabled={saving}
+                              />
+                              <span className="text-xs text-slate-600 dark:text-slate-300">
+                                ✅ Blocage résolu (arrête les relances automatiques)
+                              </span>
+                            </label>
+
+                            <p className="text-[11px] text-slate-500">
+                              💡 Les relances automatiques incluront le titre de la tâche, ce qui est attendu, et un lien vers le kanban.
+                            </p>
                           </section>
                         );
                       })()}
+                    </div>
+                  )}
 
-                      <ChildTasksSection />
+                  {activeTab === 'raci' && (
+                    <div className="space-y-5">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">👥</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Matrice RACI
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Assignez les rôles RACI pour clarifier les responsabilités autour de cette tâche.
+                        </p>
+                      </section>
+
+                      {membersLoading && (
+                        <div className="rounded-lg border border-white/10 bg-slate-500/5 p-4 text-xs text-slate-500">
+                          Chargement des membres…
+                        </div>
+                      )}
+                      {membersError && (
+                        <div className="rounded-lg border border-red-400/30 bg-red-500/10 p-4 text-xs text-red-500 dark:text-red-300">
+                          {membersError}
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div className="space-y-3 rounded-lg border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-950/20 p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">👤</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                              Responsable (R)
+                            </span>
+                          </div>
+                          <MemberMultiSelect
+                            label=""
+                            members={teamMembers}
+                            selectedIds={rResponsible}
+                            onChange={setRResponsible}
+                            disabled={saving}
+                          />
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400">
+                            Personne(s) qui réalise(nt) la tâche.
+                          </p>
+                        </div>
+
+                        <div className="space-y-3 rounded-lg border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🎯</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                              Approbateur (A)
+                            </span>
+                          </div>
+                          <MemberMultiSelect
+                            label=""
+                            members={teamMembers}
+                            selectedIds={rAccountable}
+                            onChange={setRAccountable}
+                            disabled={saving}
+                          />
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                            Personne qui valide le résultat.
+                          </p>
+                        </div>
+
+                        <div className="space-y-3 rounded-lg border border-purple-200 dark:border-purple-900/30 bg-purple-50 dark:bg-purple-950/20 p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">💬</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                              Consulté (C)
+                            </span>
+                          </div>
+                          <MemberMultiSelect
+                            label=""
+                            members={teamMembers}
+                            selectedIds={rConsulted}
+                            onChange={setRConsulted}
+                            disabled={saving}
+                          />
+                          <p className="text-[10px] text-purple-600 dark:text-purple-400">
+                            Personne(s) consultée(s) avant décision.
+                          </p>
+                        </div>
+
+                        <div className="space-y-3 rounded-lg border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">📢</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                              Informé (I)
+                            </span>
+                          </div>
+                          <MemberMultiSelect
+                            label=""
+                            members={teamMembers}
+                            selectedIds={rInformed}
+                            onChange={setRInformed}
+                            disabled={saving}
+                          />
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                            Personne(s) tenue(s) informée(s) du résultat.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {activeTab === 'collaborators' && (
-                    <div className="space-y-4">
-                      <section className="space-y-2">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Gestion des accès</h3>
-                        <p className="text-sm text-muted">
-                          Invitez des collaborateurs pour leur donner accès à cette tâche dans leur propre kanban. Les accès hérités via un parent sont signalés automatiquement.
+                    <div className="space-y-5">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🤝</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Gestion des accès
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Invitez des collaborateurs pour partager cette tâche dans leur kanban. Les accès hérités sont affichés automatiquement.
                         </p>
                       </section>
-                      <section className="space-y-3">
-                        <div className="space-y-2">
-                          <label className="flex flex-col gap-2 rounded border border-white/10 bg-surface/60 p-3 text-sm">
-                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ajouter un collaborateur</span>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
 
-                              <input
-                                type="email"
-                                value={inviteEmail}
-                                onChange={(event) => setInviteEmail(event.target.value)}
-                                placeholder="email@exemple.com"
-                                className="flex-1 rounded border border-white/10 bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                                disabled={inviteSubmitting}
-                                aria-label="Email du collaborateur à inviter"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!detail?.id || !accessToken) return;
-                                  const trimmedEmail = inviteEmail.trim();
-                                  if (!trimmedEmail) {
-                                    toastError('Veuillez saisir un email');
-                                    return;
-                                  }
-                                  setInviteSubmitting(true);
-                                  inviteNodeCollaborator(detail.id, { email: trimmedEmail }, accessToken)
-
-                                    .then((response) => {
-                                      setCollaborators(response.collaborators);
-                                      setCollaboratorInvites(response.invitations);
-                                      setCollaboratorsError(null);
-
-                                      setInviteEmail('');
-
-                                      success('Collaborateur ajouté');
-                                    })
-                                    .catch((inviteError) => {
-                                      const message = inviteError instanceof Error ? inviteError.message : "Impossible d&apos;ajouter le collaborateur";
-                                      toastError(message);
-                                    })
-                                    .finally(() => {
-                                      setInviteSubmitting(false);
-                                    });
-                                }}
-
-                                disabled={!inviteEmail.trim() || inviteSubmitting}
-
-                                className="whitespace-nowrap rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {inviteSubmitting ? 'Ajout…' : 'Inviter'}
-                              </button>
-                            </div>
-
-                            <p className="text-xs text-muted">
-                              L’adresse doit correspondre à un compte Stratum. Un membre de l’équipe sera ajouté directement, sinon une invitation restera en attente.
-                            </p>
-                            {membersError && (
-                              <span className="text-xs text-red-400">{membersError}</span>
-                            )}
-
-                          </label>
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">➕</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Ajouter un collaborateur
+                          </h3>
                         </div>
-                        <div className="space-y-3">
-                          {collaboratorsLoading ? (
-                            <div className="space-y-2">
-                              {Array.from({ length: 3 }).map((_, index) => (
-                                <div key={index} className="animate-pulse rounded border border-white/10 bg-surface/60 p-3">
-                                  <div className="h-4 w-1/3 rounded bg-white/10" />
-                                  <div className="mt-2 h-3 w-1/2 rounded bg-white/5" />
-                                </div>
-                              ))}
-                            </div>
-                          ) : collaboratorsError ? (
-                            <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                              {collaboratorsError}
-                            </div>
-                          ) : collaborators.length === 0 ? (
-                            <p className="text-sm text-muted">Aucun collaborateur pour le moment.</p>
-                          ) : (
-                            <ul className="space-y-3">
-                              {collaborators.map((collab) => {
-                                const addedBy = collab.addedById ? membersMap.get(collab.addedById)?.displayName ?? collab.addedById : null;
-                                const addedAtLabel = collab.addedAt ? new Date(collab.addedAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : null;
-                                return (
-                                  <li
-                                    key={collab.userId}
-                                    className="rounded border border-white/10 bg-surface/60 p-3"
-                                  >
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                      <div className="space-y-1">
-                                        <p className="text-sm font-medium text-foreground">{collab.displayName}</p>
-                                        <p className="text-xs text-muted">{collab.email}</p>
-                                        <div className="flex flex-wrap gap-2 text-[11px] text-muted">
-                                          <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 uppercase tracking-wide">
-                                            {collab.accessType === 'OWNER'
-                                              ? 'Propriétaire'
-                                              : collab.accessType === 'DIRECT'
-                                                ? 'Direct'
-                                                : collab.accessType === 'INHERITED'
-                                                  ? 'Hérité'
-                                                  : 'Moi'}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <input
+                            type="email"
+                            value={inviteEmail}
+                            onChange={(event) => setInviteEmail(event.target.value)}
+                            placeholder="email@exemple.com"
+                            className="flex-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                            disabled={inviteSubmitting}
+                            aria-label="Email du collaborateur à inviter"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!detail?.id || !accessToken) return;
+                              const trimmedEmail = inviteEmail.trim();
+                              if (!trimmedEmail) {
+                                toastError('Veuillez saisir un email');
+                                return;
+                              }
+                              setInviteSubmitting(true);
+                              inviteNodeCollaborator(detail.id, { email: trimmedEmail }, accessToken)
+                                .then((response) => {
+                                  setCollaborators(response.collaborators);
+                                  setCollaboratorInvites(response.invitations);
+                                  setCollaboratorsError(null);
+                                  setInviteEmail('');
+                                  success('Collaborateur ajouté');
+                                })
+                                .catch((inviteError) => {
+                                  const message = inviteError instanceof Error ? inviteError.message : "Impossible d'ajouter le collaborateur";
+                                  toastError(message);
+                                })
+                                .finally(() => {
+                                  setInviteSubmitting(false);
+                                });
+                            }}
+                            disabled={!inviteEmail.trim() || inviteSubmitting}
+                            className="whitespace-nowrap rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {inviteSubmitting ? 'Ajout…' : 'Inviter'}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          L'adresse doit correspondre à un compte Stratum. Sinon, une invitation restera en attente.
+                        </p>
+                        {membersError && (
+                          <span className="text-xs text-red-500">{membersError}</span>
+                        )}
+                      </section>
+
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">👥</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Collaborateurs
+                          </h3>
+                        </div>
+                        {collaboratorsLoading ? (
+                          <div className="space-y-2">
+                            {Array.from({ length: 3 }).map((_, index) => (
+                              <div key={index} className="animate-pulse rounded border border-white/10 bg-white/5 p-3 dark:bg-white/5">
+                                <div className="h-4 w-1/3 rounded bg-white/20" />
+                                <div className="mt-2 h-3 w-1/2 rounded bg-white/10" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : collaboratorsError ? (
+                          <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                            {collaboratorsError}
+                          </div>
+                        ) : collaborators.length === 0 ? (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Aucun collaborateur pour le moment.</p>
+                        ) : (
+                          <ul className="space-y-3">
+                            {collaborators.map((collab) => {
+                              const addedBy = collab.addedById ? membersMap.get(collab.addedById)?.displayName ?? collab.addedById : null;
+                              const addedAtLabel = collab.addedAt ? new Date(collab.addedAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+                              return (
+                                <li
+                                  key={collab.userId}
+                                  className="rounded border border-white/10 bg-white/5 p-3 dark:bg-white/5"
+                                >
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium text-foreground">{collab.displayName}</p>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">{collab.email}</p>
+                                      <div className="flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                        <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 uppercase tracking-wide">
+                                          {collab.accessType === 'OWNER'
+                                            ? 'Propriétaire'
+                                            : collab.accessType === 'DIRECT'
+                                              ? 'Direct'
+                                              : collab.accessType === 'INHERITED'
+                                                ? 'Hérité'
+                                                : 'Moi'}
+                                        </span>
+                                        {collab.viaNodes.map((via) => (
+                                          <span
+                                            key={via.nodeId}
+                                            className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5"
+                                          >
+                                            Via {via.title}
                                           </span>
-                                          {collab.viaNodes.map((via) => (
-                                            <span
-                                              key={via.nodeId}
-                                              className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5"
-                                            >
-                                              Via {via.title}
-                                            </span>
-                                          ))}
-                                        </div>
-                                        {addedAtLabel && (
-                                          <p className="text-[11px] text-muted">
-                                            Ajouté le {addedAtLabel}
-                                            {addedBy ? ` par ${addedBy}` : ''}
-                                          </p>
-                                        )}
+                                        ))}
                                       </div>
-                                      {collab.accessType === 'DIRECT' && collab.userId !== user?.id ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            if (!detail?.id || !accessToken) return;
-                                            setRemovingCollaboratorId(collab.userId);
-                                            removeNodeCollaborator(detail.id, collab.userId, accessToken)
-                                              .then((response) => {
-                                                setCollaborators(response.collaborators);
-                                                setCollaboratorInvites(response.invitations);
-                                                setCollaboratorsError(null);
-                                                success('Collaborateur retiré');
-                                              })
-                                              .catch((removeError) => {
-                                                const message = removeError instanceof Error ? removeError.message : "Impossible de retirer le collaborateur";
-                                                toastError(message);
-                                              })
-                                              .finally(() => {
-                                                setRemovingCollaboratorId(null);
-                                              });
-                                          }}
-                                          disabled={removingCollaboratorId === collab.userId}
-                                          className="self-start rounded border border-white/10 px-3 py-1 text-xs font-medium text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          {removingCollaboratorId === collab.userId ? 'Suppression…' : 'Retirer'}
-                                        </button>
-                                      ) : null}
+                                      {addedAtLabel && (
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                          Ajouté le {addedAtLabel}
+                                          {addedBy ? ` par ${addedBy}` : ''}
+                                        </p>
+                                      )}
                                     </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </div>
-                        {collaboratorInvites.length > 0 && (
-                          <section className="space-y-2">
-                            <h4 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Invitations en attente</h4>
-                            <ul className="space-y-2 text-sm text-muted">
-                              {collaboratorInvites.map((invite) => (
-                                <li key={`${invite.email}-${invite.invitedAt ?? 'pending'}`} className="rounded border border-white/10 bg-surface/40 px-3 py-2">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-medium text-foreground">{invite.email}</span>
-                                    <span className="text-xs text-muted">
-                                      Statut : {invite.status === 'PENDING' ? 'En attente' : 'Acceptée'}
-                                      {invite.invitedAt ? ` • Envoyée le ${new Date(invite.invitedAt).toLocaleDateString('fr-FR', { dateStyle: 'medium' })}` : ''}
-                                    </span>
+                                    {collab.accessType === 'DIRECT' && collab.userId !== user?.id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (!detail?.id || !accessToken) return;
+                                          setRemovingCollaboratorId(collab.userId);
+                                          removeNodeCollaborator(detail.id, collab.userId, accessToken)
+                                            .then((response) => {
+                                              setCollaborators(response.collaborators);
+                                              setCollaboratorInvites(response.invitations);
+                                              setCollaboratorsError(null);
+                                              success('Collaborateur retiré');
+                                            })
+                                            .catch((removeError) => {
+                                              const message = removeError instanceof Error ? removeError.message : "Impossible de retirer le collaborateur";
+                                              toastError(message);
+                                            })
+                                            .finally(() => {
+                                              setRemovingCollaboratorId(null);
+                                            });
+                                        }}
+                                        disabled={removingCollaboratorId === collab.userId}
+                                        className="self-start rounded border border-white/20 px-3 py-1 text-xs font-medium text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {removingCollaboratorId === collab.userId ? 'Suppression…' : 'Retirer'}
+                                      </button>
+                                    ) : null}
                                   </div>
                                 </li>
-                              ))}
-                            </ul>
-                          </section>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </section>
+
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📧</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Invitations en attente
+                          </h3>
+                        </div>
+                        {collaboratorInvites.length === 0 ? (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Aucune invitation en attente.</p>
+                        ) : (
+                          <ul className="space-y-2 text-sm text-muted">
+                            {collaboratorInvites.map((invite) => (
+                              <li
+                                key={`${invite.email}-${invite.invitedAt ?? 'pending'}`}
+                                className="rounded border border-white/10 bg-white/5 px-3 py-2 dark:bg-white/5"
+                              >
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium text-foreground">{invite.email}</span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    Statut : {invite.status === 'PENDING' ? 'En attente' : 'Acceptée'}
+                                    {invite.invitedAt ? ` • Envoyée le ${new Date(invite.invitedAt).toLocaleDateString('fr-FR', { dateStyle: 'medium' })}` : ''}
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </section>
                     </div>
                   )}
 
                   {expertMode && activeTab === 'time' && (
-                    <div className="space-y-6">
-                      <section className="space-y-3">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Temps et effort</h3>
+                    <div className="space-y-5">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">⏱️</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Temps et effort
+                          </h3>
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                             Temps estimé (heures)
@@ -1272,8 +1571,13 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
 
-                      <section className="space-y-3">
-                        <h3 className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Coûts et budgets</h3>
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">💰</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            Coûts et budgets
+                          </h3>
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                             Taux horaire (€)
