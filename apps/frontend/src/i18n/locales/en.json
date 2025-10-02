@@ -80,6 +80,22 @@
     "languageLabel": "Interface language",
     "languageHelp": "Your preference is saved on this device.",
     "success": "Language updated",
-    "back": "Back to the dashboard"
+    "back": "Back to the dashboard",
+    "raciTeams": {
+      "title": "Saved RACI teams",
+      "description": "Review and manage the RACI matrices you saved from the task drawer.",
+      "empty": "You have not saved any RACI team yet.",
+      "loading": "Loading your RACI teams…",
+      "loadError": "Unable to load your RACI teams.",
+      "counts": "R: {r} · A: {a} · C: {c} · I: {i}",
+      "rename": "Rename",
+      "delete": "Delete",
+      "renamePrompt": "New name for “{name}”",
+      "deleteConfirm": "Delete the team “{name}” permanently?",
+      "renameSuccess": "RACI team renamed",
+      "deleteSuccess": "RACI team deleted",
+      "renameError": "Unable to rename the team",
+      "deleteError": "Unable to delete the team"
+    }
   }
 }
