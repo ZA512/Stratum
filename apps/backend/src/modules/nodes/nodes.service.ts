@@ -2091,33 +2091,48 @@ export class NodesService {
       },
     });
 
-    await this.dispatchCommentNotifications(node, comment as unknown as {
-      id: string;
-      body: string;
-      notifyResponsible: boolean;
-      notifyAccountable: boolean;
-      notifyConsulted: boolean;
-      notifyInformed: boolean;
-      notifyProject: boolean;
-      notifySubProject: boolean;
-      mentions: string[];
-      author: { id: string; displayName: string | null; avatarUrl: string | null; email?: string | null } | null;
-    });
+    await this.dispatchCommentNotifications(
+      node,
+      comment as unknown as {
+        id: string;
+        body: string;
+        notifyResponsible: boolean;
+        notifyAccountable: boolean;
+        notifyConsulted: boolean;
+        notifyInformed: boolean;
+        notifyProject: boolean;
+        notifySubProject: boolean;
+        mentions: string[];
+        author: {
+          id: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          email?: string | null;
+        } | null;
+      },
+    );
 
-    const mapped = await this.mapCommentRecords(this.prisma, [comment as unknown as {
-      id: string;
-      nodeId: string;
-      body: string;
-      createdAt: Date;
-      notifyResponsible: boolean;
-      notifyAccountable: boolean;
-      notifyConsulted: boolean;
-      notifyInformed: boolean;
-      notifyProject: boolean;
-      notifySubProject: boolean;
-      mentions: string[];
-      author: { id: string; displayName: string | null; avatarUrl: string | null; email?: string | null } | null;
-    }]);
+    const mapped = await this.mapCommentRecords(this.prisma, [
+      comment as unknown as {
+        id: string;
+        nodeId: string;
+        body: string;
+        createdAt: Date;
+        notifyResponsible: boolean;
+        notifyAccountable: boolean;
+        notifyConsulted: boolean;
+        notifyInformed: boolean;
+        notifyProject: boolean;
+        notifySubProject: boolean;
+        mentions: string[];
+        author: {
+          id: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          email?: string | null;
+        } | null;
+      },
+    ]);
     return mapped[0];
   }
 

@@ -19,6 +19,11 @@ import {
   type NodeCollaboratorInvitation,
 } from '@/features/nodes/node-collaborators-api';
 import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
+import {
+  createRaciTeam as createSavedRaciTeam,
+  fetchRaciTeams as fetchSavedRaciTeams,
+  type RaciTeamPreset,
+} from '@/features/users/raci-teams-api';
 // Icône close inline pour éviter dépendance externe
 const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -181,6 +186,11 @@ export const TaskDrawer: React.FC = () => {
   const [rAccountable, setRAccountable] = useState<string[]>([]);
   const [rConsulted, setRConsulted] = useState<string[]>([]);
   const [rInformed, setRInformed] = useState<string[]>([]);
+  const [savedRaciTeams, setSavedRaciTeams] = useState<RaciTeamPreset[]>([]);
+  const [savedRaciTeamsLoading, setSavedRaciTeamsLoading] = useState(false);
+  const [savedRaciTeamsError, setSavedRaciTeamsError] = useState<string | null>(null);
+  const [selectedRaciTeamId, setSelectedRaciTeamId] = useState<string>('');
+  const [savingRaciTeam, setSavingRaciTeam] = useState(false);
   // Temps & coûts
   const [estimatedTime, setEstimatedTime] = useState<string>('');
   const [actualOpex, setActualOpex] = useState<string>('');
@@ -253,6 +263,7 @@ export const TaskDrawer: React.FC = () => {
 
   // Sync form when detail loads or node changes
   useEffect(() => {
+    setSelectedRaciTeamId('');
     if (detail) {
       const nodeIdChanged = previousNodeIdRef.current !== detail.id;
       previousNodeIdRef.current = detail.id;
@@ -396,6 +407,153 @@ export const TaskDrawer: React.FC = () => {
       cancelled = true;
     };
   }, [teamId, accessToken]);
+
+  useEffect(() => {
+    if (activeTab !== 'raci') return;
+    if (!accessToken) return;
+    let cancelled = false;
+    setSavedRaciTeamsLoading(true);
+    setSavedRaciTeamsError(null);
+    fetchSavedRaciTeams(accessToken)
+      .then((teams) => {
+        if (cancelled) return;
+        const sorted = [...teams].sort((a, b) =>
+          a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
+        );
+        setSavedRaciTeams(sorted);
+      })
+      .catch((fetchError) => {
+        if (cancelled) return;
+        setSavedRaciTeamsError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Impossible de charger vos équipes enregistrées",
+        );
+        setSavedRaciTeams([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSavedRaciTeamsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, accessToken]);
+
+  useEffect(() => {
+    if (!selectedRaciTeamId) return;
+    if (!savedRaciTeams.some((team) => team.id === selectedRaciTeamId)) {
+      setSelectedRaciTeamId('');
+    }
+  }, [savedRaciTeams, selectedRaciTeamId]);
+
+  const savedRaciTeamsCount = savedRaciTeams.length;
+
+  const handleRResponsibleChange = useCallback((ids: string[]) => {
+    setSelectedRaciTeamId('');
+    setRResponsible(ids);
+  }, []);
+
+  const handleRAccountableChange = useCallback((ids: string[]) => {
+    setSelectedRaciTeamId('');
+    setRAccountable(ids);
+  }, []);
+
+  const handleRConsultedChange = useCallback((ids: string[]) => {
+    setSelectedRaciTeamId('');
+    setRConsulted(ids);
+  }, []);
+
+  const handleRInformedChange = useCallback((ids: string[]) => {
+    setSelectedRaciTeamId('');
+    setRInformed(ids);
+  }, []);
+
+  const applySavedRaciTeam = useCallback(
+    (teamId: string) => {
+      if (!teamId) {
+        setSelectedRaciTeamId('');
+        return;
+      }
+      const team = savedRaciTeams.find((entry) => entry.id === teamId);
+      if (!team) return;
+      setSelectedRaciTeamId(teamId);
+      setRResponsible(team.raci.R);
+      setRAccountable(team.raci.A);
+      setRConsulted(team.raci.C);
+      setRInformed(team.raci.I);
+    },
+    [savedRaciTeams],
+  );
+
+  const handleSelectSavedRaciTeam = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      applySavedRaciTeam(event.target.value);
+    },
+    [applySavedRaciTeam],
+  );
+
+  const handleSaveCurrentRaciTeam = useCallback(() => {
+    if (!accessToken) {
+      toastError('Session expirée, veuillez vous reconnecter');
+      return;
+    }
+    const totalSelected =
+      rResponsible.length +
+      rAccountable.length +
+      rConsulted.length +
+      rInformed.length;
+    if (totalSelected === 0) {
+      toastError("Sélectionnez au moins une personne dans la matrice RACI");
+      return;
+    }
+    const defaultName = `Équipe ${savedRaciTeamsCount + 1}`;
+    const name = window.prompt('Nom de votre équipe RACI', defaultName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toastError('Nom invalide, veuillez réessayer');
+      return;
+    }
+    setSavingRaciTeam(true);
+    createSavedRaciTeam(
+      {
+        name: trimmed,
+        raci: {
+          R: rResponsible,
+          A: rAccountable,
+          C: rConsulted,
+          I: rInformed,
+        },
+      },
+      accessToken,
+    )
+      .then((team) => {
+        setSavedRaciTeams((prev) => {
+          const next = [...prev, team];
+          return next.sort((a, b) =>
+            a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
+          );
+        });
+        setSelectedRaciTeamId(team.id);
+        setSavedRaciTeamsError(null);
+        success('Équipe RACI enregistrée');
+      })
+      .catch(() => {
+        toastError("Impossible d'enregistrer l'équipe RACI");
+      })
+      .finally(() => {
+        setSavingRaciTeam(false);
+      });
+  }, [
+    accessToken,
+    rResponsible,
+    rAccountable,
+    rConsulted,
+    rInformed,
+    savedRaciTeamsCount,
+    success,
+    toastError,
+  ]);
 
   useEffect(() => {
     if (!detail?.id || !accessToken) {
@@ -1220,6 +1378,55 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       )}
 
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              Équipes enregistrées
+                            </h4>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Appliquez vos favoris RACI en un clic.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSaveCurrentRaciTeam}
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-emerald-500/50 hover:text-emerald-600 dark:text-slate-200 dark:hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={saving || savingRaciTeam}
+                          >
+                            💾 Enregistrer l’équipe
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <select
+                            value={selectedRaciTeamId}
+                            onChange={handleSelectSavedRaciTeam}
+                            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={savedRaciTeamsLoading || savedRaciTeams.length === 0}
+                          >
+                            <option value="">Sélectionner une équipe enregistrée</option>
+                            {savedRaciTeams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name} — R:{team.raci.R.length} · A:{team.raci.A.length} · C:{team.raci.C.length} · I:{team.raci.I.length}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {savedRaciTeamsLoading && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Chargement de vos équipes enregistrées…
+                          </p>
+                        )}
+                        {savedRaciTeamsError && (
+                          <p className="text-[11px] text-red-500 dark:text-red-400">{savedRaciTeamsError}</p>
+                        )}
+                        {!savedRaciTeamsLoading && !savedRaciTeamsError && savedRaciTeams.length === 0 && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Aucune équipe enregistrée pour le moment.
+                          </p>
+                        )}
+                      </section>
+
                       <div className="space-y-4">
                         <div className="space-y-3 rounded-lg border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-950/20 p-3">
                           <div className="flex items-center gap-2">
@@ -1232,7 +1439,7 @@ export const TaskDrawer: React.FC = () => {
                             label=""
                             members={teamMembers}
                             selectedIds={rResponsible}
-                            onChange={setRResponsible}
+                            onChange={handleRResponsibleChange}
                             disabled={saving}
                           />
                           <p className="text-[10px] text-blue-600 dark:text-blue-400">
@@ -1251,7 +1458,7 @@ export const TaskDrawer: React.FC = () => {
                             label=""
                             members={teamMembers}
                             selectedIds={rAccountable}
-                            onChange={setRAccountable}
+                            onChange={handleRAccountableChange}
                             disabled={saving}
                           />
                           <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
@@ -1270,7 +1477,7 @@ export const TaskDrawer: React.FC = () => {
                             label=""
                             members={teamMembers}
                             selectedIds={rConsulted}
-                            onChange={setRConsulted}
+                            onChange={handleRConsultedChange}
                             disabled={saving}
                           />
                           <p className="text-[10px] text-purple-600 dark:text-purple-400">
@@ -1289,7 +1496,7 @@ export const TaskDrawer: React.FC = () => {
                             label=""
                             members={teamMembers}
                             selectedIds={rInformed}
-                            onChange={setRInformed}
+                            onChange={handleRInformedChange}
                             disabled={saving}
                           />
                           <p className="text-[10px] text-amber-600 dark:text-amber-400">

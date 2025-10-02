@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -10,7 +19,8 @@ import type { AuthenticatedUser } from '../auth/decorators/current-user.decorato
 import type { User } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UsersService } from './users.service';
+import { CreateRaciTeamDto, UpdateRaciTeamDto } from './dto/raci-team.dto';
+import { UsersService, RaciTeamPreference } from './users.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -58,5 +68,44 @@ export class UsersController {
 
     await this.usersService.updateProfile(user.id, data);
     return this.usersService.getProfileWithTeams(user.id);
+  }
+
+  @Get('me/raci-teams')
+  @ApiOperation({
+    summary: 'Liste les équipes RACI enregistrées par l’utilisateur',
+  })
+  async listRaciTeams(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RaciTeamPreference[]> {
+    return this.usersService.listRaciTeams(user.id);
+  }
+
+  @Post('me/raci-teams')
+  @ApiOperation({ summary: 'Crée une nouvelle équipe RACI personnelle' })
+  async createRaciTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateRaciTeamDto,
+  ): Promise<RaciTeamPreference> {
+    return this.usersService.createRaciTeam(user.id, dto);
+  }
+
+  @Patch('me/raci-teams/:teamId')
+  @ApiOperation({ summary: 'Renomme une équipe RACI enregistrée' })
+  async renameRaciTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId') teamId: string,
+    @Body() dto: UpdateRaciTeamDto,
+  ): Promise<RaciTeamPreference> {
+    return this.usersService.renameRaciTeam(user.id, teamId, dto.name);
+  }
+
+  @Delete('me/raci-teams/:teamId')
+  @ApiOperation({ summary: 'Supprime une équipe RACI enregistrée' })
+  async deleteRaciTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId') teamId: string,
+  ): Promise<{ success: true }> {
+    await this.usersService.deleteRaciTeam(user.id, teamId);
+    return { success: true };
   }
 }

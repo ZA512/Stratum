@@ -80,6 +80,22 @@
     "languageLabel": "Langue de l'interface",
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
-    "back": "Retour au tableau de bord"
+    "back": "Retour au tableau de bord",
+    "raciTeams": {
+      "title": "Équipes RACI sauvegardées",
+      "description": "Retrouvez et gérez vos matrices RACI enregistrées depuis le tiroir tâche.",
+      "empty": "Vous n'avez pas encore enregistré d'équipe RACI.",
+      "loading": "Chargement de vos équipes RACI…",
+      "loadError": "Impossible de charger vos équipes RACI.",
+      "counts": "R: {r} · A: {a} · C: {c} · I: {i}",
+      "rename": "Renommer",
+      "delete": "Supprimer",
+      "renamePrompt": "Nouveau nom pour l'équipe « {name} »",
+      "deleteConfirm": "Supprimer définitivement l'équipe « {name} » ?",
+      "renameSuccess": "Équipe RACI renommée",
+      "deleteSuccess": "Équipe RACI supprimée",
+      "renameError": "Impossible de renommer l'équipe",
+      "deleteError": "Impossible de supprimer l'équipe"
+    }
   }
 }
