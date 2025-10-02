@@ -129,6 +129,7 @@ export const TaskDrawer: React.FC = () => {
 
   // Form state
   const [saving, setSaving] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueAt, setDueAt] = useState<string>('');
@@ -705,15 +706,24 @@ export const TaskDrawer: React.FC = () => {
     consumedBudgetPercent,
   ]);
 
-  const escHandler = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      if (hasDirty) {
-        const confirmLeave = window.confirm('Annuler les modifications ?');
-        if (!confirmLeave) return;
-      }
+  const requestClose = useCallback(() => {
+    if (hasDirty) {
+      setShowUnsavedModal(true);
+    } else {
       close();
     }
   }, [close, hasDirty]);
+
+  const escHandler = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (showUnsavedModal) {
+        setShowUnsavedModal(false);
+        return;
+      }
+      requestClose();
+    }
+  }, [requestClose, showUnsavedModal]);
 
   useEffect(() => {
     if (openedNodeId) {
@@ -722,9 +732,15 @@ export const TaskDrawer: React.FC = () => {
     }
   }, [openedNodeId, escHandler]);
 
-  const onSave = async () => {
-    if (!detail || !accessToken) return;
-    if (!hasDirty) return;
+  useEffect(() => {
+    if (!openedNodeId) {
+      setShowUnsavedModal(false);
+    }
+  }, [openedNodeId]);
+
+  const onSave = async (): Promise<boolean> => {
+    if (!detail || !accessToken) return false;
+    if (!hasDirty) return false;
     setSaving(true);
     try {
       const payload: UpdateNodeInput = {
@@ -785,7 +801,7 @@ export const TaskDrawer: React.FC = () => {
       } catch (validationError) {
         const message = validationError instanceof Error ? validationError.message : 'Valeur numérique invalide';
         toastError(message);
-        return;
+        return false;
       }
 
       payload.estimatedTimeHours = estimatedNumeric;
@@ -848,11 +864,20 @@ export const TaskDrawer: React.FC = () => {
       refresh();
       // Fermer le tiroir après une sauvegarde réussie comme demandé
       close();
+      return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erreur mise à jour';
       toastError(msg);
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveFromDialog = async () => {
+    const saved = await onSave();
+    if (saved) {
+      setShowUnsavedModal(false);
     }
   };
 
@@ -867,7 +892,7 @@ export const TaskDrawer: React.FC = () => {
             exit="exit"
             variants={overlayVariants}
             className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-            onClick={close}
+            onClick={requestClose}
             aria-hidden="true"
           />
           <motion.aside
@@ -944,12 +969,12 @@ export const TaskDrawer: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={onSave}
+                  onClick={() => { void onSave(); }}
                   disabled={saving || !hasDirty}
                   className="rounded px-3 py-1 text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >{saving ? '...' : 'Valider'}</button>
                 <button
-                  onClick={close}
+                  onClick={requestClose}
                   className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring"
                   aria-label="Fermer"
                 >
@@ -1854,6 +1879,33 @@ export const TaskDrawer: React.FC = () => {
               )}
             </div>
           </motion.aside>
+          {showUnsavedModal && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+              <div className="absolute inset-0 bg-black/50" onClick={() => setShowUnsavedModal(false)} aria-hidden="true" />
+              <div className="relative z-10 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Modifications non sauvegardées</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  Vous avez des changements non sauvegardés. Voulez-vous les enregistrer avant de fermer&nbsp;?
+                </p>
+                <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex justify-center rounded-md border border-transparent bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                    onClick={() => { void handleSaveFromDialog(); }}
+                    disabled={saving}
+                  >{saving ? 'Sauvegarde…' : 'Sauvegarder'}</button>
+                  <button
+                    type="button"
+                    className="inline-flex justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    onClick={() => {
+                      setShowUnsavedModal(false);
+                      close();
+                    }}
+                  >Fermer sans sauvegarder</button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </AnimatePresence>
