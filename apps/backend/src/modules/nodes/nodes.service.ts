@@ -1059,8 +1059,8 @@ export class NodesService {
       I: [...extractedMetadata.raci.informedIds],
     };
     const nextTimeTracking = { ...extractedMetadata.timeTracking };
-    const { actualCost: _ignoredActualCost, ...financialStore } =
-      extractedMetadata.financials;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { actualCost: _, ...financialStore } = extractedMetadata.financials;
     const nextFinancials = { ...financialStore };
 
     let metadataChanged = false;
@@ -1444,7 +1444,7 @@ export class NodesService {
 
     const comments = await this.mapCommentRecords(
       client,
-      node.comments as Array<{
+      node.comments as unknown as Array<{
         id: string;
         nodeId: string;
         body: string;
@@ -2017,7 +2017,7 @@ export class NodesService {
     await this.ensureUserCanWrite(node.teamId, userId);
     return this.mapCommentRecords(
       this.prisma,
-      node.comments as Array<{
+      node.comments as unknown as Array<{
         id: string;
         nodeId: string;
         body: string;
@@ -2071,13 +2071,13 @@ export class NodesService {
         nodeId,
         authorId: userId,
         body,
+        mentions,
         notifyResponsible: dto.notifyResponsible ?? true,
         notifyAccountable: dto.notifyAccountable ?? true,
         notifyConsulted: dto.notifyConsulted ?? true,
         notifyInformed: dto.notifyInformed ?? true,
         notifyProject: dto.notifyProject ?? false,
         notifySubProject: dto.notifySubProject ?? false,
-        mentions,
       },
       include: {
         author: {
@@ -2091,9 +2091,33 @@ export class NodesService {
       },
     });
 
-    await this.dispatchCommentNotifications(node, comment);
+    await this.dispatchCommentNotifications(node, comment as unknown as {
+      id: string;
+      body: string;
+      notifyResponsible: boolean;
+      notifyAccountable: boolean;
+      notifyConsulted: boolean;
+      notifyInformed: boolean;
+      notifyProject: boolean;
+      notifySubProject: boolean;
+      mentions: string[];
+      author: { id: string; displayName: string | null; avatarUrl: string | null; email?: string | null } | null;
+    });
 
-    const mapped = await this.mapCommentRecords(this.prisma, [comment]);
+    const mapped = await this.mapCommentRecords(this.prisma, [comment as unknown as {
+      id: string;
+      nodeId: string;
+      body: string;
+      createdAt: Date;
+      notifyResponsible: boolean;
+      notifyAccountable: boolean;
+      notifyConsulted: boolean;
+      notifyInformed: boolean;
+      notifyProject: boolean;
+      notifySubProject: boolean;
+      mentions: string[];
+      author: { id: string; displayName: string | null; avatarUrl: string | null; email?: string | null } | null;
+    }]);
     return mapped[0];
   }
 

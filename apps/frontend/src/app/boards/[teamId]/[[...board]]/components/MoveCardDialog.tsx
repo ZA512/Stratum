@@ -106,7 +106,7 @@ export function MoveCardDialog({
             const childBoards = await fetchChildBoards(nodeId, accessToken);
             for (const childBoard of childBoards) {
               // Trouver le node correspondant pour obtenir sa colonne
-              const childNodeInfo = allNodes.find(n => n.id === childBoard.nodeId);
+              // const childNodeInfo = allNodes.find(n => n.id === childBoard.nodeId);
               const column = detail.columns.find(col => 
                 col.nodes?.some(n => n.id === childBoard.nodeId)
               );

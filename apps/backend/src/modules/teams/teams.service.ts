@@ -84,7 +84,16 @@ export class TeamsService {
 
     return team.memberships
       .map((membership) => membership.user)
-      .filter((user): user is { id: string; displayName: string; email: string; avatarUrl: string | null } => Boolean(user))
+      .filter(
+        (
+          user,
+        ): user is {
+          id: string;
+          displayName: string;
+          email: string;
+          avatarUrl: string | null;
+        } => Boolean(user),
+      )
       .map((user) => ({
         id: user.id,
         displayName: user.displayName,

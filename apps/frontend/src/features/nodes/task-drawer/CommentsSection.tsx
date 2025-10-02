@@ -222,90 +222,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
 
   return (
     <section className="space-y-5">
-      <div className="space-y-2 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
-        <header className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">💬</span>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-              Discussion & journal
-            </h3>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Mentionnez vos collègues avec @nom et choisissez qui sera notifié via les options RACI / Projet.
-          </p>
-        </header>
-
-        {membersLoading && (
-          <p className="text-xs text-slate-500">Chargement des membres connus…</p>
-        )}
-        {membersError && (
-          <p className="text-xs text-red-500">{membersError}</p>
-        )}
-        {loadError && (
-          <p className="text-xs text-red-500">{loadError}</p>
-        )}
-
-        <div className="space-y-3">
-          {loading ? (
-            <div className="space-y-3">
-              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-            </div>
-          ) : comments.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucun commentaire pour le moment.</p>
-          ) : (
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-              {comments.map((comment) => {
-                const timestamp = new Date(comment.createdAt);
-                const formatted = Number.isNaN(timestamp.getTime())
-                  ? comment.createdAt
-                  : timestamp.toLocaleString('fr-FR', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    });
-                const initials = comment.author.displayName
-                  .split(' ')
-                  .map((word) => word.charAt(0).toUpperCase())
-                  .slice(0, 2)
-                  .join('');
-                return (
-                  <article
-                    key={comment.id}
-                    className="space-y-2 rounded border border-slate-200/60 bg-white/90 p-3 text-sm shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600/80 text-sm font-semibold text-white">
-                          {initials || '•'}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-700 dark:text-slate-100">{comment.author.displayName}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{formatted}</p>
-                        </div>
-                      </div>
-                      <span className="rounded bg-slate-200/70 px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
-                        {renderFlags(comment)}
-                      </span>
-                    </div>
-                    <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{comment.body}</p>
-                    {comment.mentions.length > 0 && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Mentionnés&nbsp;:
-                        {comment.mentions.map((mention) => (
-                          <span key={mention.userId} className="ml-1 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                            @{mention.displayName}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
       <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="text-lg">✏️</span>
@@ -374,6 +290,90 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
           </button>
         </div>
       </form>
+
+      <div className="space-y-2 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+        <header className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">💬</span>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+              Discussion & journal
+            </h3>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Mentionnez vos collègues avec @nom et choisissez qui sera notifié via les options RACI / Projet.
+          </p>
+        </header>
+
+        {membersLoading && (
+          <p className="text-xs text-slate-500">Chargement des membres connus…</p>
+        )}
+        {membersError && (
+          <p className="text-xs text-red-500">{membersError}</p>
+        )}
+        {loadError && (
+          <p className="text-xs text-red-500">{loadError}</p>
+        )}
+
+        <div className="space-y-3">
+          {loading ? (
+            <div className="space-y-3">
+              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+            </div>
+          ) : comments.length === 0 ? (
+            <p className="text-sm text-slate-500">Aucun commentaire pour le moment.</p>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {[...comments].reverse().map((comment) => {
+                const timestamp = new Date(comment.createdAt);
+                const formatted = Number.isNaN(timestamp.getTime())
+                  ? comment.createdAt
+                  : timestamp.toLocaleString('fr-FR', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    });
+                const initials = comment.author.displayName
+                  .split(' ')
+                  .map((word) => word.charAt(0).toUpperCase())
+                  .slice(0, 2)
+                  .join('');
+                return (
+                  <article
+                    key={comment.id}
+                    className="space-y-2 rounded border border-slate-200/60 bg-white/90 p-3 text-sm shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600/80 text-sm font-semibold text-white">
+                          {initials || '•'}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-700 dark:text-slate-100">{comment.author.displayName}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{formatted}</p>
+                        </div>
+                      </div>
+                      <span className="rounded bg-slate-200/70 px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
+                        {renderFlags(comment)}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{comment.body}</p>
+                    {comment.mentions.length > 0 && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Mentionnés&nbsp;:
+                        {comment.mentions.map((mention) => (
+                          <span key={mention.userId} className="ml-1 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                            @{mention.displayName}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 };

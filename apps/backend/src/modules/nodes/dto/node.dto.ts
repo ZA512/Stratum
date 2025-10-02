@@ -17,13 +17,25 @@ export class NodeRaciDto {
 }
 
 export class NodeTimeTrackingDto {
-  @ApiProperty({ example: 12, nullable: true, description: 'Temps estimé (heures)' })
+  @ApiProperty({
+    example: 12,
+    nullable: true,
+    description: 'Temps estimé (heures)',
+  })
   estimatedTimeHours!: number | null;
 
-  @ApiProperty({ example: 8, nullable: true, description: 'Temps réel OPEX (heures)' })
+  @ApiProperty({
+    example: 8,
+    nullable: true,
+    description: 'Temps réel OPEX (heures)',
+  })
   actualOpexHours!: number | null;
 
-  @ApiProperty({ example: 4, nullable: true, description: 'Temps réel CAPEX (heures)' })
+  @ApiProperty({
+    example: 4,
+    nullable: true,
+    description: 'Temps réel CAPEX (heures)',
+  })
   actualCapexHours!: number | null;
 
   @ApiProperty({ example: '2025-03-01', nullable: true })
@@ -37,22 +49,42 @@ export class NodeTimeTrackingDto {
 }
 
 export class NodeFinancialDto {
-  @ApiProperty({ example: 'TO_BILL', enum: ['TO_BILL', 'BILLED', 'PAID'], nullable: true })
+  @ApiProperty({
+    example: 'TO_BILL',
+    enum: ['TO_BILL', 'BILLED', 'PAID'],
+    nullable: true,
+  })
   billingStatus!: 'TO_BILL' | 'BILLED' | 'PAID' | null;
 
   @ApiProperty({ example: 75, nullable: true, description: 'Taux horaire (€)' })
   hourlyRate!: number | null;
 
-  @ApiProperty({ example: 900, nullable: true, description: 'Budget prévu (€)' })
+  @ApiProperty({
+    example: 900,
+    nullable: true,
+    description: 'Budget prévu (€)',
+  })
   plannedBudget!: number | null;
 
-  @ApiProperty({ example: 450, nullable: true, description: 'Budget consommé en valeur (€)' })
+  @ApiProperty({
+    example: 450,
+    nullable: true,
+    description: 'Budget consommé en valeur (€)',
+  })
   consumedBudgetValue!: number | null;
 
-  @ApiProperty({ example: 50, nullable: true, description: 'Budget consommé (%)' })
+  @ApiProperty({
+    example: 50,
+    nullable: true,
+    description: 'Budget consommé (%)',
+  })
   consumedBudgetPercent!: number | null;
 
-  @ApiProperty({ example: 900, nullable: true, description: 'Coût réel calculé (€)' })
+  @ApiProperty({
+    example: 900,
+    nullable: true,
+    description: 'Coût réel calculé (€)',
+  })
   actualCost!: number | null;
 }
 

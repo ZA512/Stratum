@@ -245,10 +245,26 @@ export class BoardsService {
       }>;
 
       const raciBuckets = {
-        R: [] as { id: string; displayName: string; avatarUrl: string | null }[],
-        A: [] as { id: string; displayName: string; avatarUrl: string | null }[],
-        C: [] as { id: string; displayName: string; avatarUrl: string | null }[],
-        I: [] as { id: string; displayName: string; avatarUrl: string | null }[],
+        R: [] as {
+          id: string;
+          displayName: string;
+          avatarUrl: string | null;
+        }[],
+        A: [] as {
+          id: string;
+          displayName: string;
+          avatarUrl: string | null;
+        }[],
+        C: [] as {
+          id: string;
+          displayName: string;
+          avatarUrl: string | null;
+        }[],
+        I: [] as {
+          id: string;
+          displayName: string;
+          avatarUrl: string | null;
+        }[],
       };
 
       for (const assignment of assignments) {

@@ -1243,7 +1243,7 @@ export function TeamBoardPage(){
                                   className={pillClass(displayOptions.columnHeight === 'auto')}
                                   aria-pressed={displayOptions.columnHeight === 'auto'}
                                 >
-                                  Colonnes à l'infini (auto)
+                                  Colonnes à l&apos;infini (auto)
                                 </button>
                                 <button
                                   type="button"

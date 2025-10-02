@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useTaskDrawer } from './TaskDrawerContext';
 import { useTaskDetail } from './useTaskDetail';
@@ -249,9 +249,14 @@ export const TaskDrawer: React.FC = () => {
     setBlockedEmails((prev) => prev.filter((value) => value !== email));
   }, []);
 
+  const previousNodeIdRef = useRef<string | null>(null);
+
   // Sync form when detail loads or node changes
   useEffect(() => {
     if (detail) {
+      const nodeIdChanged = previousNodeIdRef.current !== detail.id;
+      previousNodeIdRef.current = detail.id;
+      
       const dDate = detail.dueAt ? detail.dueAt.substring(0,10) : '';
       setTitle(detail.title || '');
       setDescription(detail.description || '');
@@ -260,14 +265,14 @@ export const TaskDrawer: React.FC = () => {
       setPriority(detail.priority ?? 'NONE');
       setEffort(detail.effort ?? null);
       setTags(detail.tags || []);
-  // Blocage -> map values
-  setBlockedReason((detail as any).blockedReason || '');
-  setBlockedEmails(detail.blockedReminderEmails || []);
-  setBlockedEmailInput('');
-  setBlockedInterval(detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '');
-  setBlockedEta(detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '');
-  setBlockedSince((detail as any).blockedSince || null);
-  setIsBlockResolved((detail as any).isBlockResolved || false);
+      // Blocage -> map values
+      setBlockedReason((detail as Record<string, unknown>).blockedReason as string || '');
+      setBlockedEmails(detail.blockedReminderEmails || []);
+      setBlockedEmailInput('');
+      setBlockedInterval(detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '');
+      setBlockedEta(detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '');
+      setBlockedSince((detail as Record<string, unknown>).blockedSince as string | null || null);
+      setIsBlockResolved((detail as Record<string, unknown>).isBlockResolved as boolean || false);
       setRResponsible(detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : []);
       setRAccountable(detail.raci?.accountableIds ? [...detail.raci.accountableIds] : []);
       setRConsulted(detail.raci?.consultedIds ? [...detail.raci.consultedIds] : []);
@@ -292,11 +297,11 @@ export const TaskDrawer: React.FC = () => {
         effort: detail.effort ?? null,
         tags: detail.tags ?? [],
         blocked: {
-          reason: ((detail as any).blockedReason as string | undefined) ?? '',
+          reason: ((detail as Record<string, unknown>).blockedReason as string | undefined) ?? '',
           emails: detail.blockedReminderEmails ? [...detail.blockedReminderEmails] : [],
           interval: detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '',
           eta: detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '',
-          isResolved: ((detail as any).isBlockResolved as boolean | undefined) ?? false,
+          isResolved: ((detail as Record<string, unknown>).isBlockResolved as boolean | undefined) ?? false,
         },
         raci: {
           R: detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : [],
@@ -320,8 +325,12 @@ export const TaskDrawer: React.FC = () => {
           consumedBudgetPercent: detail.financials?.consumedBudgetPercent ?? null,
         },
       });
-      setActiveTab('details');
+      // Ne forcer 'details' que si c'est une nouvelle tâche
+      if (nodeIdChanged) {
+        setActiveTab('details');
+      }
     } else {
+      previousNodeIdRef.current = null;
       setTitle('');
       setDescription('');
       setDueAt('');
@@ -351,7 +360,6 @@ export const TaskDrawer: React.FC = () => {
       setPlannedBudget('');
       setConsumedBudgetValue('');
       setConsumedBudgetPercent('');
-      setActiveTab('details');
       setInitialSnapshot(null);
     }
   }, [detail]);
@@ -430,7 +438,6 @@ export const TaskDrawer: React.FC = () => {
     if (!expertMode && activeTab === 'time') {
       setActiveTab('details');
     }
-
   }, [expertMode, activeTab]);
 
   const hasDirty = useMemo(() => {
@@ -571,9 +578,9 @@ export const TaskDrawer: React.FC = () => {
       payload.priority = priority;
       payload.effort = effort;
       // Blocage
-  (payload as any).blockedReason = blockedReason.trim() || null;
+      (payload as Record<string, unknown>).blockedReason = blockedReason.trim() || null;
       payload.blockedReminderEmails = [...blockedEmails];
-  (payload as any).isBlockResolved = isBlockResolved;
+      (payload as Record<string, unknown>).isBlockResolved = isBlockResolved;
       if (blockedInterval.trim() === '') {
         payload.blockedReminderIntervalDays = null;
       } else {
@@ -914,7 +921,7 @@ export const TaskDrawer: React.FC = () => {
                     </div>
                   )}
 
-                  {activeTab === 'comments' && (
+                  {activeTab === 'comments' && detail && (
                     <CommentsSection
                       members={teamMembers}
                       membersLoading={membersLoading}
@@ -1066,7 +1073,7 @@ export const TaskDrawer: React.FC = () => {
                             <label className="block text-xs text-slate-500 dark:text-slate-400">
                               <span className="mb-1 flex items-center gap-1.5">
                                 <span className="text-base">📝</span>
-                                Qu'est-ce qui est attendu ?
+                                Qu&apos;est-ce qui est attendu ?
                               </span>
                               <textarea
                                 value={blockedReason}
@@ -1357,7 +1364,7 @@ export const TaskDrawer: React.FC = () => {
                           </button>
                         </div>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          L'adresse doit correspondre à un compte Stratum. Sinon, une invitation restera en attente.
+                          L&apos;adresse doit correspondre à un compte Stratum. Sinon, une invitation restera en attente.
                         </p>
                         {membersError && (
                           <span className="text-xs text-red-500">{membersError}</span>

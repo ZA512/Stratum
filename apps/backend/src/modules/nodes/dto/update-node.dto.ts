@@ -45,7 +45,7 @@ export class UpdateNodeDto {
 
   @ApiPropertyOptional({
     example: '2025-01-20T09:00:00.000Z',
-    description: 'Date d\'entrée dans le statut bloqué (auto-set)',
+    description: "Date d'entrée dans le statut bloqué (auto-set)",
     nullable: true,
   })
   blockedSince?: string | null;
@@ -103,21 +103,21 @@ export class UpdateNodeDto {
   @ApiPropertyOptional({
     example: 12,
     nullable: true,
-    description: 'Temps estimé (heures)'
+    description: 'Temps estimé (heures)',
   })
   estimatedTimeHours?: number | null;
 
   @ApiPropertyOptional({
     example: 8,
     nullable: true,
-    description: 'Temps réel OPEX (heures)'
+    description: 'Temps réel OPEX (heures)',
   })
   actualOpexHours?: number | null;
 
   @ApiPropertyOptional({
     example: 4,
     nullable: true,
-    description: 'Temps réel CAPEX (heures)'
+    description: 'Temps réel CAPEX (heures)',
   })
   actualCapexHours?: number | null;
 
@@ -153,28 +153,28 @@ export class UpdateNodeDto {
   @ApiPropertyOptional({
     example: 75,
     nullable: true,
-    description: 'Taux horaire appliqué (€)'
+    description: 'Taux horaire appliqué (€)',
   })
   hourlyRate?: number | null;
 
   @ApiPropertyOptional({
     example: 900,
     nullable: true,
-    description: 'Budget prévu (€)'
+    description: 'Budget prévu (€)',
   })
   plannedBudget?: number | null;
 
   @ApiPropertyOptional({
     example: 450,
     nullable: true,
-    description: 'Budget consommé en valeur (€)'
+    description: 'Budget consommé en valeur (€)',
   })
   consumedBudgetValue?: number | null;
 
   @ApiPropertyOptional({
     example: 50,
     nullable: true,
-    description: 'Budget consommé en pourcentage (%)'
+    description: 'Budget consommé en pourcentage (%)',
   })
   consumedBudgetPercent?: number | null;
 }
