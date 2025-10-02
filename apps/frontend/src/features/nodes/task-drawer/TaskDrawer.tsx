@@ -882,12 +882,12 @@ export const TaskDrawer: React.FC = () => {
             aria-labelledby="task-drawer-title"
           >
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-              <div className="space-y-1 min-w-0 pr-4">
+              <div className="space-y-2 min-w-0 pr-4">
                 <input
                   id="task-drawer-title"
                   value={title}
                   onChange={(e) => { setTitle(e.target.value); }}
-                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm font-semibold focus:outline-none focus:ring focus:ring-emerald-500/40"
+                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-base font-semibold focus:outline-none focus:ring focus:ring-emerald-500/40"
                   placeholder="Titre de la tâche"
                   disabled={saving}
                 />
@@ -939,22 +939,6 @@ export const TaskDrawer: React.FC = () => {
                         aria-label={effort ? `Effort ${effort}` : 'Effort non défini'}
                       />
                     </span>
-                    {detail.summary && (
-                      <span
-                        className="font-mono tracking-tight flex items-center gap-1"
-                        title={`Sous-tâches: Backlog ${detail.summary.counts.backlog} • En cours ${detail.summary.counts.inProgress} • Bloqué ${detail.summary.counts.blocked} • Fait ${detail.summary.counts.done}`}
-                        aria-label={`Sous-tâches: Backlog ${detail.summary.counts.backlog}, En cours ${detail.summary.counts.inProgress}, Bloqué ${detail.summary.counts.blocked}, Fait ${detail.summary.counts.done}`}
-                      >
-                        <span className="sr-only">Ordre des compteurs: Backlog, En cours, Bloqué, Fait</span>
-                        <span className="text-amber-600 dark:text-amber-400">{detail.summary.counts.backlog}</span>
-                        <span className="text-slate-400">.</span>
-                        <span className="text-sky-600 dark:text-sky-400">{detail.summary.counts.inProgress}</span>
-                        <span className="text-slate-400">.</span>
-                        <span className="text-red-600 dark:text-red-400">{detail.summary.counts.blocked}</span>
-                        <span className="text-slate-400">.</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">{detail.summary.counts.done}</span>
-                      </span>
-                    )}
                   </div>
                 )}
               </div>
