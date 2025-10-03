@@ -76,21 +76,7 @@ export function FractalBreadcrumb({
   const router = useRouter();
   const [travelTargetDepth, setTravelTargetDepth] = useState<number | null>(null);
   const [isTraveling, setIsTraveling] = useState(false);
-  const previousDepthRef = useRef<number>(items.length - 1);
-  const [descendingBurst, setDescendingBurst] = useState(false);
   const [isPreDescending, setIsPreDescending] = useState(false);
-
-  // Détection de descente (nouveau niveau plus profond chargé)
-  useEffect(() => {
-    const prev = previousDepthRef.current;
-    const now = items.length - 1;
-    if (now > prev) {
-      // On vient de descendre : déclencher petite animation d'arrivée
-      setDescendingBurst(true);
-      setTimeout(() => setDescendingBurst(false), travelDuration * 1000);
-    }
-    previousDepthRef.current = now;
-  }, [items, travelDuration]);
 
   // Expose descend trigger to parent if requested
   useEffect(() => {
@@ -156,11 +142,8 @@ export function FractalBreadcrumb({
   const overshoot = diff > 0 ? offsetY * Math.max(0, ascendOvershootFactor) : 0;
   const yTarget = -(diff * offsetY + overshoot);
       const xTarget = -(diff * dxPerLevel * travelLateralFactor);
-      // Animation descendante (apparition) : on part de la position inverse puis retombe à 0
       const effectiveLeftPad2 = Math.round(offsetX * shrinkFactor);
       const dxPerLevel2 = offsetX - effectiveLeftPad2;
-      const enterX = dxPerLevel2 * travelLateralFactor * 0.8; // légère entrée depuis la droite
-      const enterY = offsetY * 0.9; // vient légèrement du bas
       let animateProps: TargetAndTransition | undefined;
       if (isPreDescending) {
         // Pré-descente: on sort le contenu vers bas + droite (une "plonge" visuelle)
@@ -170,16 +153,13 @@ export function FractalBreadcrumb({
       } else if (isTraveling && diff > 0) {
         // Remontée (ascenseur)
         animateProps = { y: yTarget, x: xTarget };
-      } else if (descendingBurst) {
-        // Arrivée d'une descente (nouvelle profondeur chargée)
-        animateProps = { x: [enterX, 0], y: [enterY, 0], opacity: [0, 1] } as TargetAndTransition;
       } else {
         animateProps = { x: 0, y: 0, opacity: 1 };
       }
       return (
         <motion.div
           className="fractal-content relative"
-          initial={descendingBurst ? { x: enterX, y: enterY, opacity: 0 } : false}
+          initial={false}
           animate={animateProps}
           transition={{ duration: travelDuration, ease: 'easeOut' }}
         >
