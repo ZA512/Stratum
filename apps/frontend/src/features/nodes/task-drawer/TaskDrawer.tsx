@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useTaskDrawer } from './TaskDrawerContext';
@@ -907,65 +907,15 @@ export const TaskDrawer: React.FC = () => {
             aria-labelledby="task-drawer-title"
           >
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-              <div className="space-y-2 min-w-0 pr-4">
+              <div className="space-y-2 min-w-0 pr-4 flex-1">
                 <input
                   id="task-drawer-title"
                   value={title}
                   onChange={(e) => { setTitle(e.target.value); }}
-                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-base font-semibold focus:outline-none focus:ring focus:ring-emerald-500/40"
+                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-lg font-semibold focus:outline-none focus:ring focus:ring-emerald-500/40"
                   placeholder="Titre de la tâche"
                   disabled={saving}
                 />
-                {detail && (
-                  <div className="text-xs flex flex-wrap gap-x-3 gap-y-1 items-center">
-                    {detail.dueAt && (
-                      <span className="text-slate-500 dark:text-slate-400">
-                        Echéance: {new Date(detail.dueAt).toLocaleDateString()}
-                      </span>
-                    )}
-                    {progress > 0 && (
-                      <span className="text-slate-500 dark:text-slate-400">
-                        Progression : {progress}%
-                      </span>
-                    )}
-                    {/* Pile priorité + effort */}
-                    <span className="inline-flex flex-col gap-1 items-start" aria-hidden>
-                      {/* Priorité si définie */}
-                      {priority && priority !== 'NONE' && (
-                        <span
-                          className={
-                            'inline-block h-2.5 w-2.5 rounded-sm border border-black/5 dark:border-white/10 ' +
-                            (priority === 'CRITICAL' ? 'bg-red-600' :
-                             priority === 'HIGH' ? 'bg-rose-500' :
-                             priority === 'MEDIUM' ? 'bg-amber-500' :
-                             priority === 'LOW' ? 'bg-emerald-500' :
-                             priority === 'LOWEST' ? 'bg-slate-500' : 'bg-slate-600')
-                          }
-                          title={`Priorité: ${priority}`}
-                          aria-label={`Priorité ${priority}`}
-                        />
-                      )}
-                      {/* Effort */}
-                      <span
-                        className={
-                          'inline-block h-2.5 w-2.5 rounded-sm border border-black/5 dark:border-white/10 ' +
-                          (
-                            effort === 'UNDER2MIN' ? 'bg-emerald-400' :
-                            effort === 'XS' ? 'bg-sky-400' :
-                            effort === 'S' ? 'bg-blue-400' :
-                            effort === 'M' ? 'bg-amber-400' :
-                            effort === 'L' ? 'bg-orange-500' :
-                            effort === 'XL' ? 'bg-rose-500' :
-                            effort === 'XXL' ? 'bg-red-600' :
-                            'bg-slate-400'
-                          )
-                        }
-                        title={effort ? `Effort: ${effort}` : 'Effort: (non défini)'}
-                        aria-label={effort ? `Effort ${effort}` : 'Effort non défini'}
-                      />
-                    </span>
-                  </div>
-                )}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -993,34 +943,34 @@ export const TaskDrawer: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('details')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >📋 Détails</button>
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    ><span className="material-symbols-outlined text-[18px]">description</span> Détails</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('comments')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'comments' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >💬 Commentaires</button>
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'comments' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    ><span className="material-symbols-outlined text-[18px]">chat_bubble</span> Commentaires</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('planning')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >📅 Planning</button>
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    ><span className="material-symbols-outlined text-[18px]">calendar_month</span> Planning</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('raci')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'raci' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >👥 RACI</button>
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'raci' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    ><span className="material-symbols-outlined text-[18px]">group</span> RACI</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('collaborators')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                    >🤝 Accès</button>
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                    ><span className="material-symbols-outlined text-[18px]">lock</span> Accès</button>
                     {expertMode && (
                       <button
                         type="button"
                         onClick={() => setActiveTab('time')}
-                        className={`flex-1 rounded px-3 py-2 font-medium transition ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
-                      >⏱️ Temps</button>
+                        className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      ><span className="material-symbols-outlined text-[18px]">schedule</span> Temps</button>
                     )}
                   </div>
 
@@ -1028,7 +978,7 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">📝</span>
+                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">edit_note</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                             Description
                           </h3>
@@ -1045,7 +995,7 @@ export const TaskDrawer: React.FC = () => {
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">🎯</span>
+                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">checklist</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                             Sous-tâches
                           </h3>
@@ -1055,7 +1005,7 @@ export const TaskDrawer: React.FC = () => {
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">📊</span>
+                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">bar_chart</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                             Progression
                           </h3>
@@ -1100,7 +1050,7 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">📅</span>
+                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">event</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                             Planification
                           </h3>
@@ -1108,7 +1058,7 @@ export const TaskDrawer: React.FC = () => {
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1.5">
-                              <span className="text-base">📆</span>
+                              <span className="material-symbols-outlined text-[18px]">calendar_today</span>
                               Echéance
                             </span>
                             <input
@@ -1231,7 +1181,7 @@ export const TaskDrawer: React.FC = () => {
                         return (
                           <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                             <div className="flex items-center gap-2">
-                              <span className="text-lg">🚫</span>
+                              <span className="material-symbols-outlined text-[24px] text-rose-600 dark:text-rose-400">block</span>
                               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                                 Blocage
                               </h3>
@@ -1335,8 +1285,8 @@ export const TaskDrawer: React.FC = () => {
                             </div>
 
                             {blockedSince && (
-                              <p className="text-xs text-slate-500">
-                                📌 Bloqué depuis : <strong>{new Date(blockedSince).toLocaleDateString('fr-FR', { dateStyle: 'long' })}</strong>
+                              <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px]">push_pin</span><span className="material-symbols-outlined text-[16px]">push_pin</span> Bloqué depuis : <strong>{new Date(blockedSince).toLocaleDateString('fr-FR', { dateStyle: 'long' })}</strong>
                               </p>
                             )}
 
@@ -1348,13 +1298,13 @@ export const TaskDrawer: React.FC = () => {
                                 className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40"
                                 disabled={saving}
                               />
-                              <span className="text-xs text-slate-600 dark:text-slate-300">
-                                ✅ Blocage résolu (arrête les relances automatiques)
+                              <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span><span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> Blocage résolu (arrête<span className="material-symbols-outlined text-[14px] text-amber-500">info</span> Les relances automatiques)
                               </span>
                             </label>
 
-                            <p className="text-[11px] text-slate-500">
-                              💡 Les relances automatiques incluront le titre de la tâche, ce qui est attendu, et un lien vers le kanban.
+                            <p className="text-[11px] text-slate-500 flex items-start gap-1">
+                              <span className="material-symbols-outlined text-[14px] text-amber-500">info</span><span className="material-symbols-outlined text-[14px] text-amber-500">info</span> Les relances automatiques incluront le titre de la tâche, ce qui est attendu, et un lien vers le kanban.
                             </p>
                           </section>
                         );

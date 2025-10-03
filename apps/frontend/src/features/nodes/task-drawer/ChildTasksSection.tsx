@@ -216,36 +216,19 @@ export const ChildTasksSection: React.FC = () => {
   return (
     <div className="mt-6 space-y-4 relative" key={detail.id}>
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide flex items-center gap-2">
-            <span className="material-symbols-outlined text-base text-slate-500 dark:text-slate-300" aria-hidden>checklist</span>
-            Sous-tâches
-          </h3>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {hasPending() && (
             <div className="text-[11px] px-2 py-0.5 rounded bg-amber-200 text-amber-800 border border-amber-300 shadow-sm uppercase tracking-wide">Sync…</div>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-200/70 dark:bg-slate-700/60 px-2 py-1">
-            <span className="material-symbols-outlined text-[16px] text-slate-600 dark:text-slate-200" aria-hidden>inbox</span>
-            <span>Backlog</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-100">{localCounts.backlog}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-200/60 dark:bg-sky-900/40 px-2 py-1">
-            <span className="material-symbols-outlined text-[16px] text-sky-700 dark:text-sky-300" aria-hidden>progress_activity</span>
-            <span>En cours</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-100">{localCounts.inProgress}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-rose-200/70 dark:bg-rose-900/30 px-2 py-1">
-            <span className="material-symbols-outlined text-[16px] text-rose-600 dark:text-rose-300" aria-hidden>block</span>
-            <span>Bloqué</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-100">{localCounts.blocked}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-200/70 dark:bg-emerald-900/30 px-2 py-1">
-            <span className="material-symbols-outlined text-[16px] text-emerald-600 dark:text-emerald-300" aria-hidden>check_circle</span>
-            <span>Fait</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-100">{localCounts.done}</span>
-          </span>
+        <div className="flex items-center gap-0.5 text-sm font-mono">
+          <span className="text-amber-600 dark:text-amber-400">{localCounts.backlog}</span>
+          <span className="text-slate-400">.</span>
+          <span className="text-sky-600 dark:text-sky-400">{localCounts.inProgress}</span>
+          <span className="text-slate-400">.</span>
+          <span className="text-rose-600 dark:text-rose-400">{localCounts.blocked}</span>
+          <span className="text-slate-400">.</span>
+          <span className="text-emerald-600 dark:text-emerald-400">{localCounts.done}</span>
         </div>
         <form onSubmit={onCreate} className="flex w-full flex-col gap-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-white/60 dark:bg-slate-800/60 p-3 sm:flex-row sm:items-center">
           <label className="flex-1 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">

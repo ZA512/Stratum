@@ -315,7 +315,7 @@ export function TeamBoardPage(){
     setDisplayOptions({ ...CARD_DISPLAY_DEFAULTS });
 
     const raw = window.localStorage.getItem(storageKey);
-    if (raw) {
+    if (raw && raw.trim()) {
       try {
         const parsed = JSON.parse(raw) as {
           hideDone?: unknown;
