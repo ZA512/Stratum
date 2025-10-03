@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import React, { ReactNode, useMemo, useState, useCallback, useEffect } from 'react';
 import { motion, type TargetAndTransition } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import type { NodeBreadcrumbItem } from '@/features/boards/boards-api';

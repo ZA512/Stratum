@@ -6,8 +6,7 @@ import type { CardDisplayOptions } from './types';
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
-const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
-type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+type EffortFilterValue = EffortValue | '__NO_EFFORT__';
 
 interface AdvancedFiltersPanelProps {
   // Assignees

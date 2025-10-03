@@ -15,7 +15,6 @@ import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
-import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 
 
