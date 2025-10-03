@@ -16,6 +16,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterDto } from './dto/register.dto';
 
 interface TokenBundle {
   accessToken: string;
@@ -198,6 +199,44 @@ export class AuthService {
     }
 
     return this.issueTokens({ id: user.id, email: user.email });
+  }
+
+  async register(dto: RegisterDto) {
+    const email = dto.email.toLowerCase();
+
+    // Vérifier si l'utilisateur existe déjà
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) {
+      throw new BadRequestException(
+        'Un utilisateur avec cet email existe déjà',
+      );
+    }
+
+    // Hasher le mot de passe
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    // Créer l'utilisateur
+    const displayName = dto.displayName ?? email.split('@')[0];
+    const user = await this.usersService.createUser({
+      email,
+      displayName,
+      locale: 'fr-FR',
+      passwordHash,
+    });
+
+    // Générer les tokens
+    const tokens = await this.issueTokens({ id: user.id, email: user.email });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      },
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      refreshExpiresAt: tokens.refreshExpiresAt.toISOString(),
+    };
   }
 
   async logout(dto: LogoutDto) {
