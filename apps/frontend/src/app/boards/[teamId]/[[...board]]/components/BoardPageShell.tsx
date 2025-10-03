@@ -16,6 +16,7 @@ import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
 import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
+import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -185,6 +186,12 @@ const parseSearchQuery = (raw: string): ParsedSearchQuery => {
   };
 };
 
+// ------------------------------------------------------------------
+// Composant principal (restauration d'états perdus dans refactor).
+// ------------------------------------------------------------------
+// NOTE: La définition originale de TeamBoardPage a été déplacée / tronquée.
+// On conserve ici une reconstruction complète minimaliste + TODO pour réintégrer
+// l'ensemble des handlers si nécessaire.
 function BoardSkeleton(){
   return (
     <div className="flex gap-4 overflow-x-auto">
@@ -242,10 +249,12 @@ export function TeamBoardPage(){
   const [filterHasChildren, setFilterHasChildren] = useState(false);
   const [sortPriority, setSortPriority] = useState(false);
   const [sortDueDate, setSortDueDate] = useState(false);
+  // États de recherche / panneau avancé restaurés
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  // états déjà uniques (pas de doublon plus haut désormais)
   const [filtersHydrated, setFiltersHydrated] = useState(false);
   const searchBlurTimeout = useRef<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardNode | null>(null);
@@ -1130,151 +1139,28 @@ export function TeamBoardPage(){
                     </button>
                   )}
                   {filtersExpanded && (
-                    <div className="absolute left-0 right-0 top-full z-40 mt-3">
-                      <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-white/15 bg-surface/95 shadow-2xl backdrop-blur">
-                        <div className="flex items-start justify-between gap-4 px-6 py-4">
-                          <div>
-                            <h3 className="text-sm font-semibold text-foreground">Filtres avancés</h3>
-                            <p className="text-xs text-muted">Combinez assignés, priorités, efforts et options d’affichage.</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {hasActiveFilters && (
-                              <button
-                                type="button"
-                                onClick={resetFilters}
-                                className="text-xs font-semibold text-muted transition hover:text-foreground"
-                              >
-                                Réinitialiser
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setFiltersExpanded(false)}
-                              className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-                            >
-                              Fermer
-                            </button>
-                          </div>
-                        </div>
-                        <div className="max-h-[60vh] overflow-y-auto px-6 pb-6">
-                          <div className="grid gap-6 md:grid-cols-2">
-                            <section className="space-y-3 text-xs">
-                              <div className="space-y-2">
-                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Utilisateurs</h4>
-                                <MultiSelectCombo
-                                  options={assigneeOptions}
-                                  selectedIds={selectedAssignees}
-                                  onChange={setSelectedAssignees}
-                                  placeholder="Choisir des utilisateurs à filtrer"
-                                  searchPlaceholder="Rechercher un utilisateur…"
-                                  emptyMessage="Aucun utilisateur assigné"
-                                  noResultsMessage="Aucun utilisateur trouvé"
-                                />
-                              </div>
-                              <p className="text-[11px] text-muted">
-                                Ajoutez « Aucun assigné » pour isoler les tâches sans responsable ou combinez plusieurs membres.
-                              </p>
-                            </section>
-                            <section className="space-y-6 text-xs">
-                              <div>
-                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Priorités</h4>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {PRIORITY_OPTIONS.map((option) => (
-                                    <label
-                                      key={option.value}
-                                      className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedPriorities.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="accent-accent"
-                                        checked={selectedPriorities.includes(option.value)}
-                                        onChange={() => togglePriority(option.value)}
-                                      />
-                                      {option.label}
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <h4 className="text-[11px] uppercase tracking-wide text-muted">Efforts</h4>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <label className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(NO_EFFORT_TOKEN) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}>
-                                    <input
-                                      type="checkbox"
-                                      className="accent-accent"
-                                      checked={selectedEfforts.includes(NO_EFFORT_TOKEN)}
-                                      onChange={() => toggleEffort(NO_EFFORT_TOKEN)}
-                                    />
-                                    Sans effort
-                                  </label>
-                                  {EFFORT_OPTIONS.map((option) => (
-                                    <label
-                                      key={option.value}
-                                      className={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${selectedEfforts.includes(option.value) ? 'border-accent bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="accent-accent"
-                                        checked={selectedEfforts.includes(option.value)}
-                                        onChange={() => toggleEffort(option.value)}
-                                      />
-                                      {option.label}
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            </section>
-                            <section className="flex flex-col gap-3 text-xs md:col-span-2">
-                              <label className="flex items-center gap-2 text-muted">
-                                <input type="checkbox" className="accent-accent" checked={hideDone} onChange={(event) => setHideDone(event.target.checked)} />
-                                Masquer les colonnes DONE
-                              </label>
-                              <label className="flex items-center gap-2 text-muted">
-                                <input type="checkbox" className="accent-accent" checked={filterHasChildren} onChange={(event) => setFilterHasChildren(event.target.checked)} />
-                                Avec sous-kanban
-                              </label>
-                            </section>
-                            <section className="space-y-3 text-xs md:col-span-2">
-                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Hauteur des colonnes</h4>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setDisplayOptions(prev => ({ ...prev, columnHeight: 'auto' }))}
-                                  className={pillClass(displayOptions.columnHeight === 'auto')}
-                                  aria-pressed={displayOptions.columnHeight === 'auto'}
-                                >
-                                  Colonnes à l&apos;infini (auto)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDisplayOptions(prev => ({ ...prev, columnHeight: 'fixed' }))}
-                                  className={pillClass(displayOptions.columnHeight === 'fixed')}
-                                  aria-pressed={displayOptions.columnHeight === 'fixed'}
-                                >
-                                  Hauteur limitée avec scroll
-                                </button>
-                              </div>
-                            </section>
-                            <section className="space-y-3 text-xs md:col-span-2">
-                              <h4 className="text-[11px] uppercase tracking-wide text-muted">Affichage des cartes</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {DISPLAY_TOGGLE_CONFIG.map(({ key, label }) => (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => toggleDisplayOption(key)}
-                                    className={pillClass(displayOptions[key] as boolean)}
-                                    aria-pressed={displayOptions[key] as boolean}
-                                  >
-                                    {label} {displayOptions[key] ? 'on' : 'off'}
-                                  </button>
-                                ))}
-                              </div>
-                            </section>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <AdvancedFiltersPanel
+                      assigneeOptions={assigneeOptions}
+                      selectedAssignees={selectedAssignees}
+                      onAssigneesChange={setSelectedAssignees}
+                      priorityOptions={PRIORITY_OPTIONS}
+                      selectedPriorities={selectedPriorities}
+                      onTogglePriority={togglePriority}
+                      effortOptions={EFFORT_OPTIONS}
+                      selectedEfforts={selectedEfforts}
+                      onToggleEffort={toggleEffort}
+                      hideDone={hideDone}
+                      onHideDoneChange={setHideDone}
+                      filterHasChildren={filterHasChildren}
+                      onFilterHasChildrenChange={setFilterHasChildren}
+                      displayOptions={displayOptions}
+                      onToggleDisplayOption={toggleDisplayOption}
+                      onColumnHeightChange={(height) => setDisplayOptions(prev => ({ ...prev, columnHeight: height }))}
+                      displayToggleConfig={DISPLAY_TOGGLE_CONFIG}
+                      hasActiveFilters={hasActiveFilters}
+                      onReset={resetFilters}
+                      onClose={() => setFiltersExpanded(false)}
+                    />
                   )}
                 </>
               )}
