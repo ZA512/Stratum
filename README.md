@@ -17,28 +17,30 @@ NPM workspaces monorepo for the Stratum fractal kanban platform. The repository 
 
 ## Quick install
 
-`ash
+```bash
 npm install
 
 cd apps/backend
-cp .env.example .env
+# Créer le fichier .env avec votre configuration PostgreSQL
+# DATABASE_URL="postgresql://username:password@localhost:5432/stratum?schema=public"
+npm run prisma:generate
 npm run prisma:migrate
 npm run db:seed
-`
+```
 
 ## Run the apps
 
 Backend:
-`ash
+```bash
 npm run dev:backend
-`
+```
 
 Frontend:
-`ash
+```bash
 npm run dev:frontend
-`
+```
 
-By default the backend exposes http://localhost:3000 (API available under /api/v1). The frontend also runs on port 3000; override the base URL with NEXT_PUBLIC_API_URL if required.
+By default the backend exposes http://localhost:4001/api/v1 with Swagger documentation at http://localhost:4001/docs. The frontend runs on port 3000; override the backend URL with NEXT_PUBLIC_API_URL if required.
 
 ## Backend modules
 
@@ -48,18 +50,16 @@ By default the backend exposes http://localhost:3000 (API available under /api/v
 - BoardsModule : board read endpoints (columns, nodes)
 - NodesModule : create and convert nodes (simple / medium / complex)
 
-REST contracts are documented via Swagger (/docs) and covered by the Jest e2e suite (
-pm run test:e2e).
+REST contracts are documented via Swagger (/docs) and covered by the Jest e2e suite (npm run test:e2e).
 
 ## Demo data
 
+npm run db:seed loads:
 
-pm run db:seed loads:
-
-- 1 team Stratum Core
-- user lice@stratum.dev with password stratum
+- 1 team "Stratum Core"
+- user alice@stratum.dev with password "stratum"
 - 1 root board with the 4 default columns
-- sample nodes including a checklist
+- sample nodes including a hierarchical structure for testing breadcrumb navigation
 
 ## Frontend notes
 
@@ -67,20 +67,23 @@ The dashboard lists teams returned by the API and links to the corresponding boa
 
 Runtime variable:
 
-- NEXT_PUBLIC_API_URL (defaults to http://localhost:3000/api/v1)
+- NEXT_PUBLIC_API_URL (defaults to http://localhost:4001/api/v1)
 
 ## Root scripts
 
-- 
-pm run dev:backend
-- 
-pm run dev:frontend
-- 
-pm run build:backend
-- 
-pm run build:frontend
-- 
-pm run test:e2e
+- npm run dev:backend
+- npm run dev:frontend
+- npm run build:backend
+- npm run build:frontend
+- npm run test:e2e
+
+## Database management
+
+- npm run prisma:generate - Generate Prisma client
+- npm run prisma:migrate - Apply database migrations
+- npm run prisma:studio - Open Prisma Studio (database GUI)
+- npm run db:seed - Load demo data
+- npm run db:reset - Reset database and reload demo data
 
 ## Roadmap
 
