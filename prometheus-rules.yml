@@ -1,0 +1,43 @@
+groups:
+  - name: stratum-core
+    rules:
+      - alert: HighErrorRate
+        expr: increase(stratum_http_errors_total[5m]) / increase(stratum_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Taux d'erreurs HTTP élevé
+          description: Plus de 5% d'erreurs sur 5 minutes.
+      - alert: HighLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(stratum_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Latence HTTP P95 élevée
+          description: P95 > 500ms depuis 10m.
+      - alert: PrismaErrorsSpike
+        expr: increase(stratum_prisma_errors_total[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pic d'erreurs Prisma
+          description: >20 erreurs Prisma sur 5m.
+      - alert: BackupStale
+        expr: stratum_backup_age_seconds > 86400
+        for: 60m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backup trop ancien
+          description: Aucun backup < 24h.
+      - alert: EventLoopLag
+        expr: stratum_event_loop_lag_seconds{phase="max"} > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Event loop Node saturée
+          description: Lag > 200ms sur 10m.
