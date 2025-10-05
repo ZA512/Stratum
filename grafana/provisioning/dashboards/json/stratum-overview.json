@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 38,
+  "title": "Stratum - Overview",
+  "tags": ["stratum"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "HTTP Error Rate % (5m)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "100 * (increase(stratum_http_errors_total[5m]) / clamp_min(increase(stratum_http_requests_total[5m]),1))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "thresholds": {"mode": "absolute","steps": [{"color": "green","value": null},{"color": "orange","value": 5},{"color": "red","value": 10}]}}}
+    },
+    {
+      "type": "stat",
+      "title": "HTTP P95 Latency (s)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(stratum_http_request_duration_seconds_bucket[5m])) by (le))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute","steps": [{"color": "green","value": null},{"color": "orange","value": 0.5},{"color": "red","value": 1}]}}}
+    },
+    {
+      "type": "stat",
+      "title": "Prisma P95 Latency (s)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(stratum_prisma_query_duration_seconds_bucket[5m])) by (le))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "type": "graph",
+      "title": "HTTP Requests /s",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "sum(rate(stratum_http_requests_total[1m]))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "HTTP Error Rate %",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "100 * (sum(rate(stratum_http_errors_total[1m])) / clamp_min(sum(rate(stratum_http_requests_total[1m])),1))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Event Loop Lag (s)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "stratum_event_loop_lag_seconds"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Nodes Total & Blocked",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "stratum_nodes_total"},
+        {"expr": "stratum_nodes_blocked_total"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Refresh Tokens Actifs",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "stratum_refresh_tokens_active"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Backup Age (h)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "stratum_backup_age_seconds / 3600"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "h", "thresholds": {"mode": "absolute","steps": [{"color": "green","value": null},{"color": "orange","value": 20},{"color": "red","value": 24}]}}}
+    }
+  ],
+  "time": {"from": "now-6h", "to": "now"},
+  "refresh": "30s"
+}

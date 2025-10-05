@@ -1,0 +1,15 @@
+node_modules
+.git
+.gitignore
+Dockerfile
+npm-debug.log
+yarn-error.log
+.vscode
+**/dist
+**/.next/cache
+**/.turbo
+coverage
+logs
+apps/backend/logs
+*.md
+backup_stratum_pg.sh

@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stratum-postgres
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432" # exposer seulement si nécessaire (peut être retiré en prod)
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: stratum-backend
+    env_file: [.env]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
+      PORT: ${BACKEND_PORT}
+    entrypoint: ["/bin/sh", "/app/apps/backend/entrypoint-backend.sh"]
+    ports:
+      - "${BACKEND_PORT}:4001"
+    restart: unless-stopped
+    volumes:
+      - ./docker/entrypoint-backend.sh:/app/apps/backend/entrypoint-backend.sh:ro
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: stratum-frontend
+    env_file: [.env]
+    depends_on:
+      - backend
+    environment:
+      PORT: ${FRONTEND_PORT}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: stratum-nginx
+    profiles: ["nginx"]
+    depends_on:
+      - frontend
+      - backend
+    env_file: [.env]
+    environment:
+      SERVER_NAME: ${SERVER_NAME}
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${NGINX_CERT_PATH}:/etc/ssl/certs/fullchain.pem:ro
+      - ${NGINX_KEY_PATH}:/etc/ssl/private/privkey.pem:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+    name: stratum_pg_data
