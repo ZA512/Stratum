@@ -39,7 +39,7 @@ export class AuthService {
   ) {
     this.accessTokenTtl = configService.get<string>('JWT_ACCESS_TTL', '15m');
     // On autorise: nombre (ms), string numérique, ou forme humaine ("30d", "12h", "15m", "45s").
-    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 30; // 30 jours
+    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 90; // 90 jours
     const rawRefreshTtl: unknown = configService.get(
       'JWT_REFRESH_TTL_MS',
       DEFAULT_REFRESH_MS,
@@ -127,9 +127,9 @@ export class AuthService {
     const refreshToken = randomBytes(48).toString('hex');
     const refreshHash = this.hashToken(refreshToken);
     const refreshExpiresAtMs = Date.now() + this.refreshTokenTtlMs;
-    // Sécurise: si dépassement ou NaN => fallback 30 jours.
+    // Sécurise: si dépassement ou NaN => fallback 90 jours.
     const MAX_TS = 8.64e15; // limite Date
-    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 30;
+    const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 90;
     const safeMs =
       !Number.isFinite(refreshExpiresAtMs) || refreshExpiresAtMs > MAX_TS
         ? Date.now() + DEFAULT_REFRESH_MS

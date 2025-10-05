@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    setCookie(ACCESS_COOKIE, value.tokens.accessToken, 7);
+    setCookie(ACCESS_COOKIE, value.tokens.accessToken, 90);
     // Pas de schedule ici pour éviter dépendance circulaire; gérer en amont/après login
   }, [clearRefreshTimer]);
 
@@ -95,11 +95,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const accessExpMs = getAccessExpiryMs(sess.tokens.accessToken);
     const refreshExpMs = new Date(sess.tokens.refreshExpiresAt).getTime();
     const now = Date.now();
-    // Par défaut, refresh dans 10 min si on ne peut pas décoder.
-    let delay = 10 * 60 * 1000;
+    // Rafraîchir 5 minutes avant l'expiration de l'accessToken (standard pour 15min)
+    const REFRESH_BEFORE_MS = 5 * 60 * 1000; // 5 minutes
+    let delay = 10 * 60 * 1000; // fallback 10min
     if (accessExpMs && accessExpMs > now) {
-      // rafraîchir 60s avant l'expiration d'accès
-      delay = Math.max(5_000, accessExpMs - now - 60_000);
+      delay = Math.max(5_000, accessExpMs - now - REFRESH_BEFORE_MS);
     }
     // Ne pas dépasser la fin du refreshToken moins 10s
     if (Number.isFinite(refreshExpMs)) {
@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed: AuthSession = JSON.parse(raw);
         setSession(parsed);
-        setCookie(ACCESS_COOKIE, parsed.tokens.accessToken, 7);
+        setCookie(ACCESS_COOKIE, parsed.tokens.accessToken, 90);
         scheduleNextRefresh(parsed);
       } else {
         // Si aucune session et pas déjà sur /login -> redirection (on conserve l'URL visée)
@@ -198,7 +198,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     function onFocus() {
       if (!session) return;
       const expMs = getAccessExpiryMs(session.tokens.accessToken);
-      if (expMs && expMs - Date.now() < 2 * 60_000) {
+      const REFRESH_BEFORE_MS = 2 * 60 * 1000; // 2 minutes
+      if (expMs && expMs - Date.now() < REFRESH_BEFORE_MS) {
         // si moins de 2 minutes restantes, forcer un refresh immédiat
         clearRefreshTimer();
         (async () => {
@@ -223,6 +224,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [session, getAccessExpiryMs, clearRefreshTimer, persistSession]);
+
+  // Rafraîchir à chaque interaction utilisateur (clic, scroll, mouvement souris)
+  useEffect(() => {
+    if (!session) return;
+    
+    let lastRefresh = Date.now();
+    const MIN_INTERVAL_MS = 5 * 60 * 1000; // Minimum 5min entre chaque refresh automatique
+    
+    function onActivity() {
+      if (!session) return;
+      const now = Date.now();
+      // Éviter de spammer les refresh : minimum 5min d'intervalle
+      if (now - lastRefresh < MIN_INTERVAL_MS) return;
+      
+      const expMs = getAccessExpiryMs(session.tokens.accessToken);
+      const REFRESH_BEFORE_MS = 2 * 60 * 1000; // 2 minutes
+      if (expMs && expMs - Date.now() < REFRESH_BEFORE_MS) {
+        lastRefresh = now;
+        (async () => {
+          try {
+            const res = await refreshTokens(session.tokens.refreshToken);
+            const nextSession: AuthSession = {
+              user: session.user,
+              tokens: {
+                accessToken: res.accessToken,
+                refreshToken: res.refreshToken,
+                refreshExpiresAt: res.refreshExpiresAt,
+              },
+            };
+            setSession(nextSession);
+            persistSession(nextSession);
+            scheduleNextRefresh(nextSession);
+          } catch {
+            // Ignorer les erreurs silencieusement
+          }
+        })();
+      }
+    }
+    
+    // Écouter plusieurs types d'événements pour détecter l'activité
+    window.addEventListener('click', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('scroll', onActivity, { passive: true });
+    window.addEventListener('mousemove', onActivity, { passive: true });
+    
+    return () => {
+      window.removeEventListener('click', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('mousemove', onActivity);
+    };
+  }, [session, getAccessExpiryMs, persistSession, scheduleNextRefresh]);
 
   const value = useMemo<AuthContextValue>(() => ({
     user: session?.user ?? null,
