@@ -97,5 +97,209 @@
       "renameError": "Unable to rename the team",
       "deleteError": "Unable to delete the team"
     }
+  },
+  "dashboard": {
+    "nav": {
+      "execution": "Execution",
+      "progress": "Progress & Forecast",
+      "risk": "Risks & Health"
+    },
+    "execution": {
+      "title": "Execution dashboard",
+      "description": "Identify priorities, blockers, upcoming deadlines, and activity across your board."
+    },
+    "progress": {
+      "title": "Progress & forecast dashboard",
+      "description": "Follow completion trends, throughput, forecasts, and overdue work to stay on track."
+    },
+    "risk": {
+      "title": "Risks & health dashboard",
+      "description": "Monitor stagnation, anomalies, data quality, and health signals to anticipate issues."
+    },
+    "generatedAt": "Generated {value}",
+    "generatedAtLabel": "Generated",
+    "datasetRefreshedLabel": "Data refreshed",
+    "modes": {
+      "selfLabel": "Mode",
+      "includeDescendants": "Include descendants",
+      "compareChildren": "Compare sub-boards"
+    },
+    "modeLabels": {
+      "self": "Focus on current board",
+      "aggregated": "Include descendants",
+      "comparison": "Compare sub-boards"
+    },
+    "hiddenWidgets": {
+      "button": "Hidden widgets ({count})",
+      "title": "Hidden widgets",
+      "subtitle": "Widgets that did not meet requirements are listed here with their reason.",
+      "close": "Close panel",
+      "empty": "No hidden widgets — everything is displayed."
+    },
+    "widgets": {
+      "exec-priorities": {
+        "label": "Immediate priorities",
+        "description": "Highlight the critical tasks that require rapid attention."
+      },
+      "exec-blocked": {
+        "label": "Active blockers",
+        "description": "Cards marked as blocked that require intervention."
+      },
+      "exec-upcomingDue": {
+        "label": "Upcoming due dates",
+        "description": "Tasks whose due date falls within the configured window."
+      },
+      "exec-wipColumns": {
+        "label": "WIP by column",
+        "description": "Distribution of work in progress compared to column limits."
+      },
+      "exec-activity24h": {
+        "label": "Activity in the last 24h",
+        "description": "Flow of card movements during the last 24 hours."
+      },
+      "exec-needInput": {
+        "label": "Needs input",
+        "description": "Cards requiring additional information or arbitration."
+      },
+      "progress-percent": {
+        "label": "Completion percentage",
+        "description": "Current ratio of done items versus total scope."
+      },
+      "progress-burnup": {
+        "label": "Burnup",
+        "description": "Cumulative done versus total based on daily snapshots."
+      },
+      "progress-throughput": {
+        "label": "Throughput 7/14 days",
+        "description": "Done items per day with seven and fourteen-day averages."
+      },
+      "progress-forecast": {
+        "label": "Delivery forecast",
+        "description": "Estimated completion window derived from recent throughput."
+      },
+      "progress-overdue": {
+        "label": "Overdue tasks",
+        "description": "Overdue counts and ratios across the board."
+      },
+      "progress-criticalAging": {
+        "label": "Critical stagnation",
+        "description": "In-progress tasks exceeding the configured staleness threshold."
+      },
+      "progress-effortWeighted": {
+        "label": "Effort-weighted progress",
+        "description": "Completion progress weighted by effort coverage."
+      },
+      "risk-healthScore": {
+        "label": "Health score",
+        "description": "Composite risk score combining overdue, blocked, stale, and missing due-date signals."
+      },
+      "risk-agingWip": {
+        "label": "Aging WIP",
+        "description": "Age distribution of in-progress work relative to thresholds."
+      },
+      "risk-blockedPersistent": {
+        "label": "Persistent blockers",
+        "description": "Blocked items aging beyond the configured highlight window."
+      },
+      "risk-overdueDistribution": {
+        "label": "Overdue distribution",
+        "description": "Breakdown of overdue work by aging buckets."
+      },
+      "risk-flowAnomaly": {
+        "label": "Flow anomalies",
+        "description": "Detection of unusual throughput changes compared to baseline."
+      },
+      "risk-concentration": {
+        "label": "Risk concentration",
+        "description": "Focus of risks across teams, columns, or boards."
+      },
+      "risk-dataQuality": {
+        "label": "Data quality",
+        "description": "Missing-field ratios impacting dashboard reliability."
+      }
+    },
+    "widget": {
+      "duration": "Computed in {value} ms",
+      "status": {
+        "ok": "Available",
+        "no-data": "No data available",
+        "insufficient-coverage": "Insufficient data coverage",
+        "insufficient-history": "Not enough history"
+      },
+      "empty": {
+        "generic": "We could not display this widget.",
+        "no-data": "This insight needs more recent activity before it can show results.",
+        "insufficient-coverage": "Collect more samples or adjust the coverage threshold to reveal this widget.",
+        "insufficient-history": "Historical data is still being collected—check back later.",
+        "list": "No entry yet.",
+        "noContent": "Not provided"
+      }
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {current} of {total}"
+    },
+    "healthScore": {
+      "title": "Overall health",
+      "caption": "Score weighted by overdue, blockers, stale work, and missing due dates.",
+      "totals": "{total} tasks · {withDue} with a due date · {inProgress} in progress",
+      "ariaLabel": "Health score {score}% – {severity}",
+      "ariaUnknown": "Health score unavailable",
+      "severity": {
+        "low": {
+          "label": "Healthy",
+          "aria": "Healthy (green)"
+        },
+        "medium": {
+          "label": "At risk",
+          "aria": "At risk (amber)"
+        },
+        "high": {
+          "label": "Critical",
+          "aria": "Critical (red)"
+        },
+        "unknown": {
+          "label": "No score",
+          "aria": "No severity available"
+        }
+      },
+      "breakdownTitle": "Breakdown",
+      "ratio": "Impact: {value}",
+      "weight": "Weight: {value}%",
+      "breakdown": {
+        "overdue": {
+          "label": "Overdue",
+          "description": "Percentage of work past its due date.",
+          "tooltip": "{count} overdue task(s) · weight {weight}% · penalty {ratio}%"
+        },
+        "blocked": {
+          "label": "Blocked",
+          "description": "Active work currently blocked.",
+          "tooltip": "{count} blocked item(s) · weight {weight}% · penalty {ratio}%"
+        },
+        "stale": {
+          "label": "Stale in progress",
+          "description": "Work stuck in progress beyond the staleness threshold.",
+          "tooltip": "{count} stale item(s) · weight {weight}% · penalty {ratio}%"
+        },
+        "missingDue": {
+          "label": "Missing due date",
+          "description": "Tasks without a due date defined.",
+          "tooltip": "{count} task(s) missing a due date · weight {weight}% · penalty {ratio}%"
+        }
+      }
+    },
+    "metadata": {
+      "taskCount": "Tasks analysed: {count}",
+      "duration": "Total computation: {value} ms"
+    },
+    "filters": {
+      "team": "Team",
+      "board": "Board"
+    },
+    "states": {
+      "selectBoard": "Select a team and board to display dashboard insights."
+    }
   }
 }

@@ -97,5 +97,209 @@
       "renameError": "Impossible de renommer l'équipe",
       "deleteError": "Impossible de supprimer l'équipe"
     }
+  },
+  "dashboard": {
+    "nav": {
+      "execution": "Exécution",
+      "progress": "Progression & Prévision",
+      "risk": "Risques & Santé"
+    },
+    "execution": {
+      "title": "Tableau de bord Exécution",
+      "description": "Priorisez les actions immédiates : blocages, échéances proches et activité récente."
+    },
+    "progress": {
+      "title": "Tableau de bord Avancement & Prévision",
+      "description": "Suivez la complétion, le throughput, les projections et les retards pour garder le cap."
+    },
+    "risk": {
+      "title": "Tableau de bord Risques & Santé",
+      "description": "Surveillez stagnation, anomalies de flux, qualité des données et signaux de santé."
+    },
+    "generatedAt": "Généré le {value}",
+    "generatedAtLabel": "Généré",
+    "datasetRefreshedLabel": "Données mises à jour",
+    "modes": {
+      "selfLabel": "Mode",
+      "includeDescendants": "Inclure les descendants",
+      "compareChildren": "Comparer les sous-kanbans"
+    },
+    "modeLabels": {
+      "self": "Board courant uniquement",
+      "aggregated": "Inclure les descendants",
+      "comparison": "Comparer les sous-kanbans"
+    },
+    "hiddenWidgets": {
+      "button": "Widgets masqués ({count})",
+      "title": "Widgets masqués",
+      "subtitle": "Les widgets non affichés apparaissent ici avec la raison.",
+      "close": "Fermer le panneau",
+      "empty": "Aucun widget masqué : tout est affiché."
+    },
+    "widgets": {
+      "exec-priorities": {
+        "label": "Priorités immédiates",
+        "description": "Mise en avant des tâches critiques à traiter rapidement."
+      },
+      "exec-blocked": {
+        "label": "Blocages actifs",
+        "description": "Cartes marquées comme bloquées et nécessitant une action."
+      },
+      "exec-upcomingDue": {
+        "label": "Échéances proches",
+        "description": "Tâches dont l'échéance approche dans la fenêtre configurée."
+      },
+      "exec-wipColumns": {
+        "label": "Charge par colonne",
+        "description": "Distribution du WIP par colonne face aux limites définies."
+      },
+      "exec-activity24h": {
+        "label": "Activité 24h",
+        "description": "Flux des mouvements sur les 24 dernières heures."
+      },
+      "exec-needInput": {
+        "label": "Besoin d’input",
+        "description": "Cartes nécessitant des compléments ou des arbitrages."
+      },
+      "progress-percent": {
+        "label": "Progression %",
+        "description": "Ratio actuel de tâches terminées versus le périmètre total."
+      },
+      "progress-burnup": {
+        "label": "Burnup",
+        "description": "Cumuls terminés vs cumuls totaux basés sur les snapshots quotidiens."
+      },
+      "progress-throughput": {
+        "label": "Throughput 7/14 jours",
+        "description": "Tâches terminées par jour avec moyennes glissantes sur 7 et 14 jours."
+      },
+      "progress-forecast": {
+        "label": "Prévision de livraison",
+        "description": "Fenêtre estimée de complétion dérivée du throughput récent."
+      },
+      "progress-overdue": {
+        "label": "Tâches en retard",
+        "description": "Comptes et ratios des tâches en retard sur le board."
+      },
+      "progress-criticalAging": {
+        "label": "Stagnation critique",
+        "description": "Tâches en cours dépassant le seuil de stagnation configuré."
+      },
+      "progress-effortWeighted": {
+        "label": "Progression pondérée",
+        "description": "Progression de complétion pondérée par la couverture effort."
+      },
+      "risk-healthScore": {
+        "label": "Health Score",
+        "description": "Score composite combinant retards, blocages, stagnation et absence d'échéance."
+      },
+      "risk-agingWip": {
+        "label": "Aging WIP",
+        "description": "Répartition d'âge du travail en cours selon les seuils définis."
+      },
+      "risk-blockedPersistent": {
+        "label": "Blocages persistants",
+        "description": "Cartes bloquées au-delà de la fenêtre d'alerte configurée."
+      },
+      "risk-overdueDistribution": {
+        "label": "Répartition des retards",
+        "description": "Décomposition des tâches en retard par tranche d'ancienneté."
+      },
+      "risk-flowAnomaly": {
+        "label": "Anomalies de flux",
+        "description": "Détection des variations de throughput atypiques par rapport à la base."
+      },
+      "risk-concentration": {
+        "label": "Concentration des risques",
+        "description": "Focalisation des risques par équipes, colonnes ou boards."
+      },
+      "risk-dataQuality": {
+        "label": "Qualité des données",
+        "description": "Ratios de champs manquants impactant la fiabilité des dashboards."
+      }
+    },
+    "widget": {
+      "duration": "Calculé en {value} ms",
+      "status": {
+        "ok": "Disponible",
+        "no-data": "Aucune donnée disponible",
+        "insufficient-coverage": "Couverture insuffisante",
+        "insufficient-history": "Historique insuffisant"
+      },
+      "empty": {
+        "generic": "Nous n'avons pas pu afficher ce widget.",
+        "no-data": "Ce signal nécessite plus d'activité récente pour produire un résultat.",
+        "insufficient-coverage": "Collectez davantage d'échantillons ou ajustez le seuil de couverture pour l'afficher.",
+        "insufficient-history": "L'historique est encore en cours de consolidation — revenez plus tard.",
+        "list": "Aucun élément pour le moment.",
+        "noContent": "Non renseigné"
+      }
+    },
+    "pagination": {
+      "previous": "Précédent",
+      "next": "Suivant",
+      "page": "Page {current} sur {total}"
+    },
+    "healthScore": {
+      "title": "Santé globale",
+      "caption": "Score pondéré par les retards, blocages, stagnation et dates d'échéance manquantes.",
+      "totals": "{total} tâches · {withDue} avec échéance · {inProgress} en cours",
+      "ariaLabel": "Score de santé {score}% – {severity}",
+      "ariaUnknown": "Score de santé indisponible",
+      "severity": {
+        "low": {
+          "label": "Sain",
+          "aria": "Sain (vert)"
+        },
+        "medium": {
+          "label": "Sous surveillance",
+          "aria": "Sous surveillance (orange)"
+        },
+        "high": {
+          "label": "Critique",
+          "aria": "Critique (rouge)"
+        },
+        "unknown": {
+          "label": "Indisponible",
+          "aria": "Aucune sévérité disponible"
+        }
+      },
+      "breakdownTitle": "Détail",
+      "ratio": "Impact : {value}",
+      "weight": "Poids : {value}%",
+      "breakdown": {
+        "overdue": {
+          "label": "En retard",
+          "description": "Part des tâches dépassant leur date d'échéance.",
+          "tooltip": "{count} tâche(s) en retard · poids {weight}% · pénalité {ratio}%"
+        },
+        "blocked": {
+          "label": "Bloquées",
+          "description": "Travaux actifs actuellement bloqués.",
+          "tooltip": "{count} élément(s) bloqué(s) · poids {weight}% · pénalité {ratio}%"
+        },
+        "stale": {
+          "label": "Stagnation",
+          "description": "Travaux en cours dépassant le seuil de stagnation.",
+          "tooltip": "{count} élément(s) stagnant(s) · poids {weight}% · pénalité {ratio}%"
+        },
+        "missingDue": {
+          "label": "Sans échéance",
+          "description": "Tâches sans date d'échéance définie.",
+          "tooltip": "{count} tâche(s) sans échéance · poids {weight}% · pénalité {ratio}%"
+        }
+      }
+    },
+    "metadata": {
+      "taskCount": "Tâches analysées : {count}",
+      "duration": "Temps total de calcul : {value} ms"
+    },
+    "filters": {
+      "team": "Équipe",
+      "board": "Board"
+    },
+    "states": {
+      "selectBoard": "Sélectionnez une équipe et un board pour afficher les indicateurs."
+    }
   }
 }

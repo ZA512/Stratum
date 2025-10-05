@@ -1,9 +1,12 @@
 {
+  "preset": "ts-jest/presets/default-esm",
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
-  "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+  "extensionsToTreatAsEsm": [".ts"],
+  "moduleNameMapper": {
+    "^@nestjs/bullmq$": "<rootDir>/../src/stubs/nest-bullmq.ts",
+    "^bullmq$": "<rootDir>/../src/stubs/bullmq.ts"
   }
 }
