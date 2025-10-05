@@ -6,7 +6,18 @@ import { AppModule } from '../src/app.module';
 // E2E simplifié: dépend d'une base réelle; si la DB locale n'est pas préparée ce test pourra être ignoré.
 // Objectif: vérifier qu'après bootstrap, la création d'une sous-tâche retourne un parent avec board + colonnes.
 
-describe('Auto Board E2E (simplifié)', () => {
+const describeIfDatabase: typeof describe = process.env.DATABASE_URL
+  ? describe
+  : describe.skip;
+
+if (!process.env.DATABASE_URL) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[e2e] DATABASE_URL non défini, suite Auto Board E2E ignorée.',
+  );
+}
+
+describeIfDatabase('Auto Board E2E (simplifié)', () => {
   let app: INestApplication;
   let httpServer: any;
   let authToken: string;

@@ -31,7 +31,18 @@ function ensureArray<T = unknown>(value: unknown, context: string): T[] {
 
 const DEMO_EMAIL = 'alice@stratum.dev';
 
-describe('App API (e2e)', () => {
+const describeIfDatabase: typeof describe = process.env.DATABASE_URL
+  ? describe
+  : describe.skip;
+
+if (!process.env.DATABASE_URL) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[e2e] DATABASE_URL non défini, suite App API (e2e) ignorée.',
+  );
+}
+
+describeIfDatabase('App API (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let accessToken: string;

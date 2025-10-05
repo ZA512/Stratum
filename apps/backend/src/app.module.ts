@@ -8,6 +8,9 @@ import { BoardsModule } from './modules/boards/boards.module';
 import { NodesModule } from './modules/nodes/nodes.module';
 import { TeamsModule } from './modules/teams/teams.module';
 import { UsersModule } from './modules/users/users.module';
+import { UserSettingsModule } from './modules/user-settings/user-settings.module';
+import { DashboardSnapshotsModule } from './modules/dashboard-snapshots/dashboard-snapshots.module';
+import { DashboardsModule } from './modules/dashboards/dashboards.module';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { UsersModule } from './modules/users/users.module';
     TeamsModule,
     BoardsModule,
     NodesModule,
+    UserSettingsModule,
+    DashboardSnapshotsModule,
+    DashboardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

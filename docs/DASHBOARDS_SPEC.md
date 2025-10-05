@@ -95,7 +95,7 @@ interface WidgetDefinition {
   supportedModes: Array<'SELF' | 'AGGREGATED' | 'COMPARISON'>;
   requirements?: {
     minItems?: number;
-    minCoverage?: Array<{ field: string; ratio: number }>;
+    minCoverage?: Array<{ field: string; ratio: number; relaxedRatio?: number }>;
     historyDays?: number;
   };
   compute(ctx: WidgetContext): Promise<WidgetResult>;
@@ -108,6 +108,8 @@ interface WidgetResult {
   meta?: Record<string, any>;
 }
 ```
+
+`datasetRefreshedAt` correspond au dernier horodatage observé parmi les tâches chargées et les snapshots journaliers utilisés pour calculer les widgets.
 Affichage : seuls les widgets `status=ok` sont rendus. Les autres vont dans `hiddenWidgets`.
 
 ---
@@ -115,6 +117,8 @@ Affichage : seuls les widgets `status=ok` sont rendus. Les autres vont dans `hid
 | Paramètre | Défaut | Description |
 |-----------|--------|-------------|
 | `fieldCoverageThreshold` | 0.40 | Couverture minimum champ (effort, estimation, etc.) |
+| `fieldCoverageLowSampleThreshold` | 0.30 | Couverture minimale acceptée lorsque l'échantillon est faible |
+| `fieldCoverageLowSampleTaskCount` | 25 | Taille d'échantillon en dessous de laquelle on applique le seuil relaxé |
 | `minSample` | 5 | Taille minimale pour distributions / aging fiable |
 | `upcomingDueDays` | 3 | Fenêtre échéances imminentes |
 | `staleInProgressDays` | 3 | Seuil stagnation In Progress |
@@ -123,6 +127,8 @@ Affichage : seuls les widgets `status=ok` sont rendus. Les autres vont dans `hid
 | `agingWipMin` | 3 | Items min pour afficher l'Aging WIP |
 
 Stockage recommandé : table `UserSettings (userId PK, preferences JSONB)`.
+
+> **Adaptation faible échantillon** : lorsque le nombre de tâches chargées est inférieur à `fieldCoverageLowSampleTaskCount`, les widgets peuvent relâcher leurs exigences de couverture jusqu'à `fieldCoverageLowSampleThreshold` (ou au `relaxedRatio` fourni par le widget) afin d'éviter de masquer des indicateurs pertinents sur de petits kanbans.
 
 ---
 ## 9. Health Score V1
@@ -250,6 +256,7 @@ Activation uniquement si >1 sous-kanban ou échelle > seuil.
   "mode": "SELF",
   "nodeId": "node_root",
   "generatedAt": "2025-10-05T10:12:00.000Z",
+  "datasetRefreshedAt": "2025-10-05T09:55:00.000Z",
   "widgets": {
     "exec.blocked": { "status": "ok", "payload": [{ "id": "n1", "title": "Corriger API", "blockedForHours": 5.2, "reason": "Attente contrat" }] }
   },
@@ -374,20 +381,20 @@ async function getDashboard(req: DashboardRequest): Promise<DashboardResponse> {
     }
   }
 
+  const datasetRefreshedAt = resolveLatestDataTimestamp(tasks, snapshots);
   return {
     dashboard: req.dashboard,
     mode: req.mode,
     nodeId: req.nodeId,
     generatedAt: new Date().toISOString(),
+    datasetRefreshedAt,
     widgets,
     hiddenWidgets: hidden,
-    thresholds: {
-      coverage: settings.dashboard.fieldCoverageThreshold,
-      minSample: settings.dashboard.minSample
-    },
-    meta: {
-      descendantsCount: hierarchy.descendants.length,
-      version: 1
+    metadata: {
+      totalDurationMs,
+      widgetDurations,
+      taskCount: tasks.length,
+      boardIds
     }
   };
 }
@@ -430,6 +437,8 @@ Accessibilité : contrastes > 4.5:1 pour texte principal, >3:1 secondaire.
 | % widgets masqués (dataset mature) | <15% |
 | p95 durée SELF | <400ms |
 | p95 durée AGGREGATED | <900ms |
+
+_Validation 2025-05-01 : tests Jest `dashboards.performance.spec.ts` (jeu synthétique 180 cartes, 3 boards) confirment des temps de réponse <300 ms en SELF et <600 ms en AGGREGATED._
 | Taux erreurs 5xx | <0.5% |
 
 ---
@@ -444,6 +453,8 @@ Accessibilité : contrastes > 4.5:1 pour texte principal, >3:1 secondaire.
 
 ---
 ## 28. Roadmap Évolutive (Synthèse)
+_Voir `docs/dashboard-roadmap.md` pour le détail par phase._
+
 | Phase | Ajouter |
 |-------|--------|
 | 1 | Core 3 dashboards + snapshots + health v1 |

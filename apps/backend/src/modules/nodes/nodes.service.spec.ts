@@ -14,82 +14,236 @@ type MockCtx = {
   membership: any[];
 };
 
-function createMockPrisma(): PrismaService & any {
-  const ctx: MockCtx = { board: [], column: [], columnBehavior: [], node: [], membership: [] };
+function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
+  const ctx: MockCtx =
+    existingCtx ??
+    ({
+      board: [],
+      column: [],
+      columnBehavior: [],
+      node: [],
+      membership: [],
+    } as MockCtx);
 
-  const findBehavior = (teamId: string, key: ColumnBehaviorKey) => ctx.columnBehavior.find(b => b.teamId === teamId && b.key === key);
-
-  return {
+  const client: any = {
     _ctx: ctx,
     node: {
       findUnique: jest.fn(async ({ where, include }) => {
-        const n = ctx.node.find(n => n.id === where.id);
+        const n = ctx.node.find((node) => node.id === where.id);
         if (!n) return null;
+
+        const withBase = { ...n };
+
         if (include?.board) {
-          const board = ctx.board.find(b => b.nodeId === n.id);
-          if (board) {
-            const cols = ctx.column.filter(c => c.boardId === board.id).map(c => ({ ...c, behavior: ctx.columnBehavior.find(b => b.id === c.behaviorId) }));
-            return { ...n, board: { ...board, columns: cols } };
+          const boardRecord = ctx.board.find(
+            (board) => board.nodeId === n.id || board.id === where.id,
+          );
+          if (boardRecord) {
+            const boardColumns = ctx.column
+              .filter((column) => column.boardId === boardRecord.id)
+              .map((column) => ({
+                ...column,
+                behavior: ctx.columnBehavior.find(
+                  (behavior) => behavior.id === column.behaviorId,
+                ),
+              }));
+            withBase.board = { ...boardRecord, columns: boardColumns };
+          } else {
+            withBase.board = null;
           }
-          return { ...n, board: null };
         }
-        return n;
+
+        if (include?.children) {
+          const children = ctx.node
+            .filter((child) => child.parentId === n.id)
+            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+            .map((child) => {
+              const column = ctx.column.find((col) => col.id === child.columnId);
+              const behavior = column
+                ? ctx.columnBehavior.find((b) => b.id === column.behaviorId)
+                : null;
+              return {
+                id: child.id,
+                title: child.title,
+                columnId: child.columnId,
+                column: column
+                  ? {
+                      id: column.id,
+                      behavior: behavior ? { key: behavior.key } : null,
+                    }
+                  : null,
+              };
+            });
+          withBase.children = children;
+        }
+
+        if (include?.assignments) {
+          withBase.assignments = [];
+        }
+
+        if (include?.comments) {
+          withBase.comments = [];
+        }
+
+        return withBase;
       }),
       aggregate: jest.fn(async ({ where }) => {
-        const filtered = ctx.node.filter(n => n.parentId === where.parentId && n.columnId === where.columnId);
-        const max = filtered.reduce((acc, n) => (n.position > acc ? n.position : acc), 0);
+        const filtered = ctx.node.filter(
+          (node) =>
+            node.parentId === where.parentId &&
+            node.columnId === where.columnId,
+        );
+        const max = filtered.reduce(
+          (acc, node) => (node.position > acc ? node.position : acc),
+          0,
+        );
         return { _max: { position: filtered.length ? max : null } };
       }),
       create: jest.fn(async ({ data }) => {
-        ctx.node.push({ ...data, createdAt: new Date(), updatedAt: new Date() });
-        return ctx.node[ctx.node.length - 1];
+        const record = {
+          ...data,
+          statusMetadata: data.statusMetadata ?? {
+            startedAt: null,
+            doneAt: null,
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        ctx.node.push(record);
+        return record;
       }),
       update: jest.fn(async ({ where, data }) => {
-        const idx = ctx.node.findIndex(n => n.id === where.id);
+        const idx = ctx.node.findIndex((node) => node.id === where.id);
         if (idx === -1) throw new Error('node not found');
         ctx.node[idx] = { ...ctx.node[idx], ...data };
         return ctx.node[idx];
       }),
-      count: jest.fn(async ({ where }) => ctx.node.filter(n => n.parentId === where.parentId).length),
+      updateMany: jest.fn(async ({ where, data }) => {
+        let count = 0;
+        ctx.node = ctx.node.map((node) => {
+          const matchParent =
+            where.parentId === undefined || node.parentId === where.parentId;
+          const matchColumn =
+            where.columnId === undefined || node.columnId === where.columnId;
+          if (matchParent && matchColumn) {
+            count += 1;
+            const increment = data?.position?.increment ?? 0;
+            return {
+              ...node,
+              position: (node.position ?? 0) + increment,
+            };
+          }
+          return node;
+        });
+        return { count };
+      }),
+      count: jest.fn(async ({ where }) =>
+        ctx.node.filter((node) => {
+          const matchParent =
+            where.parentId === undefined || node.parentId === where.parentId;
+          const matchColumn =
+            where.columnId === undefined || node.columnId === where.columnId;
+          return matchParent && matchColumn;
+        }).length,
+      ),
       findMany: jest.fn(async () => []),
     },
     board: {
       findUnique: jest.fn(async ({ where, include }) => {
-        const b = ctx.board.find(b => b.nodeId === where.nodeId || b.id === where.id);
-        if (!b) return null;
-        if (include?.columns) {
-          const cols = ctx.column.filter(c => c.boardId === b.id).map(c => ({ ...c, behavior: ctx.columnBehavior.find(cb => cb.id === c.behaviorId) }));
-          return { ...b, columns: cols };
+        const boardRecord = ctx.board.find(
+          (board) => board.nodeId === where.nodeId || board.id === where.id,
+        );
+        if (!boardRecord) return null;
+
+        if (include?.columns || include?.include?.columns) {
+          const boardColumns = ctx.column
+            .filter((column) => column.boardId === boardRecord.id)
+            .map((column) => ({
+              ...column,
+              behavior: ctx.columnBehavior.find(
+                (behavior) => behavior.id === column.behaviorId,
+              ),
+            }));
+          return { ...boardRecord, columns: boardColumns };
         }
-        return b;
+
+        if (include?.select?.columns) {
+          const boardColumns = ctx.column
+            .filter((column) => column.boardId === boardRecord.id)
+            .map((column) => ({
+              id: column.id,
+              behavior: {
+                key:
+                  ctx.columnBehavior.find(
+                    (behavior) => behavior.id === column.behaviorId,
+                  )?.key ?? null,
+              },
+            }));
+          return { id: boardRecord.id, columns: boardColumns };
+        }
+
+        return boardRecord;
       }),
       create: jest.fn(async ({ data }) => {
-        const rec = { id: data.id ?? 'board-' + (ctx.board.length + 1), nodeId: data.nodeId, createdAt: new Date(), updatedAt: new Date() };
-        ctx.board.push(rec);
-        return rec;
+        const record = {
+          id: data.id ?? 'board-' + (ctx.board.length + 1),
+          nodeId: data.nodeId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        ctx.board.push(record);
+        return record;
       }),
     },
     columnBehavior: {
-      findMany: jest.fn(async ({ where }) => ctx.columnBehavior.filter(b => b.teamId === where.teamId && (!where.key?.in || where.key.in.includes(b.key)))),
+      findMany: jest.fn(async ({ where }) =>
+        ctx.columnBehavior.filter(
+          (behavior) =>
+            behavior.teamId === where.teamId &&
+            (!where.key?.in || where.key.in.includes(behavior.key)),
+        ),
+      ),
       create: jest.fn(async ({ data }) => {
-        const rec = { id: 'beh-' + (ctx.columnBehavior.length + 1), createdAt: new Date(), updatedAt: new Date(), ...data };
-        ctx.columnBehavior.push(rec);
-        return rec;
+        const record = {
+          id: 'beh-' + (ctx.columnBehavior.length + 1),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...data,
+        };
+        ctx.columnBehavior.push(record);
+        return record;
       }),
     },
     column: {
       create: jest.fn(async ({ data }) => {
-        const rec = { id: 'col-' + (ctx.column.length + 1), createdAt: new Date(), updatedAt: new Date(), ...data };
-        ctx.column.push(rec);
-        return rec;
+        const record = {
+          id: 'col-' + (ctx.column.length + 1),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...data,
+        };
+        ctx.column.push(record);
+        return record;
       }),
-      findUnique: jest.fn(),
+      findUnique: jest.fn(async ({ where }) =>
+        ctx.column.find((column) => column.id === where.id) ?? null,
+      ),
     },
     membership: {
-      findFirst: jest.fn(async ({ where }) => ctx.membership.find(m => m.userId === where.userId && m.teamId === where.teamId && m.status === MembershipStatus.ACTIVE) || null),
+      findFirst: jest.fn(async ({ where }) =>
+        ctx.membership.find(
+          (membership) =>
+            membership.userId === where.userId &&
+            membership.teamId === where.teamId &&
+            membership.status === MembershipStatus.ACTIVE,
+        ) || null,
+      ),
     },
-    $transaction: async (cb: any) => cb(createMockPrisma()),
-  } as any;
+  };
+
+  client.$transaction = jest.fn(async (cb: any) => cb(client));
+
+  return client as PrismaService & any;
 }
 
 describe('NodesService ensureBoard auto-create', () => {

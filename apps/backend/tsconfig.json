@@ -20,7 +20,11 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@nestjs/bullmq": ["src/stubs/nest-bullmq"],
+      "bullmq": ["src/stubs/bullmq"]
+    }
   },
   "exclude": [
     "node_modules",
