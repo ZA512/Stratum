@@ -283,9 +283,10 @@ export class NodesService {
     }
 
     const node = await this.prisma.$transaction(async (tx) => {
-      const aggregate = await tx.node.aggregate({
+      // Décaler toutes les tâches existantes de +1 pour insérer en position 0
+      await tx.node.updateMany({
         where: { parentId: parent.id, columnId: column.id },
-        _max: { position: true },
+        data: { position: { increment: 1 } },
       });
 
       const newNodeId = randomUUID();
@@ -299,7 +300,7 @@ export class NodesService {
           description: dto.description ?? null,
           path: parent.path + '/' + newNodeId,
           depth: parent.depth + 1,
-          position: (aggregate._max.position ?? 0) + 1,
+          position: 0,
           createdById: userId,
           dueAt,
         },
@@ -346,9 +347,10 @@ export class NodesService {
         }
       }
 
-      const aggregate = await tx.node.aggregate({
+      // Décaler toutes les sous-tâches existantes de +1 pour insérer en position 0
+      await tx.node.updateMany({
         where: { parentId: parent.id, columnId: backlogColumn.id },
-        _max: { position: true },
+        data: { position: { increment: 1 } },
       });
 
       const dueAt = dto.dueAt ? new Date(dto.dueAt) : null;
@@ -367,7 +369,7 @@ export class NodesService {
           description: dto.description ?? null,
           path: parent.path + '/' + newNodeId,
           depth: parent.depth + 1,
-          position: (aggregate._max.position ?? 0) + 1,
+          position: 0,
           createdById: userId,
           dueAt,
         },

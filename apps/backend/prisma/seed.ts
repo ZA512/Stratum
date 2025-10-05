@@ -186,13 +186,13 @@ async function upsertRootBoard(
   const rootNode = await prisma.node.upsert({
     where: { id: ids.rootNode },
     update: {
-      title: 'Stratum Rollout',
+      title: 'Master Kanban',
       description: 'Master project board showcasing the fractal kanban.',
     },
     create: {
       id: ids.rootNode,
       teamId: ids.team,
-      title: 'Stratum Rollout',
+      title: 'Master Kanban',
       description: 'Master project board showcasing the fractal kanban.',
       path: [ids.team, ids.rootNode].join('/'),
       depth: 0,

@@ -18,6 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Stratum Kanban",
   description: "Pilotage fractal des equipes produit",
+  // Favicon automatiquement géré par la présence de /src/app/favicon.ico
 };
 
 export default function RootLayout({
@@ -41,6 +42,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
           rel="stylesheet"
         />
+  {/* Favicon: inutile d'ajouter <link> car app/favicon.ico est détecté automatiquement */}
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}>
         <Providers>{children}</Providers>

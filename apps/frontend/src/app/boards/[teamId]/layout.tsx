@@ -10,22 +10,24 @@ import { TaskDrawer } from "@/features/nodes/task-drawer/TaskDrawer";
 function TeamBoardsShell({ children }: { children: React.ReactNode }) {
   const { breadcrumb, registerDescendTrigger, teamId, prefetchBoard } = useBoardData();
   return (
-    <FractalBreadcrumb
-      items={breadcrumb}
-      offsetX={56}
-      offsetY={40}
-      labelWidth={220}
-      visibleTrailingCount={8}
-      registerDescend={registerDescendTrigger}
-      buildHref={(item) => {
-        if (!teamId) return "#";
-        if (item.boardId) return `/boards/${teamId}/${item.boardId}`;
-        return `/boards/${teamId}`;
-      }}
-      onPreNavigate={(item) => { if (item.boardId) prefetchBoard(item.boardId); }}
-    >
-      {children}
-    </FractalBreadcrumb>
+    <div className="pt-[76px]">
+      <FractalBreadcrumb
+        items={breadcrumb}
+        offsetX={56}
+        offsetY={40}
+        labelWidth={220}
+        visibleTrailingCount={8}
+        registerDescend={registerDescendTrigger}
+        buildHref={(item) => {
+          if (!teamId) return "#";
+          if (item.boardId) return `/boards/${teamId}/${item.boardId}`;
+          return `/boards/${teamId}`;
+        }}
+        onPreNavigate={(item) => { if (item.boardId) prefetchBoard(item.boardId); }}
+      >
+        {children}
+      </FractalBreadcrumb>
+    </div>
   );
 }
 

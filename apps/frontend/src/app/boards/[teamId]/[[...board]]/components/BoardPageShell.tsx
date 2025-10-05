@@ -992,31 +992,24 @@ export function TeamBoardPage(){
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-white/10 bg-surface/90 backdrop-blur">
-        <div className="flex items-center justify-between gap-4 px-8 py-5">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.35em] text-accent">Stratum</p>
-            <h1 className="text-3xl font-semibold">{board?board.name:'Board'}</h1>
-          </div>
+      <header className="border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50">
+        <div className="flex items-center justify-between gap-4 px-8 py-4">
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-sm font-semibold">{user?.displayName}</p>
-              <p className="text-[11px] uppercase tracking-[0.35em] text-muted">Équipe {teamId}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/settings"
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
-              >
-                {t("common.actions.settings")}
-              </Link>
-              <button
-                onClick={() => logout()}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
-              >
-                {t("common.actions.signOut")}
-              </button>
-            </div>
+            <img src="/stratum.png" alt="Stratum" className="h-10 w-auto" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/settings"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {t("common.actions.settings")}
+            </Link>
+            <button
+              onClick={() => logout()}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {t("common.actions.signOut")}
+            </button>
           </div>
         </div>
       </header>
