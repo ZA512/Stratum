@@ -141,6 +141,9 @@ export class NodeDto {
   @ApiProperty({ example: 3, nullable: true })
   blockedReminderIntervalDays!: number | null;
 
+  @ApiProperty({ example: '2025-02-05T09:00:00.000Z', nullable: true })
+  blockedReminderLastSentAt!: string | null;
+
   @ApiProperty({ example: '2025-02-10T10:00:00.000Z', nullable: true })
   blockedExpectedUnblockAt!: string | null;
 
@@ -149,6 +152,34 @@ export class NodeDto {
 
   @ApiProperty({ example: false })
   isBlockResolved!: boolean;
+
+  @ApiProperty({ example: '2025-02-10T00:00:00.000Z', nullable: true })
+  backlogHiddenUntil!: string | null;
+
+  @ApiProperty({ example: '2025-02-17T00:00:00.000Z', nullable: true })
+  backlogNextReviewAt!: string | null;
+
+  @ApiProperty({ example: '2025-01-31T00:00:00.000Z', nullable: true })
+  backlogReviewStartedAt!: string | null;
+
+  @ApiProperty({ example: '2025-02-02T00:00:00.000Z', nullable: true })
+  backlogLastInteractionAt!: string | null;
+
+  @ApiProperty({ example: '2025-02-09T00:00:00.000Z', nullable: true })
+  backlogLastReminderAt!: string | null;
+
+  @ApiProperty({ example: 'column_backlog', nullable: true })
+  lastKnownColumnId!: string | null;
+
+  @ApiProperty({
+    example: 'BACKLOG',
+    enum: ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CUSTOM'],
+    nullable: true,
+  })
+  lastKnownColumnBehavior!: 'BACKLOG' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CUSTOM' | null;
+
+  @ApiProperty({ example: '2025-03-15T00:00:00.000Z', nullable: true })
+  doneArchiveScheduledAt!: string | null;
 
   @ApiProperty({
     example: 'HIGH',

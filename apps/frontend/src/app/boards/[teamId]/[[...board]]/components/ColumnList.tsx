@@ -5,19 +5,29 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import type { NodeChildBoard, BoardNode } from '@/features/boards/boards-api';
+import type { ColumnEditingValues } from './types';
 import { ColumnPanel } from './ColumnPanel';
 
 interface ColumnListProps {
   columns: BoardColumnWithNodes[];
   childBoards: Record<string, NodeChildBoard>;
   editingColumnId: string | null;
-  editingValues: { name: string; wip: string; submitting: boolean; error: string|null } | null;
+  editingValues: ColumnEditingValues | null;
   loadingCards: boolean;
   displayOptions: CardDisplayOptions;
   onRequestEdit: (id:string) => void;
   onCancelEdit: () => void;
   onSubmitEdit: () => void;
-  onFieldChange: (field: 'name'|'wip', value: string) => void;
+  onFieldChange: (
+    field:
+      | 'name'
+      | 'wip'
+      | 'backlogReviewAfter'
+      | 'backlogReviewEvery'
+      | 'backlogArchiveAfter'
+      | 'doneArchiveAfter',
+    value: string,
+  ) => void;
   onMoveColumn: (columnId:string, direction:-1|1) => void;
   onDeleteColumn: (columnId:string) => void;
   onCreateCard: (columnId:string, title:string) => Promise<void> | void;
@@ -26,6 +36,7 @@ interface ColumnListProps {
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
+  onShowArchived: (column: BoardColumnWithNodes) => void;
 }
 
 type ColumnListItemProps = {
@@ -34,13 +45,22 @@ type ColumnListItemProps = {
   total: number;
   childBoards: Record<string, NodeChildBoard>;
   editingColumnId: string | null;
-  editingValues: { name: string; wip: string; submitting: boolean; error: string|null } | null;
+  editingValues: ColumnEditingValues | null;
   loadingCards: boolean;
   displayOptions: CardDisplayOptions;
   onRequestEdit: (id: string) => void;
   onCancelEdit: () => void;
   onSubmitEdit: () => void;
-  onFieldChange: (field: 'name'|'wip', value: string) => void;
+  onFieldChange: (
+    field:
+      | 'name'
+      | 'wip'
+      | 'backlogReviewAfter'
+      | 'backlogReviewEvery'
+      | 'backlogArchiveAfter'
+      | 'doneArchiveAfter',
+    value: string,
+  ) => void;
   onMoveColumn: (columnId:string, direction:-1|1) => void;
   onDeleteColumn: (columnId:string) => void;
   onCreateCard: (columnId:string, title:string) => Promise<void> | void;
@@ -49,6 +69,7 @@ type ColumnListItemProps = {
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
+  onShowArchived: (column: BoardColumnWithNodes) => void;
 };
 
 const ColumnListItem: React.FC<ColumnListItemProps> = ({
@@ -72,6 +93,7 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   onRenameCard,
   onRequestMoveCard,
   onRequestDeleteCard,
+  onShowArchived,
 }) => {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -107,6 +129,7 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       onRenameCard={onRenameCard}
       onRequestMoveCard={onRequestMoveCard}
       onRequestDeleteCard={onRequestDeleteCard}
+      onShowArchived={onShowArchived}
       childBoards={childBoards}
       loadingCards={loadingCards}
       displayOptions={displayOptions}
@@ -163,6 +186,7 @@ export function ColumnList(props: ColumnListProps){
               onRenameCard={props.onRenameCard}
               onRequestMoveCard={props.onRequestMoveCard}
               onRequestDeleteCard={props.onRequestDeleteCard}
+              onShowArchived={props.onShowArchived}
             />
           ))}
         </div>

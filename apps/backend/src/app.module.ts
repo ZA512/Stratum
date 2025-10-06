@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { UserSettingsModule } from './modules/user-settings/user-settings.module';
 import { DashboardSnapshotsModule } from './modules/dashboard-snapshots/dashboard-snapshots.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
+import { WorkflowAutomationModule } from './modules/workflow-automation/workflow-automation.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DashboardsModule } from './modules/dashboards/dashboards.module';
     DashboardSnapshotsModule,
     DashboardsModule,
     MetricsModule,
+    WorkflowAutomationModule,
 
   ],
   controllers: [AppController],

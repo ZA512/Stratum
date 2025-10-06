@@ -119,13 +119,43 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
   );
 };
 
+const formatDateTime = (iso: string | null | undefined): string => {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const formatDateInputDisplay = (value: string): string => {
+  if (!value) return '—';
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('fr-FR', { dateStyle: 'long' });
+};
+
+const describeSnoozeCountdown = (value: string): string | null => {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = date.getTime() - Date.now();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays > 0) {
+    return `Réapparition dans ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+  }
+  if (diffDays === 0) {
+    return "Réapparition aujourd'hui";
+  }
+  const pastDays = Math.abs(diffDays);
+  return `Réapparue depuis ${pastDays} jour${pastDays > 1 ? 's' : ''}`;
+};
+
 export const TaskDrawer: React.FC = () => {
   const { openedNodeId, close } = useTaskDrawer();
   const { detail, loading, error, refresh } = useTaskDetail();
   const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
-  const { teamId, refreshActiveBoard } = useBoardData();
+  const { teamId, refreshActiveBoard, board } = useBoardData();
 
   // Form state
   const [saving, setSaving] = useState(false);
@@ -150,6 +180,9 @@ export const TaskDrawer: React.FC = () => {
       interval: string;
       eta: string;
       isResolved: boolean;
+    };
+    backlog: {
+      hiddenUntil: string;
     };
     raci: { R: string[]; A: string[]; C: string[]; I: string[] };
     timeTracking: {
@@ -182,6 +215,8 @@ export const TaskDrawer: React.FC = () => {
   const [isBlockResolved, setIsBlockResolved] = useState(false);
   const [blockedInterval, setBlockedInterval] = useState('');
   const [blockedEta, setBlockedEta] = useState('');
+  const [backlogHiddenUntil, setBacklogHiddenUntil] = useState('');
+  const [backlogRestartRequested, setBacklogRestartRequested] = useState(false);
   // RACI
   const [rResponsible, setRResponsible] = useState<string[]>([]);
   const [rAccountable, setRAccountable] = useState<string[]>([]);
@@ -204,6 +239,45 @@ export const TaskDrawer: React.FC = () => {
   const [plannedBudget, setPlannedBudget] = useState<string>('');
   const [consumedBudgetValue, setConsumedBudgetValue] = useState<string>('');
   const [consumedBudgetPercent, setConsumedBudgetPercent] = useState<string>('');
+
+  const currentColumnBehavior = useMemo(() => {
+    if (!detail) return null;
+    if (detail.columnId && board?.columns) {
+      const column = board.columns.find((entry) => entry.id === detail.columnId);
+      if (column?.behaviorKey) {
+        return column.behaviorKey;
+      }
+    }
+    return detail.lastKnownColumnBehavior ?? null;
+  }, [board, detail]);
+
+  const isBacklogCard = currentColumnBehavior === 'BACKLOG';
+
+  const backlogHiddenDisplay = useMemo(
+    () => formatDateInputDisplay(backlogHiddenUntil),
+    [backlogHiddenUntil],
+  );
+
+  const snoozeCountdown = useMemo(
+    () => describeSnoozeCountdown(backlogHiddenUntil),
+    [backlogHiddenUntil],
+  );
+
+  const backlogAutomationLabels = useMemo(
+    () => ({
+      nextReview: formatDateTime(detail?.backlogNextReviewAt ?? null),
+      lastReminder: formatDateTime(detail?.backlogLastReminderAt ?? null),
+      reviewStarted: formatDateTime(detail?.backlogReviewStartedAt ?? null),
+      lastInteraction: formatDateTime(detail?.backlogLastInteractionAt ?? null),
+    }),
+    [
+      detail?.backlogNextReviewAt,
+      detail?.backlogLastReminderAt,
+      detail?.backlogReviewStartedAt,
+      detail?.backlogLastInteractionAt,
+    ],
+  );
+
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -285,6 +359,8 @@ export const TaskDrawer: React.FC = () => {
       setBlockedEta(detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '');
       setBlockedSince((detail as Record<string, unknown>).blockedSince as string | null || null);
       setIsBlockResolved((detail as Record<string, unknown>).isBlockResolved as boolean || false);
+      setBacklogHiddenUntil(detail.backlogHiddenUntil ? detail.backlogHiddenUntil.substring(0, 10) : '');
+      setBacklogRestartRequested(false);
       setRResponsible(detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : []);
       setRAccountable(detail.raci?.accountableIds ? [...detail.raci.accountableIds] : []);
       setRConsulted(detail.raci?.consultedIds ? [...detail.raci.consultedIds] : []);
@@ -314,6 +390,9 @@ export const TaskDrawer: React.FC = () => {
           interval: detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '',
           eta: detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '',
           isResolved: ((detail as Record<string, unknown>).isBlockResolved as boolean | undefined) ?? false,
+        },
+        backlog: {
+          hiddenUntil: detail.backlogHiddenUntil ? detail.backlogHiddenUntil.substring(0, 10) : '',
         },
         raci: {
           R: detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : [],
@@ -350,13 +429,15 @@ export const TaskDrawer: React.FC = () => {
       setPriority('NONE');
       setEffort(null);
       setTags([]);
-  setBlockedReason('');
-  setBlockedEmails([]);
-  setBlockedEmailInput('');
+      setBlockedReason('');
+      setBlockedEmails([]);
+      setBlockedEmailInput('');
       setBlockedInterval('');
       setBlockedEta('');
-  setBlockedSince(null);
-  setIsBlockResolved(false);
+      setBlockedSince(null);
+      setIsBlockResolved(false);
+      setBacklogHiddenUntil('');
+      setBacklogRestartRequested(false);
       setRResponsible([]);
       setRAccountable([]);
       setRConsulted([]);
@@ -642,6 +723,9 @@ export const TaskDrawer: React.FC = () => {
     if (blockedEta.trim() !== initialSnapshot.blocked.eta.trim()) return true;
     if (isBlockResolved !== initialSnapshot.blocked.isResolved) return true;
 
+    if (backlogHiddenUntil !== initialSnapshot.backlog.hiddenUntil) return true;
+    if (backlogRestartRequested) return true;
+
     if (
       !arraysEqual(rResponsible, initialSnapshot.raci.R) ||
       !arraysEqual(rAccountable, initialSnapshot.raci.A) ||
@@ -704,6 +788,8 @@ export const TaskDrawer: React.FC = () => {
     plannedBudget,
     consumedBudgetValue,
     consumedBudgetPercent,
+    backlogHiddenUntil,
+    backlogRestartRequested,
   ]);
 
   const requestClose = useCallback(() => {
@@ -765,6 +851,19 @@ export const TaskDrawer: React.FC = () => {
         payload.blockedExpectedUnblockAt = null;
       } else {
         payload.blockedExpectedUnblockAt = new Date(blockedEta + 'T00:00:00Z').toISOString();
+      }
+      if (backlogHiddenUntil.trim() === '') {
+        payload.backlogHiddenUntil = null;
+      } else {
+        const snoozeDate = new Date(backlogHiddenUntil + 'T00:00:00Z');
+        if (Number.isNaN(snoozeDate.getTime())) {
+          toastError('Date de réapparition backlog invalide');
+          return false;
+        }
+        payload.backlogHiddenUntil = snoozeDate.toISOString();
+      }
+      if (backlogRestartRequested) {
+        payload.backlogReviewRestart = true;
       }
       payload.tags = tags;
 
@@ -839,6 +938,9 @@ export const TaskDrawer: React.FC = () => {
           eta: blockedEta,
           isResolved: isBlockResolved,
         },
+        backlog: {
+          hiddenUntil: backlogHiddenUntil.trim(),
+        },
         raci: {
           R: [...rResponsible],
           A: [...rAccountable],
@@ -861,6 +963,7 @@ export const TaskDrawer: React.FC = () => {
           consumedBudgetPercent: consumedPercentNumeric ?? null,
         },
       });
+      setBacklogRestartRequested(false);
       refresh();
       // Fermer le tiroir après une sauvegarde réussie comme demandé
       close();
@@ -1111,6 +1214,92 @@ export const TaskDrawer: React.FC = () => {
                           </label>
                         </div>
                       </section>
+
+                      {isBacklogCard && (
+                        <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">history_toggle_off</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              Cycle backlog
+                            </h3>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Ajustez la date de réapparition d’une carte backlog et, si besoin, relancez manuellement le cycle de revue.
+                          </p>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                              <span className="flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[18px]">visibility_off</span>
+                                Masquer jusqu’au
+                              </span>
+                              <input
+                                type="date"
+                                value={backlogHiddenUntil}
+                                onChange={(event) => setBacklogHiddenUntil(event.target.value)}
+                                className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                disabled={saving}
+                              />
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                <span className="font-medium">{backlogHiddenDisplay}</span>
+                                {snoozeCountdown && (
+                                  <span className="ml-1 text-[11px] text-slate-400 dark:text-slate-500">({snoozeCountdown})</span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setBacklogHiddenUntil('')}
+                                className="self-start rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 transition hover:border-emerald-400/50 hover:text-emerald-500 disabled:opacity-50"
+                                disabled={saving || !backlogHiddenUntil}
+                              >
+                                Réinitialiser le snooze
+                              </button>
+                            </label>
+                            <div className="space-y-1 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-500 dark:text-slate-400">
+                              <p>
+                                Prochaine revue : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.nextReview}</span>
+                              </p>
+                              <p>
+                                Dernier rappel : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastReminder}</span>
+                              </p>
+                              <p>
+                                Cycle démarré : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.reviewStarted}</span>
+                              </p>
+                              <p>
+                                Dernière interaction : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastInteraction}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setBacklogRestartRequested((prev) => !prev)}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+                                backlogRestartRequested
+                                  ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-100'
+                                  : 'border-white/15 bg-white/5 text-slate-500 hover:border-emerald-400/50 hover:text-emerald-500'
+                              }`}
+                              disabled={saving}
+                            >
+                              {backlogRestartRequested ? 'Relance programmée' : 'Relancer la revue maintenant'}
+                            </button>
+                            {!backlogHiddenUntil && (
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                Sans snooze, la tâche restera visible en backlog.
+                              </span>
+                            )}
+                          </div>
+                          {backlogRestartRequested ? (
+                            <p className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                              <span className="material-symbols-outlined text-[16px]">autorenew</span>
+                              La sauvegarde recalculera immédiatement la prochaine revue et réinitialisera les rappels.
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Les rappels suivent la fréquence configurée sur la colonne backlog.
+                            </p>
+                          )}
+                        </section>
+                      )}
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">

@@ -5,12 +5,13 @@ import { CSS } from '@dnd-kit/utilities';
 import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-card';
 import { useAuth } from '@/features/auth/auth-provider';
 import { ensureChildBoard } from '@/features/boards/boards-api';
-import type { BoardNode } from '@/features/boards/boards-api';
+import type { BoardNode, ColumnBehaviorKey } from '@/features/boards/boards-api';
 import type { CardDisplayOptions } from './types';
 
 interface BoardTaskCardProps {
   node: BoardNode;
   columnId: string;
+  columnBehavior: ColumnBehaviorKey;
   childBoard?: { boardId: string } | undefined;
   onOpen: (id: string) => void;              // ouvre le drawer tâche
   onOpenChildBoard?: (boardId: string) => void; // navigation vers sous-board
@@ -39,7 +40,18 @@ function truncateDescription(description: string | null | undefined, maxLength =
   return `${trimmed.slice(0, maxLength).trimEnd()}…`;
 }
 
-export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildBoard, onRename, onRequestMove, onRequestDelete, displayOptions }: BoardTaskCardProps) {
+export function BoardTaskCard({
+  node,
+  columnId,
+  columnBehavior,
+  childBoard,
+  onOpen,
+  onOpenChildBoard,
+  onRename,
+  onRequestMove,
+  onRequestDelete,
+  displayOptions,
+}: BoardTaskCardProps) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
     data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
@@ -163,10 +175,37 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
     `${node.counts.backlog}.${node.counts.inProgress}.${node.counts.blocked}.${node.counts.done}` :
     undefined;
 
-  const shortIdLabel = typeof node.shortId === 'number' && Number.isFinite(node.shortId) && node.shortId > 0 ? 
+  const shortIdLabel = typeof node.shortId === 'number' && Number.isFinite(node.shortId) && node.shortId > 0 ?
     node.shortId : node.id;
 
   const description = displayOptions.showDescription ? truncateDescription(node.description) : undefined;
+
+  const showReminderBadge =
+    columnBehavior === 'BLOCKED' &&
+    typeof node.blockedReminderIntervalDays === 'number' &&
+    Number.isFinite(node.blockedReminderIntervalDays) &&
+    node.blockedReminderIntervalDays > 0;
+
+  const reminderValue = showReminderBadge
+    ? typeof node.blockedReminderDueInDays === 'number' && Number.isFinite(node.blockedReminderDueInDays)
+      ? Math.max(0, node.blockedReminderDueInDays)
+      : node.blockedReminderIntervalDays ?? null
+    : null;
+
+  const reminderTooltip = showReminderBadge
+    ? (() => {
+        if (typeof node.blockedReminderDueInDays === 'number' && Number.isFinite(node.blockedReminderDueInDays)) {
+          if (node.blockedReminderDueInDays <= 0) {
+            return "Relance automatique prévue aujourd'hui";
+          }
+          return `Prochaine relance auto dans ${node.blockedReminderDueInDays} jour${node.blockedReminderDueInDays > 1 ? 's' : ''}`;
+        }
+        if (typeof node.blockedReminderIntervalDays === 'number') {
+          return `Relance auto toutes les ${node.blockedReminderIntervalDays} jour${node.blockedReminderIntervalDays > 1 ? 's' : ''}`;
+        }
+        return undefined;
+      })()
+    : undefined;
 
   return (
     <div
@@ -215,6 +254,16 @@ export function BoardTaskCard({ node, columnId, childBoard, onOpen, onOpenChildB
         onMenuButtonClick={() => setMenuOpen(prev => !prev)}
         className="cursor-grab active:cursor-grabbing"
       />
+      {showReminderBadge && reminderValue !== null && (
+        <div
+          className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow"
+          title={reminderTooltip}
+          aria-label={reminderTooltip}
+        >
+          <span className="material-symbols-outlined text-[16px] leading-none">schedule</span>
+          <span className="leading-none">{reminderValue}</span>
+        </div>
+      )}
       {fractalLoading && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 z-40">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />

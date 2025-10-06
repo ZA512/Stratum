@@ -1,11 +1,22 @@
 "use client";
 import React from 'react';
 import { useDroppable, type DraggableSyntheticListeners, type DraggableAttributes } from '@dnd-kit/core';
-import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
+import type { BoardColumnWithNodes, CardDisplayOptions, ColumnEditingValues } from './types';
 import { BEHAVIOR_COLOR_CLASSES, BEHAVIOR_LABELS } from './constants';
 import { AddCardForm } from './AddCardForm';
 import { BoardTaskCard } from './BoardTaskCard';
 import type { BoardNode, NodeChildBoard } from '@/features/boards/boards-api';
+import { readBacklogSettings, readDoneSettings } from './settings-helpers';
+
+const BACKLOG_DEFAULTS = Object.freeze({
+  reviewAfterDays: 14,
+  reviewEveryDays: 7,
+  archiveAfterDays: 60,
+});
+
+const DONE_DEFAULTS = Object.freeze({
+  archiveAfterDays: 30,
+});
 
 interface ColumnPanelProps {
   column: BoardColumnWithNodes;
@@ -13,11 +24,20 @@ interface ColumnPanelProps {
   isEditing: boolean;
   isFirst: boolean;
   isLast: boolean;
-  editingValues: { name: string; wip: string; submitting: boolean; error: string|null } | null;
+  editingValues: ColumnEditingValues | null;
   onRequestEdit: (columnId: string) => void;
   onCancelEdit: () => void;
   onSubmitEdit: () => void; // actual payload handled upstream
-  onFieldChange: (field: 'name' | 'wip', value: string) => void;
+  onFieldChange: (
+    field:
+      | 'name'
+      | 'wip'
+      | 'backlogReviewAfter'
+      | 'backlogReviewEvery'
+      | 'backlogArchiveAfter'
+      | 'doneArchiveAfter',
+    value: string,
+  ) => void;
   onMove: (direction: -1|1) => void;
   onDelete: () => void;
   onCreateCard: (title: string) => Promise<void> | void;
@@ -34,6 +54,7 @@ interface ColumnPanelProps {
   dragHandleAttributes?: DraggableAttributes;
   dragHandleRef?: (element: HTMLElement | null) => void;
   isColumnDragging?: boolean;
+  onShowArchived?: (column: BoardColumnWithNodes) => void;
 }
 
 export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(function ColumnPanel(props, ref) {
@@ -44,7 +65,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
     onRequestMoveCard, onRequestDeleteCard,
     childBoards, loadingCards, displayOptions, onOpenChildBoard,
     dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
-    isColumnDragging,
+    isColumnDragging, onShowArchived,
   } = props;
 
   const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || '';
@@ -55,6 +76,32 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
   const handleRef = (node: HTMLButtonElement | null) => {
     dragHandleRef?.(node);
   };
+
+  const backlogSnapshot =
+    column.behaviorKey === 'BACKLOG'
+      ? readBacklogSettings(column.settings ?? null)
+      : null;
+  const doneSnapshot =
+    column.behaviorKey === 'DONE'
+      ? readDoneSettings(column.settings ?? null)
+      : null;
+
+  const backlogReviewAfter = backlogSnapshot?.reviewAfterDays ?? null;
+  const backlogReviewEvery = backlogSnapshot?.reviewEveryDays ?? null;
+  const backlogArchiveAfter = backlogSnapshot?.archiveAfterDays ?? null;
+  const doneArchiveAfter = doneSnapshot?.archiveAfterDays ?? null;
+
+  const archivedCount = column.badges?.archived ?? 0;
+  const snoozedCount = column.badges?.snoozed ?? 0;
+  const archivedButtonProps = {
+    type: 'button' as const,
+    onClick: () => onShowArchived?.(column),
+    disabled: !onShowArchived,
+    className:
+      'rounded-full border border-white/10 bg-surface/70 px-2 py-1 text-muted transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60',
+    title: 'Afficher les tâches archivées de la colonne',
+    'aria-label': `Afficher les tâches archivées pour ${column.name}`,
+  } satisfies React.ComponentProps<'button'>;
 
   return (
     // Largeur fixe pour uniformiser toutes les colonnes
@@ -93,6 +140,42 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
           </div>
         </div>
       </header>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+        {column.behaviorKey === 'BACKLOG' && (
+          <>
+            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
+              Revue J+{backlogReviewAfter ?? BACKLOG_DEFAULTS.reviewAfterDays}
+            </span>
+            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
+              Relance {backlogReviewEvery ?? BACKLOG_DEFAULTS.reviewEveryDays} j
+            </span>
+            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
+              Archive J+{backlogArchiveAfter ?? BACKLOG_DEFAULTS.archiveAfterDays}
+            </span>
+            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
+              Snoozées {snoozedCount}
+            </span>
+            <button {...archivedButtonProps}>
+              Archivé·es {archivedCount}
+            </button>
+          </>
+        )}
+        {column.behaviorKey === 'DONE' && (
+          <>
+            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
+              Archive J+{doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays}
+            </span>
+            <button {...archivedButtonProps}>
+              Archivé·es {archivedCount}
+            </button>
+          </>
+        )}
+        {column.behaviorKey !== 'BACKLOG' && column.behaviorKey !== 'DONE' && archivedCount > 0 && (
+          <button {...archivedButtonProps}>
+            Archivé·es {archivedCount}
+          </button>
+        )}
+      </div>
       {isEditing && editingValues && (
         <form onSubmit={(e)=> { e.preventDefault(); onSubmitEdit(); }} className="mt-4 space-y-3 rounded-xl border border-white/10 bg-surface/60 p-4">
           <label className="text-xs text-muted">Nom
@@ -110,6 +193,40 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
             />
           </label>
+          {column.behaviorKey === 'BACKLOG' && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-xs text-muted">Première revue (jours)
+                <input
+                  value={editingValues.backlogReviewAfter}
+                  onChange={(e) => onFieldChange('backlogReviewAfter', e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </label>
+              <label className="text-xs text-muted">Relance (jours)
+                <input
+                  value={editingValues.backlogReviewEvery}
+                  onChange={(e) => onFieldChange('backlogReviewEvery', e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </label>
+              <label className="text-xs text-muted">Archivage auto (jours)
+                <input
+                  value={editingValues.backlogArchiveAfter}
+                  onChange={(e) => onFieldChange('backlogArchiveAfter', e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </label>
+            </div>
+          )}
+          {column.behaviorKey === 'DONE' && (
+            <label className="text-xs text-muted">Archivage auto (jours)
+              <input
+                value={editingValues.doneArchiveAfter}
+                onChange={(e) => onFieldChange('doneArchiveAfter', e.target.value)}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button disabled={editingValues.submitting} className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-background disabled:opacity-60">Enregistrer</button>
             <button type="button" onClick={onCancelEdit} className="text-xs text-muted hover:text-foreground">Annuler</button>
@@ -136,6 +253,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 key={card.id}
                 node={card}
                 columnId={column.id}
+                columnBehavior={column.behaviorKey}
                 childBoard={childBoards[card.id]}
                 onOpen={onOpenCard}
                 onOpenChildBoard={onOpenChildBoard}

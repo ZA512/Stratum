@@ -27,6 +27,7 @@ import { BoardColumnDto } from './dto/board-column.dto';
 import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
 import { BoardsService } from './boards.service';
+import { ArchivedBoardNodeDto } from './dto/archived-board-node.dto';
 
 @ApiTags('Boards')
 @Controller('boards')
@@ -49,6 +50,23 @@ export class BoardsController {
     @Param('boardId') boardId: string,
   ): Promise<BoardWithNodesDto> {
     return this.boardsService.getBoardWithNodes(boardId);
+  }
+
+  @Get(':boardId/columns/:columnId/archived')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Liste les tâches archivées associées à une colonne du board',
+  })
+  @ApiParam({ name: 'boardId', example: 'board_123' })
+  @ApiParam({ name: 'columnId', example: 'column_789' })
+  @ApiOkResponse({ type: ArchivedBoardNodeDto, isArray: true })
+  listArchivedNodes(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+    @Param('columnId') columnId: string,
+  ): Promise<ArchivedBoardNodeDto[]> {
+    return this.boardsService.listArchivedNodes(boardId, columnId, user.id);
   }
 
   @Get('team/:teamId')

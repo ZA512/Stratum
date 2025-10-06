@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NodesService } from './nodes.service';
 import { MembershipStatus, ColumnBehaviorKey } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 
 // Ce test se concentre sur l'auto-création du board et des colonnes lors de la création de sous-tâche.
 // Simplifié: on mock Prisma pour vérifier les appels structurels, sans toucher à la BD réelle.
@@ -106,6 +107,15 @@ function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
             startedAt: null,
             doneAt: null,
           },
+          metadata: data.metadata ?? {},
+          blockedReminderEmails: data.blockedReminderEmails ?? [],
+          blockedReminderIntervalDays: data.blockedReminderIntervalDays ?? null,
+          blockedReminderLastSentAt: data.blockedReminderLastSentAt ?? null,
+          blockedReason: data.blockedReason ?? null,
+          blockedExpectedUnblockAt: data.blockedExpectedUnblockAt ?? null,
+          blockedSince: data.blockedSince ?? null,
+          isBlockResolved: data.isBlockResolved ?? false,
+          archivedAt: data.archivedAt ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -143,10 +153,80 @@ function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
             where.parentId === undefined || node.parentId === where.parentId;
           const matchColumn =
             where.columnId === undefined || node.columnId === where.columnId;
-          return matchParent && matchColumn;
+          const matchArchived =
+            where.archivedAt === undefined
+              ? true
+              : where.archivedAt === null
+              ? node.archivedAt === null || node.archivedAt === undefined
+              : node.archivedAt === where.archivedAt;
+          return matchParent && matchColumn && matchArchived;
         }).length,
       ),
-      findMany: jest.fn(async () => []),
+      findMany: jest.fn(async ({ where = {}, select, orderBy }) => {
+        let results = ctx.node.filter((node) => {
+          if (where.parentId !== undefined && node.parentId !== where.parentId)
+            return false;
+          if (where.columnId !== undefined && node.columnId !== where.columnId)
+            return false;
+          if (where.column?.behavior?.key) {
+            const column = ctx.column.find((col) => col.id === node.columnId);
+            const behavior = column
+              ? ctx.columnBehavior.find((b) => b.id === column.behaviorId)
+              : null;
+            if (!behavior || behavior.key !== where.column.behavior.key)
+              return false;
+          }
+          if (where.archivedAt === null) {
+            if (!(node.archivedAt === null || node.archivedAt === undefined))
+              return false;
+          }
+          if (
+            where.blockedReminderIntervalDays?.not !== undefined &&
+            where.blockedReminderIntervalDays?.not !== null
+          ) {
+            if (node.blockedReminderIntervalDays === null)
+              return false;
+          }
+          return true;
+        });
+        if (orderBy?.position === 'asc') {
+          results = results.sort(
+            (a, b) => (a.position ?? 0) - (b.position ?? 0),
+          );
+        } else if (orderBy?.position === 'desc') {
+          results = results.sort(
+            (a, b) => (b.position ?? 0) - (a.position ?? 0),
+          );
+        }
+        if (!select) {
+          return results.map((node) => ({ ...node }));
+        }
+        return results.map((node) => {
+          const entry: any = {};
+          for (const key of Object.keys(select)) {
+            const descriptor = (select as any)[key];
+            if (!descriptor) continue;
+            if (key === 'column') {
+              const column = ctx.column.find((col) => col.id === node.columnId);
+              if (!column) {
+                entry.column = null;
+              } else if (descriptor.select?.behavior?.select?.key) {
+                const behavior = ctx.columnBehavior.find(
+                  (b) => b.id === column.behaviorId,
+                );
+                entry.column = {
+                  behavior: behavior ? { key: behavior.key } : null,
+                };
+              } else {
+                entry.column = { ...column };
+              }
+            } else if (descriptor === true) {
+              entry[key] = (node as any)[key];
+            }
+          }
+          return entry;
+        });
+      }),
     },
     board: {
       findUnique: jest.fn(async ({ where, include }) => {
@@ -225,9 +305,17 @@ function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
         ctx.column.push(record);
         return record;
       }),
-      findUnique: jest.fn(async ({ where }) =>
-        ctx.column.find((column) => column.id === where.id) ?? null,
-      ),
+      findUnique: jest.fn(async ({ where, include }) => {
+        const column = ctx.column.find((entry) => entry.id === where.id);
+        if (!column) return null;
+        if (include?.behavior) {
+          const behavior = ctx.columnBehavior.find(
+            (b) => b.id === column.behaviorId,
+          );
+          return { ...column, behavior };
+        }
+        return { ...column };
+      }),
     },
     membership: {
       findFirst: jest.fn(async ({ where }) =>
@@ -247,7 +335,8 @@ function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
 }
 
 describe('NodesService ensureBoard auto-create', () => {
-  let service: NodesService;
+let service: NodesService;
+let mailService: { sendMail: jest.Mock };
   let prisma: any;
 
   beforeEach(async () => {
@@ -255,11 +344,39 @@ describe('NodesService ensureBoard auto-create', () => {
     // seed membership + parent node simple
     prisma._ctx.membership.push({ id: 'm1', userId: 'u1', teamId: 't1', status: MembershipStatus.ACTIVE });
     prisma._ctx.node.push({
-      id: 'parent-1', teamId: 't1', parentId: null, title: 'Parent', description: null, path: '/parent-1', depth: 0, position: 0, createdById: 'u1', columnId: null, dueAt: null, statusMetadata: null, createdAt: new Date(), updatedAt: new Date(),
+      id: 'parent-1',
+      teamId: 't1',
+      parentId: null,
+      title: 'Parent',
+      description: null,
+      path: '/parent-1',
+      depth: 0,
+      position: 0,
+      createdById: 'u1',
+      columnId: null,
+      dueAt: null,
+      statusMetadata: null,
+      blockedReminderEmails: [],
+      blockedReminderIntervalDays: null,
+      blockedReason: null,
+      blockedExpectedUnblockAt: null,
+      blockedSince: null,
+      isBlockResolved: false,
+      archivedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
+    mailService = {
+      sendMail: jest.fn(async () => {}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [NodesService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        NodesService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: MailService, useValue: mailService },
+      ],
     }).compile();
 
     service = module.get(NodesService);
@@ -281,6 +398,21 @@ describe('NodesService ensureBoard auto-create', () => {
     await service.createChildNode('parent-1', { title: 'Child B' } as any, 'u1');
     expect((prisma.board.create as jest.Mock).mock.calls.length).toBe(boardCreateCalls);
     expect(prisma._ctx.column.length).toBe(4);
+  });
+
+  it('initialise le workflow backlog lors de la création d’une sous-tâche', async () => {
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Workflow child' } as any,
+      'u1',
+    );
+    const ctx = (prisma as any)._ctx;
+    const childId = detail.children[detail.children.length - 1].id;
+    const nodeRecord = ctx.node.find((n: any) => n.id === childId);
+    expect(nodeRecord.metadata.workflow).toBeDefined();
+    expect(nodeRecord.metadata.workflow.backlog.lastKnownColumnId).toBeDefined();
+    expect(nodeRecord.metadata.workflow.backlog.nextReviewAt).toBeDefined();
+    expect(nodeRecord.metadata.workflow.backlog.hiddenUntil).toBeNull();
   });
 
   it('toggleChildDone renseigne doneAt à la première complétion', async () => {
@@ -337,4 +469,256 @@ describe('NodesService ensureBoard auto-create', () => {
     const secondTask = ctx.node.find((n: any) => n.title === 'Task B');
     await expect(service.moveChildNode('parent-1', secondTask.id, { targetColumnId: progressCol.id }, 'u1')).rejects.toThrow(/WIP/);
   });
+
+  it('refuse de passer une tâche en DONE si des sous-tâches actives existent', async () => {
+    const detail = await service.createChildNode('parent-1', { title: 'Epic' } as any, 'u1');
+    const epicId = detail.children[0].id;
+    await service.createChildNode(epicId, { title: 'Sub A' } as any, 'u1');
+    await expect(service.toggleChildDone('parent-1', epicId, 'u1')).rejects.toThrow(/sous-tache/);
+  });
+
+  it('autorise DONE quand toutes les sous-tâches sont terminées', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode('parent-1', { title: 'Feature' } as any, 'u1');
+    const featureId = detail.children[0].id;
+    const subDetail = await service.createChildNode(featureId, { title: 'Sub task' } as any, 'u1');
+    const subId = subDetail.children[0].id;
+    await service.toggleChildDone(featureId, subId, 'u1');
+    await service.toggleChildDone('parent-1', featureId, 'u1');
+    const doneColumn = ctx.column.find((c: any) =>
+      ctx.columnBehavior.find((b: any) => b.id === c.behaviorId && b.key === ColumnBehaviorKey.DONE),
+    );
+    const featureNode = ctx.node.find((n: any) => n.id === featureId);
+    expect(featureNode.columnId).toBe(doneColumn.id);
+  });
+
+  it('réinitialise les champs de blocage en quittant la colonne BLOQUE', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode('parent-1', { title: 'Blocked task' } as any, 'u1');
+    const taskId = detail.children[0].id;
+    const board = ctx.board[0];
+    const columns = ctx.column.filter((c: any) => c.boardId === board.id);
+    const findCol = (key: ColumnBehaviorKey) =>
+      columns.find((c: any) => ctx.columnBehavior.find((b: any) => b.id === c.behaviorId && b.key === key));
+    const blockedCol = findCol(ColumnBehaviorKey.BLOCKED);
+    const backlogCol = findCol(ColumnBehaviorKey.BACKLOG);
+    await service.moveChildNode('parent-1', taskId, { targetColumnId: blockedCol.id }, 'u1');
+    await service.updateNode(taskId, {
+      blockedReason: 'Need info',
+      blockedReminderEmails: ['a@example.com', 'b@example.com'],
+      blockedReminderIntervalDays: 4,
+      blockedExpectedUnblockAt: new Date().toISOString(),
+    } as any, 'u1');
+    let nodeRecord = ctx.node.find((n: any) => n.id === taskId);
+    expect(Array.isArray(nodeRecord.blockedReminderEmails)).toBe(true);
+    expect(nodeRecord.blockedReminderEmails.length).toBe(2);
+    expect(nodeRecord.blockedSince).toBeInstanceOf(Date);
+
+    await service.moveChildNode('parent-1', taskId, { targetColumnId: backlogCol.id }, 'u1');
+    nodeRecord = ctx.node.find((n: any) => n.id === taskId);
+    expect(nodeRecord.blockedReminderEmails).toEqual([]);
+    expect(nodeRecord.blockedReminderIntervalDays).toBeNull();
+    expect(nodeRecord.blockedReminderLastSentAt).toBeNull();
+    expect(nodeRecord.blockedReason).toBeNull();
+    expect(nodeRecord.blockedExpectedUnblockAt).toBeNull();
+    expect(nodeRecord.blockedSince).toBeNull();
+  });
+
+  it('permet de snoozer et relancer la revue backlog', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Snooze me' } as any,
+      'u1',
+    );
+    const childId = detail.children[detail.children.length - 1].id;
+    const snoozeUntil = new Date(Date.now() + 2 * 86400000).toISOString();
+    await service.updateNode(
+      childId,
+      { backlogHiddenUntil: snoozeUntil } as any,
+      'u1',
+    );
+    let nodeRecord = ctx.node.find((n: any) => n.id === childId);
+    expect(nodeRecord.metadata.workflow.backlog.hiddenUntil).toBe(snoozeUntil);
+
+    const restartBaseline = Date.now();
+    await service.updateNode(childId, { backlogReviewRestart: true } as any, 'u1');
+    nodeRecord = ctx.node.find((n: any) => n.id === childId);
+    expect(nodeRecord.metadata.workflow.backlog.hiddenUntil).toBeNull();
+    const nextReviewTs = new Date(
+      nodeRecord.metadata.workflow.backlog.nextReviewAt,
+    ).getTime();
+    const diffDays = Math.round((nextReviewTs - restartBaseline) / 86400000);
+    expect(diffDays).toBeGreaterThanOrEqual(6);
+    expect(diffDays).toBeLessThanOrEqual(8);
+  });
+
+  it('restaure une tâche archivée dans sa colonne d’origine', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Archive me' } as any,
+      'u1',
+    );
+    const childId = detail.children[detail.children.length - 1].id;
+    const backlogColumn = ctx.column.find((column: any) =>
+      ctx.columnBehavior.find(
+        (behavior: any) =>
+          behavior.id === column.behaviorId &&
+          behavior.key === ColumnBehaviorKey.BACKLOG,
+      ),
+    );
+    expect(backlogColumn).toBeDefined();
+
+    const archivedNode = ctx.node.find((node: any) => node.id === childId);
+    expect(archivedNode).toBeDefined();
+    const previousReview = archivedNode.metadata.workflow.backlog.reviewStartedAt;
+
+    archivedNode.archivedAt = new Date('2024-01-01T00:00:00.000Z');
+    archivedNode.columnId = backlogColumn.id;
+    archivedNode.metadata.workflow.backlog.lastKnownColumnId = backlogColumn.id;
+    archivedNode.metadata.workflow.backlog.lastKnownBehavior =
+      ColumnBehaviorKey.BACKLOG;
+
+    await service.createChildNode(
+      'parent-1',
+      { title: 'Still active' } as any,
+      'u1',
+    );
+
+    const backlogActiveBefore = ctx.node.filter(
+      (node: any) =>
+        node.parentId === 'parent-1' &&
+        node.columnId === backlogColumn.id &&
+        (node.archivedAt === null || node.archivedAt === undefined),
+    ).length;
+
+    const restored = await service.restoreNode(childId, 'u1');
+    expect(restored.columnId).toBe(backlogColumn.id);
+    expect(restored.lastKnownColumnId).toBe(backlogColumn.id);
+
+    const refreshed = ctx.node.find((node: any) => node.id === childId);
+    expect(refreshed.archivedAt).toBeNull();
+    expect(refreshed.position).toBe(backlogActiveBefore);
+    expect(refreshed.metadata.workflow.backlog.reviewStartedAt).not.toBe(
+      previousReview,
+    );
+  });
+  it('relance automatiquement la revue backlog échue', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Automation backlog' } as any,
+      'u1',
+    );
+    const childId = detail.children[detail.children.length - 1].id;
+    const nodeRecord = ctx.node.find((n: any) => n.id === childId);
+    nodeRecord.metadata.workflow.backlog.nextReviewAt = '2025-01-01T00:00:00.000Z';
+    nodeRecord.metadata.workflow.backlog.lastInteractionAt = '2024-12-15T00:00:00.000Z';
+
+    const appendSpy = jest.spyOn(service as any, 'appendMailLog');
+    const writeSpy = jest
+      .spyOn(service as any, 'writeMailLog')
+      .mockResolvedValue(undefined);
+
+    await service.runWorkflowAutomation(new Date('2025-01-10T00:00:00.000Z'));
+
+    const refreshed = ctx.node.find((n: any) => n.id === childId);
+    expect(new Date(refreshed.metadata.workflow.backlog.nextReviewAt).getTime()).toBeGreaterThan(
+      new Date('2025-01-10T00:00:00.000Z').getTime(),
+    );
+    expect(refreshed.metadata.workflow.backlog.lastReminderAt).toBeDefined();
+    expect(appendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'backlog-review-reminder',
+        node: expect.objectContaining({ id: childId }),
+      }),
+    );
+
+    appendSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+
+  it('archive automatiquement un backlog dépassé', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Archive backlog' } as any,
+      'u1',
+    );
+    const childId = detail.children[detail.children.length - 1].id;
+    const nodeRecord = ctx.node.find((n: any) => n.id === childId);
+    nodeRecord.metadata.workflow.backlog.lastInteractionAt = '2024-08-01T00:00:00.000Z';
+    nodeRecord.metadata.workflow.backlog.nextReviewAt = '2024-08-15T00:00:00.000Z';
+
+    const appendSpy = jest.spyOn(service as any, 'appendMailLog');
+    const writeSpy = jest
+      .spyOn(service as any, 'writeMailLog')
+      .mockResolvedValue(undefined);
+
+    await service.runWorkflowAutomation(new Date('2024-12-01T00:00:00.000Z'));
+
+    const refreshed = ctx.node.find((n: any) => n.id === childId);
+    expect(refreshed.archivedAt).toBeInstanceOf(Date);
+    expect(appendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'backlog-auto-archive',
+        node: expect.objectContaining({ id: childId }),
+      }),
+    );
+
+    appendSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+
+  it('programme une relance automatique sur une tâche bloquée', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Blocked reminder' } as any,
+      'u1',
+    );
+    const taskId = detail.children[detail.children.length - 1].id;
+    const board = ctx.board[0];
+    const columns = ctx.column.filter((c: any) => c.boardId === board.id);
+    const findCol = (key: ColumnBehaviorKey) =>
+      columns.find((c: any) => ctx.columnBehavior.find((b: any) => b.id === c.behaviorId && b.key === key));
+    const blockedCol = findCol(ColumnBehaviorKey.BLOCKED);
+    await service.moveChildNode('parent-1', taskId, { targetColumnId: blockedCol.id }, 'u1');
+    await service.updateNode(
+      taskId,
+      {
+        blockedReminderEmails: ['alert@example.com'],
+        blockedReminderIntervalDays: 3,
+      } as any,
+      'u1',
+    );
+    const nodeRecord = ctx.node.find((n: any) => n.id === taskId);
+    nodeRecord.blockedSince = new Date('2025-01-01T00:00:00.000Z');
+
+    const appendSpy = jest.spyOn(service as any, 'appendMailLog');
+    const writeSpy = jest
+      .spyOn(service as any, 'writeMailLog')
+      .mockResolvedValue(undefined);
+
+    await service.runWorkflowAutomation(new Date('2025-01-05T00:00:00.000Z'));
+
+    const refreshed = ctx.node.find((n: any) => n.id === taskId);
+    expect(refreshed.blockedReminderLastSentAt).toBeInstanceOf(Date);
+    expect(appendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'blocked-auto-reminder',
+        node: expect.objectContaining({ id: taskId }),
+      }),
+    );
+    expect(mailService.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.stringContaining('Relance automatique'),
+      }),
+    );
+
+    appendSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+
 });

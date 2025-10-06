@@ -1,4 +1,4 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class BoardNodeAssigneeDto {
   @ApiProperty({ example: 'user_123' })
@@ -68,6 +68,18 @@ export class BoardNodeDto {
   @ApiProperty({ example: '2025-02-15T00:00:00.000Z', nullable: true })
   blockedExpectedUnblockAt?: string | null;
 
+  @ApiPropertyOptional({ example: 3, nullable: true })
+  blockedReminderIntervalDays?: number | null;
+
+  @ApiPropertyOptional({ example: 1, nullable: true })
+  blockedReminderDueInDays?: number | null;
+
+  @ApiPropertyOptional({ example: '2025-02-05T09:00:00.000Z', nullable: true })
+  blockedReminderLastSentAt?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-02-10T00:00:00.000Z', nullable: true })
+  blockedSince?: string | null;
+
   @ApiProperty({ example: 7, nullable: true })
   estimatedDurationDays?: number | null;
 
@@ -93,4 +105,32 @@ export class BoardNodeDto {
 
   @ApiProperty({ type: () => BoardNodeRaciDto, required: false })
   raci?: BoardNodeRaciDto;
+
+  @ApiPropertyOptional({ example: '2025-02-10T00:00:00.000Z', nullable: true })
+  backlogHiddenUntil?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-02-17T00:00:00.000Z', nullable: true })
+  backlogNextReviewAt?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-01-31T00:00:00.000Z', nullable: true })
+  backlogReviewStartedAt?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-02-02T00:00:00.000Z', nullable: true })
+  backlogLastInteractionAt?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-02-09T00:00:00.000Z', nullable: true })
+  backlogLastReminderAt?: string | null;
+
+  @ApiPropertyOptional({ example: 'column_backlog', nullable: true })
+  lastKnownColumnId?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'BACKLOG',
+    enum: ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CUSTOM'],
+    nullable: true,
+  })
+  lastKnownColumnBehavior?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-03-15T00:00:00.000Z', nullable: true })
+  doneArchiveScheduledAt?: string | null;
 }

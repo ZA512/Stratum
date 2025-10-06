@@ -177,4 +177,19 @@ export class UpdateNodeDto {
     description: 'Budget consommé en pourcentage (%)',
   })
   consumedBudgetPercent?: number | null;
+
+  @ApiPropertyOptional({
+    example: '2025-02-10T00:00:00.000Z',
+    nullable: true,
+    description:
+      'Date jusqu\'à laquelle la tâche backlog est masquée (snooze)',
+  })
+  backlogHiddenUntil?: string | null;
+
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Force le redémarrage du cycle de revue backlog (recalcule nextReviewAt)',
+  })
+  backlogReviewRestart?: boolean;
 }

@@ -111,6 +111,7 @@ model Node {
   blockedReason               String?           @db.Text
   blockedReminderEmails       String[]          @default([])
   blockedReminderIntervalDays Int?
+  blockedReminderLastSentAt   DateTime?
   blockedExpectedUnblockAt    DateTime?
   blockedSince                DateTime?
   isBlockResolved             Boolean           @default(false)

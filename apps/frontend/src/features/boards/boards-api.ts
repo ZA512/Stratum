@@ -17,6 +17,10 @@ export type BoardNode = {
   priority?: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   counts?: { backlog: number; inProgress: number; blocked: number; done: number };
   blockedExpectedUnblockAt?: string | null;
+  blockedReminderIntervalDays?: number | null;
+  blockedReminderDueInDays?: number | null;
+  blockedReminderLastSentAt?: string | null;
+  blockedSince?: string | null;
   tags?: string[];
   estimatedDurationDays?: number | null;
   assignees?: { id: string; displayName: string; avatarUrl: string | null }[];
@@ -27,15 +31,39 @@ export type BoardNode = {
     consulted: { id: string; displayName: string; avatarUrl: string | null }[];
     informed: { id: string; displayName: string; avatarUrl: string | null }[];
   };
+  backlogHiddenUntil?: string | null;
+  backlogNextReviewAt?: string | null;
+  backlogReviewStartedAt?: string | null;
+  backlogLastInteractionAt?: string | null;
+  backlogLastReminderAt?: string | null;
+  lastKnownColumnId?: string | null;
+  lastKnownColumnBehavior?: ColumnBehaviorKey | null;
+  doneArchiveScheduledAt?: string | null;
+};
+
+export type ArchivedBoardNode = {
+  id: string;
+  shortId: number | null;
+  title: string;
+  archivedAt: string;
+  lastKnownColumnId: string | null;
+  lastKnownBehavior: ColumnBehaviorKey | null;
+  backlogNextReviewAt: string | null;
+  backlogReviewStartedAt: string | null;
+  backlogHiddenUntil: string | null;
+  doneArchiveScheduledAt: string | null;
+  dueAt: string | null;
 };
 
 export type BoardColumn = {
   id: string;
   name: string;
-  behaviorKey: string;
+  behaviorKey: ColumnBehaviorKey;
   position: number;
   wipLimit: number | null;
   nodes?: BoardNode[];
+  settings?: Record<string, unknown> | null;
+  badges?: { archived: number; snoozed: number };
 };
 
 export type Board = {
@@ -69,6 +97,14 @@ export type UpdateBoardColumnInput = {
   name?: string;
   wipLimit?: number | null;
   position?: number;
+  backlogSettings?: {
+    reviewAfterDays?: number;
+    reviewEveryDays?: number;
+    archiveAfterDays?: number;
+  };
+  doneSettings?: {
+    archiveAfterDays?: number;
+  };
 };
 
 function createOptions(accessToken: string, init?: RequestInit): RequestInit {
@@ -100,6 +136,26 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
   }
 
   return (await response.json()) as Board;
+}
+
+export async function fetchArchivedNodes(
+  boardId: string,
+  columnId: string,
+  accessToken: string,
+): Promise<ArchivedBoardNode[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/boards/${boardId}/columns/${columnId}/archived`,
+    createOptions(accessToken),
+  );
+
+  if (!response.ok) {
+    await throwApiError(
+      response,
+      "Impossible de charger les tâches archivées de la colonne",
+    );
+  }
+
+  return (await response.json()) as ArchivedBoardNode[];
 }
 
 export async function fetchNodeBreadcrumb(nodeId: string, accessToken: string): Promise<NodeBreadcrumbItem[]> {

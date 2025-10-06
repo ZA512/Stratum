@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import {
   ColumnBehaviorKey,
@@ -15,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { NodeDto } from './dto/node.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
@@ -49,6 +51,21 @@ function normalizeJson(
 const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const DEFAULT_BACKLOG_SETTINGS = Object.freeze({
+  reviewAfterDays: 14,
+  reviewEveryDays: 7,
+  archiveAfterDays: 60,
+});
+
+const DEFAULT_DONE_SETTINGS = Object.freeze({
+  archiveAfterDays: 30,
+});
+
+const DEFAULT_MAIL_LOG_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const DEFAULT_MAIL_LOG_MAX_FILES = 5;
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
 type RaciRole = 'R' | 'A' | 'C' | 'I';
 
 type ShareCollaborator = {
@@ -62,6 +79,47 @@ type ShareInvitation = {
   invitedById: string | null;
   invitedAt: string | null;
   status: 'PENDING' | 'ACCEPTED';
+};
+
+type BacklogColumnSettings = {
+  reviewAfterDays: number;
+  reviewEveryDays: number;
+  archiveAfterDays: number;
+};
+
+type DoneColumnSettings = {
+  archiveAfterDays: number;
+};
+
+type MailRecipient = {
+  userId: string | null;
+  email: string;
+  displayName: string;
+};
+
+type MailLogEntry = {
+  id: string;
+  timestamp: string;
+  type:
+    | 'node-comment-notification'
+    | 'backlog-auto-archive'
+    | 'backlog-review-reminder'
+    | 'done-auto-archive'
+    | 'blocked-auto-reminder';
+  recipients?: MailRecipient[];
+  node?: {
+    id: string;
+    title: string | null;
+    parentId?: string | null;
+  };
+  [key: string]: any;
+};
+
+type MailPayload = {
+  subject: string;
+  text: string;
+  html?: string;
+  metadata?: Record<string, any> | null;
 };
 
 type ExtractedMetadata = {
@@ -92,6 +150,25 @@ type ExtractedMetadata = {
     collaborators: ShareCollaborator[];
     invitations: ShareInvitation[];
   };
+  workflow: {
+    backlog: {
+      hiddenUntil: string | null;
+      reviewStartedAt: string | null;
+      lastInteractionAt: string | null;
+      lastReminderAt: string | null;
+      nextReviewAt: string | null;
+      lastKnownColumnId: string | null;
+      lastKnownBehavior: ColumnBehaviorKey | 'CUSTOM' | null;
+    };
+    done: {
+      completedAt: string | null;
+      archiveScheduledAt: string | null;
+    };
+  };
+  workflowRaw: {
+    backlog: Record<string, any>;
+    done: Record<string, any>;
+  };
 };
 
 function toStringArray(value: unknown): string[] {
@@ -116,6 +193,55 @@ function toDateStringOrNull(value: unknown): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatMultilineHtml(value: string): string {
+  return escapeHtml(value).replace(/\r?\n/g, '<br />');
+}
+
+function formatDateTime(input: string | Date | null): string | null {
+  if (!input) return null;
+  const date = typeof input === 'string' ? new Date(input) : input;
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  try {
+    return date.toLocaleString('fr-FR', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function toIsoDateTimeOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString();
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  }
+  return null;
 }
 
 function normalizeShare(rawRoot: Record<string, any>): {
@@ -220,7 +346,18 @@ function writeShareBack(metadata: ExtractedMetadata) {
 
 @Injectable()
 export class NodesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NodesService.name);
+  private workflowAutomationRunning = false;
+  private readonly mailLogMaxBytes: number;
+  private readonly mailLogMaxFiles: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {
+    this.mailLogMaxBytes = this.resolveMailLogMaxBytes();
+    this.mailLogMaxFiles = this.resolveMailLogMaxFiles();
+  }
 
   async getNode(nodeId: string): Promise<NodeDto> {
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
@@ -338,6 +475,10 @@ export class NodesService {
       if (!backlogColumn)
         throw new NotFoundException('Colonne backlog introuvable');
 
+      const backlogSettings = this.normalizeBacklogSettings(
+        backlogColumn.settings,
+      );
+
       if (backlogColumn.wipLimit !== null) {
         const currentCount = await tx.node.count({
           where: { parentId: parent.id, columnId: backlogColumn.id },
@@ -359,6 +500,22 @@ export class NodesService {
       }
 
       const newNodeId = randomUUID();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const metadataPayload: Prisma.InputJsonValue = {
+        workflow: {
+          backlog: {
+            hiddenUntil: null,
+            reviewStartedAt: nowIso,
+            lastInteractionAt: nowIso,
+            lastReminderAt: null,
+            nextReviewAt: this.addDaysIso(now, backlogSettings.reviewAfterDays),
+            lastKnownColumnId: backlogColumn.id,
+            lastKnownBehavior: ColumnBehaviorKey.BACKLOG,
+          },
+          done: { completedAt: null, archiveScheduledAt: null },
+        },
+      };
       await tx.node.create({
         data: {
           id: newNodeId,
@@ -372,6 +529,7 @@ export class NodesService {
           position: 0,
           createdById: userId,
           dueAt,
+          metadata: metadataPayload,
         },
       });
       // Recalcul progress parent (done/total)
@@ -418,6 +576,13 @@ export class NodesService {
       if (!targetColumn)
         throw new NotFoundException('Colonne cible introuvable');
 
+      if (
+        targetKey === ColumnBehaviorKey.DONE &&
+        behaviorKey !== ColumnBehaviorKey.DONE
+      ) {
+        await this.ensureNodeCanEnterDone(tx, child.id);
+      }
+
       const aggregate = await tx.node.aggregate({
         where: { parentId: parent.id, columnId: targetColumn.id },
         _max: { position: true },
@@ -425,7 +590,8 @@ export class NodesService {
 
       // Cycle time: mettre à jour statusMetadata child
       const statusMeta = normalizeJson(child.statusMetadata) || {};
-      const nowIso = new Date().toISOString();
+      const now = new Date();
+      const nowIso = now.toISOString();
       if (targetKey === ColumnBehaviorKey.DONE) {
         if (!('doneAt' in statusMeta)) statusMeta.doneAt = nowIso;
         if (!('firstMovedAt' in statusMeta)) statusMeta.firstMovedAt = nowIso;
@@ -433,12 +599,23 @@ export class NodesService {
         // On ne supprime pas doneAt si retour backlog
         if (!('firstMovedAt' in statusMeta)) statusMeta.firstMovedAt = nowIso;
       }
+      const blockedTransitionUpdate = this.buildBlockedTransitionUpdate(
+        behaviorKey ?? null,
+        targetKey,
+      );
+      const workflowUpdate = this.buildWorkflowTransitionUpdate(
+        child as NodeModel,
+        targetColumn,
+        now,
+      );
       await tx.node.update({
         where: { id: child.id },
         data: {
           columnId: targetColumn.id,
           position: (aggregate._max.position ?? 0) + 1,
           statusMetadata: statusMeta as any,
+          ...blockedTransitionUpdate,
+          ...workflowUpdate,
         },
       });
       await this.recomputeParentProgress(tx, parent.id);
@@ -568,24 +745,46 @@ export class NodesService {
       // Apply updates target column
       // Determine if moving child to IN_PROGRESS or DONE for first time markers
       const targetBehavior = targetColumn.behavior.key;
-      const childFull = await tx.node.findUnique({ where: { id: child.id } });
-      const statusMeta = normalizeJson(childFull?.statusMetadata ?? {}) || {};
-      const nowIso = new Date().toISOString();
+      const statusMeta = normalizeJson(child.statusMetadata ?? {}) || {};
+      const now = new Date();
+      const nowIso = now.toISOString();
       if (targetBehavior === ColumnBehaviorKey.IN_PROGRESS) {
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
       } else if (targetBehavior === ColumnBehaviorKey.DONE) {
+        if (!sameColumn) {
+          await this.ensureNodeCanEnterDone(tx, child.id);
+        }
         if (!('doneAt' in statusMeta)) statusMeta.doneAt = nowIso;
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso; // fallback si jamais allé IN_PROGRESS
       }
+      const currentBehavior = columns.find((c) => c.id === child.columnId)?.behavior
+        ?.key;
+      const blockedTransitionUpdate = sameColumn
+        ? {}
+        : this.buildBlockedTransitionUpdate(
+            currentBehavior ?? null,
+            targetBehavior,
+          );
+      const workflowUpdate = sameColumn
+        ? {}
+        : this.buildWorkflowTransitionUpdate(
+            child as NodeModel,
+            targetColumn,
+            now,
+          );
       for (let i = 0; i < finalOrder.length; i++) {
         const id = finalOrder[i];
+        const data: Prisma.NodeUpdateInput = {
+          position: i,
+          columnId: targetColumn.id,
+        };
+        if (id === child.id) {
+          data.statusMetadata = statusMeta as any;
+          Object.assign(data, blockedTransitionUpdate, workflowUpdate);
+        }
         await tx.node.update({
           where: { id },
-          data: {
-            position: i,
-            columnId: targetColumn.id,
-            statusMetadata: id === child.id ? (statusMeta as any) : undefined,
-          },
+          data,
         });
       }
       await this.recomputeParentProgress(tx, parent.id);
@@ -679,6 +878,7 @@ export class NodesService {
           path: true,
           depth: true,
           statusMetadata: true,
+          metadata: true,
         },
       });
       if (!freshNode) throw new NotFoundException('Tâche introuvable');
@@ -756,14 +956,37 @@ export class NodesService {
       const depthDelta = board.node.depth + 1 - sourceDepth;
 
       const statusMeta = normalizeJson(freshNode.statusMetadata) || {};
-      const nowIso = new Date().toISOString();
+      const now = new Date();
+      const nowIso = now.toISOString();
       const behaviorKey = targetColumn.behavior.key;
+      const sourceBehavior = freshNode.columnId
+        ? (
+            await tx.column.findUnique({
+              where: { id: freshNode.columnId },
+              include: { behavior: true },
+            })
+          )?.behavior.key ?? null
+        : null;
       if (behaviorKey === ColumnBehaviorKey.IN_PROGRESS) {
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
       } else if (behaviorKey === ColumnBehaviorKey.DONE) {
+        await this.ensureNodeCanEnterDone(tx, freshNode.id);
         if (!('doneAt' in statusMeta)) statusMeta.doneAt = nowIso;
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
       }
+      const blockedTransitionUpdate = this.buildBlockedTransitionUpdate(
+        sourceBehavior,
+        behaviorKey,
+      );
+      const workflowUpdate = this.buildWorkflowTransitionUpdate(
+        freshNode as unknown as NodeModel,
+        {
+          id: targetColumn.id,
+          behavior: { key: behaviorKey },
+          settings: this.normalizeColumnSettings((targetColumn as any).settings ?? null),
+        },
+        now,
+      );
 
       const updated = await tx.node.update({
         where: { id: node.id },
@@ -775,6 +998,8 @@ export class NodesService {
           path: newPath,
           depth: board.node.depth + 1,
           statusMetadata: statusMeta as any,
+          ...blockedTransitionUpdate,
+          ...workflowUpdate,
         },
       });
 
@@ -870,6 +1095,187 @@ export class NodesService {
     });
   }
 
+  private buildBlockedTransitionUpdate(
+    sourceBehavior: ColumnBehaviorKey | null,
+    targetBehavior: ColumnBehaviorKey,
+  ): Prisma.NodeUpdateInput {
+    const update: Prisma.NodeUpdateInput = {};
+    if (
+      sourceBehavior === ColumnBehaviorKey.BLOCKED &&
+      targetBehavior !== ColumnBehaviorKey.BLOCKED
+    ) {
+      (update as any).blockedReason = null;
+      (update as any).blockedReminderEmails = [];
+      (update as any).blockedReminderIntervalDays = null;
+      (update as any).blockedReminderLastSentAt = null;
+      (update as any).blockedExpectedUnblockAt = null;
+      (update as any).blockedSince = null;
+      (update as any).isBlockResolved = false;
+    }
+    if (
+      sourceBehavior !== ColumnBehaviorKey.BLOCKED &&
+      targetBehavior === ColumnBehaviorKey.BLOCKED
+    ) {
+      (update as any).blockedSince = new Date();
+      (update as any).isBlockResolved = false;
+      (update as any).blockedReminderLastSentAt = null;
+    }
+    return update;
+  }
+
+  private buildWorkflowTransitionUpdate(
+    node: NodeModel,
+    targetColumn: {
+      id: string;
+      behavior: { key: ColumnBehaviorKey };
+      settings: Record<string, any> | null;
+    },
+    now: Date,
+  ): Prisma.NodeUpdateInput {
+    const extracted = this.extractMetadata(node);
+    const workflowState = extracted.workflow;
+    const workflowRaw = extracted.workflowRaw;
+    let changed = false;
+    const nowIso = now.toISOString();
+
+    if (workflowState.backlog.lastKnownColumnId !== targetColumn.id) {
+      workflowState.backlog.lastKnownColumnId = targetColumn.id;
+      workflowRaw.backlog.lastKnownColumnId = targetColumn.id;
+      changed = true;
+    }
+    if (workflowState.backlog.lastKnownBehavior !== targetColumn.behavior.key) {
+      workflowState.backlog.lastKnownBehavior = targetColumn.behavior.key;
+      workflowRaw.backlog.lastKnownBehavior = targetColumn.behavior.key;
+      changed = true;
+    }
+
+    if (targetColumn.behavior.key === ColumnBehaviorKey.BACKLOG) {
+      const backlogSettings = this.normalizeBacklogSettings(targetColumn.settings);
+      const nextReview = this.addDaysIso(now, backlogSettings.reviewAfterDays);
+      if (workflowState.backlog.hiddenUntil !== null) {
+        workflowState.backlog.hiddenUntil = null;
+        workflowRaw.backlog.hiddenUntil = null;
+        changed = true;
+      }
+      if (workflowState.backlog.reviewStartedAt !== nowIso) {
+        workflowState.backlog.reviewStartedAt = nowIso;
+        workflowRaw.backlog.reviewStartedAt = nowIso;
+        changed = true;
+      }
+      if (workflowState.backlog.lastInteractionAt !== nowIso) {
+        workflowState.backlog.lastInteractionAt = nowIso;
+        workflowRaw.backlog.lastInteractionAt = nowIso;
+        changed = true;
+      }
+      if (workflowState.backlog.lastReminderAt !== null) {
+        workflowState.backlog.lastReminderAt = null;
+        workflowRaw.backlog.lastReminderAt = null;
+        changed = true;
+      }
+      if (workflowState.backlog.nextReviewAt !== nextReview) {
+        workflowState.backlog.nextReviewAt = nextReview;
+        workflowRaw.backlog.nextReviewAt = nextReview;
+        changed = true;
+      }
+    } else {
+      if (workflowState.backlog.reviewStartedAt !== null) {
+        workflowState.backlog.reviewStartedAt = null;
+        workflowRaw.backlog.reviewStartedAt = null;
+        changed = true;
+      }
+      if (workflowState.backlog.nextReviewAt !== null) {
+        workflowState.backlog.nextReviewAt = null;
+        workflowRaw.backlog.nextReviewAt = null;
+        changed = true;
+      }
+      if (workflowState.backlog.hiddenUntil !== null) {
+        workflowState.backlog.hiddenUntil = null;
+        workflowRaw.backlog.hiddenUntil = null;
+        changed = true;
+      }
+      if (workflowState.backlog.lastReminderAt !== null) {
+        workflowState.backlog.lastReminderAt = null;
+        workflowRaw.backlog.lastReminderAt = null;
+        changed = true;
+      }
+    }
+
+    if (targetColumn.behavior.key === ColumnBehaviorKey.DONE) {
+      const doneSettings = this.normalizeDoneSettings(targetColumn.settings);
+      if (!workflowState.done.completedAt) {
+        workflowState.done.completedAt = nowIso;
+        workflowRaw.done.completedAt = nowIso;
+        changed = true;
+      }
+      const archiveAt =
+        doneSettings.archiveAfterDays > 0
+          ? this.addDaysIso(now, doneSettings.archiveAfterDays)
+          : null;
+      if (workflowState.done.archiveScheduledAt !== archiveAt) {
+        workflowState.done.archiveScheduledAt = archiveAt;
+        workflowRaw.done.archiveScheduledAt = archiveAt;
+        changed = true;
+      }
+    } else if (workflowState.done.archiveScheduledAt !== null) {
+      workflowState.done.archiveScheduledAt = null;
+      workflowRaw.done.archiveScheduledAt = null;
+      changed = true;
+    }
+
+    if (!changed) {
+      return {};
+    }
+
+    extracted.raw.workflow = {
+      backlog: { ...workflowRaw.backlog },
+      done: { ...workflowRaw.done },
+    };
+
+    return {
+      metadata: extracted.raw as Prisma.InputJsonValue,
+    };
+  }
+
+  private async countIncompleteDescendants(
+    tx: Prisma.TransactionClient,
+    nodeId: string,
+  ): Promise<number> {
+    let count = 0;
+    const stack: string[] = [nodeId];
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      const children = await tx.node.findMany({
+        where: { parentId: currentId, archivedAt: null },
+        select: {
+          id: true,
+          column: { select: { behavior: { select: { key: true } } } },
+        },
+      });
+      for (const child of children) {
+        const childBehavior = child.column?.behavior?.key ?? null;
+        if (childBehavior !== ColumnBehaviorKey.DONE) {
+          count += 1;
+        }
+        stack.push(child.id);
+      }
+    }
+    return count;
+  }
+
+  private async ensureNodeCanEnterDone(
+    tx: Prisma.TransactionClient,
+    nodeId: string,
+  ): Promise<void> {
+    const unfinished = await this.countIncompleteDescendants(tx, nodeId);
+    if (unfinished > 0) {
+      throw new ConflictException({
+        message: `Impossible de terminer la tache : ${unfinished} sous-tache(s) non terminee(s)`,
+        code: 'NODE_HAS_ACTIVE_CHILDREN',
+        incompleteChildrenCount: unfinished,
+      });
+    }
+  }
+
   async updateNode(
     nodeId: string,
     dto: UpdateNodeDto,
@@ -907,7 +1313,9 @@ export class NodesService {
       dto.hourlyRate === undefined &&
       dto.plannedBudget === undefined &&
       dto.consumedBudgetValue === undefined &&
-      dto.consumedBudgetPercent === undefined
+      dto.consumedBudgetPercent === undefined &&
+      dto.backlogHiddenUntil === undefined &&
+      dto.backlogReviewRestart === undefined
     ) {
       throw new BadRequestException('Aucun champ a mettre a jour');
     }
@@ -981,6 +1389,7 @@ export class NodesService {
     if (dto.blockedReminderIntervalDays !== undefined) {
       if (dto.blockedReminderIntervalDays === null) {
         (data as any).blockedReminderIntervalDays = null;
+        (data as any).blockedReminderLastSentAt = null;
       } else {
         const v = Number(dto.blockedReminderIntervalDays);
         if (!Number.isInteger(v) || v < 1 || v > 365)
@@ -988,6 +1397,7 @@ export class NodesService {
             'blockedReminderIntervalDays invalide (1-365)',
           );
         (data as any).blockedReminderIntervalDays = v;
+        (data as any).blockedReminderLastSentAt = null;
       }
     }
     if (dto.blockedExpectedUnblockAt !== undefined) {
@@ -1064,10 +1474,13 @@ export class NodesService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { actualCost: _, ...financialStore } = extractedMetadata.financials;
     const nextFinancials = { ...financialStore };
+    const workflowState = extractedMetadata.workflow;
+    const workflowRaw = extractedMetadata.workflowRaw;
 
     let metadataChanged = false;
     let timeTrackingChanged = false;
     let financialsChanged = false;
+    let workflowChanged = false;
     let shouldUpdateAssignments = false;
 
     const sanitizeIds = (value: string[] | undefined): string[] =>
@@ -1098,6 +1511,66 @@ export class NodesService {
         throw new BadRequestException(`${field} doit être positif`);
       return parsed;
     };
+
+    if (dto.backlogHiddenUntil !== undefined) {
+      const previous = workflowState.backlog.hiddenUntil;
+      if (dto.backlogHiddenUntil === null) {
+        if (previous !== null) {
+          workflowState.backlog.hiddenUntil = null;
+          workflowRaw.backlog.hiddenUntil = null;
+          workflowChanged = true;
+        }
+      } else {
+        const parsed = toIsoDateTimeOrNull(dto.backlogHiddenUntil);
+        if (parsed === null)
+          throw new BadRequestException('backlogHiddenUntil invalide');
+        if (parsed !== previous) {
+          workflowState.backlog.hiddenUntil = parsed;
+          workflowRaw.backlog.hiddenUntil = parsed;
+          workflowChanged = true;
+        }
+      }
+    }
+
+    if (dto.backlogReviewRestart) {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      workflowState.backlog.reviewStartedAt = nowIso;
+      workflowState.backlog.lastInteractionAt = nowIso;
+      workflowState.backlog.lastReminderAt = null;
+      workflowRaw.backlog.reviewStartedAt = nowIso;
+      workflowRaw.backlog.lastInteractionAt = nowIso;
+      workflowRaw.backlog.lastReminderAt = null;
+      if (workflowState.backlog.hiddenUntil !== null) {
+        workflowState.backlog.hiddenUntil = null;
+        workflowRaw.backlog.hiddenUntil = null;
+        workflowChanged = true;
+      }
+
+      const candidateColumnId =
+        node.columnId ?? workflowState.backlog.lastKnownColumnId;
+      let nextReview: string | null = null;
+      if (candidateColumnId) {
+        const column = await this.prisma.column.findUnique({
+          where: { id: candidateColumnId },
+          include: { behavior: true },
+        });
+        if (column && column.behavior.key === ColumnBehaviorKey.BACKLOG) {
+          const columnSettings = this.normalizeColumnSettings(
+            (column as any).settings ?? null,
+          );
+          const backlogSettings = this.normalizeBacklogSettings(columnSettings);
+          nextReview = this.addDaysIso(now, backlogSettings.reviewEveryDays);
+          workflowState.backlog.lastKnownColumnId = column.id;
+          workflowRaw.backlog.lastKnownColumnId = column.id;
+          workflowState.backlog.lastKnownBehavior = column.behavior.key;
+          workflowRaw.backlog.lastKnownBehavior = column.behavior.key;
+        }
+      }
+      workflowState.backlog.nextReviewAt = nextReview;
+      workflowRaw.backlog.nextReviewAt = nextReview;
+      workflowChanged = true;
+    }
 
     if (
       dto.raciResponsibleIds !== undefined ||
@@ -1242,6 +1715,13 @@ export class NodesService {
       metadata.financials = { ...nextFinancials };
       metadataChanged = true;
     }
+    if (workflowChanged) {
+      metadata.workflow = {
+        backlog: { ...workflowRaw.backlog },
+        done: { ...workflowRaw.done },
+      };
+      metadataChanged = true;
+    }
     if (metadataChanged) {
       (data as any).metadata = metadata as Prisma.InputJsonValue;
     }
@@ -1301,6 +1781,156 @@ export class NodesService {
           // Parent possiblement supprimé via cascade (suppression récursive)
         }
       }
+    });
+  }
+
+  async restoreNode(nodeId: string, userId: string): Promise<NodeDto> {
+    const archived = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: {
+        id: true,
+        teamId: true,
+        parentId: true,
+        archivedAt: true,
+      },
+    });
+
+    if (!archived) {
+      throw new NotFoundException('Tâche introuvable');
+    }
+
+    if (!archived.archivedAt) {
+      throw new BadRequestException('La tâche n\'est pas archivée');
+    }
+
+    await this.ensureUserCanWrite(archived.teamId, userId);
+
+    if (!archived.parentId) {
+      throw new BadRequestException(
+        'Impossible de restaurer une tâche sans parent',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const freshNode = await tx.node.findUnique({
+        where: { id: nodeId },
+        select: {
+          id: true,
+          teamId: true,
+          parentId: true,
+          columnId: true,
+          statusMetadata: true,
+          metadata: true,
+          archivedAt: true,
+        },
+      });
+
+      if (!freshNode) {
+        throw new NotFoundException('Tâche introuvable');
+      }
+
+      if (!freshNode.archivedAt) {
+        throw new BadRequestException('La tâche n\'est pas archivée');
+      }
+
+      if (!freshNode.parentId) {
+        throw new BadRequestException(
+          'Impossible de restaurer une tâche sans parent',
+        );
+      }
+
+      const parent = await tx.node.findUnique({
+        where: { id: freshNode.parentId },
+        select: { id: true, teamId: true },
+      });
+
+      if (!parent) {
+        throw new NotFoundException('Parent introuvable');
+      }
+
+      const { columns } = await this.ensureBoardWithColumns(tx, parent);
+      const metadata = this.extractMetadata(freshNode as unknown as NodeModel);
+      const targetColumnId = metadata.workflow.backlog.lastKnownColumnId;
+
+      if (!targetColumnId) {
+        throw new BadRequestException(
+          'Impossible de déterminer la colonne d’origine',
+        );
+      }
+
+      const targetColumn = columns.find((column) => column.id === targetColumnId);
+
+      if (!targetColumn) {
+        throw new NotFoundException('Colonne cible introuvable');
+      }
+
+      if (targetColumn.behavior.key === ColumnBehaviorKey.DONE) {
+        await this.ensureNodeCanEnterDone(tx, freshNode.id);
+      }
+
+      const siblings = await tx.node.findMany({
+        where: {
+          parentId: parent.id,
+          columnId: targetColumn.id,
+          archivedAt: null,
+        },
+        select: { id: true, position: true },
+        orderBy: { position: 'asc' },
+      });
+
+      const nextPosition = siblings.length;
+      const statusMeta: Record<string, unknown> =
+        normalizeJson(freshNode.statusMetadata) ?? {};
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const behaviorKey = targetColumn.behavior.key;
+
+      if (behaviorKey === ColumnBehaviorKey.IN_PROGRESS) {
+        if (!('startedAt' in statusMeta)) {
+          statusMeta.startedAt = nowIso;
+        }
+      } else if (behaviorKey === ColumnBehaviorKey.DONE) {
+        if (!('doneAt' in statusMeta)) {
+          statusMeta.doneAt = nowIso;
+        }
+        if (!('startedAt' in statusMeta)) {
+          statusMeta.startedAt = nowIso;
+        }
+      }
+
+      const previousBehavior =
+        metadata.workflow.backlog.lastKnownBehavior === behaviorKey
+          ? null
+          : metadata.workflow.backlog.lastKnownBehavior;
+
+      const blockedUpdate = this.buildBlockedTransitionUpdate(
+        previousBehavior,
+        behaviorKey,
+      );
+
+      const workflowUpdate = this.buildWorkflowTransitionUpdate(
+        freshNode as unknown as NodeModel,
+        targetColumn,
+        now,
+      );
+
+      const updateData: Prisma.NodeUpdateInput = {
+        archivedAt: null,
+        columnId: targetColumn.id,
+        position: nextPosition,
+        statusMetadata: statusMeta as Prisma.InputJsonValue,
+      };
+
+      Object.assign(updateData, blockedUpdate, workflowUpdate);
+
+      const updated = await tx.node.update({
+        where: { id: freshNode.id },
+        data: updateData,
+      });
+
+      await this.recomputeParentProgress(tx, parent.id);
+
+      return this.mapNode(updated as unknown as NodeModel);
     });
   }
 
@@ -1666,6 +2296,28 @@ export class NodesService {
     }
   }
 
+  private async appendMailLog(entry: MailLogEntry): Promise<void> {
+    try {
+      await this.deliverMail(entry);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        "Impossible d'envoyer le mail d'automatisation",
+        err.stack ?? err.message,
+      );
+    }
+
+    try {
+      await this.writeMailLog(entry);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        "Impossible d'écrire dans le fichier de log des mails",
+        err.stack ?? err.message,
+      );
+    }
+  }
+
   private async logCommentEmail(params: {
     node: NodeModel;
     comment: {
@@ -1685,9 +2337,7 @@ export class NodesService {
     };
     recipients: Array<{ userId: string; email: string; displayName: string }>;
   }): Promise<void> {
-    const logDir = join(process.cwd(), 'apps', 'backend', 'logs');
-    const logPath = join(logDir, 'mail.log');
-    const entry = {
+    await this.appendMailLog({
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       type: 'node-comment-notification',
@@ -1710,16 +2360,298 @@ export class NodesService {
         subProject: params.comment.notifySubProject ?? false,
       },
       recipients: params.recipients,
+    });
+  }
+
+  private async writeMailLog(entry: MailLogEntry): Promise<void> {
+    const logDir = join(process.cwd(), 'apps', 'backend', 'logs');
+    const logPath = join(logDir, 'mail.log');
+    await fs.mkdir(logDir, { recursive: true });
+    await this.rotateMailLogIfNeeded(logPath);
+    await fs.appendFile(logPath, JSON.stringify(entry) + '\n', 'utf8');
+  }
+
+  private async rotateMailLogIfNeeded(logPath: string): Promise<void> {
+    let stats: { size: number } | null = null;
+    try {
+      stats = await fs.stat(logPath);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === 'ENOENT') {
+        return;
+      }
+      throw err;
+    }
+
+    if (!stats || stats.size < this.mailLogMaxBytes) {
+      return;
+    }
+
+    const maxFiles = this.mailLogMaxFiles;
+    for (let index = maxFiles; index >= 1; index--) {
+      const source = index === 1 ? logPath : `${logPath}.${index - 1}`;
+      const target = `${logPath}.${index}`;
+
+      try {
+        await fs.rm(target, { force: true });
+      } catch {
+        // ignore errors when removing previous archive
+      }
+
+      try {
+        await fs.rename(source, target);
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err?.code === 'ENOENT') {
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  private resolveMailLogMaxBytes(): number {
+    const raw = Number(process.env.MAIL_LOG_MAX_BYTES ?? DEFAULT_MAIL_LOG_MAX_BYTES);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return DEFAULT_MAIL_LOG_MAX_BYTES;
+    }
+    return raw;
+  }
+
+  private resolveMailLogMaxFiles(): number {
+    const raw = Number(process.env.MAIL_LOG_MAX_FILES ?? DEFAULT_MAIL_LOG_MAX_FILES);
+    if (!Number.isFinite(raw) || raw < 1) {
+      return DEFAULT_MAIL_LOG_MAX_FILES;
+    }
+    return Math.max(Math.floor(raw), 1);
+  }
+
+  private async deliverMail(entry: MailLogEntry): Promise<void> {
+    const recipients = Array.isArray(entry.recipients)
+      ? entry.recipients.filter((recipient) => recipient?.email)
+      : [];
+
+    if (!recipients.length) {
+      return;
+    }
+
+    const payload = this.buildMailPayload(entry);
+    if (!payload) {
+      return;
+    }
+
+    const metadata: Record<string, any> = {
+      type: entry.type,
+      nodeId: entry.node?.id ?? null,
+      entryId: entry.id,
+      timestamp: entry.timestamp,
     };
 
+    if (payload.metadata) {
+      Object.assign(metadata, payload.metadata);
+    }
+
     try {
-      await fs.mkdir(logDir, { recursive: true });
-      await fs.appendFile(logPath, JSON.stringify(entry) + '\n', 'utf8');
+      await this.mailService.sendMail({
+        to: recipients.map((recipient) => ({
+          email: recipient.email,
+          displayName: recipient.displayName,
+        })),
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+        metadata,
+      });
     } catch (error) {
-      console.error(
-        "Impossible d'écrire dans le fichier de log des mails",
-        error,
-      );
+      throw error;
+    }
+  }
+
+  private buildMailPayload(entry: MailLogEntry): MailPayload | null {
+    const nodeTitle = entry.node?.title?.trim() || 'Sans titre';
+    const baseMetadata = { nodeTitle, parentId: entry.node?.parentId ?? null };
+
+    switch (entry.type) {
+      case 'node-comment-notification': {
+        const authorName =
+          entry.comment?.authorDisplayName?.trim() ||
+          entry.comment?.authorId ||
+          'Un collaborateur';
+        const commentBody = (entry.comment?.body ?? '').trim();
+        const textBody = commentBody || '(commentaire vide)';
+        const formattedDate = formatDateTime(entry.timestamp);
+        const textLines = [
+          `${authorName} a commenté "${nodeTitle}"`,
+          formattedDate ? `le ${formattedDate}` : null,
+          '',
+          textBody,
+          '',
+          'Connectez-vous à Stratum pour répondre.',
+        ].filter((line) => line !== null) as string[];
+
+        const htmlBody = commentBody
+          ? `<blockquote>${formatMultilineHtml(commentBody)}</blockquote>`
+          : '<p><em>Commentaire vide</em></p>';
+
+        return {
+          subject: `[Stratum] Nouveau commentaire – ${nodeTitle}`,
+          text: textLines.join('\n'),
+          html: `<p><strong>${escapeHtml(authorName)}</strong> a commenté <em>${escapeHtml(
+            nodeTitle,
+          )}</em>.</p>${htmlBody}<p>Connectez-vous à Stratum pour répondre.</p>`,
+          metadata: {
+            ...baseMetadata,
+            commentId: entry.comment?.id ?? null,
+          },
+        };
+      }
+      case 'backlog-review-reminder': {
+        const nextReview = formatDateTime(entry.nextReviewAt ?? null);
+        const frequency = entry.reviewEveryDays ?? null;
+        const textLines = [
+          `La tâche "${nodeTitle}" nécessite une revue backlog.`,
+          nextReview
+            ? `La dernière date planifiée était le ${nextReview}.`
+            : "La dernière date planifiée n'a pas pu être déterminée.",
+          frequency
+            ? `Fréquence configurée : tous les ${frequency} jours.`
+            : 'La fréquence configurée est indisponible.',
+          '',
+          'Merci de planifier une action ou de mettre à jour la tâche.',
+        ];
+
+        const htmlLines = [
+          `<p>La tâche <em>${escapeHtml(nodeTitle)}</em> nécessite une revue backlog.</p>`,
+          nextReview
+            ? `<p>La dernière date planifiée était le <strong>${escapeHtml(nextReview)}</strong>.</p>`
+            : `<p>La dernière date planifiée n'a pas pu être déterminée.</p>`,
+          frequency
+            ? `<p>Fréquence configurée : tous les <strong>${escapeHtml(String(
+                frequency,
+              ))}</strong> jours.</p>`
+            : '<p>La fréquence configurée est indisponible.</p>',
+          '<p>Merci de planifier une action ou de mettre à jour la tâche.</p>',
+        ];
+
+        return {
+          subject: `[Stratum] Revue backlog à planifier – ${nodeTitle}`,
+          text: textLines.join('\n'),
+          html: htmlLines.join(''),
+          metadata: {
+            ...baseMetadata,
+            nextReviewAt: entry.nextReviewAt ?? null,
+            reviewEveryDays: frequency,
+          },
+        };
+      }
+      case 'backlog-auto-archive': {
+        const archiveAfter = entry.archiveAfterDays ?? null;
+        const textLines = [
+          `La tâche "${nodeTitle}" a été archivée automatiquement depuis le backlog.`,
+          archiveAfter
+            ? `Délai configuré : ${archiveAfter} jours sans activité.`
+            : 'Le délai configuré est indisponible.',
+          '',
+          'Vous pouvez restaurer la tâche depuis le panneau des archives si nécessaire.',
+        ];
+
+        const htmlLines = [
+          `<p>La tâche <em>${escapeHtml(nodeTitle)}</em> a été archivée automatiquement depuis le backlog.</p>`,
+          archiveAfter
+            ? `<p>Délai configuré : <strong>${escapeHtml(String(archiveAfter))} jours</strong> sans activité.</p>`
+            : '<p>Le délai configuré est indisponible.</p>',
+          '<p>Vous pouvez restaurer la tâche depuis le panneau des archives si nécessaire.</p>',
+        ];
+
+        return {
+          subject: `[Stratum] Tâche archivée depuis le backlog – ${nodeTitle}`,
+          text: textLines.join('\n'),
+          html: htmlLines.join(''),
+          metadata: {
+            ...baseMetadata,
+            archiveAfterDays: archiveAfter,
+          },
+        };
+      }
+      case 'done-auto-archive': {
+        const scheduledAt = formatDateTime(entry.archiveScheduledAt ?? null);
+        const textLines = [
+          `La tâche "${nodeTitle}" a quitté la colonne Terminé et a été archivée automatiquement.`,
+          scheduledAt
+            ? `Date de planification initiale : ${scheduledAt}.`
+            : 'La date de planification initiale est indisponible.',
+          '',
+          'Vous pouvez restaurer la tâche depuis la colonne d’archives.',
+        ];
+
+        const htmlLines = [
+          `<p>La tâche <em>${escapeHtml(nodeTitle)}</em> a quitté la colonne Terminé et a été archivée automatiquement.</p>`,
+          scheduledAt
+            ? `<p>Date de planification initiale : <strong>${escapeHtml(scheduledAt)}</strong>.</p>`
+            : '<p>La date de planification initiale est indisponible.</p>',
+          '<p>Vous pouvez restaurer la tâche depuis la colonne d’archives.</p>',
+        ];
+
+        return {
+          subject: `[Stratum] Tâche archivée depuis Terminé – ${nodeTitle}`,
+          text: textLines.join('\n'),
+          html: htmlLines.join(''),
+          metadata: {
+            ...baseMetadata,
+            archiveScheduledAt: entry.archiveScheduledAt ?? null,
+          },
+        };
+      }
+      case 'blocked-auto-reminder': {
+        const reminderEvery = entry.reminderIntervalDays ?? null;
+        const reason = (entry.blockedReason ?? '').trim();
+        const textLines = [
+          `La tâche "${nodeTitle}" est toujours bloquée.`,
+          reminderEvery
+            ? `Rappel automatique toutes les ${reminderEvery} journées.`
+            : 'Aucun intervalle de relance n’a été trouvé.',
+        ];
+
+        if (reason) {
+          textLines.push('', 'Contexte fourni :', reason);
+        }
+
+        textLines.push(
+          '',
+          'Merci de mettre à jour la fiche ou de contacter les responsables.',
+        );
+
+        const htmlParts = [
+          `<p>La tâche <em>${escapeHtml(nodeTitle)}</em> est toujours bloquée.</p>`,
+          reminderEvery
+            ? `<p>Rappel automatique toutes les <strong>${escapeHtml(String(reminderEvery))}</strong> journées.</p>`
+            : '<p>Aucun intervalle de relance n’a été trouvé.</p>',
+        ];
+
+        if (reason) {
+          htmlParts.push(
+            '<p>Contexte fourni :</p>',
+            `<blockquote>${formatMultilineHtml(reason)}</blockquote>`,
+          );
+        }
+
+        htmlParts.push(
+          '<p>Merci de mettre à jour la fiche ou de contacter les responsables.</p>',
+        );
+
+        return {
+          subject: `[Stratum] Relance automatique – ${nodeTitle}`,
+          text: textLines.join('\n'),
+          html: htmlParts.join(''),
+          metadata: {
+            ...baseMetadata,
+            reminderIntervalDays: reminderEvery,
+            blockedReason: reason || null,
+          },
+        };
+      }
+      default:
+        return null;
     }
   }
 
@@ -2317,6 +3249,17 @@ export class NodesService {
       const behavior = behaviors.get(def.key);
       if (!behavior) continue;
 
+      let settings: Prisma.JsonValue | undefined;
+      if (def.key === ColumnBehaviorKey.BACKLOG) {
+        settings = {
+          backlog: { ...DEFAULT_BACKLOG_SETTINGS },
+        } as Prisma.JsonObject;
+      } else if (def.key === ColumnBehaviorKey.DONE) {
+        settings = {
+          done: { ...DEFAULT_DONE_SETTINGS },
+        } as Prisma.JsonObject;
+      }
+
       await tx.column.create({
         data: {
           boardId,
@@ -2324,9 +3267,92 @@ export class NodesService {
           position: def.position,
           wipLimit: def.wipLimit,
           behaviorId: behavior.id,
+          settings,
         },
       });
     }
+  }
+
+  private normalizeColumnSettings(
+    value: Prisma.JsonValue | null,
+  ): Record<string, any> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    return { ...(value as Record<string, any>) };
+  }
+
+  private normalizeBacklogSettings(
+    settings: Record<string, any> | null,
+  ): BacklogColumnSettings {
+    const source =
+      settings && typeof settings === 'object' && !Array.isArray(settings)
+        ? (settings.backlog &&
+            typeof settings.backlog === 'object' &&
+            !Array.isArray(settings.backlog)
+            ? settings.backlog
+            : settings)
+        : {};
+    const ensure = (value: unknown, fallback: number, max: number) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      const rounded = Math.floor(num);
+      if (rounded < 1) return fallback;
+      if (rounded > max) return max;
+      return rounded;
+    };
+    const reviewAfterDays = ensure(
+      (source as any).reviewAfterDays,
+      DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
+      365,
+    );
+    const reviewEveryDays = ensure(
+      (source as any).reviewEveryDays,
+      DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
+      365,
+    );
+    const archiveAfterDays = ensure(
+      (source as any).archiveAfterDays,
+      DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
+      730,
+    );
+    return {
+      reviewAfterDays,
+      reviewEveryDays,
+      archiveAfterDays,
+    };
+  }
+
+  private normalizeDoneSettings(
+    settings: Record<string, any> | null,
+  ): DoneColumnSettings {
+    const source =
+      settings && typeof settings === 'object' && !Array.isArray(settings)
+        ? (settings.done &&
+            typeof settings.done === 'object' &&
+            !Array.isArray(settings.done)
+            ? settings.done
+            : settings)
+        : {};
+    const ensure = (value: unknown, fallback: number) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      const rounded = Math.floor(num);
+      if (rounded < 0) return 0;
+      if (rounded > 730) return 730;
+      return rounded;
+    };
+    const archiveAfterDays = ensure(
+      (source as any).archiveAfterDays,
+      DEFAULT_DONE_SETTINGS.archiveAfterDays,
+    );
+    return { archiveAfterDays };
+  }
+
+  private addDaysIso(base: Date, days: number): string {
+    const next = new Date(base.getTime());
+    next.setUTCDate(next.getUTCDate() + days);
+    return next.toISOString();
   }
 
   private mapNode(node: NodeModel): NodeDto {
@@ -2349,6 +3375,9 @@ export class NodesService {
       blockedReminderEmails: (node as any).blockedReminderEmails ?? [],
       blockedReminderIntervalDays:
         (node as any).blockedReminderIntervalDays ?? null,
+      blockedReminderLastSentAt: (node as any).blockedReminderLastSentAt
+        ? (node as any).blockedReminderLastSentAt.toISOString?.()
+        : null,
       blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt
         ? (node as any).blockedExpectedUnblockAt.toISOString?.()
         : null,
@@ -2356,6 +3385,14 @@ export class NodesService {
         ? (node as any).blockedSince.toISOString?.()
         : null,
       isBlockResolved: (node as any).isBlockResolved ?? false,
+      backlogHiddenUntil: metadata.workflow.backlog.hiddenUntil,
+      backlogNextReviewAt: metadata.workflow.backlog.nextReviewAt,
+      backlogReviewStartedAt: metadata.workflow.backlog.reviewStartedAt,
+      backlogLastInteractionAt: metadata.workflow.backlog.lastInteractionAt,
+      backlogLastReminderAt: metadata.workflow.backlog.lastReminderAt,
+      lastKnownColumnId: metadata.workflow.backlog.lastKnownColumnId,
+      lastKnownColumnBehavior: metadata.workflow.backlog.lastKnownBehavior,
+      doneArchiveScheduledAt: metadata.workflow.done.archiveScheduledAt,
       priority: (node as any).priority ?? 'NONE',
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],
@@ -2554,6 +3591,27 @@ export class NodesService {
     rawRoot.raci = raciRaw;
     rawRoot.timeTracking = timeRaw;
     rawRoot.financials = financialRaw;
+    const workflowRaw =
+      rawRoot.workflow &&
+      typeof rawRoot.workflow === 'object' &&
+      !Array.isArray(rawRoot.workflow)
+        ? { ...(rawRoot.workflow as Record<string, any>) }
+        : {};
+    rawRoot.workflow = workflowRaw;
+    const backlogWorkflowRaw =
+      workflowRaw.backlog &&
+      typeof workflowRaw.backlog === 'object' &&
+      !Array.isArray(workflowRaw.backlog)
+        ? { ...(workflowRaw.backlog as Record<string, any>) }
+        : {};
+    workflowRaw.backlog = backlogWorkflowRaw;
+    const doneWorkflowRaw =
+      workflowRaw.done &&
+      typeof workflowRaw.done === 'object' &&
+      !Array.isArray(workflowRaw.done)
+        ? { ...(workflowRaw.done as Record<string, any>) }
+        : {};
+    workflowRaw.done = doneWorkflowRaw;
     const shareNormalized = normalizeShare(rawRoot);
 
     const responsibleIds = toStringArray(
@@ -2624,6 +3682,73 @@ export class NodesService {
         ? Math.round(totalHours * hourlyRate * 100) / 100
         : null;
 
+    const backlogHiddenUntil = toIsoDateTimeOrNull(
+      backlogWorkflowRaw.hiddenUntil,
+    );
+    if (backlogHiddenUntil === null)
+      delete backlogWorkflowRaw.hiddenUntil;
+    else backlogWorkflowRaw.hiddenUntil = backlogHiddenUntil;
+    const backlogReviewStartedAt = toIsoDateTimeOrNull(
+      backlogWorkflowRaw.reviewStartedAt,
+    );
+    if (backlogReviewStartedAt === null)
+      delete backlogWorkflowRaw.reviewStartedAt;
+    else backlogWorkflowRaw.reviewStartedAt = backlogReviewStartedAt;
+    const backlogLastInteractionAt = toIsoDateTimeOrNull(
+      backlogWorkflowRaw.lastInteractionAt,
+    );
+    if (backlogLastInteractionAt === null)
+      delete backlogWorkflowRaw.lastInteractionAt;
+    else backlogWorkflowRaw.lastInteractionAt = backlogLastInteractionAt;
+    const backlogLastReminderAt = toIsoDateTimeOrNull(
+      backlogWorkflowRaw.lastReminderAt,
+    );
+    if (backlogLastReminderAt === null)
+      delete backlogWorkflowRaw.lastReminderAt;
+    else backlogWorkflowRaw.lastReminderAt = backlogLastReminderAt;
+    const backlogNextReviewAt = toIsoDateTimeOrNull(
+      backlogWorkflowRaw.nextReviewAt,
+    );
+    if (backlogNextReviewAt === null)
+      delete backlogWorkflowRaw.nextReviewAt;
+    else backlogWorkflowRaw.nextReviewAt = backlogNextReviewAt;
+    const backlogLastColumnId =
+      typeof backlogWorkflowRaw.lastKnownColumnId === 'string'
+        ? backlogWorkflowRaw.lastKnownColumnId
+        : null;
+    if (backlogLastColumnId === null)
+      delete backlogWorkflowRaw.lastKnownColumnId;
+    else backlogWorkflowRaw.lastKnownColumnId = backlogLastColumnId;
+    const backlogLastBehaviorRaw =
+      typeof backlogWorkflowRaw.lastKnownBehavior === 'string'
+        ? backlogWorkflowRaw.lastKnownBehavior
+        : null;
+    const allowedBehaviors = new Set<ColumnBehaviorKey | 'CUSTOM'>([
+      ColumnBehaviorKey.BACKLOG,
+      ColumnBehaviorKey.BLOCKED,
+      ColumnBehaviorKey.DONE,
+      ColumnBehaviorKey.IN_PROGRESS,
+      ColumnBehaviorKey.CUSTOM,
+    ]);
+    const backlogLastBehavior = allowedBehaviors.has(
+      backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM' | null,
+    )
+      ? (backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM')
+      : null;
+    if (backlogLastBehavior === null)
+      delete backlogWorkflowRaw.lastKnownBehavior;
+    else backlogWorkflowRaw.lastKnownBehavior = backlogLastBehavior;
+
+    const doneCompletedAt = toIsoDateTimeOrNull(doneWorkflowRaw.completedAt);
+    if (doneCompletedAt === null) delete doneWorkflowRaw.completedAt;
+    else doneWorkflowRaw.completedAt = doneCompletedAt;
+    const doneArchiveScheduledAt = toIsoDateTimeOrNull(
+      doneWorkflowRaw.archiveScheduledAt,
+    );
+    if (doneArchiveScheduledAt === null)
+      delete doneWorkflowRaw.archiveScheduledAt;
+    else doneWorkflowRaw.archiveScheduledAt = doneArchiveScheduledAt;
+
     return {
       raw: rawRoot,
       raci: {
@@ -2651,6 +3776,25 @@ export class NodesService {
       share: {
         collaborators: shareNormalized.collaborators,
         invitations: shareNormalized.invitations,
+      },
+      workflow: {
+        backlog: {
+          hiddenUntil: backlogHiddenUntil,
+          reviewStartedAt: backlogReviewStartedAt,
+          lastInteractionAt: backlogLastInteractionAt,
+          lastReminderAt: backlogLastReminderAt,
+          nextReviewAt: backlogNextReviewAt,
+          lastKnownColumnId: backlogLastColumnId,
+          lastKnownBehavior: backlogLastBehavior,
+        },
+        done: {
+          completedAt: doneCompletedAt,
+          archiveScheduledAt: doneArchiveScheduledAt,
+        },
+      },
+      workflowRaw: {
+        backlog: backlogWorkflowRaw,
+        done: doneWorkflowRaw,
       },
     };
   }
@@ -2700,6 +3844,321 @@ export class NodesService {
     }
   }
 
+  private buildAssignmentRecipients(
+    assignments: Array<{
+      role: string | null;
+      user: { id: string; email: string | null; displayName: string | null } | null;
+    }> = [],
+  ): Array<{ userId: string | null; email: string; displayName: string }> {
+    const recipients: Array<{ userId: string | null; email: string; displayName: string }> = [];
+    const seen = new Set<string>();
+    for (const assignment of assignments) {
+      if (!assignment.user?.email) continue;
+      const role = (assignment.role ?? '').toUpperCase();
+      if (role && role !== 'R' && role !== 'A') continue;
+      const email = assignment.user.email.trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      recipients.push({
+        userId: assignment.user.id,
+        email,
+        displayName: assignment.user.displayName ?? assignment.user.id,
+      });
+    }
+    return recipients;
+  }
+
+  private buildEmailRecipients(
+    emails: string[],
+  ): Array<{ userId: string | null; email: string; displayName: string }> {
+    const recipients: Array<{ userId: string | null; email: string; displayName: string }> = [];
+    const seen = new Set<string>();
+    for (const raw of emails) {
+      const email = String(raw).trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      recipients.push({ userId: null, email, displayName: email });
+    }
+    return recipients;
+  }
+
+  async runWorkflowAutomation(now: Date = new Date()): Promise<void> {
+    if (this.workflowAutomationRunning) {
+      return;
+    }
+    this.workflowAutomationRunning = true;
+    try {
+      await this.processBacklogWorkflow(now);
+      await this.processDoneAutoArchive(now);
+      await this.processBlockedReminders(now);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        'Workflow automation failed',
+        err.stack ?? err.message,
+      );
+    } finally {
+      this.workflowAutomationRunning = false;
+    }
+  }
+
+  private async processBacklogWorkflow(now: Date): Promise<void> {
+    const nodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        column: { behavior: { key: ColumnBehaviorKey.BACKLOG } },
+      },
+      include: {
+        column: {
+          select: {
+            id: true,
+            settings: true,
+          },
+        },
+        assignments: {
+          select: {
+            role: true,
+            user: { select: { id: true, email: true, displayName: true } },
+          },
+        },
+      },
+    });
+
+    if (!nodes.length) {
+      return;
+    }
+
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+
+    for (const node of nodes) {
+      const metadata = this.extractMetadata(node as unknown as NodeModel);
+      const backlogState = metadata.workflow.backlog;
+      const columnSettings = this.normalizeColumnSettings(
+        (node.column as any)?.settings ?? null,
+      );
+      const backlogSettings = this.normalizeBacklogSettings(columnSettings);
+      const recipients = this.buildAssignmentRecipients(
+        (node as any).assignments ?? [],
+      );
+
+      let archived = false;
+      if (backlogSettings.archiveAfterDays > 0) {
+        const interactionIso = backlogState.lastInteractionAt;
+        if (interactionIso) {
+          const interactionMs = Date.parse(interactionIso);
+          if (!Number.isNaN(interactionMs)) {
+            const archiveDeadline = (
+              interactionMs + backlogSettings.archiveAfterDays * DAY_IN_MS
+            );
+            if (archiveDeadline <= nowMs) {
+              backlogState.reviewStartedAt = null;
+              metadata.workflowRaw.backlog.reviewStartedAt = null;
+              backlogState.nextReviewAt = null;
+              metadata.workflowRaw.backlog.nextReviewAt = null;
+              backlogState.hiddenUntil = null;
+              metadata.workflowRaw.backlog.hiddenUntil = null;
+              backlogState.lastReminderAt = nowIso;
+              metadata.workflowRaw.backlog.lastReminderAt = nowIso;
+              backlogState.lastInteractionAt = nowIso;
+              metadata.workflowRaw.backlog.lastInteractionAt = nowIso;
+
+              await this.prisma.node.update({
+                where: { id: node.id },
+                data: {
+                  archivedAt: now,
+                  metadata: metadata.raw as Prisma.InputJsonValue,
+                },
+              });
+
+              await this.appendMailLog({
+                id: randomUUID(),
+                timestamp: nowIso,
+                type: 'backlog-auto-archive',
+                node: {
+                  id: node.id,
+                  title: node.title,
+                  parentId: node.parentId,
+                },
+                columnId: node.columnId,
+                archiveAfterDays: backlogSettings.archiveAfterDays,
+                recipients,
+              });
+              archived = true;
+            }
+          }
+        }
+      }
+
+      if (archived) {
+        continue;
+      }
+
+      if (backlogState.hiddenUntil) {
+        const hiddenUntilMs = Date.parse(backlogState.hiddenUntil);
+        if (!Number.isNaN(hiddenUntilMs) && hiddenUntilMs > nowMs) {
+          continue;
+        }
+      }
+
+      const nextReviewIso = backlogState.nextReviewAt;
+      if (!nextReviewIso) continue;
+      const nextReviewMs = Date.parse(nextReviewIso);
+      if (Number.isNaN(nextReviewMs) || nextReviewMs > nowMs) continue;
+
+      const nextReviewAt = this.addDaysIso(
+        now,
+        backlogSettings.reviewEveryDays,
+      );
+      backlogState.nextReviewAt = nextReviewAt;
+      metadata.workflowRaw.backlog.nextReviewAt = nextReviewAt;
+      backlogState.lastReminderAt = nowIso;
+      metadata.workflowRaw.backlog.lastReminderAt = nowIso;
+
+      await this.prisma.node.update({
+        where: { id: node.id },
+        data: { metadata: metadata.raw as Prisma.InputJsonValue },
+      });
+
+      await this.appendMailLog({
+        id: randomUUID(),
+        timestamp: nowIso,
+        type: 'backlog-review-reminder',
+        node: {
+          id: node.id,
+          title: node.title,
+          parentId: node.parentId,
+        },
+        columnId: node.columnId,
+        nextReviewAt: nextReviewIso,
+        reviewEveryDays: backlogSettings.reviewEveryDays,
+        recipients,
+      });
+    }
+  }
+
+  private async processDoneAutoArchive(now: Date): Promise<void> {
+    const nodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        column: { behavior: { key: ColumnBehaviorKey.DONE } },
+      },
+      include: {
+        assignments: {
+          select: {
+            role: true,
+            user: { select: { id: true, email: true, displayName: true } },
+          },
+        },
+      },
+    });
+
+    if (!nodes.length) {
+      return;
+    }
+
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+
+    for (const node of nodes) {
+      const metadata = this.extractMetadata(node as unknown as NodeModel);
+      const archiveIso = metadata.workflow.done.archiveScheduledAt;
+      if (!archiveIso) continue;
+      const archiveMs = Date.parse(archiveIso);
+      if (Number.isNaN(archiveMs) || archiveMs > nowMs) continue;
+
+      metadata.workflow.done.archiveScheduledAt = null;
+      metadata.workflowRaw.done.archiveScheduledAt = null;
+
+      await this.prisma.node.update({
+        where: { id: node.id },
+        data: {
+          archivedAt: now,
+          metadata: metadata.raw as Prisma.InputJsonValue,
+        },
+      });
+
+      const recipients = this.buildAssignmentRecipients(
+        (node as any).assignments ?? [],
+      );
+
+      await this.appendMailLog({
+        id: randomUUID(),
+        timestamp: nowIso,
+        type: 'done-auto-archive',
+        node: {
+          id: node.id,
+          title: node.title,
+          parentId: node.parentId,
+        },
+        columnId: node.columnId,
+        archiveScheduledAt: archiveIso,
+        recipients,
+      });
+    }
+  }
+
+  private async processBlockedReminders(now: Date): Promise<void> {
+    const nodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        column: { behavior: { key: ColumnBehaviorKey.BLOCKED } },
+        blockedReminderIntervalDays: { not: null },
+      },
+      select: {
+        id: true,
+        parentId: true,
+        title: true,
+        blockedReminderEmails: true,
+        blockedReminderIntervalDays: true,
+        blockedReminderLastSentAt: true,
+        blockedSince: true,
+        blockedReason: true,
+        isBlockResolved: true,
+      },
+    });
+
+    if (!nodes.length) {
+      return;
+    }
+
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+
+    for (const node of nodes) {
+      if (node.isBlockResolved) continue;
+      const intervalDays = node.blockedReminderIntervalDays ?? null;
+      if (!intervalDays || intervalDays <= 0) continue;
+      const emails = Array.isArray(node.blockedReminderEmails)
+        ? (node.blockedReminderEmails as string[])
+        : [];
+      if (!emails.length) continue;
+      const recipients = this.buildEmailRecipients(emails);
+      if (!recipients.length) continue;
+      const baseline = node.blockedReminderLastSentAt ?? node.blockedSince;
+      if (!baseline) continue;
+      const baselineMs = baseline.getTime();
+      if (Number.isNaN(baselineMs)) continue;
+      const dueMs = baselineMs + intervalDays * DAY_IN_MS;
+      if (dueMs > nowMs) continue;
+
+      await this.prisma.node.update({
+        where: { id: node.id },
+        data: { blockedReminderLastSentAt: now },
+      });
+
+      await this.appendMailLog({
+        id: randomUUID(),
+        timestamp: nowIso,
+        type: 'blocked-auto-reminder',
+        node: { id: node.id, title: node.title, parentId: node.parentId },
+        reminderIntervalDays: intervalDays,
+        blockedReason: node.blockedReason ?? null,
+        recipients,
+      });
+    }
+  }
+
   private async ensureBoardWithColumns(
     tx: Prisma.TransactionClient,
     parent: { id: string; teamId: string },
@@ -2709,6 +4168,7 @@ export class NodesService {
       id: string;
       behavior: { key: ColumnBehaviorKey };
       wipLimit: number | null;
+      settings: Record<string, any> | null;
     }>;
   }> {
     let board = await tx.board.findUnique({
@@ -2741,6 +4201,7 @@ export class NodesService {
         id: c.id,
         behavior: { key: c.behavior.key },
         wipLimit: c.wipLimit,
+        settings: this.normalizeColumnSettings((c as any).settings ?? null),
       })),
     };
   }

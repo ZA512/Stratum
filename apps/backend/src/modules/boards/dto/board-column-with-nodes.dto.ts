@@ -1,4 +1,4 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BoardNodeDto } from './board-node.dto';
 
 export class BoardColumnWithNodesDto {
@@ -19,4 +19,10 @@ export class BoardColumnWithNodesDto {
 
   @ApiProperty({ type: BoardNodeDto, isArray: true })
   nodes!: BoardNodeDto[];
+
+  @ApiPropertyOptional({ type: Object, nullable: true })
+  settings?: Record<string, unknown> | null;
+
+  @ApiPropertyOptional({ example: { archived: 2, snoozed: 1 } })
+  badges?: { archived: number; snoozed: number };
 }
