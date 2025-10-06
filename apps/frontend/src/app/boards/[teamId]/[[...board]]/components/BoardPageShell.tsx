@@ -1,21 +1,40 @@
 "use client";
 import React, { useState, FormEvent, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useTranslation } from '@/i18n';
-import { createBoardColumn, updateBoardColumn, deleteBoardColumn, type UpdateBoardColumnInput } from '@/features/boards/boards-api';
-import { createNode, updateNode, moveChildNode, deleteNode as apiDeleteNode, fetchNodeDeletePreview, type NodeDeletePreview } from '@/features/nodes/nodes-api';
+import {
+  createBoardColumn,
+  updateBoardColumn,
+  deleteBoardColumn,
+  fetchArchivedNodes,
+  type UpdateBoardColumnInput,
+  type BoardNode,
+  type ColumnBehaviorKey,
+  type ArchivedBoardNode,
+} from '@/features/boards/boards-api';
+import {
+  createNode,
+  updateNode,
+  moveChildNode,
+  deleteNode as apiDeleteNode,
+  fetchNodeDeletePreview,
+  restoreNode as apiRestoreNode,
+  type NodeDeletePreview,
+} from '@/features/nodes/nodes-api';
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
-import type { BoardNode } from '@/features/boards/boards-api';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
+import { ArchivedCardsDialog } from './ArchivedCardsDialog';
+import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -32,6 +51,16 @@ const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showEffort: true,
   showDescription: true,
   columnHeight: 'auto',
+};
+
+const BACKLOG_SETTINGS_DEFAULTS = {
+  reviewAfterDays: 14,
+  reviewEveryDays: 7,
+  archiveAfterDays: 60,
+};
+
+const DONE_SETTINGS_DEFAULTS = {
+  archiveAfterDays: 30,
 };
 
 // --- Stratégie de collision personnalisée ---
@@ -231,6 +260,10 @@ export function TeamBoardPage(){
   const [editingColumnId,setEditingColumnId] = useState<string|null>(null);
   const [editingName,setEditingName] = useState('');
   const [editingWip,setEditingWip] = useState('');
+  const [editingBacklogReviewAfter, setEditingBacklogReviewAfter] = useState('');
+  const [editingBacklogReviewEvery, setEditingBacklogReviewEvery] = useState('');
+  const [editingBacklogArchiveAfter, setEditingBacklogArchiveAfter] = useState('');
+  const [editingDoneArchiveAfter, setEditingDoneArchiveAfter] = useState('');
   const [editingError,setEditingError] = useState<string|null>(null);
   const [editingSubmitting,setEditingSubmitting] = useState(false);
 
@@ -256,12 +289,23 @@ export function TeamBoardPage(){
   // états déjà uniques (pas de doublon plus haut désormais)
   const [filtersHydrated, setFiltersHydrated] = useState(false);
   const searchBlurTimeout = useRef<number | null>(null);
+  const archivedColumnIdRef = useRef<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardNode | null>(null);
   const [moveTarget, setMoveTarget] = useState<BoardNode | null>(null);
   const [deletePreview, setDeletePreview] = useState<NodeDeletePreview | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [archivedColumn, setArchivedColumn] = useState<{
+    id: string;
+    name: string;
+    behavior: ColumnBehaviorKey;
+  } | null>(null);
+  const [archivedNodes, setArchivedNodes] = useState<ArchivedBoardNode[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedError, setArchivedError] = useState<string | null>(null);
+  const [archivedSubmittingId, setArchivedSubmittingId] = useState<string | null>(null);
+  const [archivedSubmittingAction, setArchivedSubmittingAction] = useState<'restore' | 'delete' | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
   const advancedFiltersActive =
@@ -671,19 +715,62 @@ export function TeamBoardPage(){
   } catch(e){ setColumnError((e as Error).message); } finally { setColumnSubmitting(false); }
   };
 
+  const resetEditingFields = () => {
+    setEditingName('');
+    setEditingWip('');
+    setEditingBacklogReviewAfter('');
+    setEditingBacklogReviewEvery('');
+    setEditingBacklogArchiveAfter('');
+    setEditingDoneArchiveAfter('');
+    setEditingError(null);
+  };
+
   const handleOpenColumnEditorById = (columnId:string) => {
     if(!board) return;
     const c = board.columns.find(col=>col.id===columnId) as BoardColumnWithNodes | undefined;
     if(!c) return;
+    const backlogSnapshot =
+      c.behaviorKey === 'BACKLOG'
+        ? readBacklogSettings(c.settings ?? null)
+        : null;
+    const doneSnapshot =
+      c.behaviorKey === 'DONE'
+        ? readDoneSettings(c.settings ?? null)
+        : null;
     setEditingColumnId(c.id);
     setEditingName(c.name);
     setEditingWip(c.wipLimit?String(c.wipLimit):'');
+    if (c.behaviorKey === 'BACKLOG') {
+      const reviewAfter =
+        backlogSnapshot?.reviewAfterDays ?? BACKLOG_SETTINGS_DEFAULTS.reviewAfterDays;
+      const reviewEvery =
+        backlogSnapshot?.reviewEveryDays ?? BACKLOG_SETTINGS_DEFAULTS.reviewEveryDays;
+      const archiveAfter =
+        backlogSnapshot?.archiveAfterDays ?? BACKLOG_SETTINGS_DEFAULTS.archiveAfterDays;
+      setEditingBacklogReviewAfter(String(reviewAfter));
+      setEditingBacklogReviewEvery(String(reviewEvery));
+      setEditingBacklogArchiveAfter(String(archiveAfter));
+    } else {
+      setEditingBacklogReviewAfter('');
+      setEditingBacklogReviewEvery('');
+      setEditingBacklogArchiveAfter('');
+    }
+    if (c.behaviorKey === 'DONE') {
+      const archiveAfter =
+        doneSnapshot?.archiveAfterDays ?? DONE_SETTINGS_DEFAULTS.archiveAfterDays;
+      setEditingDoneArchiveAfter(String(archiveAfter));
+    } else {
+      setEditingDoneArchiveAfter('');
+    }
     setEditingError(null);
   };
-  const handleCancelEditColumn = () => { setEditingColumnId(null); setEditingError(null); };
+  const handleCancelEditColumn = () => {
+    setEditingColumnId(null);
+    resetEditingFields();
+  };
 
   const handleUpdateColumn = async () => {
-    if(!accessToken || !board || !editingColumnId) return; 
+    if(!accessToken || !board || !editingColumnId) return;
     const col = board.columns.find(c=>c.id===editingColumnId); if(!col) return;
     const name = editingName.trim();
     if(!name){ setEditingError('Nom obligatoire'); return; }
@@ -691,13 +778,94 @@ export function TeamBoardPage(){
     if(name !== col.name) updates.name = name;
     const w = editingWip.trim();
     if(w===''){ if(col.wipLimit !== null) updates.wipLimit = null; }
-    else { const n=parseInt(w,10); if(!Number.isFinite(n)||n<=0){ setEditingError('WIP invalide'); return;} if(col.wipLimit !== n) updates.wipLimit = n; }
-    if(Object.keys(updates).length===0){ setEditingColumnId(null); return; }
+    else {
+      const n = Number(w);
+      if(!Number.isInteger(n) || n<=0){ setEditingError('WIP invalide'); return; }
+      if(col.wipLimit !== n) updates.wipLimit = n;
+    }
+
+    const backlogSnapshot =
+      col.behaviorKey === 'BACKLOG'
+        ? readBacklogSettings(col.settings ?? null)
+        : null;
+    const doneSnapshot =
+      col.behaviorKey === 'DONE'
+        ? readDoneSettings(col.settings ?? null)
+        : null;
+
+    let hasSettingsChange = false;
+
+    if (col.behaviorKey === 'BACKLOG') {
+      const reviewAfterRaw = editingBacklogReviewAfter.trim();
+      const reviewEveryRaw = editingBacklogReviewEvery.trim();
+      const archiveAfterRaw = editingBacklogArchiveAfter.trim();
+      if (!reviewAfterRaw || !reviewEveryRaw || !archiveAfterRaw) {
+        setEditingError('Tous les délais backlog sont requis');
+        return;
+      }
+      const reviewAfter = Number(reviewAfterRaw);
+      const reviewEvery = Number(reviewEveryRaw);
+      const archiveAfter = Number(archiveAfterRaw);
+      if (!Number.isInteger(reviewAfter) || reviewAfter < 1 || reviewAfter > 365) {
+        setEditingError('La première revue doit être comprise entre 1 et 365 jours');
+        return;
+      }
+      if (!Number.isInteger(reviewEvery) || reviewEvery < 1 || reviewEvery > 365) {
+        setEditingError('La relance doit être comprise entre 1 et 365 jours');
+        return;
+      }
+      if (!Number.isInteger(archiveAfter) || archiveAfter < 1 || archiveAfter > 730) {
+        setEditingError('L\'archivage automatique doit être compris entre 1 et 730 jours');
+        return;
+      }
+      const currentReviewAfter =
+        backlogSnapshot?.reviewAfterDays ?? BACKLOG_SETTINGS_DEFAULTS.reviewAfterDays;
+      const currentReviewEvery =
+        backlogSnapshot?.reviewEveryDays ?? BACKLOG_SETTINGS_DEFAULTS.reviewEveryDays;
+      const currentArchiveAfter =
+        backlogSnapshot?.archiveAfterDays ?? BACKLOG_SETTINGS_DEFAULTS.archiveAfterDays;
+      const backlogSettingsUpdates: NonNullable<UpdateBoardColumnInput['backlogSettings']> = {};
+      if (reviewAfter !== currentReviewAfter) backlogSettingsUpdates.reviewAfterDays = reviewAfter;
+      if (reviewEvery !== currentReviewEvery) backlogSettingsUpdates.reviewEveryDays = reviewEvery;
+      if (archiveAfter !== currentArchiveAfter) backlogSettingsUpdates.archiveAfterDays = archiveAfter;
+      if (Object.keys(backlogSettingsUpdates).length > 0) {
+        updates.backlogSettings = backlogSettingsUpdates;
+        hasSettingsChange = true;
+      }
+    }
+
+    if (col.behaviorKey === 'DONE') {
+      const archiveAfterRaw = editingDoneArchiveAfter.trim();
+      if (!archiveAfterRaw) {
+        setEditingError('L\'archivage automatique est requis');
+        return;
+      }
+      const archiveAfter = Number(archiveAfterRaw);
+      if (!Number.isInteger(archiveAfter) || archiveAfter < 0 || archiveAfter > 730) {
+        setEditingError('L\'archivage automatique doit être compris entre 0 et 730 jours');
+        return;
+      }
+      const currentArchiveAfter =
+        doneSnapshot?.archiveAfterDays ?? DONE_SETTINGS_DEFAULTS.archiveAfterDays;
+      if (archiveAfter !== currentArchiveAfter) {
+        updates.doneSettings = { archiveAfterDays: archiveAfter };
+        hasSettingsChange = true;
+      }
+    }
+
+    const hasStructuralUpdate =
+      updates.name !== undefined || updates.wipLimit !== undefined || updates.position !== undefined;
+    if(!hasStructuralUpdate && !hasSettingsChange){
+      setEditingColumnId(null);
+      resetEditingFields();
+      return;
+    }
     setEditingSubmitting(true); setEditingError(null);
     try {
       await handleApi(()=>updateBoardColumn(board.id, col.id, updates, accessToken), { success: 'Colonne mise à jour' });
       await refreshActiveBoard();
       setEditingColumnId(null);
+      resetEditingFields();
   } catch(e){ setEditingError((e as Error).message); } finally { setEditingSubmitting(false); }
   };
 
@@ -719,6 +887,89 @@ export function TeamBoardPage(){
       await handleApi(()=>deleteBoardColumn(board.id, columnId, accessToken), { success: 'Colonne supprimée' });
       await refreshActiveBoard();
     } catch { /* toast déjà affiché */ }
+  };
+
+  const handleShowArchived = async (column: BoardColumnWithNodes) => {
+    if (!board) {
+      return;
+    }
+    setArchivedColumn({ id: column.id, name: column.name, behavior: column.behaviorKey });
+    archivedColumnIdRef.current = column.id;
+    setArchivedNodes([]);
+    setArchivedError(null);
+    setArchivedLoading(true);
+    if (!accessToken) {
+      setArchivedLoading(false);
+      setArchivedError('Session invalide — veuillez vous reconnecter.');
+      return;
+    }
+    try {
+      const items = await fetchArchivedNodes(board.id, column.id, accessToken);
+      if (archivedColumnIdRef.current === column.id) {
+        setArchivedNodes(items);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de charger les tâches archivées.';
+      if (archivedColumnIdRef.current === column.id) {
+        setArchivedError(message);
+      }
+    } finally {
+      if (archivedColumnIdRef.current === column.id) {
+        setArchivedLoading(false);
+      }
+    }
+  };
+
+  const closeArchivedDialog = () => {
+    setArchivedColumn(null);
+    setArchivedNodes([]);
+    setArchivedLoading(false);
+    setArchivedError(null);
+    setArchivedSubmittingId(null);
+    setArchivedSubmittingAction(null);
+    archivedColumnIdRef.current = null;
+  };
+
+  const handleRestoreArchived = async (nodeId: string) => {
+    if (!accessToken) {
+      toastError('Session invalide — veuillez vous reconnecter.');
+      return;
+    }
+    setArchivedSubmittingId(nodeId);
+    setArchivedSubmittingAction('restore');
+    try {
+      await apiRestoreNode(nodeId, accessToken);
+      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
+      await refreshActiveBoard();
+      success('Carte restaurée dans la colonne.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de restaurer la carte archivée.';
+      toastError(message);
+    } finally {
+      setArchivedSubmittingId(null);
+      setArchivedSubmittingAction(null);
+    }
+  };
+
+  const handleDeleteArchived = async (nodeId: string) => {
+    if (!accessToken) {
+      toastError('Session invalide — veuillez vous reconnecter.');
+      return;
+    }
+    setArchivedSubmittingId(nodeId);
+    setArchivedSubmittingAction('delete');
+    try {
+      await apiDeleteNode(nodeId, { recursive: true }, accessToken);
+      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
+      await refreshActiveBoard();
+      success('Carte archivée supprimée.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de supprimer la carte archivée.';
+      toastError(message);
+    } finally {
+      setArchivedSubmittingId(null);
+      setArchivedSubmittingAction(null);
+    }
   };
 
   const handleCreateCard = async (columnId:string, title:string) => {
@@ -995,7 +1246,7 @@ export function TeamBoardPage(){
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50">
         <div className="flex items-center justify-between gap-4 px-8 py-4">
           <div className="flex items-center gap-3">
-            <img src="/stratum.png" alt="Stratum" className="h-10 w-auto" />
+            <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -1213,13 +1464,45 @@ export function TeamBoardPage(){
                   columns={displayedColumns}
                   childBoards={childBoards}
                   editingColumnId={editingColumnId}
-                  editingValues={{ name: editingName, wip: editingWip, submitting: editingSubmitting, error: editingError }}
+                  editingValues={{
+                    name: editingName,
+                    wip: editingWip,
+                    backlogReviewAfter: editingBacklogReviewAfter,
+                    backlogReviewEvery: editingBacklogReviewEvery,
+                    backlogArchiveAfter: editingBacklogArchiveAfter,
+                    doneArchiveAfter: editingDoneArchiveAfter,
+                    submitting: editingSubmitting,
+                    error: editingError,
+                  }}
                   loadingCards={detailLoading}
                   displayOptions={displayOptions}
                   onRequestEdit={handleOpenColumnEditorById}
                   onCancelEdit={handleCancelEditColumn}
                   onSubmitEdit={handleUpdateColumn}
-                  onFieldChange={(field,val)=> field==='name'? setEditingName(val): setEditingWip(val)}
+                  onFieldChange={(field,val)=>{
+                    switch(field){
+                      case 'name':
+                        setEditingName(val);
+                        break;
+                      case 'wip':
+                        setEditingWip(val);
+                        break;
+                      case 'backlogReviewAfter':
+                        setEditingBacklogReviewAfter(val);
+                        break;
+                      case 'backlogReviewEvery':
+                        setEditingBacklogReviewEvery(val);
+                        break;
+                      case 'backlogArchiveAfter':
+                        setEditingBacklogArchiveAfter(val);
+                        break;
+                      case 'doneArchiveAfter':
+                        setEditingDoneArchiveAfter(val);
+                        break;
+                      default:
+                        break;
+                    }
+                  }}
                   onMoveColumn={handleMoveColumn}
                   onDeleteColumn={handleDeleteColumn}
                   onCreateCard={handleCreateCard}
@@ -1228,6 +1511,7 @@ export function TeamBoardPage(){
                   onRenameCard={handleRenameCard}
                   onRequestMoveCard={handleRequestMoveCard}
                   onRequestDeleteCard={handleRequestDeleteCard}
+                  onShowArchived={handleShowArchived}
                 />
                 <DragOverlay dropAnimation={null}>
                   {draggingCard && (
@@ -1245,6 +1529,21 @@ export function TeamBoardPage(){
           </section>
         )}
       </main>
+      {archivedColumn && (
+        <ArchivedCardsDialog
+          open={true}
+          columnName={archivedColumn.name}
+          columnBehavior={archivedColumn.behavior}
+          nodes={archivedNodes}
+          loading={archivedLoading}
+          error={archivedError}
+          onClose={closeArchivedDialog}
+          onRestore={handleRestoreArchived}
+          onDelete={handleDeleteArchived}
+          submittingNodeId={archivedSubmittingId}
+          submittingAction={archivedSubmittingAction}
+        />
+      )}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">

@@ -1,10 +1,10 @@
-﻿import {
+import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ColumnBehaviorKey, MembershipStatus } from '@prisma/client';
+import { ColumnBehaviorKey, MembershipStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BoardColumnDto } from './dto/board-column.dto';
 import { BoardDto } from './dto/board.dto';
@@ -12,6 +12,7 @@ import { BoardWithNodesDto } from './dto/board-with-nodes.dto';
 import { BoardNodeDto } from './dto/board-node.dto';
 import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
+import { ArchivedBoardNodeDto } from './dto/archived-board-node.dto';
 
 const COLUMN_BEHAVIOR_DEFAULTS: Record<
   ColumnBehaviorKey,
@@ -22,6 +23,58 @@ const COLUMN_BEHAVIOR_DEFAULTS: Record<
   [ColumnBehaviorKey.BLOCKED]: { label: 'Bloque', color: '#f97316' },
   [ColumnBehaviorKey.DONE]: { label: 'Termine', color: '#16a34a' },
   [ColumnBehaviorKey.CUSTOM]: { label: 'Custom', color: '#6366f1' },
+};
+
+const DEFAULT_BACKLOG_SETTINGS = Object.freeze({
+  reviewAfterDays: 14,
+  reviewEveryDays: 7,
+  archiveAfterDays: 60,
+});
+
+const DEFAULT_DONE_SETTINGS = Object.freeze({
+  archiveAfterDays: 30,
+});
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+type BacklogColumnSettings = {
+  reviewAfterDays: number;
+  reviewEveryDays: number;
+  archiveAfterDays: number;
+};
+
+type DoneColumnSettings = {
+  archiveAfterDays: number;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, any> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const toIsoDateTime = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString();
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  }
+  return null;
+};
+
+type ParsedWorkflowSnapshot = {
+  backlogHiddenUntil: string | null;
+  backlogNextReviewAt: string | null;
+  backlogReviewStartedAt: string | null;
+  backlogLastInteractionAt: string | null;
+  backlogLastReminderAt: string | null;
+  lastKnownColumnId: string | null;
+  lastKnownBehavior: ColumnBehaviorKey | null;
+  doneArchiveScheduledAt: string | null;
 };
 
 @Injectable()
@@ -59,6 +112,7 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
+        settings: this.normalizeColumnSettings((column as any).settings ?? null),
       })),
     };
   }
@@ -102,6 +156,7 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
+        settings: this.normalizeColumnSettings((column as any).settings ?? null),
       })),
     };
   }
@@ -128,9 +183,9 @@ export class BoardsService {
     }
 
     const columnIds = board.columns.map((column) => column.id);
-    const nodes = columnIds.length
+    const rawNodes = columnIds.length
       ? await this.prisma.node.findMany({
-          where: { columnId: { in: columnIds } },
+          where: { columnId: { in: columnIds }, archivedAt: null },
           orderBy: { position: 'asc' },
           select: {
             id: true,
@@ -143,7 +198,9 @@ export class BoardsService {
             description: true,
             effort: true,
             priority: true,
+            blockedReminderIntervalDays: true,
             blockedExpectedUnblockAt: true,
+            blockedSince: true,
             tags: true,
             metadata: true,
             statusMetadata: true,
@@ -163,6 +220,37 @@ export class BoardsService {
           },
         })
       : [];
+
+    const behaviorByColumn = new Map<string, ColumnBehaviorKey>();
+    for (const column of board.columns) {
+      behaviorByColumn.set(column.id, column.behavior.key);
+    }
+
+    const workflowByNode = new Map<string, ParsedWorkflowSnapshot>();
+    const snoozedCounts = new Map<string, number>();
+    const nodes = [] as typeof rawNodes;
+    const nowMs = Date.now();
+
+    for (const node of rawNodes) {
+      const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
+      workflowByNode.set(node.id, workflow);
+      const behavior = node.columnId ? behaviorByColumn.get(node.columnId) : null;
+      if (
+        behavior === ColumnBehaviorKey.BACKLOG &&
+        workflow.backlogHiddenUntil &&
+        node.columnId
+      ) {
+        const hiddenTs = Date.parse(workflow.backlogHiddenUntil);
+        if (!Number.isNaN(hiddenTs) && hiddenTs > nowMs) {
+          snoozedCounts.set(
+            node.columnId,
+            (snoozedCounts.get(node.columnId) ?? 0) + 1,
+          );
+          continue;
+        }
+      }
+      nodes.push(node);
+    }
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
     const countsByParent = new Map<
@@ -283,6 +371,33 @@ export class BoardsService {
       }
 
       const assignees = raciBuckets.R;
+      const blockedReminderIntervalDays =
+        typeof (node as any).blockedReminderIntervalDays === 'number'
+          ? ((node as any).blockedReminderIntervalDays as number)
+          : null;
+      const blockedSinceDate =
+        node.blockedSince instanceof Date ? node.blockedSince : null;
+      const blockedReminderLastSentDate =
+        (node as any).blockedReminderLastSentAt instanceof Date
+          ? ((node as any).blockedReminderLastSentAt as Date)
+          : null;
+      let blockedReminderDueInDays: number | null = null;
+      if (
+        blockedReminderIntervalDays &&
+        Number.isFinite(blockedReminderIntervalDays) &&
+        blockedReminderIntervalDays > 0 &&
+        (blockedSinceDate || blockedReminderLastSentDate)
+      ) {
+        const intervalMs = blockedReminderIntervalDays * DAY_IN_MS;
+        const baselineDate = blockedReminderLastSentDate ?? blockedSinceDate;
+        if (baselineDate && !Number.isNaN(baselineDate.getTime())) {
+          const nextDueMs = baselineDate.getTime() + intervalMs;
+          const remainingMs = nextDueMs - nowMs;
+          blockedReminderDueInDays = remainingMs <= 0
+            ? 0
+            : Math.ceil(remainingMs / DAY_IN_MS);
+        }
+      }
       bucket.push({
         id: node.id,
         title: node.title,
@@ -300,6 +415,14 @@ export class BoardsService {
         blockedExpectedUnblockAt: node.blockedExpectedUnblockAt
           ? node.blockedExpectedUnblockAt.toISOString?.()
           : null,
+        blockedReminderIntervalDays,
+        blockedReminderDueInDays,
+        blockedReminderLastSentAt: blockedReminderLastSentDate
+          ? blockedReminderLastSentDate.toISOString()
+          : null,
+        blockedSince: blockedSinceDate
+          ? blockedSinceDate.toISOString()
+          : null,
         tags: node.tags ?? [],
         estimatedDurationDays: estimatedDuration ?? null,
         assignees,
@@ -316,7 +439,30 @@ export class BoardsService {
           blocked: 0,
           done: 0,
         },
+        backlogHiddenUntil: workflow.backlogHiddenUntil,
+        backlogNextReviewAt: workflow.backlogNextReviewAt,
+        backlogReviewStartedAt: workflow.backlogReviewStartedAt,
+        backlogLastInteractionAt: workflow.backlogLastInteractionAt,
+        backlogLastReminderAt: workflow.backlogLastReminderAt,
+        lastKnownColumnId: workflow.lastKnownColumnId,
+        lastKnownColumnBehavior: workflow.lastKnownBehavior,
+        doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
       });
+    }
+
+    const archivedNodes = await this.prisma.node.findMany({
+      where: { parentId: board.nodeId, archivedAt: { not: null } },
+      select: { metadata: true },
+    });
+    const archivedCounts = new Map<string, number>();
+    for (const archived of archivedNodes) {
+      const workflow = this.parseWorkflowMetadata(archived.metadata ?? null);
+      if (workflow.lastKnownColumnId) {
+        archivedCounts.set(
+          workflow.lastKnownColumnId,
+          (archivedCounts.get(workflow.lastKnownColumnId) ?? 0) + 1,
+        );
+      }
     }
 
     return {
@@ -329,9 +475,89 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
+        settings: this.normalizeColumnSettings((column as any).settings ?? null),
+        badges: {
+          archived: archivedCounts.get(column.id) ?? 0,
+          snoozed: snoozedCounts.get(column.id) ?? 0,
+        },
         nodes: nodesByColumn.get(column.id) ?? [],
       })),
     };
+  }
+
+  async listArchivedNodes(
+    boardId: string,
+    columnId: string,
+    userId: string,
+  ): Promise<ArchivedBoardNodeDto[]> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      include: {
+        node: { select: { id: true, teamId: true } },
+        columns: { include: { behavior: true }, orderBy: { position: 'asc' } },
+      },
+    });
+
+    if (!board) {
+      throw new NotFoundException('Board introuvable');
+    }
+
+    await this.ensureUserCanWrite(board.node.teamId, userId);
+
+    const column = board.columns.find((entry) => entry.id === columnId);
+    if (!column) {
+      throw new NotFoundException('Colonne introuvable');
+    }
+
+    const archivedNodes = await this.prisma.node.findMany({
+      where: {
+        parentId: board.nodeId,
+        archivedAt: { not: null },
+        OR: [
+          {
+            metadata: {
+              path: ['workflow', 'backlog', 'lastKnownColumnId'],
+              equals: columnId,
+            },
+          },
+          { columnId },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        archivedAt: true,
+        shortId: true,
+        metadata: true,
+        dueAt: true,
+        columnId: true,
+      },
+      orderBy: { archivedAt: 'desc' },
+    });
+
+    return archivedNodes
+      .map((node) => {
+        const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
+        const lastKnownColumnId =
+          workflow.lastKnownColumnId ?? node.columnId ?? null;
+        return {
+          id: node.id,
+          shortId:
+            typeof node.shortId === 'number' && Number.isFinite(node.shortId)
+              ? node.shortId
+              : null,
+          title: node.title,
+          archivedAt: (node.archivedAt ?? new Date(0)).toISOString(),
+          lastKnownColumnId,
+          lastKnownBehavior: workflow.lastKnownBehavior,
+          backlogNextReviewAt: workflow.backlogNextReviewAt,
+          backlogReviewStartedAt: workflow.backlogReviewStartedAt,
+          backlogHiddenUntil: workflow.backlogHiddenUntil,
+          doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
+          dueAt: node.dueAt ? node.dueAt.toISOString() : null,
+        } satisfies ArchivedBoardNodeDto;
+      })
+      .filter((entry) => entry.lastKnownColumnId === columnId);
   }
 
   async createColumn(
@@ -402,6 +628,7 @@ export class BoardsService {
       behaviorKey: created.behavior.key,
       position: created.position,
       wipLimit: created.wipLimit,
+      settings: this.normalizeColumnSettings((created as any).settings ?? null),
     };
   }
 
@@ -441,8 +668,13 @@ export class BoardsService {
 
     await this.ensureUserCanWrite(column.board.node.teamId, userId);
 
-    const updateData: { name?: string; wipLimit?: number | null } = {};
+    const currentSettings = this.normalizeColumnSettings(
+      (column as any).settings ?? null,
+    );
+    const updateData: Prisma.ColumnUpdateInput = {};
     let hasChange = false;
+    let settingsChanged = false;
+    let nextSettingsPayload: Prisma.InputJsonValue | undefined;
 
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
@@ -472,6 +704,108 @@ export class BoardsService {
           hasChange = true;
         }
       }
+    }
+
+    if (
+      dto.backlogSettings !== undefined &&
+      column.behavior.key !== ColumnBehaviorKey.BACKLOG
+    ) {
+      throw new BadRequestException(
+        'backlogSettings ne peut etre utilise que sur une colonne Backlog',
+      );
+    }
+    if (
+      dto.doneSettings !== undefined &&
+      column.behavior.key !== ColumnBehaviorKey.DONE
+    ) {
+      throw new BadRequestException(
+        'doneSettings ne peut etre utilise que sur une colonne Termine',
+      );
+    }
+
+    if (dto.backlogSettings !== undefined) {
+      const normalized = this.normalizeBacklogSettings(currentSettings);
+      const updates = dto.backlogSettings ?? {};
+      const nextBacklog = { ...normalized };
+      let backlogChanged = false;
+
+      if (updates.reviewAfterDays !== undefined) {
+        const value = this.parseIntegerSetting(
+          'reviewAfterDays (jours)',
+          updates.reviewAfterDays,
+          1,
+          365,
+        );
+        if (value !== normalized.reviewAfterDays) {
+          nextBacklog.reviewAfterDays = value;
+          backlogChanged = true;
+        }
+      }
+
+      if (updates.reviewEveryDays !== undefined) {
+        const value = this.parseIntegerSetting(
+          'reviewEveryDays (jours)',
+          updates.reviewEveryDays,
+          1,
+          365,
+        );
+        if (value !== normalized.reviewEveryDays) {
+          nextBacklog.reviewEveryDays = value;
+          backlogChanged = true;
+        }
+      }
+
+      if (updates.archiveAfterDays !== undefined) {
+        const value = this.parseIntegerSetting(
+          'archiveAfterDays (jours)',
+          updates.archiveAfterDays,
+          1,
+          730,
+        );
+        if (value !== normalized.archiveAfterDays) {
+          nextBacklog.archiveAfterDays = value;
+          backlogChanged = true;
+        }
+      }
+
+      if (backlogChanged) {
+        const base = currentSettings ? { ...currentSettings } : {};
+        base.backlog = nextBacklog;
+        nextSettingsPayload = base as Prisma.InputJsonValue;
+        settingsChanged = true;
+      }
+    }
+
+    if (dto.doneSettings !== undefined) {
+      const normalized = this.normalizeDoneSettings(currentSettings);
+      const updates = dto.doneSettings ?? {};
+      const nextDone = { ...normalized };
+      let doneChanged = false;
+
+      if (updates.archiveAfterDays !== undefined) {
+        const value = this.parseIntegerSetting(
+          'archiveAfterDays (jours)',
+          updates.archiveAfterDays,
+          0,
+          730,
+        );
+        if (value !== normalized.archiveAfterDays) {
+          nextDone.archiveAfterDays = value;
+          doneChanged = true;
+        }
+      }
+
+      if (doneChanged) {
+        const base = currentSettings ? { ...currentSettings } : {};
+        base.done = nextDone;
+        nextSettingsPayload = base as Prisma.InputJsonValue;
+        settingsChanged = true;
+      }
+    }
+
+    if (settingsChanged && nextSettingsPayload !== undefined) {
+      updateData.settings = nextSettingsPayload;
+      hasChange = true;
     }
 
     const orderedColumns = [...column.board.columns].sort(
@@ -511,6 +845,7 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
+        settings: currentSettings,
       };
     }
 
@@ -553,6 +888,7 @@ export class BoardsService {
       behaviorKey: updated.behavior.key,
       position: updated.position,
       wipLimit: updated.wipLimit,
+      settings: this.normalizeColumnSettings((updated as any).settings ?? null),
     };
   }
 
@@ -638,5 +974,155 @@ export class BoardsService {
         color: defaults.color,
       },
     });
+  }
+
+  private normalizeBacklogSettings(
+    settings: Record<string, any> | null,
+  ): BacklogColumnSettings {
+    const source =
+      settings && isPlainObject((settings as any).backlog)
+        ? ((settings as any).backlog as Record<string, any>)
+        : settings ?? {};
+    const ensure = (
+      value: unknown,
+      fallback: number,
+      min: number,
+      max: number,
+    ) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      const rounded = Math.floor(num);
+      if (rounded < min) return min;
+      if (rounded > max) return max;
+      return rounded;
+    };
+    return {
+      reviewAfterDays: ensure(
+        (source as any).reviewAfterDays,
+        DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
+        1,
+        365,
+      ),
+      reviewEveryDays: ensure(
+        (source as any).reviewEveryDays,
+        DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
+        1,
+        365,
+      ),
+      archiveAfterDays: ensure(
+        (source as any).archiveAfterDays,
+        DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
+        1,
+        730,
+      ),
+    };
+  }
+
+  private normalizeDoneSettings(
+    settings: Record<string, any> | null,
+  ): DoneColumnSettings {
+    const source =
+      settings && isPlainObject((settings as any).done)
+        ? ((settings as any).done as Record<string, any>)
+        : settings ?? {};
+    const ensure = (value: unknown, fallback: number) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return fallback;
+      const rounded = Math.floor(num);
+      if (rounded < 0) return 0;
+      if (rounded > 730) return 730;
+      return rounded;
+    };
+    return {
+      archiveAfterDays: ensure(
+        (source as any).archiveAfterDays,
+        DEFAULT_DONE_SETTINGS.archiveAfterDays,
+      ),
+    };
+  }
+
+  private parseIntegerSetting(
+    label: string,
+    value: unknown,
+    min: number,
+    max: number,
+  ): number {
+    if (value === null || value === undefined) {
+      throw new BadRequestException(
+        `${label} est requis et doit etre un entier`,
+      );
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+      throw new BadRequestException(
+        `${label} doit etre un entier compris entre ${min} et ${max}`,
+      );
+    }
+    if (parsed < min || parsed > max) {
+      throw new BadRequestException(
+        `${label} doit etre compris entre ${min} et ${max}`,
+      );
+    }
+    return parsed;
+  }
+
+  private normalizeColumnSettings(value: unknown): Record<string, any> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    return { ...(value as Record<string, any>) };
+  }
+
+  private parseWorkflowMetadata(metadata: unknown): ParsedWorkflowSnapshot {
+    const root =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, any>)
+        : {};
+    const workflow =
+      root.workflow && typeof root.workflow === 'object' && !Array.isArray(root.workflow)
+        ? (root.workflow as Record<string, any>)
+        : {};
+    const backlog =
+      workflow.backlog && typeof workflow.backlog === 'object' && !Array.isArray(workflow.backlog)
+        ? (workflow.backlog as Record<string, any>)
+        : {};
+    const done =
+      workflow.done && typeof workflow.done === 'object' && !Array.isArray(workflow.done)
+        ? (workflow.done as Record<string, any>)
+        : {};
+
+    const backlogHiddenUntil = toIsoDateTime(backlog.hiddenUntil);
+    const backlogNextReviewAt = toIsoDateTime(backlog.nextReviewAt);
+    const backlogReviewStartedAt = toIsoDateTime(backlog.reviewStartedAt);
+    const backlogLastInteractionAt = toIsoDateTime(
+      backlog.lastInteractionAt,
+    );
+    const backlogLastReminderAt = toIsoDateTime(backlog.lastReminderAt);
+    const lastKnownColumnId =
+      typeof backlog.lastKnownColumnId === 'string'
+        ? backlog.lastKnownColumnId
+        : null;
+    const lastKnownBehaviorRaw =
+      typeof backlog.lastKnownBehavior === 'string'
+        ? (backlog.lastKnownBehavior as string)
+        : null;
+    const validBehaviors = new Set(Object.values(ColumnBehaviorKey));
+    const lastKnownBehavior = validBehaviors.has(
+      lastKnownBehaviorRaw as ColumnBehaviorKey,
+    )
+      ? (lastKnownBehaviorRaw as ColumnBehaviorKey)
+      : null;
+    const doneArchiveScheduledAt = toIsoDateTime(done.archiveScheduledAt);
+
+    return {
+      backlogHiddenUntil,
+      backlogNextReviewAt,
+      backlogReviewStartedAt,
+      backlogLastInteractionAt,
+      backlogLastReminderAt,
+      lastKnownColumnId,
+      lastKnownBehavior,
+      doneArchiveScheduledAt,
+    };
   }
 }

@@ -214,6 +214,21 @@ export class NodesController {
     );
   }
 
+  @Post(':nodeId/restore')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Restaure une tâche archivée dans sa colonne d’origine',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: NodeDto })
+  restoreNode(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<NodeDto> {
+    return this.nodesService.restoreNode(nodeId, user.id);
+  }
+
   @Patch(':nodeId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

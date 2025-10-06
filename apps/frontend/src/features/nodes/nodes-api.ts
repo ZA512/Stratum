@@ -141,7 +141,18 @@ export type NodeLite = {
   progress: number;
   blockedReminderEmails: string[];
   blockedReminderIntervalDays: number | null;
+  blockedReminderLastSentAt: string | null;
   blockedExpectedUnblockAt: string | null;
+  blockedSince: string | null;
+  isBlockResolved: boolean;
+  backlogHiddenUntil: string | null;
+  backlogNextReviewAt: string | null;
+  backlogReviewStartedAt: string | null;
+  backlogLastInteractionAt: string | null;
+  backlogLastReminderAt: string | null;
+  lastKnownColumnId: string | null;
+  lastKnownColumnBehavior: 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM' | null;
+  doneArchiveScheduledAt: string | null;
   priority: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   effort: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];
@@ -232,6 +243,25 @@ export async function deleteNode(
   if (!response.ok) {
     await throwNodeError(response, 'Impossible de supprimer la tâche');
   }
+}
+
+export async function restoreNode(
+  nodeId: string,
+  accessToken: string,
+): Promise<NodeDetail> {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/restore`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    await throwNodeError(response, 'Impossible de restaurer la tâche');
+  }
+
+  return (await response.json()) as NodeDetail;
 }
 
 async function throwNodeError(response: Response, fallback: string): Promise<never> {

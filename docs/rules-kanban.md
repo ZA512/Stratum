@@ -25,6 +25,50 @@ Chaque entrée (Node) est une tâche. Elle devient implicitement un "mini‑kanb
 - WIP (Work In Progress limit) stocké sur la colonne (optionnel). Enforcement backend à venir (todo #6).
 - Une colonne DONE permet le marquage terminé; déplacer/rebasculer une sous‑tâche alterne entre BACKLOG et DONE dans `toggleChildDone`.
 
+#### 5.1 Backlog (BACKLOG)
+- **Réévaluation automatique**: chaque tâche du backlog déclenche une relance utilisateur après `backlog.reviewAfterDays`. Si aucune action n’est prise, une relance est renvoyée tous les `backlog.reviewEveryDays` (config kanban) jusqu’à décision.
+- **Archivage automatique**: `backlog.archiveAfterDays` après la dernière interaction, la tâche est archivée automatiquement.
+- **Gestion archive**:
+  - La colonne affiche un badge « Archivé » avec le nombre de tâches archivées associées au backlog et un bouton « Archivé·es » ouvre le panneau.
+  - Un panneau d’archive permet de lister, restaurer ou supprimer définitivement les tâches archivées (avec compteur, tri et actions directes).
+  - Restaurer renvoie la tâche à sa position précédente et relance le cycle de revue backlog.
+- **Snooze** (« faire disparaître X jours »):
+  - Chaque tâche peut être "snoozée" via une date de réapparition (`backlog.hiddenUntil`).
+  - Jusqu’à cette date, la carte est masquée de la colonne, le badge « Snoozées » indique le nombre de tâches en attente.
+  - Une tâche réapparaît automatiquement à la date choisie (min minuit local).
+
+#### 5.2 En cours (IN_PROGRESS)
+- Aucun comportement supplémentaire au-delà du flux standard (WIP éventuel).
+
+#### 5.3 Bloqué (BLOCKED)
+- **Champ emails**: formulaire enrichi comprenant un champ multi‑emails (séparateur `;` ou virgule). Les adresses sont stockées sur la tâche (`blocked.followupEmails`).
+- **Message attendu**: champ texte court (`blocked.expectationMessage`) utilisé dans les mails automatiques.
+- **Relance automatique**:
+  - `blocked.reminderDelayDays` (int) définit la fréquence des relances.
+  - Les relances sont adressées aux emails fournis. Si aucun email renseigné, aucune relance n’est envoyée.
+  - L’utilisateur peut s’ajouter lui-même (`me` shortcut) ou saisir d’autres contacts.
+- **Indicateur sur carte**: icône horloge + badge numérique indiquant le nombre de jours avant la prochaine relance planifiée.
+- **Arrêt relances**: déplacer la tâche hors de « Bloqué » annule les relances à venir et purge les champs emails/message/délai.
+
+#### 5.4 Terminé (DONE)
+- **Validation hiérarchique**: impossible de passer une tâche en Terminé si elle possède des sous-tâches (tout niveau) non terminées.
+  - Le backend refuse le move avec une erreur `409` contenant la liste (ou au moins le nombre) des sous-tâches restantes.
+  - Le frontend affiche un toast d’erreur indiquant « X sous-tâches ne sont pas terminées » et replace la carte dans sa colonne d’origine.
+- **Archivage différé**: `done.archiveAfterDays` jours après le passage en Terminé, la tâche est envoyée en archive.
+- **Badge archive**: le compteur d’archives pour cette colonne est affiché au même emplacement que pour le backlog.
+- **Gestion archive**: même panneau que backlog (réactivation/suppression).
+
+#### 5.5 Paramétrage des délais
+- Les délais `backlog.reviewAfterDays`, `backlog.reviewEveryDays`, `backlog.archiveAfterDays` et `done.archiveAfterDays` sont **configurés au niveau du kanban** (pas par utilisateur) afin d’éviter les divergences.
+- L’édition se fait depuis les paramètres de la colonne (UI) avec affichage du délai actuel sur la colonne (ex. badge « Archive J+30 »).
+- Toute modification est auditée (historique d’actions) et notifiée aux membres avec accès écriture.
+
+#### 5.6 Automatisation & notifications
+- Le scheduler d’automatisation lit l’intervalle via `WORKFLOW_AUTOMATION_INTERVAL_MS` (défaut 15 min, minimum 1 min). Mettre `WORKFLOW_AUTOMATION_DISABLED=true` pour couper l’exécution (utile en environnement de test).
+- Les mails automatiques sont envoyés via un webhook HTTP configuré avec `MAIL_WEBHOOK_URL` (+ `MAIL_WEBHOOK_TOKEN` optionnel pour le bearer). Sans URL, l’envoi est ignoré mais les événements restent loggés. `MAIL_WEBHOOK_TIMEOUT_MS` (défaut 5000) borne la durée d’appel.
+- Les logs d’envoi sont stockés dans `apps/backend/logs/mail.log` avec rotation automatique (`MAIL_LOG_MAX_BYTES`, `MAIL_LOG_MAX_FILES`, défaut 5 Mo sur 5 fichiers).
+- Les payloads webhook contiennent le sujet, texte, HTML et un bloc `metadata` incluant `type`, `nodeId`, `entryId` et les champs métiers associés (dates de revue, délais d’archive, raison du blocage, etc.).
+
 ### 6. Résumés & métriques
 - `GET /nodes/:id/detail` fournit `summary.counts` + board + enfants.
 - `GET /nodes/:id/summary` (léger) renvoie uniquement `{ id, hasBoard, counts }`.

@@ -57,7 +57,18 @@ export type NodeDetail = {
   progress: number; // 0-100
   blockedReminderEmails: string[];
   blockedReminderIntervalDays: number | null;
+  blockedReminderLastSentAt: string | null;
   blockedExpectedUnblockAt: string | null;
+  blockedSince: string | null;
+  isBlockResolved: boolean;
+  backlogHiddenUntil: string | null;
+  backlogNextReviewAt: string | null;
+  backlogReviewStartedAt: string | null;
+  backlogLastInteractionAt: string | null;
+  backlogLastReminderAt: string | null;
+  lastKnownColumnId: string | null;
+  lastKnownColumnBehavior: 'BACKLOG' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CUSTOM' | null;
+  doneArchiveScheduledAt: string | null;
   priority: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   effort: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];

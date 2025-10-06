@@ -15,3 +15,14 @@ export type CardDisplayOptions = {
   showDescription: boolean;
   columnHeight: 'auto' | 'fixed';
 };
+
+export type ColumnEditingValues = {
+  name: string;
+  wip: string;
+  backlogReviewAfter: string;
+  backlogReviewEvery: string;
+  backlogArchiveAfter: string;
+  doneArchiveAfter: string;
+  submitting: boolean;
+  error: string | null;
+};
