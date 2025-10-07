@@ -137,16 +137,90 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
             <span className="rounded-full border border-white/10 bg-surface/70 px-3 py-1 text-[11px] uppercase tracking-wide text-muted" title={typeof column.wipLimit==='number'?`Limite WIP ${column.wipLimit}`:'Pas de limite WIP'}>
               {typeof column.wipLimit==='number'?`WIP ${column.wipLimit}`:'∞'}
             </span>
-            <button
-              onClick={()=> isEditing? onCancelEdit(): onRequestEdit(column.id)}
-              className="rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground"
-            >
-              {isEditing? 'Fermer':'Gérer'}
-            </button>
+            <div className="flex items-center gap-1.5">
+              {column.behaviorKey === 'BACKLOG' && backlogArchiveAfter && backlogArchiveAfter > 0 && (
+                <div className="group relative">
+                  <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-1.5 py-0.5 text-[10px] cursor-help">
+                    Arch:{backlogArchiveAfter}j
+                  </span>
+                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-72 rounded-lg border border-orange-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
+                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-orange-500/20 bg-slate-800"></div>
+                    <h4 className="mb-1 font-semibold text-orange-400">📦 Archivage automatique</h4>
+                    <p className="text-slate-300">Les cartes <strong>non traitées</strong> pendant {backlogArchiveAfter} jours sont automatiquement archivées.</p>
+                    <p className="mt-1 text-slate-300">Le compteur est <strong>remis à zéro</strong> à chaque interaction (ouverture, modification, reset manuel).</p>
+                    <p className="mt-2 text-[10px] text-slate-400">💡 Cliquez sur "♻️ Garder" dans la carte pour confirmer son intérêt et réinitialiser le compteur.</p>
+                  </div>
+                </div>
+              )}
+              
+              {column.behaviorKey === 'DONE' && (
+                <span className="rounded-full border border-white/10 bg-surface/70 px-1.5 py-0.5 text-[10px]">
+                  Arch:J+{doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays}
+                </span>
+              )}
+              
+              {(snoozedCount > 0 || viewMode === 'snoozed') && (
+                <div className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onShowSnoozed?.(column)}
+                    disabled={!onShowSnoozed}
+                    className={`rounded-full border px-1.5 py-0.5 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      viewMode === 'snoozed'
+                        ? 'border-cyan-400 bg-cyan-500/30 text-cyan-100'
+                        : 'border-cyan-500/30 bg-cyan-500/10 hover:border-cyan-400 hover:bg-cyan-500/20'
+                    }`}
+                    title={viewMode === 'snoozed' ? 'Revenir aux tâches normales' : 'Afficher les tâches en snooze'}
+                    aria-label={`${viewMode === 'snoozed' ? 'Masquer' : 'Afficher'} les ${snoozedCount} tâche(s) en snooze pour ${column.name}`}
+                  >
+                    😴{snoozedCount}
+                  </button>
+                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-64 rounded-lg border border-cyan-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
+                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-800"></div>
+                    <h4 className="mb-1 font-semibold text-cyan-400">😴 Cartes en snooze</h4>
+                    <p className="text-slate-300">Nombre de cartes <strong>masquées temporairement</strong> jusqu'à une date choisie par vous.</p>
+                    <p className="mt-1 text-slate-300">Le snooze <strong>réinitialise le compteur d'archive</strong> automatiquement.</p>
+                    <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'snoozed' ? 'revenir' : 'voir les cartes reportées'}</p>
+                  </div>
+                </div>
+              )}
+              
+              {(archivedCount > 0 || viewMode === 'archived') && (
+                <div className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onShowArchived?.(column)}
+                    disabled={!onShowArchived}
+                    className={`rounded-full border px-1.5 py-0.5 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      viewMode === 'archived'
+                        ? 'border-amber-400 bg-amber-500/30 text-amber-100'
+                        : 'border-slate-500/30 bg-slate-500/10 hover:border-slate-400 hover:bg-slate-500/20'
+                    }`}
+                    title={viewMode === 'archived' ? 'Revenir aux tâches normales' : 'Afficher les tâches archivées'}
+                    aria-label={`${viewMode === 'archived' ? 'Masquer' : 'Afficher'} les ${archivedCount} tâche(s) archivées pour ${column.name}`}
+                  >
+                    📦{archivedCount}
+                  </button>
+                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-64 rounded-lg border border-slate-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
+                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-slate-500/20 bg-slate-800"></div>
+                    <h4 className="mb-1 font-semibold text-slate-400">📦 Cartes archivées</h4>
+                    <p className="text-slate-300">Cartes archivées automatiquement après {backlogArchiveAfter ?? 60} jours d'inactivité.</p>
+                    <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'archived' ? 'revenir' : 'voir les cartes archivées'}</p>
+                  </div>
+                </div>
+              )}
+              
+              <button
+                onClick={()=> isEditing? onCancelEdit(): onRequestEdit(column.id)}
+                className="rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground"
+              >
+                {isEditing? 'Fermer':'Gérer'}
+              </button>
+            </div>
           </div>
         </div>
       </header>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted overflow-visible">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted overflow-visible min-h-[32px]">
         {column.behaviorKey === 'BACKLOG' && (
           <>
             {backlogArchiveAfter && backlogArchiveAfter > 0 ? (
@@ -172,57 +246,6 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   <h4 className="mb-1 font-semibold text-slate-400">🚫 Archivage désactivé</h4>
                   <p className="text-slate-300">Les cartes ne sont <strong>jamais archivées automatiquement</strong> pour cette colonne.</p>
                   <p className="mt-2 text-[10px] text-slate-400">💡 Pour activer l'archivage automatique, cliquez sur <strong>"Gérer"</strong> et définissez un délai en jours.</p>
-                </div>
-              </div>
-            )}
-            
-            {(snoozedCount > 0 || viewMode === 'snoozed') && (
-              <div className="group relative">
-                <button
-                  type="button"
-                  onClick={() => onShowSnoozed?.(column)}
-                  disabled={!onShowSnoozed}
-                  className={`rounded-full border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    viewMode === 'snoozed'
-                      ? 'border-cyan-400 bg-cyan-500/30 text-cyan-100'
-                      : 'border-cyan-500/30 bg-cyan-500/10 hover:border-cyan-400 hover:bg-cyan-500/20'
-                  }`}
-                  title={viewMode === 'snoozed' ? 'Revenir aux tâches normales' : 'Afficher les tâches en snooze'}
-                  aria-label={`${viewMode === 'snoozed' ? 'Masquer' : 'Afficher'} les ${snoozedCount} tâche(s) en snooze pour ${column.name}`}
-                >
-                  😴 {snoozedCount}
-                </button>
-                <div className="pointer-events-none absolute top-full left-1/2 z-[9999] mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-cyan-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-800"></div>
-                  <h4 className="mb-1 font-semibold text-cyan-400">😴 Cartes en snooze</h4>
-                  <p className="text-slate-300">Nombre de cartes <strong>masquées temporairement</strong> jusqu'à une date choisie par vous.</p>
-                  <p className="mt-1 text-slate-300">Le snooze <strong>réinitialise le compteur d'archive</strong> automatiquement.</p>
-                  <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'snoozed' ? 'revenir' : 'voir les cartes reportées'}</p>
-                </div>
-              </div>
-            )}
-            
-            {(archivedCount > 0 || viewMode === 'archived') && (
-              <div className="group relative">
-                <button
-                  type="button"
-                  onClick={() => onShowArchived?.(column)}
-                  disabled={!onShowArchived}
-                  className={`rounded-full border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    viewMode === 'archived'
-                      ? 'border-amber-400 bg-amber-500/30 text-amber-100'
-                      : 'border-slate-500/30 bg-slate-500/10 hover:border-slate-400 hover:bg-slate-500/20'
-                  }`}
-                  title={viewMode === 'archived' ? 'Revenir aux tâches normales' : 'Afficher les tâches archivées'}
-                  aria-label={`${viewMode === 'archived' ? 'Masquer' : 'Afficher'} les ${archivedCount} tâche(s) archivées pour ${column.name}`}
-                >
-                  📦 {archivedCount}
-                </button>
-                <div className="pointer-events-none absolute top-full left-1/2 z-[9999] mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-slate-500/20 bg-slate-800"></div>
-                  <h4 className="mb-1 font-semibold text-slate-400">📦 Cartes archivées</h4>
-                  <p className="text-slate-300">Cartes archivées automatiquement après {backlogArchiveAfter ?? 60} jours d'inactivité.</p>
-                  <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'archived' ? 'revenir' : 'voir les cartes archivées'}</p>
                 </div>
               </div>
             )}

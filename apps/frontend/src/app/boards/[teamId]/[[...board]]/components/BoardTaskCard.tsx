@@ -256,11 +256,11 @@ export function BoardTaskCard({
       />
       {(node as any).isSnoozed && (
         <div
-          className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-cyan-400/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow"
+          className="absolute left-3 top-3 z-10 flex items-center gap-0.5 rounded-full bg-cyan-400/90 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow"
           title="Tâche reportée (snooze)"
           aria-label="Tâche reportée"
         >
-          <span className="material-symbols-outlined text-[16px] leading-none">snooze</span>
+          <span className="material-symbols-outlined text-[14px] leading-none">snooze</span>
         </div>
       )}
       {showReminderBadge && reminderValue !== null && (
