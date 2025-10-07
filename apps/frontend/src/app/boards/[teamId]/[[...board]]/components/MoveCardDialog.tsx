@@ -13,6 +13,7 @@ import {
 import { moveNodeToBoard } from '@/features/nodes/nodes-api';
 import { useToast } from '@/components/toast/ToastProvider';
 import { ChevronRight, ChevronDown, Search } from 'lucide-react';
+import { useTranslation } from '@/i18n';
 
 interface MoveCardDialogProps {
   teamId: string;
@@ -43,6 +44,7 @@ export function MoveCardDialog({
 }: MoveCardDialogProps) {
   const { accessToken } = useAuth();
   const { success, error: toastError } = useToast();
+  const { t: tBoard } = useTranslation('board');
 
   const [nodeOptions, setNodeOptions] = useState<NodeOption[]>([]);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -63,7 +65,7 @@ export function MoveCardDialog({
   useEffect(() => {
     if (!accessToken) {
       setNodesLoading(false);
-      setNodesError('Session invalide — veuillez vous reconnecter.');
+      setNodesError(tBoard('moveDialog.errors.sessionInvalid'));
       return;
     }
 
@@ -169,7 +171,7 @@ export function MoveCardDialog({
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : String(err);
-          setNodesError(message || 'Impossible de charger la hiérarchie des tâches.');
+          setNodesError(message || tBoard('moveDialog.errors.hierarchyLoad'));
         }
       } finally {
         if (!cancelled) setNodesLoading(false);
@@ -279,7 +281,7 @@ export function MoveCardDialog({
         } catch (err) {
           if (!cancelled) {
             const message = err instanceof Error ? err.message : String(err);
-            setColumnsError(message || 'Impossible de charger les colonnes.');
+            setColumnsError(message || tBoard('moveDialog.errors.columnsLoad'));
           }
         } finally {
           if (!cancelled) setColumnsLoading(false);
@@ -326,7 +328,7 @@ export function MoveCardDialog({
         } catch (err) {
           if (!cancelled) {
             const message = err instanceof Error ? err.message : String(err);
-            setColumnsError(message || 'Impossible de créer le board.');
+            setColumnsError(message || tBoard('moveDialog.errors.boardCreationFailed'));
           }
         } finally {
           if (!cancelled) setColumnsLoading(false);
@@ -360,18 +362,18 @@ export function MoveCardDialog({
 
   const handleConfirm = async () => {
     if (!accessToken) {
-      setFormError('Session invalide – veuillez vous reconnecter.');
+      setFormError(tBoard('moveDialog.errors.sessionInvalid'));
       return;
     }
     if (!selectedNodeId || !selectedColumnId) {
-      setFormError('Sélectionnez une tâche et une colonne.');
+      setFormError(tBoard('moveDialog.errors.selectNodeAndColumn'));
       return;
     }
 
     // À ce stade, le board a déjà été créé si nécessaire dans le useEffect
     const targetBoardId = selectedNode?.boardId;
     if (!targetBoardId) {
-      setFormError('Le board cible n\'a pas pu être créé. Réessayez.');
+      setFormError(tBoard('moveDialog.errors.boardCreationFailed'));
       return;
     }
 
@@ -384,12 +386,12 @@ export function MoveCardDialog({
         { targetBoardId, targetColumnId: selectedColumnId },
         accessToken,
       );
-      const nodeName = selectedNode?.name ?? 'Tâche';
-      success(`«${node.title}» a été déplacée vers «${nodeName}».`);
+      const nodeName = selectedNode?.name ?? tBoard('moveDialog.fallbackTaskName');
+      success(tBoard('moveDialog.success', { title: node.title, destination: nodeName }));
       await onSuccess({ boardId: targetBoardId, boardName: nodeName });
       onClose();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de déplacer la tâche.';
+      const message = err instanceof Error ? err.message : tBoard('moveDialog.errors.moveFailed');
       setFormError(message);
       toastError(message);
     } finally {
@@ -486,15 +488,14 @@ export function MoveCardDialog({
     >
       <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">
         <h2 id="move-dialog-title" className="text-lg font-semibold">
-          Déplacer «{node.title}» dans un autre kanban
+          {tBoard('moveDialog.title', { title: node.title })}
         </h2>
         <p className="mt-2 text-sm text-muted">
-          Sélectionnez la tâche cible puis choisissez la colonne d&apos;arrivée. Le déplacement mettra à jour la progression du
-          parent source et du parent cible.
+          {tBoard('moveDialog.description')}
         </p>
 
         {nodesLoading ? (
-          <p className="mt-6 text-sm text-accent">Chargement de la hiérarchie des tâches…</p>
+            <p className="mt-6 text-sm text-accent">{tBoard('moveDialog.loadingHierarchy')}</p>
         ) : nodesError ? (
           <p className="mt-6 text-sm text-rose-300">{nodesError}</p>
         ) : (
@@ -505,7 +506,7 @@ export function MoveCardDialog({
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                   <input
                     type="text"
-                    placeholder="Rechercher une tâche..."
+                      placeholder={tBoard('moveDialog.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
@@ -513,7 +514,7 @@ export function MoveCardDialog({
                 </div>
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-                Tâches disponibles
+                {tBoard('moveDialog.availableTasks')}
               </p>
               <div className="max-h-96 overflow-y-auto pr-1 space-y-0.5">
                 {filteredNodes.length > 0 ? (
@@ -522,7 +523,9 @@ export function MoveCardDialog({
                   ))
                 ) : (
                   <p className="text-sm text-muted py-4 text-center">
-                    {searchQuery.trim() ? 'Aucune tâche trouvée.' : 'Aucune tâche disponible.'}
+                    {searchQuery.trim()
+                      ? tBoard('moveDialog.noTasksFound')
+                      : tBoard('moveDialog.noTasksAvailable')}
                   </p>
                 )}
               </div>
@@ -530,10 +533,10 @@ export function MoveCardDialog({
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-                Colonne d&apos;arrivée
+                {tBoard('moveDialog.targetColumn')}
               </p>
               {columnsLoading ? (
-                <p className="mt-3 text-sm text-accent">Chargement…</p>
+                <p className="mt-3 text-sm text-accent">{tBoard('moveDialog.columnsLoading')}</p>
               ) : selectedNodeId ? (
                 selectedColumns && selectedColumns.length > 0 ? (
                   <ul className="space-y-2">
@@ -552,7 +555,7 @@ export function MoveCardDialog({
                           >
                             <span className="truncate text-xs">{column.name}</span>
                             <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
-                              {column.behaviorKey}
+                              {tBoard(`behaviors.${column.behaviorKey}`)}
                             </span>
                           </button>
                         </li>
@@ -560,12 +563,10 @@ export function MoveCardDialog({
                     })}
                   </ul>
                 ) : (
-                  <p className="mt-3 text-xs text-muted">
-                    Ce kanban ne contient pas encore de colonne.
-                  </p>
+                  <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.columnsEmpty')}</p>
                 )
               ) : (
-                <p className="mt-3 text-xs text-muted">Sélectionnez une tâche d&apos;abord.</p>
+                <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.selectTaskFirst')}</p>
               )}
               {columnsError && (
                 <p className="mt-3 text-xs text-rose-300">{columnsError}</p>
@@ -584,7 +585,7 @@ export function MoveCardDialog({
             onClick={onClose}
             className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-muted transition hover:border-accent hover:text-foreground"
           >
-            Annuler
+            {tBoard('moveDialog.cancel')}
           </button>
           <button
             type="button"
@@ -596,7 +597,7 @@ export function MoveCardDialog({
                 : 'border-accent/60 bg-accent/20 text-foreground hover:border-accent hover:bg-accent/30'
             }`}
           >
-            {submitting ? 'Déplacement…' : 'Déplacer la tâche'}
+            {submitting ? tBoard('moveDialog.confirmLoading') : tBoard('moveDialog.confirm')}
           </button>
         </div>
       </div>

@@ -12,6 +12,18 @@
       "signOut": "Déconnexion",
       "settings": "Paramétrage"
     }
+      },
+      "notifications": {
+        "created": "Carte créée",
+        "moved": "Carte déplacée",
+        "unsnoozed": "Carte réactivée",
+        "restored": "Carte restaurée dans la colonne",
+        "archivedDeleted": "Carte archivée supprimée"
+      },
+      "errors": {
+        "unsnoozeFailed": "Impossible de réactiver la carte.",
+        "restoreFailed": "Impossible de restaurer la carte archivée.",
+        "deleteArchivedFailed": "Impossible de supprimer la carte archivée."
   },
   "home": {
     "guest": {
@@ -300,6 +312,343 @@
     },
     "states": {
       "selectBoard": "Sélectionnez une équipe et un board pour afficher les indicateurs."
+    }
+  },
+  "board": {
+    "addCard": {
+      "placeholder": "Ajouter une carte…",
+      "buttonTitle": "Créer la carte",
+      "errors": {
+        "required": "Un titre est requis.",
+        "generic": "Impossible de créer la carte."
+      }
+    },
+    "search": {
+      "label": "Recherche",
+      "placeholder": "Titre, description, #id, @utilisateur, !priorité…",
+      "aria": "Recherche textuelle avec filtres rapides",
+      "helper": "Minimum 3 caractères ou utilisez @, !, #.",
+      "mentions": {
+        "empty": "Aucun utilisateur trouvé"
+      }
+    },
+    "quickFilters": {
+      "mine": "Mes tâches",
+      "sortPriority": "Tri prio",
+      "sortDueDate": "Tri échéance",
+      "expert": {
+        "ariaDisable": "Désactiver le mode expert",
+        "ariaEnable": "Activer le mode expert",
+        "titleDisable": "Mode expert actif (temps, coûts, onglets)",
+        "titleEnable": "Activer le mode expert (temps, coûts)",
+        "onLabel": "Expert on",
+        "offLabel": "Expert off"
+      }
+    },
+    "behaviors": {
+      "BACKLOG": "Backlog",
+      "IN_PROGRESS": "En cours",
+      "BLOCKED": "Bloqué",
+      "DONE": "Terminé",
+      "CUSTOM": "Personnalisé"
+    },
+    "priority": {
+      "labels": {
+        "CRITICAL": "Critique",
+        "HIGH": "Haute",
+        "MEDIUM": "Moyenne",
+        "LOW": "Basse",
+        "LOWEST": "Très basse",
+        "NONE": "Aucune"
+      }
+    },
+    "columns": {
+      "header": {
+        "title": "Colonnes du board",
+        "addTooltip": "Ajouter une colonne",
+        "status": {
+          "refreshing": "Actualisation…",
+          "empty": "Aucune colonne",
+          "single": "1 colonne",
+          "multiple": "{count} colonnes"
+        }
+      },
+      "confirmDelete": "Supprimer la colonne « {name} » ?",
+      "wip": {
+        "ariaLimited": "Limite WIP {limit}",
+        "ariaUnlimited": "Aucune limite WIP sur cette colonne",
+        "helpLimited": "Cette colonne applique une limite de travail en cours fixée à {limit}.",
+        "helpUnlimited": "Cette colonne n'a pas encore de limite WIP.",
+        "helpHint": "Ajustez la limite dans les paramètres de la colonne."
+      },
+      "reorder": {
+        "aria": "Glisser pour réordonner la colonne",
+        "help": "Maintenez et glissez pour déplacer les colonnes, puis relâchez."
+      },
+      "settings": {
+        "closeAria": "Fermer les paramètres de la colonne",
+        "openAria": "Ouvrir les paramètres de la colonne",
+        "helpClose": "Fermez le panneau pour revenir au board.",
+        "helpOpen": "Ouvrez le panneau pour configurer cette colonne."
+      },
+      "behavior": {
+        "tooltip": "Comportement de la colonne : {label}"
+      },
+      "archive": {
+        "backlog": {
+          "disabled": "Archivage automatique désactivé pour cette colonne backlog.",
+          "enabled": "Les cartes sont archivées après {days} jour(s) sans activité.",
+          "hint": "Ajustez le délai d'archivage automatique dans les paramètres."
+        },
+        "done": {
+          "tooltip": "Les cartes terminées sont archivées après {days} jour(s).",
+          "hint": "Modifiez la rétention dans les paramètres de la colonne."
+        }
+      },
+      "snoozed": {
+        "aria": {
+          "show": "Afficher les cartes en pause pour {name} ({count})",
+          "hide": "Masquer les cartes en pause pour {name}"
+        },
+        "title": "Cartes en pause",
+        "body": "Les cartes mises en pause restent cachées jusqu'à leur rappel.",
+        "cta": {
+          "show": "Voir les cartes en pause",
+          "hide": "Revenir aux cartes actives"
+        }
+      },
+      "archived": {
+        "aria": {
+          "show": "Afficher les cartes archivées pour {name} ({count})",
+          "hide": "Masquer les cartes archivées pour {name}"
+        },
+        "title": "Cartes archivées",
+        "body": "Consultez les cartes archivées ou restaurez-les dans la colonne.",
+        "cta": {
+          "show": "Ouvrir la vue archive",
+          "hide": "Revenir aux cartes actives"
+        },
+        "list": {
+          "archivedAt": "Archivée le {date}",
+          "noArchivedAt": "Date d'archivage indisponible"
+        },
+        "empty": "Aucune carte archivée à revoir."
+      },
+      "empty": {
+        "snoozed": "Aucune carte en pause pour le moment.",
+        "default": "Aucune carte pour l'instant. Déposez-en une ou créez-en une nouvelle."
+      },
+      "emptyBoard": "Ce board n'a pas encore de colonnes.",
+      "form": {
+        "name": "Nom de la colonne",
+        "behavior": "Comportement",
+        "wipLimit": "Limite WIP (optionnel)",
+        "wipPlaceholder": "Illimité",
+        "backlogArchive": "Archivage automatique (jours)",
+        "backlogArchivePlaceholder": "60",
+        "backlogArchiveHint": "Les cartes backlog sont archivées une fois le délai atteint.",
+        "doneArchive": "Archiver après (jours)",
+        "save": "Enregistrer",
+        "create": "Créer",
+        "creating": "Création…",
+        "cancel": "Annuler",
+        "delete": "Supprimer la colonne",
+        "errors": {
+          "sessionInvalid": "Session invalide",
+          "nameRequired": "Nom obligatoire",
+          "wipInvalid": "WIP invalide"
+        }
+      },
+      "notifications": {
+        "created": "Colonne créée",
+        "deleted": "Colonne supprimée"
+      }
+    },
+    "cards": {
+      "reminder": {
+        "today": "Rappel pour aujourd'hui",
+        "dueIn": "Rappel dans {count} jour(s)",
+        "every": "Rappel tous les {count} jour(s)"
+      },
+      "snoozedBadge": "Carte en pause",
+      "snoozedAria": "Cette carte est en pause",
+      "menu": {
+        "open": "Ouvrir",
+        "rename": "Renommer",
+        "move": "Déplacer…",
+        "delete": "Supprimer"
+      },
+      "notifications": {
+        "created": "Carte créée",
+        "moved": "Carte déplacée",
+        "unsnoozed": "Carte réactivée",
+        "restored": "Carte restaurée dans la colonne",
+        "archivedDeleted": "Carte archivée supprimée",
+        "deleted": "Carte supprimée",
+        "deletedRecursive": "Carte et sous-tâches supprimées"
+      },
+      "errors": {
+        "unsnoozeFailed": "Impossible de réactiver la carte.",
+        "restoreFailed": "Impossible de restaurer la carte archivée.",
+        "deleteArchivedFailed": "Impossible de supprimer la carte archivée.",
+        "moveFailed": "Impossible de déplacer la carte."
+      }
+    },
+    "filters": {
+      "button": {
+        "ariaOpen": "Afficher les filtres avancés",
+        "ariaClose": "Masquer les filtres avancés"
+      },
+      "panel": {
+        "title": "Filtres avancés",
+        "subtitle": "Combinez les critères pour affiner la vue du board."
+      },
+      "actions": {
+        "reset": "Réinitialiser",
+        "close": "Fermer"
+      },
+      "assignees": {
+        "title": "Utilisateurs",
+        "placeholder": "Sélectionner des utilisateurs…",
+        "searchPlaceholder": "Rechercher…",
+        "empty": "Aucun utilisateur assigné",
+        "noResults": "Aucun résultat",
+        "hint": "Incluez « Aucun assigné » pour trouver les cartes sans responsable.",
+        "optionUnassigned": {
+          "label": "Aucun assigné",
+          "description": "Inclure les cartes sans responsable.",
+          "searchTerms": "aucun assigné"
+        }
+      },
+      "priority": {
+        "title": "Priorités"
+      },
+      "options": {
+        "title": "Options",
+        "hideDone": "Masquer colonnes DONE",
+        "withChildBoard": "Cartes avec sous-kanban uniquement"
+      },
+      "effort": {
+        "title": "Efforts",
+        "noEffort": "Sans effort",
+        "options": {
+          "UNDER2MIN": "< 2 min",
+          "XS": "XS",
+          "S": "S",
+          "M": "M",
+          "L": "L",
+          "XL": "XL",
+          "XXL": "XXL"
+        }
+      },
+      "columns": {
+        "title": "Hauteur des colonnes",
+        "auto": "Hauteur illimitée",
+        "fixed": "Avec défilement"
+      },
+      "display": {
+        "title": "Détails des cartes",
+        "options": {
+          "shortId": "Identifiant court",
+          "priority": "Badge priorité",
+          "owner": "Responsable",
+          "dueDate": "Échéance",
+          "progress": "Progression",
+          "effort": "Effort",
+          "description": "Description"
+        }
+      }
+    },
+    "helpMode": {
+      "tooltip": {
+        "enableTitle": "Activer l'aide contextuelle",
+        "disableTitle": "Désactiver l'aide contextuelle",
+        "title": "💡 Mode Découverte",
+        "body": "Activez ce mode pour afficher des tooltips explicatifs sur toute l'interface.",
+        "hint": "Idéal pour découvrir l'outil ou former de nouveaux utilisateurs. Les tooltips dynamiques restent visibles."
+      }
+    },
+    "deleteDialog": {
+      "title": "Supprimer « {title} » ?",
+      "body": "Confirmez la suppression de cette carte. La prévisualisation estime l'impact sur les sous-tâches.",
+      "loading": "Analyse en cours…",
+      "directChildren": "Enfants directs :",
+      "totalDescendants": "Total descendants :",
+      "legend": "Ordre : Backlog, En cours, Bloqué, Fait.",
+      "cancel": "Annuler",
+      "singleDisabledTooltip": "Des sous-tâches existent : utilisez la suppression récursive.",
+      "deleteSingle": "Supprimer la carte",
+      "deletingSingle": "Suppression…",
+      "deleteRecursive": "Supprimer tout (cascade)",
+      "deletingRecursive": "Suppression…"
+    },
+    "moveDialog": {
+      "title": "Déplacer « {title} » vers un autre kanban",
+      "description": "Sélectionnez la tâche cible puis choisissez la colonne d'arrivée. Le déplacement met à jour la progression des parents source et cible.",
+      "loadingHierarchy": "Chargement de la hiérarchie des tâches…",
+      "searchPlaceholder": "Rechercher une tâche…",
+      "availableTasks": "Tâches disponibles",
+      "noTasksFound": "Aucune tâche trouvée.",
+      "noTasksAvailable": "Aucune tâche disponible.",
+      "targetColumn": "Colonne d'arrivée",
+      "columnsLoading": "Chargement…",
+      "columnsEmpty": "Ce kanban ne contient pas encore de colonne.",
+      "selectTaskFirst": "Sélectionnez une tâche d'abord.",
+      "fallbackTaskName": "Tâche",
+      "cancel": "Annuler",
+      "confirm": "Déplacer la tâche",
+      "confirmLoading": "Déplacement…",
+      "success": "« {title} » a été déplacée vers « {destination} ».",
+      "errors": {
+        "sessionInvalid": "Session invalide — veuillez vous reconnecter.",
+        "selectNodeAndColumn": "Sélectionnez une tâche et une colonne.",
+        "boardCreationFailed": "Le board cible n'a pas pu être créé. Réessayez.",
+        "moveFailed": "Impossible de déplacer la tâche.",
+        "hierarchyLoad": "Impossible de charger la hiérarchie des tâches.",
+        "columnsLoad": "Impossible de charger les colonnes.",
+        "boardLoad": "Impossible de charger le board."
+      }
+    },
+    "archivedDialog": {
+      "title": "Archives — {name}",
+      "count": {
+        "zero": "Aucune carte archivée",
+        "one": "1 carte archivée",
+        "many": "{count} cartes archivées"
+      },
+      "close": "Fermer",
+      "loading": "Chargement des cartes archivées…",
+      "empty": "Cette colonne ne contient actuellement aucune carte archivée.",
+      "archivedAt": "Archivée le {date}",
+      "dueAt": "Échéance : {date}",
+      "restore": "Restaurer",
+      "restoring": "Restauration…",
+      "delete": "Supprimer",
+      "deleting": "Suppression…"
+    },
+    "snoozedDialog": {
+      "title": "Cartes reportées — {name}",
+      "count": {
+        "zero": "Aucune carte reportée",
+        "one": "1 carte reportée",
+        "many": "{count} cartes reportées"
+      },
+      "close": "Fermer",
+      "loading": "Chargement des cartes reportées…",
+      "empty": "Cette colonne ne contient actuellement aucune carte reportée.",
+      "snoozedUntil": "Reportée jusqu'au {date}",
+      "dueAt": "Échéance : {date}",
+      "unsnooze": "Réveiller",
+      "unsnoozing": "Réveiller…"
+    },
+    "alerts": {
+      "sessionExpired": "Session expirée – redirection…",
+      "sessionInvalid": "Session invalide — veuillez vous reconnecter.",
+      "wipLimitReached": "Limite WIP atteinte",
+      "archivedLoadFailed": "Impossible de charger les cartes archivées.",
+      "snoozedLoadFailed": "Impossible de charger les cartes reportées.",
+      "boardUnavailable": "Kanban actif indisponible pour cette action.",
+      "unexpectedError": "Erreur inattendue"
     }
   }
 }

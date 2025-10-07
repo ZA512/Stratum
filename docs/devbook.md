@@ -79,6 +79,17 @@ pm run seed:reset (drop + migrate + seed) pour synchroniser les environnements.
 - [x] Paramètre board : persistance du mode expert et intégration dans le filtre (toggle disponible côté board UI settings).
 - [ ] Tests automatisés : ajouter la couverture sur la validation numérique et la persistance RACI.
 
+## 🗓️ Tâches courantes - 07/10/2025
+- [ ] **I18n board** : recenser toutes les chaînes en dur (ColumnPanel, BoardTaskCard, BoardPageShell, dialogues snooze/archivage, formulaires colonne/carte).
+  - [~] Restant : passer en revue `AddCardForm.tsx`, `ColumnPanel.tsx`, `TaskDrawer` (labels effort/priority) et vérifier les toasts d'erreur côté `BoardPageShell`.
+- [x] **Catalogue EN** : ajouter les clés manquantes dans `apps/frontend/src/i18n/locales/en.json` pour couvrir le board.
+- [x] **Catalogue FR** : aligner `apps/frontend/src/i18n/locales/fr.json` sur la nouvelle structure avec traductions françaises.
+- [~] **Refactor UI** : brancher `useTranslation("board")` sur les composants et remplacer les littéraux.
+  - Reste à traiter : `ColumnPanel` (menus), `AddCardForm` (placeholders/validation), `TaskDrawer` (tooltips), `BoardTaskCard` (badges).
+  - Terminé : `MoveCardDialog` (dialogue de déplacement) → traductions branchées + tests manuels basiques OK.
+- [ ] **Vérification langue** : vérifier le switch langue, la persistance (localStorage), et les tooltips/ARIA.
+  - À planifier après refactor complet ; prévoir run manuel + automatisation éventuelle (Vitest i18n?).
+
 ℹ️ Notes :
 - `npm run prisma:migrate --workspace backend -- --name add_node_short_id` échoue ici faute de `DATABASE_URL`; migration SQL créée manuellement.
 - Les filtres/menus avancés restent à planifier après finalisation du Lot 1.

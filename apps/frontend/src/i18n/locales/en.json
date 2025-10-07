@@ -301,5 +301,342 @@
     "states": {
       "selectBoard": "Select a team and board to display dashboard insights."
     }
+  },
+  "board": {
+    "addCard": {
+      "placeholder": "Add a new card…",
+      "buttonTitle": "Create card",
+      "errors": {
+        "required": "Please provide a title.",
+        "generic": "We could not create the card."
+      }
+    },
+    "search": {
+      "label": "Search",
+      "placeholder": "Title, description, #id, @assignee, !priority…",
+      "aria": "Text search with quick filters",
+      "helper": "Minimum 3 characters or use @, !, #.",
+      "mentions": {
+        "empty": "No user found"
+      }
+    },
+    "quickFilters": {
+      "mine": "My tasks",
+      "sortPriority": "Sort by priority",
+      "sortDueDate": "Sort by due date",
+      "expert": {
+        "ariaDisable": "Disable expert mode",
+        "ariaEnable": "Enable expert mode",
+        "titleDisable": "Expert mode is active (time, costs, tabs)",
+        "titleEnable": "Enable expert mode (time, costs)",
+        "onLabel": "Expert on",
+        "offLabel": "Expert off"
+      }
+    },
+    "behaviors": {
+      "BACKLOG": "Backlog",
+      "IN_PROGRESS": "In progress",
+      "BLOCKED": "Blocked",
+      "DONE": "Done",
+      "CUSTOM": "Custom"
+    },
+    "priority": {
+      "labels": {
+        "CRITICAL": "Critical",
+        "HIGH": "High",
+        "MEDIUM": "Medium",
+        "LOW": "Low",
+        "LOWEST": "Very low",
+        "NONE": "None"
+      }
+    },
+      "columns": {
+      "header": {
+        "title": "Board columns",
+        "addTooltip": "Add a column",
+        "status": {
+          "refreshing": "Refreshing…",
+          "empty": "No column",
+          "single": "1 column",
+          "multiple": "{count} columns"
+        }
+      },
+      "confirmDelete": "Delete column “{name}”?",
+      "wip": {
+        "ariaLimited": "WIP limit {limit}",
+        "ariaUnlimited": "No WIP limit on this column",
+        "helpLimited": "This column enforces a work-in-progress limit set to {limit}.",
+        "helpUnlimited": "This column currently has no WIP limit.",
+        "helpHint": "Adjust the limit from the column settings."
+      },
+      "reorder": {
+        "aria": "Drag to reorder the column",
+        "help": "Hold and drag to move columns, then release to drop."
+      },
+      "settings": {
+        "closeAria": "Close column settings",
+        "openAria": "Open column settings",
+        "helpClose": "Close the settings panel to go back to the board.",
+        "helpOpen": "Open the settings panel to configure this column."
+      },
+      "behavior": {
+        "tooltip": "Column behaviour: {label}"
+      },
+      "archive": {
+        "backlog": {
+          "disabled": "Automatic archive is disabled for this backlog column.",
+          "enabled": "Cards are archived after {days} day(s) without activity.",
+          "hint": "Tune the automatic archive delay in the column settings."
+        },
+        "done": {
+          "tooltip": "Done cards are archived after {days} day(s).",
+          "hint": "Change the retention in the column settings."
+        }
+      },
+      "snoozed": {
+        "aria": {
+          "show": "Show snoozed cards for {name} ({count})",
+          "hide": "Hide snoozed cards for {name}"
+        },
+        "title": "Snoozed cards",
+        "body": "Snoozed cards stay hidden until their reminder date.",
+        "cta": {
+          "show": "Show the snoozed list",
+          "hide": "Back to live cards"
+        }
+      },
+      "archived": {
+        "aria": {
+          "show": "Show archived cards for {name} ({count})",
+          "hide": "Hide archived cards for {name}"
+        },
+        "title": "Archived cards",
+        "body": "Review archived cards or restore them to the column.",
+        "cta": {
+          "show": "Open archive view",
+          "hide": "Back to active cards"
+        },
+        "list": {
+          "archivedAt": "Archived on {date}",
+          "noArchivedAt": "Archive date unavailable"
+        },
+        "empty": "No archived cards to review."
+      },
+      "empty": {
+        "snoozed": "No snoozed cards at the moment.",
+        "default": "No cards yet. Drop one here or create a new card."
+      },
+      "emptyBoard": "This board has no columns yet.",
+      "form": {
+        "name": "Column name",
+        "behavior": "Behaviour",
+        "wipLimit": "WIP limit (optional)",
+        "wipPlaceholder": "Unlimited",
+        "backlogArchive": "Automatic archive (days)",
+        "backlogArchivePlaceholder": "60",
+        "backlogArchiveHint": "Backlog cards move to the archive once the delay is reached.",
+        "doneArchive": "Archive after (days)",
+        "save": "Save changes",
+        "create": "Create",
+        "creating": "Creating…",
+        "cancel": "Cancel",
+        "delete": "Delete column",
+        "errors": {
+          "sessionInvalid": "Session invalid",
+          "nameRequired": "Name is required",
+          "wipInvalid": "WIP limit must be a positive number"
+        }
+      },
+      "notifications": {
+        "created": "Column created",
+        "deleted": "Column deleted"
+      }
+    },
+    "cards": {
+      "reminder": {
+        "today": "Reminder due today",
+        "dueIn": "Reminder in {count} day(s)",
+        "every": "Reminder every {count} day(s)"
+      },
+      "snoozedBadge": "Snoozed card",
+      "snoozedAria": "This card is snoozed",
+      "menu": {
+        "open": "Open",
+        "rename": "Rename",
+        "move": "Move…",
+        "delete": "Delete"
+      },
+      "notifications": {
+        "created": "Card created",
+        "moved": "Card moved",
+        "unsnoozed": "Card unsnoozed",
+        "restored": "Card restored to column",
+        "archivedDeleted": "Archived card deleted",
+        "deleted": "Card deleted",
+        "deletedRecursive": "Card and subtasks deleted"
+      },
+      "errors": {
+        "unsnoozeFailed": "Could not unsnooze the card.",
+        "restoreFailed": "Could not restore the archived card.",
+        "deleteArchivedFailed": "Could not delete the archived card.",
+        "moveFailed": "Could not move the card."
+      }
+    },
+    "filters": {
+      "button": {
+        "ariaOpen": "Show advanced filters",
+        "ariaClose": "Hide advanced filters"
+      },
+      "panel": {
+        "title": "Advanced filters",
+        "subtitle": "Combine filters to refine the board view."
+      },
+      "actions": {
+        "reset": "Reset filters",
+        "close": "Close"
+      },
+      "assignees": {
+        "title": "Assignees",
+        "placeholder": "Select users…",
+        "searchPlaceholder": "Search…",
+        "empty": "No assignee",
+        "noResults": "No result",
+        "hint": "Include “No assignee” to target unassigned cards.",
+        "optionUnassigned": {
+          "label": "No assignee",
+          "description": "Include cards without a responsible.",
+          "searchTerms": "no assignee"
+        }
+      },
+      "priority": {
+        "title": "Priorities"
+      },
+      "options": {
+        "title": "Options",
+        "hideDone": "Hide DONE columns",
+        "withChildBoard": "Only cards with sub-board"
+      },
+      "effort": {
+        "title": "Effort",
+        "noEffort": "No effort",
+        "options": {
+          "UNDER2MIN": "< 2 min",
+          "XS": "XS",
+          "S": "S",
+          "M": "M",
+          "L": "L",
+          "XL": "XL",
+          "XXL": "XXL"
+        }
+      },
+      "columns": {
+        "title": "Column height",
+        "auto": "Unlimited height",
+        "fixed": "Scrollable"
+      },
+      "display": {
+        "title": "Card details",
+        "options": {
+          "shortId": "Short ID",
+          "priority": "Priority badge",
+          "owner": "Owner",
+          "dueDate": "Due date",
+          "progress": "Progress",
+          "effort": "Effort",
+          "description": "Description"
+        }
+      }
+    },
+    "helpMode": {
+      "tooltip": {
+        "enableTitle": "Enable contextual help",
+        "disableTitle": "Disable contextual help",
+        "title": "💡 Discovery mode",
+        "body": "Turn this mode on to display explanatory tooltips across the interface.",
+        "hint": "Ideal for onboarding and training. Tooltips with dynamic data remain visible regardless."
+      }
+    },
+    "deleteDialog": {
+      "title": "Delete “{title}”?",
+      "body": "Confirm the deletion of this card. The preview estimates its impact on subtasks.",
+      "loading": "Analysing…",
+      "directChildren": "Direct children:",
+      "totalDescendants": "Total descendants:",
+      "legend": "Legend order: Backlog, In progress, Blocked, Done.",
+      "cancel": "Cancel",
+      "singleDisabledTooltip": "Subtasks detected: use recursive deletion.",
+      "deleteSingle": "Delete card",
+      "deletingSingle": "Deleting…",
+      "deleteRecursive": "Delete all (cascade)",
+      "deletingRecursive": "Deleting…"
+    },
+    "moveDialog": {
+      "title": "Move “{title}” to another board",
+      "description": "Select the destination task, then choose the target column. Progress will be updated on both parents.",
+      "loadingHierarchy": "Loading task hierarchy…",
+      "searchPlaceholder": "Search a task…",
+      "availableTasks": "Available tasks",
+      "noTasksFound": "No tasks found.",
+      "noTasksAvailable": "No tasks available.",
+      "targetColumn": "Target column",
+      "columnsLoading": "Loading…",
+      "columnsEmpty": "This board has no columns yet.",
+      "selectTaskFirst": "Select a task first.",
+      "fallbackTaskName": "Task",
+      "cancel": "Cancel",
+      "confirm": "Move task",
+      "confirmLoading": "Moving…",
+      "success": "“{title}” moved to “{destination}”.",
+      "errors": {
+        "sessionInvalid": "Session invalid — please sign in again.",
+        "selectNodeAndColumn": "Select a task and a column.",
+        "boardCreationFailed": "The target board could not be created. Please try again.",
+        "moveFailed": "Unable to move the task.",
+        "hierarchyLoad": "Unable to load the task hierarchy.",
+        "columnsLoad": "Unable to load the columns.",
+        "boardLoad": "Unable to load the board."
+      }
+    },
+    "archivedDialog": {
+      "title": "Archives — {name}",
+      "count": {
+        "zero": "No archived cards",
+        "one": "1 archived card",
+        "many": "{count} archived cards"
+      },
+      "close": "Close",
+      "loading": "Loading archived cards…",
+      "empty": "This column currently has no archived cards.",
+      "archivedAt": "Archived on {date}",
+      "dueAt": "Due date: {date}",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "delete": "Delete",
+      "deleting": "Deleting…"
+    },
+    "snoozedDialog": {
+      "title": "Snoozed cards — {name}",
+      "count": {
+        "zero": "No snoozed cards",
+        "one": "1 snoozed card",
+        "many": "{count} snoozed cards"
+      },
+      "close": "Close",
+      "loading": "Loading snoozed cards…",
+      "empty": "This column currently has no snoozed cards.",
+      "snoozedUntil": "Snoozed until {date}",
+      "dueAt": "Due date: {date}",
+      "unsnooze": "Unsnooze",
+      "unsnoozing": "Unsnoozing…"
+    },
+    "alerts": {
+      "sessionExpired": "Session expired – redirecting…",
+      "sessionInvalid": "Session invalid — please sign in again.",
+      "wipLimitReached": "WIP limit reached",
+      "archivedLoadFailed": "Unable to load archived cards.",
+      "snoozedLoadFailed": "Unable to load snoozed cards.",
+      "boardUnavailable": "Active board unavailable for this action.",
+      "unexpectedError": "Unexpected error"
+    }
   }
 }

@@ -88,29 +88,24 @@ const collisionDetectionStrategy: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-const DISPLAY_TOGGLE_CONFIG: Array<{ key: keyof CardDisplayOptions; label: string }> = [
-  { key: 'showShortId', label: 'Identifiant' },
-  { key: 'showPriority', label: 'Priorité' },
-  { key: 'showOwner', label: 'Propriétaire' },
-  { key: 'showDueDate', label: 'Échéance' },
-  { key: 'showProgress', label: 'Progression' },
-  { key: 'showEffort', label: 'Effort' },
-  { key: 'showDescription', label: 'Description' },
+const DISPLAY_TOGGLE_CONFIG: Array<{ key: keyof CardDisplayOptions; labelKey: string }> = [
+  { key: 'showShortId', labelKey: 'filters.display.options.shortId' },
+  { key: 'showPriority', labelKey: 'filters.display.options.priority' },
+  { key: 'showOwner', labelKey: 'filters.display.options.owner' },
+  { key: 'showDueDate', labelKey: 'filters.display.options.dueDate' },
+  { key: 'showProgress', labelKey: 'filters.display.options.progress' },
+  { key: 'showEffort', labelKey: 'filters.display.options.effort' },
+  { key: 'showDescription', labelKey: 'filters.display.options.description' },
 ];
 
-const PRIORITY_OPTIONS: Array<{ value: PriorityValue; label: string }> = [
-  { value: 'CRITICAL', label: 'Critique' },
-  { value: 'HIGH', label: 'Haute' },
-  { value: 'MEDIUM', label: 'Moyenne' },
-  { value: 'LOW', label: 'Basse' },
-  { value: 'LOWEST', label: 'Très basse' },
-  { value: 'NONE', label: 'Aucune' },
+const PRIORITY_DEFINITIONS: Array<{ value: PriorityValue }> = [
+  { value: 'CRITICAL' },
+  { value: 'HIGH' },
+  { value: 'MEDIUM' },
+  { value: 'LOW' },
+  { value: 'LOWEST' },
+  { value: 'NONE' },
 ];
-
-const PRIORITY_LABELS: Record<PriorityValue, string> = PRIORITY_OPTIONS.reduce((acc, option) => {
-  acc[option.value] = option.label;
-  return acc;
-}, {} as Record<PriorityValue, string>);
 
 const EFFORT_OPTIONS: Array<{ value: EffortValue; label: string }> = [
   { value: 'UNDER2MIN', label: '< 2 min' },
@@ -143,7 +138,7 @@ const normalizeSearchString = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-const parseSearchQuery = (raw: string): ParsedSearchQuery => {
+const parseSearchQuery = (raw: string, priorityLabels: Record<PriorityValue, string>): ParsedSearchQuery => {
   const trimmed = raw.trim();
   if (!trimmed) {
     return { hasQuery: false, textTerms: [], mentionTerms: [], priorityValues: [], shortIdTerms: [] };
@@ -179,9 +174,9 @@ const parseSearchQuery = (raw: string): ParsedSearchQuery => {
 
     if (prefix === '!') {
       if (!normalizedContent) continue;
-      const matches = PRIORITY_OPTIONS.filter((option) => {
-        const normalizedLabel = normalizeSearchString(option.label);
-        const normalizedValue = normalizeSearchString(option.value);
+      const matches = PRIORITY_DEFINITIONS.filter(({ value }) => {
+        const normalizedLabel = normalizeSearchString(priorityLabels[value] ?? '');
+        const normalizedValue = normalizeSearchString(value);
         return normalizedLabel.includes(normalizedContent) || normalizedValue.includes(normalizedContent);
       });
       if (matches.length > 0) {
@@ -240,6 +235,7 @@ export function TeamBoardPage(){
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
+  const { t: tBoard } = useTranslation("board");
   const { expertMode, setExpertMode } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
 
@@ -319,7 +315,6 @@ export function TeamBoardPage(){
   const [snoozedError, setSnoozedError] = useState<string | null>(null);
   const [snoozedSubmittingId, setSnoozedSubmittingId] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
   const advancedFiltersActive =
     selectedAssignees.length > 0 ||
     selectedPriorities.length > 0 ||
@@ -507,9 +502,9 @@ export function TeamBoardPage(){
     () => [
       {
         id: UNASSIGNED_TOKEN,
-        label: 'Aucun assigné',
-        description: 'Inclure les tâches sans responsable',
-        searchText: 'aucun sans assignation non assignée',
+        label: tBoard('filters.assignees.optionUnassigned.label'),
+        description: tBoard('filters.assignees.optionUnassigned.description'),
+        searchText: `${tBoard('filters.assignees.optionUnassigned.searchTerms')} unassigned none`,
       },
       ...allAssignees.map((assignee) => ({
         id: assignee.id,
@@ -517,8 +512,26 @@ export function TeamBoardPage(){
         searchText: assignee.displayName,
       })),
     ],
-    [allAssignees],
+    [allAssignees, tBoard],
   );
+
+  const priorityOptions = useMemo(
+    () => PRIORITY_DEFINITIONS.map(({ value }) => ({
+      value,
+      label: tBoard(`priority.labels.${value}` as const),
+    })),
+    [tBoard],
+  );
+
+  const priorityLabelMap = useMemo(() => {
+    const map = {} as Record<PriorityValue, string>;
+    for (const option of priorityOptions) {
+      map[option.value] = option.label;
+    }
+    return map;
+  }, [priorityOptions]);
+
+  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery, priorityLabelMap), [searchQuery, priorityLabelMap]);
 
   const mentionContext = useMemo(() => {
     if (!searchFocused) return null;
@@ -580,7 +593,7 @@ export function TeamBoardPage(){
       const effortValue = card.effort ?? null;
       const normalizedTitle = normalizeSearchString(card.title);
       const normalizedDescription = normalizeSearchString(card.description ?? '');
-      const normalizedPriorityLabel = normalizeSearchString(PRIORITY_LABELS[priorityValue] ?? '');
+  const normalizedPriorityLabel = normalizeSearchString(priorityLabelMap[priorityValue] ?? '');
       const normalizedPriorityValue = normalizeSearchString(priorityValue);
       const normalizedEffortLabel = effortValue ? normalizeSearchString(EFFORT_LABELS[effortValue]) : '';
       const normalizedEffortValue = effortValue ? normalizeSearchString(effortValue) : '';
@@ -680,7 +693,7 @@ export function TeamBoardPage(){
 
       return { ...column, nodes: filtered };
     });
-  }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate]);
+  }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate, priorityLabelMap]);
 
   const resetColumnForm = () => { setColumnName(''); setColumnBehavior('BACKLOG'); setColumnWip(''); setColumnError(null); };
 
@@ -695,15 +708,15 @@ export function TeamBoardPage(){
       const msg = (err?.message || '').toLowerCase();
       // Détection 401 élargie (status ou message)
       if (err.status === 401 || msg.includes('401') || msg.includes('unauthorized')) {
-        toastError('Session expirée – redirection…');
+        toastError(tBoard('alerts.sessionExpired'));
         // logout() effectue déjà la redirection vers /login
         logout();
         return Promise.reject(err);
       }
       if (msg.includes('wip')) {
-        toastError(opts?.warnWip || 'Limite WIP atteinte');
+        toastError(opts?.warnWip || tBoard('alerts.wipLimitReached'));
       } else {
-        toastError(err.message || 'Erreur inattendue');
+        toastError(err.message || tBoard('alerts.unexpectedError'));
       }
       throw err;
     }
@@ -711,17 +724,17 @@ export function TeamBoardPage(){
 
   const handleSubmitColumn = async (e:FormEvent) => {
     e.preventDefault();
-    if(!accessToken || !board){ setColumnError('Session invalide'); return; }
-    if(!columnName.trim()){ setColumnError('Nom obligatoire'); return; }
+    if(!accessToken || !board){ setColumnError(tBoard('columns.form.errors.sessionInvalid')); return; }
+    if(!columnName.trim()){ setColumnError(tBoard('columns.form.errors.nameRequired')); return; }
   const payload: { name: string; behaviorKey: 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM'; wipLimit?: number|null } = { name: columnName.trim(), behaviorKey: columnBehavior };
     if(columnWip.trim()){
       const n = parseInt(columnWip.trim(),10);
-      if(!Number.isFinite(n) || n<=0){ setColumnError('WIP invalide'); return; }
+      if(!Number.isFinite(n) || n<=0){ setColumnError(tBoard('columns.form.errors.wipInvalid')); return; }
       payload.wipLimit = n;
     }
     setColumnSubmitting(true); setColumnError(null);
     try {
-      await handleApi(()=>createBoardColumn(board.id, payload, accessToken), { success: 'Colonne créée' });
+      await handleApi(()=>createBoardColumn(board.id, payload, accessToken), { success: tBoard('columns.notifications.created') });
       await refreshActiveBoard();
       setIsAddingColumn(false); resetColumnForm();
   } catch(e){ setColumnError((e as Error).message); } finally { setColumnSubmitting(false); }
@@ -874,7 +887,7 @@ export function TeamBoardPage(){
     }
     setEditingSubmitting(true); setEditingError(null);
     try {
-      await handleApi(()=>updateBoardColumn(board.id, col.id, updates, accessToken), { success: 'Colonne mise à jour' });
+  await handleApi(()=>updateBoardColumn(board.id, col.id, updates, accessToken), { success: tBoard('columns.notifications.updated') });
       await refreshActiveBoard();
       setEditingColumnId(null);
       resetEditingFields();
@@ -896,7 +909,7 @@ export function TeamBoardPage(){
     const col = board.columns.find(c=>c.id===columnId); if(!col) return;
     if(!window.confirm(`Supprimer la colonne "${col.name}" ?`)) return;
     try {
-      await handleApi(()=>deleteBoardColumn(board.id, columnId, accessToken), { success: 'Colonne supprimée' });
+  await handleApi(()=>deleteBoardColumn(board.id, columnId, accessToken), { success: tBoard('columns.notifications.deleted') });
       await refreshActiveBoard();
     } catch { /* toast déjà affiché */ }
   };
@@ -1000,9 +1013,9 @@ export function TeamBoardPage(){
       await updateNode(nodeId, { backlogHiddenUntil: null }, accessToken);
       setSnoozedNodes((prev) => prev.filter((node) => node.id !== nodeId));
       await refreshActiveBoard();
-      success('Carte réveillée avec succès.');
+      success(tBoard('cards.notifications.unsnoozed'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de réveiller la carte.';
+      const message = err instanceof Error ? err.message : tBoard('cards.errors.unsnoozeFailed');
       toastError(message);
     } finally {
       setSnoozedSubmittingId(null);
@@ -1030,9 +1043,9 @@ export function TeamBoardPage(){
       await apiRestoreNode(nodeId, accessToken);
       setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
       await refreshActiveBoard();
-      success('Carte restaurée dans la colonne.');
+      success(tBoard('cards.notifications.restored'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de restaurer la carte archivée.';
+      const message = err instanceof Error ? err.message : tBoard('cards.errors.restoreFailed');
       toastError(message);
     } finally {
       setArchivedSubmittingId(null);
@@ -1051,9 +1064,9 @@ export function TeamBoardPage(){
       await apiDeleteNode(nodeId, { recursive: true }, accessToken);
       setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
       await refreshActiveBoard();
-      success('Carte archivée supprimée.');
+      success(tBoard('cards.notifications.archivedDeleted'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de supprimer la carte archivée.';
+      const message = err instanceof Error ? err.message : tBoard('cards.errors.deleteArchivedFailed');
       toastError(message);
     } finally {
       setArchivedSubmittingId(null);
@@ -1063,7 +1076,7 @@ export function TeamBoardPage(){
 
   const handleCreateCard = async (columnId:string, title:string) => {
     if(!accessToken || !board) throw new Error('Session invalide');
-    await handleApi(()=>createNode({ title, columnId }, accessToken), { success: 'Carte créée' });
+  await handleApi(()=>createNode({ title, columnId }, accessToken), { success: tBoard('cards.notifications.created') });
     await refreshActiveBoard();
   };
 
@@ -1320,7 +1333,7 @@ export function TeamBoardPage(){
           { targetColumnId: finalTargetCol.id, position: targetIndex },
           accessToken,
         ),
-        { success: 'Tâche déplacée', warnWip: 'Limite WIP atteinte' }
+        { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
       );
       await refreshActiveBoard();
       setOptimisticColumns(null);
@@ -1363,7 +1376,7 @@ export function TeamBoardPage(){
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="relative flex-1 min-w-[240px]">
                         <label className="flex flex-col gap-1 text-xs text-muted">
-                          <span className="text-[10px] uppercase tracking-wide">Recherche</span>
+                          <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
                           <input
                             type="search"
                             value={searchDraft}
@@ -1376,11 +1389,11 @@ export function TeamBoardPage(){
                               if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
                               searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
                             }}
-                            placeholder="Titre, description, #id, @utilisateur, !priorité…"
+                            placeholder={tBoard('search.placeholder')}
                             className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                            aria-label="Recherche textuelle et filtres rapides"
+                            aria-label={tBoard('search.aria')}
                           />
-                          <span className="text-[10px] text-muted">Min. 3 caractères ou utilisez @, !, #.</span>
+                          <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
                         </label>
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
@@ -1401,7 +1414,7 @@ export function TeamBoardPage(){
                                   </li>
                                 ))
                               ) : (
-                                <li className="px-4 py-2 text-xs text-muted">Aucun utilisateur trouvé</li>
+                                <li className="px-4 py-2 text-xs text-muted">{tBoard('search.mentions.empty')}</li>
                               )}
                             </ul>
                           </div>
@@ -1414,7 +1427,7 @@ export function TeamBoardPage(){
                           className={pillClass(filterMine)}
                           aria-pressed={filterMine}
                         >
-                          Mes tâches
+                          {tBoard('quickFilters.mine')}
                         </button>
                         <button
                           type="button"
@@ -1422,7 +1435,7 @@ export function TeamBoardPage(){
                           className={pillClass(sortPriority)}
                           aria-pressed={sortPriority}
                         >
-                          Tri prio
+                          {tBoard('quickFilters.sortPriority')}
                         </button>
                         <button
                           type="button"
@@ -1430,17 +1443,17 @@ export function TeamBoardPage(){
                           className={pillClass(sortDueDate)}
                           aria-pressed={sortDueDate}
                         >
-                          Tri échéance
+                          {tBoard('quickFilters.sortDueDate')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setExpertMode(!expertMode)}
                           className={pillClass(expertMode)}
                           aria-pressed={expertMode}
-                          aria-label={expertMode ? 'Désactiver mode expert' : 'Activer mode expert'}
-                          title={expertMode ? 'Mode expert actif (temps, coûts, onglets)' : 'Activer mode expert (temps, coûts)'}
+                          aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
+                          title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
                         >
-                          Expert {expertMode ? 'on' : 'off'}
+                          {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1450,7 +1463,7 @@ export function TeamBoardPage(){
                           onClick={() => setFiltersExpanded((prev) => !prev)}
                           className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
                           aria-expanded={filtersExpanded}
-                          aria-label={filtersExpanded ? 'Masquer les filtres avancés' : 'Afficher les filtres avancés'}
+                          aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
                         >
                           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
@@ -1467,7 +1480,7 @@ export function TeamBoardPage(){
                       onClick={resetFilters}
                       className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-white/15 px-4 py-1 text-[11px] font-semibold tracking-wide text-muted shadow-sm transition hover:border-accent hover:text-foreground hover:bg-accent/10"
                     >
-                      Réinitialiser
+                      {tBoard('filters.actions.reset')}
                     </button>
                   )}
                   {filtersExpanded && (
@@ -1475,7 +1488,7 @@ export function TeamBoardPage(){
                       assigneeOptions={assigneeOptions}
                       selectedAssignees={selectedAssignees}
                       onAssigneesChange={setSelectedAssignees}
-                      priorityOptions={PRIORITY_OPTIONS}
+                      priorityOptions={priorityOptions}
                       selectedPriorities={selectedPriorities}
                       onTogglePriority={togglePriority}
                       effortOptions={EFFORT_OPTIONS}
@@ -1498,24 +1511,24 @@ export function TeamBoardPage(){
               )}
               {isAddingColumn && (
                 <form onSubmit={handleSubmitColumn} className={`${showBoardControls ? 'mt-6' : ''} grid gap-4 md:grid-cols-2`}>
-                  <label className="text-xs text-muted">Nom
+                  <label className="text-xs text-muted">{tBoard('columns.form.name')}
                     <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
                   </label>
-                  <label className="text-xs text-muted">Comportement
+                  <label className="text-xs text-muted">{tBoard('columns.form.behavior')}
                     <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
-                      <option value="BACKLOG">Backlog</option>
-                      <option value="IN_PROGRESS">En cours</option>
-                      <option value="BLOCKED">Bloqué</option>
-                      <option value="DONE">Terminé</option>
-                      <option value="CUSTOM">Custom</option>
+                      <option value="BACKLOG">{tBoard('behaviors.BACKLOG')}</option>
+                      <option value="IN_PROGRESS">{tBoard('behaviors.IN_PROGRESS')}</option>
+                      <option value="BLOCKED">{tBoard('behaviors.BLOCKED')}</option>
+                      <option value="DONE">{tBoard('behaviors.DONE')}</option>
+                      <option value="CUSTOM">{tBoard('behaviors.CUSTOM')}</option>
                     </select>
                   </label>
-                  <label className="text-xs text-muted">WIP (optionnel)
-                    <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder="Illimité" className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
+                  <label className="text-xs text-muted">{tBoard('columns.form.wipLimit')}
+                    <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder={tBoard('columns.form.wipPlaceholder')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
                   </label>
                   <div className="flex items-center gap-3 pt-4">
-                    <button disabled={columnSubmitting} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-background disabled:opacity-60">{columnSubmitting?'Création…':'Créer'}</button>
-                    <button type="button" onClick={()=>{ setIsAddingColumn(false); resetColumnForm(); }} className="text-sm text-muted hover:text-foreground">Annuler</button>
+                    <button disabled={columnSubmitting} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-background disabled:opacity-60">{columnSubmitting ? tBoard('columns.form.creating') : tBoard('columns.form.create')}</button>
+                    <button type="button" onClick={()=>{ setIsAddingColumn(false); resetColumnForm(); }} className="text-sm text-muted hover:text-foreground">{tBoard('columns.form.cancel')}</button>
                   </div>
                   {columnError && <p className="text-sm text-red-300 col-span-2">{columnError}</p>}
                 </form>
@@ -1529,7 +1542,7 @@ export function TeamBoardPage(){
           <section className="space-y-4 w-full">
             <div className="flex items-baseline justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold">Colonnes du board</h2>
+                  <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
                 <button type="button"
                   onClick={() => {
                     resetColumnForm();
@@ -1537,8 +1550,8 @@ export function TeamBoardPage(){
                     setFiltersExpanded(false);
                   }}
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
-                  title="Ajouter une colonne"
-                  aria-label="Ajouter une colonne"
+                    title={tBoard('columns.header.addTooltip')}
+                    aria-label={tBoard('columns.header.addTooltip')}
                 >
                   +
                 </button>
@@ -1549,9 +1562,9 @@ export function TeamBoardPage(){
                     helpMode
                       ? 'border-accent bg-accent/20 text-accent'
                       : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
-                  }`}
-                  title={helpMode ? 'Désactiver l\'aide contextuelle' : 'Activer l\'aide contextuelle'}
-                  aria-label={helpMode ? 'Désactiver l\'aide contextuelle' : 'Activer l\'aide contextuelle'}
+                    }`}
+                    title={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
+                    aria-label={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
                   aria-pressed={helpMode}
                 >
                   ?
@@ -1560,14 +1573,20 @@ export function TeamBoardPage(){
                     style={{ transitionDelay: '200ms' }}
                   >
                     <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                    <h4 className="mb-1 font-semibold text-accent">💡 Mode Découverte</h4>
-                    <p>Activez ce mode pour afficher des tooltips explicatifs sur toutes les fonctionnalités de l&apos;interface.</p>
-                    <p className="mt-2 text-[10px] text-slate-400">Idéal pour découvrir l&apos;outil ou former de nouveaux utilisateurs. Les tooltips avec données dynamiques restent toujours visibles.</p>
+                      <h4 className="mb-1 font-semibold text-accent">{tBoard('helpMode.tooltip.title')}</h4>
+                      <p>{tBoard('helpMode.tooltip.body')}</p>
+                      <p className="mt-2 text-[10px] text-slate-400">{tBoard('helpMode.tooltip.hint')}</p>
                   </div>
                 </button>
               </div>
               <span className="text-xs uppercase tracking-wide text-muted">
-                {detailLoading? 'Actualisation…': board.columns.length===0? 'Aucune colonne': `${board.columns.length} colonne(s)`}
+                  {detailLoading
+                    ? tBoard('columns.header.status.refreshing')
+                    : board.columns.length === 0
+                      ? tBoard('columns.header.status.empty')
+                      : board.columns.length === 1
+                        ? tBoard('columns.header.status.single')
+                        : tBoard('columns.header.status.multiple', { count: board.columns.length })}
               </span>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
@@ -1640,7 +1659,7 @@ export function TeamBoardPage(){
               </DndContext>
             ) : (
               <div className="rounded-2xl border border-dashed border-white/15 bg-card/60 p-8 text-center">
-                <p className="text-sm text-muted">Ce board n&apos;a pas encore de colonnes.</p>
+                <p className="text-sm text-muted">{tBoard('columns.emptyBoard')}</p>
               </div>
             )}
           </section>
@@ -1649,23 +1668,23 @@ export function TeamBoardPage(){
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">
-            <h2 id="delete-dialog-title" className="text-lg font-semibold">Supprimer «{deleteTarget.title}» ?</h2>
+            <h2 id="delete-dialog-title" className="text-lg font-semibold">{tBoard('deleteDialog.title', { title: deleteTarget.title })}</h2>
             <p className="mt-2 text-sm text-muted">
-              Confirmez la suppression de cette carte. La prévisualisation ci-dessous estime l’impact sur les sous-tâches.
+              {tBoard('deleteDialog.body')}
             </p>
             {deleteLoading && (
-              <p className="mt-4 text-sm text-accent">Analyse en cours…</p>
+              <p className="mt-4 text-sm text-accent">{tBoard('deleteDialog.loading')}</p>
             )}
             {deletePreview && (
               <div className="mt-4 space-y-3 text-sm">
                 <p>
-                  <span className="font-semibold">Enfants directs :</span> {deletePreview.directChildren}
+                  <span className="font-semibold">{tBoard('deleteDialog.directChildren')}</span> {deletePreview.directChildren}
                 </p>
                 <p>
-                  <span className="font-semibold">Total descendants :</span> {deletePreview.totalDescendants}
+                  <span className="font-semibold">{tBoard('deleteDialog.totalDescendants')}</span> {deletePreview.totalDescendants}
                 </p>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-[12px] font-mono text-muted">
-                  <p className="sr-only">Ordre: Backlog, En cours, Bloqué, Fait.</p>
+                  <p className="sr-only">{tBoard('deleteDialog.legend')}</p>
                   <span className="text-amber-300">{deletePreview.counts.backlog}</span>
                   <span className="text-muted">.</span>
                   <span className="text-sky-300">{deletePreview.counts.inProgress}</span>
@@ -1685,16 +1704,16 @@ export function TeamBoardPage(){
                 onClick={closeDeleteDialog}
                 className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-muted transition hover:border-accent hover:text-foreground"
               >
-                Annuler
+                {tBoard('deleteDialog.cancel')}
               </button>
               <button
                 type="button"
                 disabled={deleteLoading || deleteSubmitting !== null || (deletePreview?.hasChildren ?? false)}
-                title={deletePreview?.hasChildren ? 'Des sous-tâches existent : utilisez la suppression récursive.' : undefined}
+                title={deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined}
                 onClick={() => confirmDelete(false)}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${deletePreview?.hasChildren ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
               >
-                {deleteSubmitting === 'single' ? 'Suppression…' : 'Supprimer la carte'}
+                {deleteSubmitting === 'single' ? tBoard('deleteDialog.deletingSingle') : tBoard('deleteDialog.deleteSingle')}
               </button>
               <button
                 type="button"
@@ -1702,7 +1721,7 @@ export function TeamBoardPage(){
                 onClick={() => confirmDelete(true)}
                 className={`rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-200 hover:text-rose-100 ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
               >
-                {deleteSubmitting === 'recursive' ? 'Suppression…' : 'Supprimer tout (cascade)'}
+                {deleteSubmitting === 'recursive' ? tBoard('deleteDialog.deletingRecursive') : tBoard('deleteDialog.deleteRecursive')}
               </button>
             </div>
           </div>

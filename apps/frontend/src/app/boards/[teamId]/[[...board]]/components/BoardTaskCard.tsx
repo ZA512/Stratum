@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { ensureChildBoard } from '@/features/boards/boards-api';
 import type { BoardNode, ColumnBehaviorKey } from '@/features/boards/boards-api';
 import type { CardDisplayOptions } from './types';
+import { useTranslation } from '@/i18n';
 
 interface BoardTaskCardProps {
   node: BoardNode;
@@ -57,6 +58,7 @@ export function BoardTaskCard({
     data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
   });
   const { accessToken } = useAuth();
+  const { t: tBoard } = useTranslation("board");
   
   const style: React.CSSProperties = { 
     transform: CSS.Transform.toString(transform), 
@@ -192,20 +194,19 @@ export function BoardTaskCard({
       : node.blockedReminderIntervalDays ?? null
     : null;
 
-  const reminderTooltip = showReminderBadge
-    ? (() => {
-        if (typeof node.blockedReminderDueInDays === 'number' && Number.isFinite(node.blockedReminderDueInDays)) {
-          if (node.blockedReminderDueInDays <= 0) {
-            return "Relance automatique prévue aujourd'hui";
-          }
-          return `Prochaine relance auto dans ${node.blockedReminderDueInDays} jour${node.blockedReminderDueInDays > 1 ? 's' : ''}`;
-        }
-        if (typeof node.blockedReminderIntervalDays === 'number') {
-          return `Relance auto toutes les ${node.blockedReminderIntervalDays} jour${node.blockedReminderIntervalDays > 1 ? 's' : ''}`;
-        }
-        return undefined;
-      })()
-    : undefined;
+  const reminderTooltip = useMemo(() => {
+    if (!showReminderBadge) return undefined;
+    if (typeof node.blockedReminderDueInDays === 'number' && Number.isFinite(node.blockedReminderDueInDays)) {
+      if (node.blockedReminderDueInDays <= 0) {
+        return tBoard('cards.reminder.today');
+      }
+      return tBoard('cards.reminder.dueIn', { count: node.blockedReminderDueInDays });
+    }
+    if (typeof node.blockedReminderIntervalDays === 'number') {
+      return tBoard('cards.reminder.every', { count: node.blockedReminderIntervalDays });
+    }
+    return undefined;
+  }, [showReminderBadge, node.blockedReminderDueInDays, node.blockedReminderIntervalDays, tBoard]);
 
   return (
     <div
@@ -257,8 +258,8 @@ export function BoardTaskCard({
       {(node as any).isSnoozed && (
         <div
           className="absolute left-3 top-3 z-10 flex items-center gap-0.5 rounded-full bg-cyan-400/90 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow"
-          title="Tâche reportée (snooze)"
-          aria-label="Tâche reportée"
+          title={tBoard('cards.snoozedBadge')}
+          aria-label={tBoard('cards.snoozedAria')}
         >
           <span className="material-symbols-outlined text-[14px] leading-none">snooze</span>
         </div>
@@ -295,7 +296,7 @@ export function BoardTaskCard({
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
           >
-            ✏️ <span>Éditer la tâche</span>
+            ✏️ <span>{tBoard('cards.menu.open')}</span>
           </button>
           <button
             type="button"
@@ -306,7 +307,7 @@ export function BoardTaskCard({
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
           >
-            📝 <span>Modifier le titre</span>
+            📝 <span>{tBoard('cards.menu.rename')}</span>
           </button>
           <button
             type="button"
@@ -317,7 +318,7 @@ export function BoardTaskCard({
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
           >
-            📦 <span>Déplacer dans un autre kanban</span>
+            📦 <span>{tBoard('cards.menu.move')}</span>
           </button>
           <button
             type="button"
@@ -328,7 +329,7 @@ export function BoardTaskCard({
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
           >
-            🗑️ <span>Supprimer…</span>
+            🗑️ <span>{tBoard('cards.menu.delete')}</span>
           </button>
         </div>
       )}
