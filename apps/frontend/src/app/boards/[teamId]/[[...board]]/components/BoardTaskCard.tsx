@@ -20,6 +20,7 @@ interface BoardTaskCardProps {
   onRequestMove: (node: BoardNode) => void;
   onRequestDelete: (node: BoardNode) => void;
   displayOptions: CardDisplayOptions;
+  helpMode?: boolean;
 }
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
@@ -52,6 +53,7 @@ export function BoardTaskCard({
   onRequestMove,
   onRequestDelete,
   displayOptions,
+  helpMode,
 }: BoardTaskCardProps) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
@@ -208,6 +210,60 @@ export function BoardTaskCard({
     return undefined;
   }, [showReminderBadge, node.blockedReminderDueInDays, node.blockedReminderIntervalDays, tBoard]);
 
+  const helpMessages = useMemo(() => {
+    if (!helpMode) return undefined;
+    return {
+      id: {
+        title: tBoard("help.cards.id.title"),
+        description: tBoard("help.cards.id.body"),
+      },
+      priority: {
+        title: tBoard("help.cards.priority.title"),
+        description: tBoard("help.cards.priority.body"),
+      },
+      menu: {
+        title: tBoard("help.cards.menu.title"),
+        description: tBoard("help.cards.menu.body"),
+        hint: tBoard("help.cards.menu.hint"),
+        align: "right" as const,
+      },
+      assignees: {
+        title: tBoard("help.cards.assignees.title"),
+        description: tBoard("help.cards.assignees.body"),
+        hint: tBoard("help.cards.assignees.hint"),
+      },
+      dueDate: node.dueAt
+        ? {
+            title: tBoard("help.cards.dueDate.title"),
+            description: tBoard("help.cards.dueDate.body"),
+            hint: tBoard("help.cards.dueDate.hint"),
+          }
+        : undefined,
+      progress: displayOptions.showProgress
+        ? {
+            title: tBoard("help.cards.progress.title"),
+            description: tBoard("help.cards.progress.body"),
+          }
+        : undefined,
+      effort: node.effort
+        ? {
+            title: tBoard("help.cards.effort.title"),
+            description: tBoard("help.cards.effort.body"),
+          }
+        : undefined,
+      fractal: fractalPath
+        ? {
+            title: tBoard("help.cards.fractal.title"),
+            description: tBoard("help.cards.fractal.body"),
+            hint: childBoard
+              ? tBoard("help.cards.fractal.hintExisting")
+              : tBoard("help.cards.fractal.hintCreate"),
+            align: "right" as const,
+          }
+        : undefined,
+    };
+  }, [helpMode, tBoard, node.dueAt, node.effort, displayOptions.showProgress, fractalPath, childBoard]);
+
   return (
     <div
       ref={setNodeRef}
@@ -233,6 +289,8 @@ export function BoardTaskCard({
         showDueDate={displayOptions.showDueDate}
         showProgress={displayOptions.showProgress}
         showEffort={displayOptions.showEffort}
+        helpMode={helpMode}
+        helpMessages={helpMessages}
         onClick={() => onOpen(node.id)}
         onFractalPathClick={async () => {
           if (!onOpenChildBoard || fractalLoading) return;

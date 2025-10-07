@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useId, useRef, useEffect, useCallback } from "react";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 // utilitaire léger pour concaténer des classes sans dépendance externe
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -53,6 +54,16 @@ export interface TaskCardProps {
   showDueDate?: boolean;
   showProgress?: boolean;
   showEffort?: boolean;
+  helpMode?: boolean;
+  helpMessages?: Partial<Record<
+    "id" | "priority" | "menu" | "assignees" | "dueDate" | "progress" | "effort" | "fractal",
+    {
+      title?: string;
+      description: React.ReactNode;
+      hint?: React.ReactNode;
+      align?: "left" | "right";
+    }
+  >>;
 }
 
 // Helper palette (conserver les couleurs existantes)
@@ -91,6 +102,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   showDueDate = true,
   showProgress = true,
   showEffort = true,
+  helpMode = false,
+  helpMessages,
 }) => {
   void _href;
   const compact = variant === "compact";
@@ -151,28 +164,52 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <div className="flex items-start justify-between px-4 pt-3 pb-2">
         <div className="flex items-center gap-2">
           {showId && (
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.id?.title}
+              description={helpMessages?.id?.description ?? ""}
+              hint={helpMessages?.id?.hint}
+              align={helpMessages?.id?.align}
+            >
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>
+            </HelpTooltip>
           )}
           {showPriority && (
-            <span
-              className={cx(
-                "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
-                priorityBadgeClasses[priority]
-              )}
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.priority?.title}
+              description={helpMessages?.priority?.description ?? ""}
+              hint={helpMessages?.priority?.hint}
+              align={helpMessages?.priority?.align}
             >
-              {priority}
-            </span>
+              <span
+                className={cx(
+                  "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
+                  priorityBadgeClasses[priority]
+                )}
+              >
+                {priority}
+              </span>
+            </HelpTooltip>
           )}
         </div>
         {!hideInternalMenuButton && (
-          <button
-            type="button"
-            aria-label="Actions de la tâche"
-            onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
-            className="p-1 -m-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+          <HelpTooltip
+            helpMode={helpMode}
+            title={helpMessages?.menu?.title}
+            description={helpMessages?.menu?.description ?? ""}
+            hint={helpMessages?.menu?.hint}
+            align={helpMessages?.menu?.align ?? "right"}
           >
-            <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
-          </button>
+            <button
+              type="button"
+              aria-label="Actions de la tâche"
+              onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
+              className="p-1 -m-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+            >
+              <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
+            </button>
+          </HelpTooltip>
         )}
       </div>
       {/* Corps */}
@@ -187,101 +224,141 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
           {showAssignees && assignees.length > 0 && (
-            <div
-              className="relative flex -space-x-2 min-w-[28px]"
-              onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
-              onMouseLeave={computedTooltip ? handleRaciClose : undefined}
-              onFocus={computedTooltip ? handleRaciOpen : undefined}
-              onBlur={computedTooltip ? handleRaciClose : undefined}
-              aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.assignees?.title}
+              description={helpMessages?.assignees?.description ?? ""}
+              hint={helpMessages?.assignees?.hint}
+              align={helpMessages?.assignees?.align}
             >
-              {assignees.slice(0, 4).map(a => (
-                <div
-                  key={a.id}
-                  className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
-                  style={a.color ? { backgroundColor: a.color } : undefined}
-                  // Supprime title natif pour éviter conflit avec tooltip multi-ligne
-                  aria-label={a.displayName || a.initials}
-                >
-                  <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
-                </div>
-              ))}
-              {assignees.length > 4 && (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
-                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
-                </div>
-              )}
-              {computedTooltip && raciOpen && (
-                <div
-                  id={raciTooltipId}
-                  role="tooltip"
-                  className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
-                >
-                  {computedTooltip}
-                </div>
-              )}
-            </div>
+              <div
+                className="relative flex -space-x-2 min-w-[28px]"
+                onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
+                onMouseLeave={computedTooltip ? handleRaciClose : undefined}
+                onFocus={computedTooltip ? handleRaciOpen : undefined}
+                onBlur={computedTooltip ? handleRaciClose : undefined}
+                aria-describedby={computedTooltip && raciOpen ? raciTooltipId : undefined}
+              >
+                {assignees.slice(0, 4).map(a => (
+                  <div
+                    key={a.id}
+                    className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
+                    style={a.color ? { backgroundColor: a.color } : undefined}
+                    // Supprime title natif pour éviter conflit avec tooltip multi-ligne
+                    aria-label={a.displayName || a.initials}
+                  >
+                    <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
+                  </div>
+                ))}
+                {assignees.length > 4 && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
+                    <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
+                  </div>
+                )}
+                {computedTooltip && raciOpen && (
+                  <div
+                    id={raciTooltipId}
+                    role="tooltip"
+                    className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+                  >
+                    {computedTooltip}
+                  </div>
+                )}
+              </div>
+            </HelpTooltip>
           )}
           {showDueDate && typeof lateness === "number" && (
-            <div className={cx(
-              "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
-              // Très en retard (< -7 jours) : rouge vif
-              lateness < -7 ? "bg-red-500/20 border border-red-500/30 text-red-300" :
-              // En retard (< 0) : rouge-orange
-              lateness < 0 ? "bg-orange-500/20 border border-orange-500/30 text-orange-300" :
-              // À temps (0-3 jours) : vert
-              lateness <= 3 ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300" :
-              // Confortable (4-7 jours) : vert clair
-              lateness <= 7 ? "bg-green-500/20 border border-green-500/30 text-green-300" :
-              // Très à l'avance (>7 jours) : bleu-vert
-              "bg-teal-500/20 border border-teal-500/30 text-teal-300"
-            )}>
-              <span className="material-icons-outlined" style={{ fontSize: 16 }}>timer</span>
-              <span className="-mt-px">{lateness}</span>
-            </div>
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.dueDate?.title}
+              description={helpMessages?.dueDate?.description ?? ""}
+              hint={helpMessages?.dueDate?.hint}
+              align={helpMessages?.dueDate?.align}
+            >
+              <div className={cx(
+                "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
+                // Très en retard (< -7 jours) : rouge vif
+                lateness < -7 ? "bg-red-500/20 border border-red-500/30 text-red-300" :
+                // En retard (< 0) : rouge-orange
+                lateness < 0 ? "bg-orange-500/20 border border-orange-500/30 text-orange-300" :
+                // À temps (0-3 jours) : vert
+                lateness <= 3 ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300" :
+                // Confortable (4-7 jours) : vert clair
+                lateness <= 7 ? "bg-green-500/20 border border-green-500/30 text-green-300" :
+                // Très à l'avance (>7 jours) : bleu-vert
+                "bg-teal-500/20 border border-teal-500/30 text-teal-300"
+              )}>
+                <span className="material-icons-outlined" style={{ fontSize: 16 }}>timer</span>
+                <span className="-mt-px">{lateness}</span>
+              </div>
+            </HelpTooltip>
           )}
         </div>
         <div className="col-span-5 flex items-center justify-end gap-4">
           {/* Slot progression (fixe) - on garde seulement le pourcentage */}
           {showProgress && (
-            <div
-              className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
-              title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
-              aria-label="Progression"
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.progress?.title}
+              description={helpMessages?.progress?.description ?? ""}
+              hint={helpMessages?.progress?.hint}
+              align={helpMessages?.progress?.align ?? "right"}
             >
-              {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
-            </div>
+              <div
+                className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+                title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
+                aria-label="Progression"
+              >
+                {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
+              </div>
+            </HelpTooltip>
           )}
           {showEffort && complexity && (
-            <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>
-              <span className="text-xs font-medium">{complexity}</span>
-            </div>
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.effort?.title}
+              description={helpMessages?.effort?.description ?? ""}
+              hint={helpMessages?.effort?.hint}
+              align={helpMessages?.effort?.align ?? "right"}
+            >
+              <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>
+                <span className="text-xs font-medium">{complexity}</span>
+              </div>
+            </HelpTooltip>
           )}
           {fractalPath && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onFractalPathClick?.();
-              }}
-              className="relative z-10 flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 rounded-sm px-1 -mx-1"
-              title="Ouvrir le kanban enfant"
+            <HelpTooltip
+              helpMode={helpMode}
+              title={helpMessages?.fractal?.title}
+              description={helpMessages?.fractal?.description ?? ""}
+              hint={helpMessages?.fractal?.hint}
+              align={helpMessages?.fractal?.align ?? "right"}
             >
-              <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>
-              <span className="flex items-center gap-[1px] font-mono text-[11px]">
-                {(() => {
-                  const parts = fractalPath.split('.');
-                  const colors = ['text-amber-600 dark:text-amber-400', 'text-sky-600 dark:text-sky-400', 'text-red-600 dark:text-red-400', 'text-emerald-600 dark:text-emerald-400'];
-                  return parts.map((part, i) => (
-                    <React.Fragment key={i}>
-                      <span className={colors[i] || 'text-gray-500'}>{part}</span>
-                      {i < parts.length - 1 && <span className="text-slate-400">.</span>}
-                    </React.Fragment>
-                  ));
-                })()}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFractalPathClick?.();
+                }}
+                className="relative z-10 flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 rounded-sm px-1 -mx-1"
+                title="Ouvrir le kanban enfant"
+              >
+                <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>
+                <span className="flex items-center gap-[1px] font-mono text-[11px]">
+                  {(() => {
+                    const parts = fractalPath.split('.');
+                    const colors = ['text-amber-600 dark:text-amber-400', 'text-sky-600 dark:text-sky-400', 'text-red-600 dark:text-red-400', 'text-emerald-600 dark:text-emerald-400'];
+                    return parts.map((part, i) => (
+                      <React.Fragment key={i}>
+                        <span className={colors[i] || 'text-gray-500'}>{part}</span>
+                        {i < parts.length - 1 && <span className="text-slate-400">.</span>}
+                      </React.Fragment>
+                    ));
+                  })()}
+                </span>
+              </button>
+            </HelpTooltip>
           )}
         </div>
       </div>
