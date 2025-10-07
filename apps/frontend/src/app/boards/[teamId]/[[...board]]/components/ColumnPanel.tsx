@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { useDroppable, type DraggableSyntheticListeners, type DraggableAttributes } from '@dnd-kit/core';
+import { AlarmClock, Archive, Gauge, GripVertical, Layers, Settings2 } from 'lucide-react';
 import type { BoardColumnWithNodes, CardDisplayOptions, ColumnEditingValues } from './types';
 import { BEHAVIOR_COLOR_CLASSES, BEHAVIOR_LABELS } from './constants';
 import { AddCardForm } from './AddCardForm';
@@ -17,6 +18,9 @@ const BACKLOG_DEFAULTS = Object.freeze({
 const DONE_DEFAULTS = Object.freeze({
   archiveAfterDays: 30,
 });
+
+const HATCHED_SURFACE = 'bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.08)_0,rgba(255,255,255,0.08)_8px,rgba(255,255,255,0)_8px,rgba(255,255,255,0)_16px)]';
+const HATCHED_ACCENT = 'bg-[repeating-linear-gradient(135deg,rgba(127,216,255,0.16)_0,rgba(127,216,255,0.16)_8px,rgba(255,255,255,0)_8px,rgba(255,255,255,0)_16px)]';
 
 interface ColumnPanelProps {
   column: BoardColumnWithNodes;
@@ -99,6 +103,14 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
 
   const archivedCount = column.badges?.archived ?? 0;
   const snoozedCount = column.badges?.snoozed ?? 0;
+  const behaviorLabel = BEHAVIOR_LABELS[column.behaviorKey as keyof typeof BEHAVIOR_LABELS] || column.behaviorKey;
+  const backlogArchiveDelay = backlogArchiveAfter == null ? null : backlogArchiveAfter;
+  const backlogArchiveBadge = backlogArchiveDelay == null ? '∞' : `${backlogArchiveDelay} j`;
+  const backlogArchiveTooltip = backlogArchiveDelay == null
+    ? 'Archivage automatique désactivé : les cartes restent ici tant que vous ne les archivez pas manuellement.'
+    : `Les cartes sont archivées après ${backlogArchiveDelay} jour(s) d\'inactivité. Mettez la valeur à 0 pour forcer un archivage immédiat.`;
+  const doneArchiveDelay = doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays;
+  const doneArchiveBadge = `J+${doneArchiveDelay}`;
   const archivedButtonProps = {
     type: 'button' as const,
     onClick: () => onShowArchived?.(column),
@@ -117,156 +129,170 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
       className={`w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative ${isColumnDragging ? 'ring-2 ring-accent/40 ring-offset-2 ring-offset-background' : ''}`}
     >
       <div className={`absolute left-0 top-0 h-1 w-full rounded-t-2xl ${colorClass}`} />
-      <header className="flex items-start justify-between gap-3 pb-2 border-b border-white/10">
-        <div>
-          <h3 className="text-lg font-semibold">{column.name}</h3>
-          <p className="text-[11px] uppercase tracking-wide text-muted">{BEHAVIOR_LABELS[column.behaviorKey as keyof typeof BEHAVIOR_LABELS] || column.behaviorKey}</p>
-        </div>
-        <div className="flex items-start gap-2">
-          <button
-            type="button"
-            ref={handleRef}
-            {...activatorAttributes}
-            {...activatorListeners}
-            className="rounded-full border border-white/10 bg-surface/70 px-2 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground cursor-grab active:cursor-grabbing"
-            aria-label="Déplacer la colonne"
-          >
-            ⠿
-          </button>
-          <div className="flex flex-col items-end gap-2">
-            <span className="rounded-full border border-white/10 bg-surface/70 px-3 py-1 text-[11px] uppercase tracking-wide text-muted" title={typeof column.wipLimit==='number'?`Limite WIP ${column.wipLimit}`:'Pas de limite WIP'}>
-              {typeof column.wipLimit==='number'?`WIP ${column.wipLimit}`:'∞'}
-            </span>
-            <div className="flex items-center gap-1.5">
-              {column.behaviorKey === 'BACKLOG' && backlogArchiveAfter && backlogArchiveAfter > 0 && (
-                <div className="group relative">
-                  <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-1.5 py-0.5 text-[10px] cursor-help">
-                    Arch:{backlogArchiveAfter}j
-                  </span>
-                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-72 rounded-lg border border-orange-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-orange-500/20 bg-slate-800"></div>
-                    <h4 className="mb-1 font-semibold text-orange-400">📦 Archivage automatique</h4>
-                    <p className="text-slate-300">Les cartes <strong>non traitées</strong> pendant {backlogArchiveAfter} jours sont automatiquement archivées.</p>
-                    <p className="mt-1 text-slate-300">Le compteur est <strong>remis à zéro</strong> à chaque interaction (ouverture, modification, reset manuel).</p>
-                    <p className="mt-2 text-[10px] text-slate-400">💡 Cliquez sur "♻️ Garder" dans la carte pour confirmer son intérêt et réinitialiser le compteur.</p>
-                  </div>
-                </div>
-              )}
-              
-              {column.behaviorKey === 'DONE' && (
-                <span className="rounded-full border border-white/10 bg-surface/70 px-1.5 py-0.5 text-[10px]">
-                  Arch:J+{doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays}
-                </span>
-              )}
-              
-              {(snoozedCount > 0 || viewMode === 'snoozed') && (
-                <div className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => onShowSnoozed?.(column)}
-                    disabled={!onShowSnoozed}
-                    className={`rounded-full border px-1.5 py-0.5 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      viewMode === 'snoozed'
-                        ? 'border-cyan-400 bg-cyan-500/30 text-cyan-100'
-                        : 'border-cyan-500/30 bg-cyan-500/10 hover:border-cyan-400 hover:bg-cyan-500/20'
-                    }`}
-                    title={viewMode === 'snoozed' ? 'Revenir aux tâches normales' : 'Afficher les tâches en snooze'}
-                    aria-label={`${viewMode === 'snoozed' ? 'Masquer' : 'Afficher'} les ${snoozedCount} tâche(s) en snooze pour ${column.name}`}
-                  >
-                    😴{snoozedCount}
-                  </button>
-                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-64 rounded-lg border border-cyan-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-800"></div>
-                    <h4 className="mb-1 font-semibold text-cyan-400">😴 Cartes en snooze</h4>
-                    <p className="text-slate-300">Nombre de cartes <strong>masquées temporairement</strong> jusqu'à une date choisie par vous.</p>
-                    <p className="mt-1 text-slate-300">Le snooze <strong>réinitialise le compteur d'archive</strong> automatiquement.</p>
-                    <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'snoozed' ? 'revenir' : 'voir les cartes reportées'}</p>
-                  </div>
-                </div>
-              )}
-              
-              {(archivedCount > 0 || viewMode === 'archived') && (
-                <div className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => onShowArchived?.(column)}
-                    disabled={!onShowArchived}
-                    className={`rounded-full border px-1.5 py-0.5 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      viewMode === 'archived'
-                        ? 'border-amber-400 bg-amber-500/30 text-amber-100'
-                        : 'border-slate-500/30 bg-slate-500/10 hover:border-slate-400 hover:bg-slate-500/20'
-                    }`}
-                    title={viewMode === 'archived' ? 'Revenir aux tâches normales' : 'Afficher les tâches archivées'}
-                    aria-label={`${viewMode === 'archived' ? 'Masquer' : 'Afficher'} les ${archivedCount} tâche(s) archivées pour ${column.name}`}
-                  >
-                    📦{archivedCount}
-                  </button>
-                  <div className="pointer-events-none absolute top-full right-0 z-[9999] mt-2 hidden w-64 rounded-lg border border-slate-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-slate-500/20 bg-slate-800"></div>
-                    <h4 className="mb-1 font-semibold text-slate-400">📦 Cartes archivées</h4>
-                    <p className="text-slate-300">Cartes archivées automatiquement après {backlogArchiveAfter ?? 60} jours d'inactivité.</p>
-                    <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'archived' ? 'revenir' : 'voir les cartes archivées'}</p>
-                  </div>
-                </div>
-              )}
-              
-              <button
-                onClick={()=> isEditing? onCancelEdit(): onRequestEdit(column.id)}
-                className="rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:border-accent hover:text-foreground"
+      <header className="border-b border-white/10 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-semibold" title={column.name}>{column.name}</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="group relative">
+              <span
+                className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted"
+                aria-label={typeof column.wipLimit === 'number' ? `Limite WIP fixée à ${column.wipLimit}` : 'Aucune limite WIP'}
+                role="status"
               >
-                {isEditing? 'Fermer':'Gérer'}
+                <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{typeof column.wipLimit === 'number' ? column.wipLimit : '∞'}</span>
+              </span>
+              <div
+                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                style={{ transitionDelay: '320ms' }}
+              >
+                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                <p>{typeof column.wipLimit === 'number' ? `Vous avez défini une limite de ${column.wipLimit} carte(s) simultanées pour fluidifier le flux.` : 'Aucune limite de WIP : la colonne accepte un nombre illimité de cartes.'}</p>
+                <p className="mt-1 text-[10px] text-slate-400">Astuce : ajustez cette limite dans les paramètres de colonne.</p>
+              </div>
+            </div>
+            <div className="group relative">
+              <button
+                type="button"
+                ref={handleRef}
+                {...activatorAttributes}
+                {...activatorListeners}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-solid border-white/20 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 cursor-grab active:cursor-grabbing"
+                aria-label="Déplacer la colonne"
+              >
+                <GripVertical className="h-4 w-4" aria-hidden="true" />
               </button>
+              <div
+                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-52 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                style={{ transitionDelay: '320ms' }}
+              >
+                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                <p>Glissez-déposez ce bouton pour réordonner les colonnes du tableau.</p>
+              </div>
+            </div>
+            <div className="group relative">
+              <button
+                type="button"
+                onClick={() => (isEditing ? onCancelEdit() : onRequestEdit(column.id))}
+                className={`flex h-8 w-8 items-center justify-center rounded-full border border-solid bg-surface/70 text-muted transition hover:border-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${isEditing ? 'border-accent text-foreground' : 'border-white/20'}`}
+                aria-label={isEditing ? 'Fermer les paramètres de la colonne' : 'Ouvrir les paramètres de la colonne'}
+              >
+                <Settings2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <div
+                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                style={{ transitionDelay: '320ms' }}
+                role="tooltip"
+              >
+                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                <p>{isEditing ? 'Fermez le panneau de paramétrage.' : 'Configurez le nom, la limite WIP et les automatisations de cette colonne.'}</p>
+              </div>
             </div>
           </div>
         </div>
-      </header>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted overflow-visible min-h-[32px]">
-        {column.behaviorKey === 'BACKLOG' && (
-          <>
-            {backlogArchiveAfter && backlogArchiveAfter > 0 ? (
-              <div className="group relative">
-                <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 cursor-help">
-                  📦 Archivage : {backlogArchiveAfter}j
-                </span>
-                <div className="pointer-events-none absolute top-full left-1/2 z-[9999] mt-2 hidden w-72 -translate-x-1/2 rounded-lg border border-orange-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-orange-500/20 bg-slate-800"></div>
-                  <h4 className="mb-1 font-semibold text-orange-400">📦 Archivage automatique</h4>
-                  <p className="text-slate-300">Les cartes <strong>non traitées</strong> pendant {backlogArchiveAfter} jours sont automatiquement archivées.</p>
-                  <p className="mt-1 text-slate-300">Le compteur est <strong>remis à zéro</strong> à chaque interaction (ouverture, modification, reset manuel).</p>
-                  <p className="mt-2 text-[10px] text-slate-400">💡 Cliquez sur "♻️ Garder" dans la carte pour confirmer son intérêt et réinitialiser le compteur.</p>
-                </div>
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="group relative">
+              <span className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 font-medium uppercase tracking-wide" role="status">
+                <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{behaviorLabel}</span>
+              </span>
+              <div
+                className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                style={{ transitionDelay: '80ms' }}
+              >
+                <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                <p>Type de colonne : {behaviorLabel}. Certains comportements (archivage, déplacement auto…) sont activés automatiquement.</p>
               </div>
-            ) : (
+            </div>
+            {(column.behaviorKey === 'BACKLOG' || column.behaviorKey === 'DONE') && (
               <div className="group relative">
-                <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-1 cursor-help text-slate-400">
-                  🚫 Pas d'archivage auto
+                <span className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 font-medium" role="status">
+                  <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>
+                    {column.behaviorKey === 'BACKLOG' ? backlogArchiveBadge : doneArchiveBadge}
+                  </span>
                 </span>
-                <div className="pointer-events-none absolute top-full left-1/2 z-[9999] mt-2 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-500/20 bg-slate-800 p-3 text-xs shadow-2xl group-hover:block">
-                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-slate-500/20 bg-slate-800"></div>
-                  <h4 className="mb-1 font-semibold text-slate-400">🚫 Archivage désactivé</h4>
-                  <p className="text-slate-300">Les cartes ne sont <strong>jamais archivées automatiquement</strong> pour cette colonne.</p>
-                  <p className="mt-2 text-[10px] text-slate-400">💡 Pour activer l'archivage automatique, cliquez sur <strong>"Gérer"</strong> et définissez un délai en jours.</p>
+                <div
+                  className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                  style={{ transitionDelay: '80ms' }}
+                >
+                  <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  {column.behaviorKey === 'BACKLOG' ? (
+                    <>
+                      <p>{backlogArchiveTooltip}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">Dans une carte, utilisez le bouton « ♻️ Garder » pour remettre le compteur à zéro manuellement.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p>Les cartes faites sont archivées automatiquement {doneArchiveDelay} jour(s) après leur arrivée.</p>
+                      <p className="mt-1 text-[10px] text-slate-400">Ajustez le délai dans les paramètres de colonne si besoin.</p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
-          </>
-        )}
-        {column.behaviorKey === 'DONE' && (
-          <>
-            <span className="rounded-full border border-white/10 bg-surface/70 px-2 py-1">
-              Archive J+{doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays}
-            </span>
-            <button {...archivedButtonProps}>
-              Archivé·es {archivedCount}
-            </button>
-          </>
-        )}
-        {column.behaviorKey !== 'BACKLOG' && column.behaviorKey !== 'DONE' && archivedCount > 0 && (
-          <button {...archivedButtonProps}>
-            Archivé·es {archivedCount}
-          </button>
-        )}
-      </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {column.behaviorKey === 'BACKLOG' && (snoozedCount > 0 || viewMode === 'snoozed') && (
+              <div className="group relative">
+                <button
+                  type="button"
+                  onClick={() => onShowSnoozed?.(column)}
+                  disabled={!onShowSnoozed}
+                  className={`flex items-center gap-1 rounded-full border border-solid px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    viewMode === 'snoozed'
+                      ? 'border-cyan-400 bg-cyan-500/30 text-cyan-100'
+                      : 'border-white/20 bg-surface/70 text-muted hover:border-cyan-300 hover:bg-cyan-500/10 hover:text-foreground'
+                  }`}
+                  aria-label={`${viewMode === 'snoozed' ? 'Masquer' : 'Afficher'} les ${snoozedCount} tâche(s) en snooze pour ${column.name}`}
+                >
+                  <AlarmClock className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{snoozedCount}</span>
+                </button>
+                <div
+                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-cyan-500/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  style={{ transitionDelay: '320ms' }}
+                >
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-900/95" />
+                  <h4 className="mb-1 font-semibold text-cyan-300">Cartes en snooze</h4>
+                  <p>Affichez ou masque les cartes reportées temporairement. Le snooze remet le compteur d&apos;archivage à zéro.</p>
+                  <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'snoozed' ? 'revenir à la vue normale' : 'voir les cartes reportées'}.</p>
+                </div>
+              </div>
+            )}
+            {(archivedCount > 0 || viewMode === 'archived') && (
+              <div className="group relative">
+                <button
+                  type="button"
+                  onClick={() => onShowArchived?.(column)}
+                  disabled={!onShowArchived}
+                  className={`flex items-center gap-1 rounded-full border border-solid px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    viewMode === 'archived'
+                      ? 'border-amber-400 bg-amber-500/30 text-amber-100'
+                      : 'border-white/20 bg-surface/70 text-muted hover:border-amber-300 hover:text-foreground'
+                  }`}
+                  aria-label={`${viewMode === 'archived' ? 'Masquer' : 'Afficher'} les ${archivedCount} tâche(s) archivées pour ${column.name}`}
+                >
+                  <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{archivedCount}</span>
+                </button>
+                <div
+                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-amber-400/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  style={{ transitionDelay: '320ms' }}
+                >
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-amber-400/20 bg-slate-900/95" />
+                  <h4 className="mb-1 font-semibold text-amber-300">Cartes archivées</h4>
+                  <p>Consultez les éléments sortis du flux actif. Le délai dépend du paramètre d&apos;archivage automatique.</p>
+                  <p className="mt-1 text-[10px] italic text-slate-400">Cliquez pour {viewMode === 'archived' ? 'revenir aux cartes actives' : 'voir les cartes archivées'}.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
       {isEditing && editingValues && (
         <form onSubmit={(e)=> { e.preventDefault(); onSubmitEdit(); }} className="mt-4 space-y-3 rounded-xl border border-white/10 bg-surface/60 p-4">
           <label className="text-xs text-muted">Nom
@@ -312,7 +338,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
           {editingValues.error && <p className="text-xs text-red-300">{editingValues.error}</p>}
         </form>
       )}
-      <div className="mt-4 border-t border-white/10 pt-4">
+      <div className="mt-4">
         <AddCardForm onCreate={onCreateCard} disabled={loadingCards} />
       </div>
       <div 
