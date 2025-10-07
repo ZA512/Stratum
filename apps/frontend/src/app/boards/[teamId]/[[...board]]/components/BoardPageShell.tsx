@@ -35,6 +35,7 @@ import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -1376,26 +1377,34 @@ export function TeamBoardPage(){
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="relative flex-1 min-w-[240px]">
-                        <label className="flex flex-col gap-1 text-xs text-muted">
-                          <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
-                          <input
-                            type="search"
-                            value={searchDraft}
-                            onChange={(event) => setSearchDraft(event.target.value)}
-                            onFocus={() => {
-                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                              setSearchFocused(true);
-                            }}
-                            onBlur={() => {
-                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                              searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                            }}
-                            placeholder={tBoard('search.placeholder')}
-                            className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                            aria-label={tBoard('search.aria')}
-                          />
-                          <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
-                        </label>
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.search.title')}
+                          description={tBoard('help.search.body')}
+                          hint={tBoard('help.search.hint')}
+                          className="block"
+                        >
+                          <label className="flex flex-col gap-1 text-xs text-muted">
+                            <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
+                            <input
+                              type="search"
+                              value={searchDraft}
+                              onChange={(event) => setSearchDraft(event.target.value)}
+                              onFocus={() => {
+                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                setSearchFocused(true);
+                              }}
+                              onBlur={() => {
+                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                              }}
+                              placeholder={tBoard('search.placeholder')}
+                              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                              aria-label={tBoard('search.aria')}
+                            />
+                            <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
+                          </label>
+                        </HelpTooltip>
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
                             <ul className="max-h-56 overflow-y-auto py-2 text-sm">
@@ -1422,55 +1431,92 @@ export function TeamBoardPage(){
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setFilterMine((prev) => !prev)}
-                          className={pillClass(filterMine)}
-                          aria-pressed={filterMine}
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.quickFilters.mine.title')}
+                          description={tBoard('help.quickFilters.mine.body')}
+                          className="inline-flex"
                         >
-                          {tBoard('quickFilters.mine')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSortPriority((prev) => !prev)}
-                          className={pillClass(sortPriority)}
-                          aria-pressed={sortPriority}
+                          <button
+                            type="button"
+                            onClick={() => setFilterMine((prev) => !prev)}
+                            className={pillClass(filterMine)}
+                            aria-pressed={filterMine}
+                          >
+                            {tBoard('quickFilters.mine')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.quickFilters.priority.title')}
+                          description={tBoard('help.quickFilters.priority.body')}
+                          className="inline-flex"
                         >
-                          {tBoard('quickFilters.sortPriority')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSortDueDate((prev) => !prev)}
-                          className={pillClass(sortDueDate)}
-                          aria-pressed={sortDueDate}
+                          <button
+                            type="button"
+                            onClick={() => setSortPriority((prev) => !prev)}
+                            className={pillClass(sortPriority)}
+                            aria-pressed={sortPriority}
+                          >
+                            {tBoard('quickFilters.sortPriority')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.quickFilters.dueDate.title')}
+                          description={tBoard('help.quickFilters.dueDate.body')}
+                          className="inline-flex"
                         >
-                          {tBoard('quickFilters.sortDueDate')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setExpertMode(!expertMode)}
-                          className={pillClass(expertMode)}
-                          aria-pressed={expertMode}
-                          aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
-                          title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
+                          <button
+                            type="button"
+                            onClick={() => setSortDueDate((prev) => !prev)}
+                            className={pillClass(sortDueDate)}
+                            aria-pressed={sortDueDate}
+                          >
+                            {tBoard('quickFilters.sortDueDate')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.quickFilters.expert.title')}
+                          description={tBoard('help.quickFilters.expert.body')}
+                          hint={tBoard('help.quickFilters.expert.hint')}
+                          className="inline-flex"
                         >
-                          {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpertMode(!expertMode)}
+                            className={pillClass(expertMode)}
+                            aria-pressed={expertMode}
+                            aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
+                            title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
+                          >
+                            {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
+                          </button>
+                        </HelpTooltip>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
-                        <button
-                          type="button"
-                          onClick={() => setFiltersExpanded((prev) => !prev)}
-                          className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
-                          aria-expanded={filtersExpanded}
-                          aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
+                        <HelpTooltip
+                          helpMode={helpMode}
+                          title={tBoard('help.filtersButton.title')}
+                          description={tBoard('help.filtersButton.body')}
+                          hint={tBoard('help.filtersButton.hint')}
+                          className="inline-flex"
                         >
-                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
-                          </svg>
-                          {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setFiltersExpanded((prev) => !prev)}
+                            className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
+                            aria-expanded={filtersExpanded}
+                            aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
+                            </svg>
+                            {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
+                          </button>
+                        </HelpTooltip>
                       </div>
                     </div>
                   </div>
@@ -1506,27 +1552,50 @@ export function TeamBoardPage(){
                       hasActiveFilters={hasActiveFilters}
                       onReset={resetFilters}
                       onClose={() => setFiltersExpanded(false)}
+                      helpMode={helpMode}
                     />
                   )}
                 </>
               )}
               {isAddingColumn && (
                 <form onSubmit={handleSubmitColumn} className={`${showBoardControls ? 'mt-6' : ''} grid gap-4 md:grid-cols-2`}>
-                  <label className="text-xs text-muted">{tBoard('columns.form.name')}
-                    <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
-                  </label>
-                  <label className="text-xs text-muted">{tBoard('columns.form.behavior')}
-                    <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
-                      <option value="BACKLOG">{tBoard('behaviors.BACKLOG')}</option>
-                      <option value="IN_PROGRESS">{tBoard('behaviors.IN_PROGRESS')}</option>
-                      <option value="BLOCKED">{tBoard('behaviors.BLOCKED')}</option>
-                      <option value="DONE">{tBoard('behaviors.DONE')}</option>
-                      <option value="CUSTOM">{tBoard('behaviors.CUSTOM')}</option>
-                    </select>
-                  </label>
-                  <label className="text-xs text-muted">{tBoard('columns.form.wipLimit')}
-                    <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder={tBoard('columns.form.wipPlaceholder')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
-                  </label>
+                  <HelpTooltip
+                    helpMode={helpMode}
+                    title={tBoard('help.columns.form.name.title')}
+                    description={tBoard('help.columns.form.name.body')}
+                    className="block"
+                  >
+                    <label className="text-xs text-muted">{tBoard('columns.form.name')}
+                      <input value={columnName} onChange={e=>setColumnName(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" required />
+                    </label>
+                  </HelpTooltip>
+                  <HelpTooltip
+                    helpMode={helpMode}
+                    title={tBoard('help.columns.form.behavior.title')}
+                    description={tBoard('help.columns.form.behavior.body')}
+                    hint={tBoard('help.columns.form.behavior.hint')}
+                    className="block"
+                  >
+                    <label className="text-xs text-muted">{tBoard('columns.form.behavior')}
+                      <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+                        <option value="BACKLOG">{tBoard('behaviors.BACKLOG')}</option>
+                        <option value="IN_PROGRESS">{tBoard('behaviors.IN_PROGRESS')}</option>
+                        <option value="BLOCKED">{tBoard('behaviors.BLOCKED')}</option>
+                        <option value="DONE">{tBoard('behaviors.DONE')}</option>
+                        <option value="CUSTOM">{tBoard('behaviors.CUSTOM')}</option>
+                      </select>
+                    </label>
+                  </HelpTooltip>
+                  <HelpTooltip
+                    helpMode={helpMode}
+                    title={tBoard('help.columns.form.wip.title')}
+                    description={tBoard('help.columns.form.wip.body')}
+                    className="block"
+                  >
+                    <label className="text-xs text-muted">{tBoard('columns.form.wipLimit')}
+                      <input type="number" min={1} value={columnWip} onChange={e=>setColumnWip(e.target.value)} placeholder={tBoard('columns.form.wipPlaceholder')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
+                    </label>
+                  </HelpTooltip>
                   <div className="flex items-center gap-3 pt-4">
                     <button disabled={columnSubmitting} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-background disabled:opacity-60">{columnSubmitting ? tBoard('columns.form.creating') : tBoard('columns.form.create')}</button>
                     <button type="button" onClick={()=>{ setIsAddingColumn(false); resetColumnForm(); }} className="text-sm text-muted hover:text-foreground">{tBoard('columns.form.cancel')}</button>
@@ -1544,18 +1613,26 @@ export function TeamBoardPage(){
             <div className="flex items-baseline justify-between">
               <div className="flex items-center gap-2">
                   <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
-                <button type="button"
-                  onClick={() => {
-                    resetColumnForm();
-                    setIsAddingColumn(true);
-                    setFiltersExpanded(false);
-                  }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
-                    title={tBoard('columns.header.addTooltip')}
-                    aria-label={tBoard('columns.header.addTooltip')}
+                <HelpTooltip
+                  helpMode={helpMode}
+                  title={tBoard('help.columns.add.title')}
+                  description={tBoard('help.columns.add.body')}
+                  hint={tBoard('help.columns.add.hint')}
+                  className="inline-flex"
                 >
-                  +
-                </button>
+                  <button type="button"
+                    onClick={() => {
+                      resetColumnForm();
+                      setIsAddingColumn(true);
+                      setFiltersExpanded(false);
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
+                      title={tBoard('columns.header.addTooltip')}
+                      aria-label={tBoard('columns.header.addTooltip')}
+                  >
+                    +
+                  </button>
+                </HelpTooltip>
                 <button
                   type="button"
                   onClick={toggleHelpMode}

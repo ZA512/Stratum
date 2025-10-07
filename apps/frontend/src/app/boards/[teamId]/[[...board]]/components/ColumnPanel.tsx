@@ -9,6 +9,7 @@ import { BoardTaskCard } from './BoardTaskCard';
 import type { BoardNode, NodeChildBoard, ArchivedBoardNode } from '@/features/boards/boards-api';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { useTranslation } from '@/i18n';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 
 const BACKLOG_DEFAULTS = Object.freeze({
   reviewAfterDays: 14,
@@ -308,40 +309,70 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
       </header>
       {isEditing && editingValues && (
         <form onSubmit={(e)=> { e.preventDefault(); onSubmitEdit(); }} className="mt-4 space-y-3 rounded-xl border border-white/10 bg-surface/60 p-4">
-          <label className="text-xs text-muted">{tBoard('columns.form.name')}
-            <input
-              value={editingValues.name}
-              onChange={e=>onFieldChange('name', e.target.value)}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-          </label>
-          <label className="text-xs text-muted">{tBoard('columns.form.wipLimit')}
-            <input
-              value={editingValues.wip}
-              onChange={e=>onFieldChange('wip', e.target.value)}
-              placeholder={tBoard('columns.form.wipPlaceholder')}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-          </label>
-          {column.behaviorKey === 'BACKLOG' && (
-            <label className="text-xs text-muted">{tBoard('columns.form.backlogArchive')}
+          <HelpTooltip
+            helpMode={helpMode}
+            title={tBoard('help.columns.settings.name.title')}
+            description={tBoard('help.columns.settings.name.body')}
+            className="block"
+          >
+            <label className="text-xs text-muted">{tBoard('columns.form.name')}
               <input
-                value={editingValues.backlogArchiveAfter}
-                onChange={(e) => onFieldChange('backlogArchiveAfter', e.target.value)}
-                placeholder={tBoard('columns.form.backlogArchivePlaceholder')}
+                value={editingValues.name}
+                onChange={e=>onFieldChange('name', e.target.value)}
                 className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
               />
-              <p className="mt-1 text-[11px] text-slate-500">{tBoard('columns.form.backlogArchiveHint')}</p>
             </label>
+          </HelpTooltip>
+          <HelpTooltip
+            helpMode={helpMode}
+            title={tBoard('help.columns.settings.wip.title')}
+            description={tBoard('help.columns.settings.wip.body')}
+            className="block"
+          >
+            <label className="text-xs text-muted">{tBoard('columns.form.wipLimit')}
+              <input
+                value={editingValues.wip}
+                onChange={e=>onFieldChange('wip', e.target.value)}
+                placeholder={tBoard('columns.form.wipPlaceholder')}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </label>
+          </HelpTooltip>
+          {column.behaviorKey === 'BACKLOG' && (
+            <HelpTooltip
+              helpMode={helpMode}
+              title={tBoard('help.columns.settings.backlogArchive.title')}
+              description={tBoard('help.columns.settings.backlogArchive.body')}
+              hint={tBoard('help.columns.settings.backlogArchive.hint')}
+              className="block"
+            >
+              <label className="text-xs text-muted">{tBoard('columns.form.backlogArchive')}
+                <input
+                  value={editingValues.backlogArchiveAfter}
+                  onChange={(e) => onFieldChange('backlogArchiveAfter', e.target.value)}
+                  placeholder={tBoard('columns.form.backlogArchivePlaceholder')}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">{tBoard('columns.form.backlogArchiveHint')}</p>
+              </label>
+            </HelpTooltip>
           )}
           {column.behaviorKey === 'DONE' && (
-            <label className="text-xs text-muted">{tBoard('columns.form.doneArchive')}
-              <input
-                value={editingValues.doneArchiveAfter}
-                onChange={(e) => onFieldChange('doneArchiveAfter', e.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-              />
-            </label>
+            <HelpTooltip
+              helpMode={helpMode}
+              title={tBoard('help.columns.settings.doneArchive.title')}
+              description={tBoard('help.columns.settings.doneArchive.body')}
+              hint={tBoard('help.columns.settings.doneArchive.hint')}
+              className="block"
+            >
+              <label className="text-xs text-muted">{tBoard('columns.form.doneArchive')}
+                <input
+                  value={editingValues.doneArchiveAfter}
+                  onChange={(e) => onFieldChange('doneArchiveAfter', e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </label>
+            </HelpTooltip>
           )}
           <div className="flex flex-wrap items-center gap-2">
             <button disabled={editingValues.submitting} className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-background disabled:opacity-60">{tBoard('columns.form.save')}</button>
