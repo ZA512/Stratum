@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { BoardNode } from '@/features/boards/boards-api';
+import { useTranslation } from '@/i18n';
 
 interface CardItemProps {
   node: BoardNode;
@@ -37,6 +38,7 @@ function truncateDescription(description: string | null | undefined, maxLength =
 }
 
 export function CardItem({ node, columnId, childBoard, onOpen, onRename, onRequestMove, onRequestDelete, showDescription }: CardItemProps){
+  const { t: tBoard } = useTranslation("board");
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: node.id, data:{ columnId, type:'card', node: { id: node.id, title: node.title } }});
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging?0.4:1 };
 
@@ -228,8 +230,8 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
             {overdue && (
               <span
                 className="inline-flex h-3 w-3 rounded-sm border border-white/20 bg-red-600 animate-pulse"
-                title="Blocage en retard (date prévue dépassée)"
-                aria-label="Blocage en retard"
+                title={tBoard('cards.blockedOverdue')}
+                aria-label={tBoard('cards.blockedOverdueAria')}
               />
             )}
           </div>
@@ -242,7 +244,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
             className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            aria-label="Actions carte"
+            aria-label={tBoard('cards.menuAria')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <circle cx="5" cy="12" r="2" />
@@ -343,7 +345,7 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
                 )}
               </span>
             ) : (
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/20 text-[10px] uppercase text-muted" aria-label="Aucun assigné">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/20 text-[10px] uppercase text-muted" aria-label={tBoard('cards.noAssignee')}>
                 --
               </span>
             )}
@@ -373,8 +375,8 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
               type="button"
               onClick={()=> onOpen(childBoard.boardId)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-xs text-accent transition hover:border-accent hover:text-accent-strong focus:outline-none focus:ring-2 focus:ring-accent/40"
-              title="Ouvrir le sous-board"
-              aria-label="Ouvrir le sous-board"
+              title={tBoard('cards.openSubBoard')}
+              aria-label={tBoard('cards.openSubBoardAria')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z"/>

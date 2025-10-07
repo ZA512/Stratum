@@ -105,7 +105,7 @@ export function SnoozedCardsDialog({
                         {node.title}
                       </p>
                       <p className="text-xs text-cyan-300">
-                        Reportée jusqu'au {formatDate(node.backlogHiddenUntil ?? null)}
+                        Reportée jusqu&apos;au {formatDate(node.backlogHiddenUntil ?? null)}
                       </p>
                       {node.dueAt && (
                         <p className="text-xs text-muted">Échéance: {formatDate(node.dueAt)}</p>

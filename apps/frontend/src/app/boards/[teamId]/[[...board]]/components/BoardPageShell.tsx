@@ -797,15 +797,15 @@ export function TeamBoardPage(){
   const handleUpdateColumn = async () => {
     if(!accessToken || !board || !editingColumnId) return;
     const col = board.columns.find(c=>c.id===editingColumnId); if(!col) return;
-    const name = editingName.trim();
-    if(!name){ setEditingError('Nom obligatoire'); return; }
+  const name = editingName.trim();
+  if(!name){ setEditingError(tBoard('columns.form.errors.nameRequired')); return; }
     const updates: UpdateBoardColumnInput = {};
     if(name !== col.name) updates.name = name;
     const w = editingWip.trim();
     if(w===''){ if(col.wipLimit !== null) updates.wipLimit = null; }
     else {
       const n = Number(w);
-      if(!Number.isInteger(n) || n<=0){ setEditingError('WIP invalide'); return; }
+  if(!Number.isInteger(n) || n<=0){ setEditingError(tBoard('columns.form.errors.wipInvalid')); return; }
       if(col.wipLimit !== n) updates.wipLimit = n;
     }
 
@@ -825,22 +825,22 @@ export function TeamBoardPage(){
       const reviewEveryRaw = editingBacklogReviewEvery.trim();
       const archiveAfterRaw = editingBacklogArchiveAfter.trim();
       if (!reviewAfterRaw || !reviewEveryRaw || !archiveAfterRaw) {
-        setEditingError('Tous les délais backlog sont requis');
+        setEditingError(tBoard('columns.form.errors.backlogDelaysRequired'));
         return;
       }
       const reviewAfter = Number(reviewAfterRaw);
       const reviewEvery = Number(reviewEveryRaw);
       const archiveAfter = Number(archiveAfterRaw);
       if (!Number.isInteger(reviewAfter) || reviewAfter < 1 || reviewAfter > 365) {
-        setEditingError('La première revue doit être comprise entre 1 et 365 jours');
+        setEditingError(tBoard('columns.form.errors.backlogReviewAfterRange'));
         return;
       }
       if (!Number.isInteger(reviewEvery) || reviewEvery < 1 || reviewEvery > 365) {
-        setEditingError('La relance doit être comprise entre 1 et 365 jours');
+        setEditingError(tBoard('columns.form.errors.backlogReviewEveryRange'));
         return;
       }
       if (!Number.isInteger(archiveAfter) || archiveAfter < 1 || archiveAfter > 730) {
-        setEditingError('L\'archivage automatique doit être compris entre 1 et 730 jours');
+        setEditingError(tBoard('columns.form.errors.backlogArchiveRange'));
         return;
       }
       const currentReviewAfter =
@@ -862,12 +862,12 @@ export function TeamBoardPage(){
     if (col.behaviorKey === 'DONE') {
       const archiveAfterRaw = editingDoneArchiveAfter.trim();
       if (!archiveAfterRaw) {
-        setEditingError('L\'archivage automatique est requis');
+        setEditingError(tBoard('columns.form.errors.doneArchiveRequired'));
         return;
       }
       const archiveAfter = Number(archiveAfterRaw);
       if (!Number.isInteger(archiveAfter) || archiveAfter < 0 || archiveAfter > 730) {
-        setEditingError('L\'archivage automatique doit être compris entre 0 et 730 jours');
+        setEditingError(tBoard('columns.form.errors.doneArchiveRange'));
         return;
       }
       const currentArchiveAfter =
@@ -906,8 +906,9 @@ export function TeamBoardPage(){
 
   const handleDeleteColumn = async (columnId:string) => {
     if(!accessToken || !board) return;
-    const col = board.columns.find(c=>c.id===columnId); if(!col) return;
-    if(!window.confirm(`Supprimer la colonne "${col.name}" ?`)) return;
+  const col = board.columns.find(c=>c.id===columnId); if(!col) return;
+  const confirmationMessage = tBoard('columns.confirmDelete', { name: col.name });
+  if(!window.confirm(confirmationMessage)) return;
     try {
   await handleApi(()=>deleteBoardColumn(board.id, columnId, accessToken), { success: tBoard('columns.notifications.deleted') });
       await refreshActiveBoard();
@@ -967,7 +968,7 @@ export function TeamBoardPage(){
     setArchivedLoading(true);
     if (!accessToken) {
       setArchivedLoading(false);
-      setArchivedError('Session invalide — veuillez vous reconnecter.');
+      setArchivedError(tBoard('alerts.sessionInvalid'));
       return;
     }
     try {
@@ -976,7 +977,7 @@ export function TeamBoardPage(){
         setArchivedNodes(items);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de charger les tâches archivées.';
+      const message = err instanceof Error && err.message ? err.message : tBoard('alerts.archivedLoadFailed');
       if (archivedColumnIdRef.current === column.id) {
         setArchivedError(message);
       }
@@ -1005,7 +1006,7 @@ export function TeamBoardPage(){
 
   const handleUnsnoozeSnoozed = async (nodeId: string) => {
     if (!accessToken) {
-      toastError('Session invalide — veuillez vous reconnecter.');
+      toastError(tBoard('alerts.sessionInvalid'));
       return;
     }
     setSnoozedSubmittingId(nodeId);
@@ -1034,7 +1035,7 @@ export function TeamBoardPage(){
 
   const handleRestoreArchived = async (nodeId: string) => {
     if (!accessToken) {
-      toastError('Session invalide — veuillez vous reconnecter.');
+      toastError(tBoard('alerts.sessionInvalid'));
       return;
     }
     setArchivedSubmittingId(nodeId);
@@ -1055,7 +1056,7 @@ export function TeamBoardPage(){
 
   const handleDeleteArchived = async (nodeId: string) => {
     if (!accessToken) {
-      toastError('Session invalide — veuillez vous reconnecter.');
+      toastError(tBoard('alerts.sessionInvalid'));
       return;
     }
     setArchivedSubmittingId(nodeId);
@@ -1075,7 +1076,7 @@ export function TeamBoardPage(){
   };
 
   const handleCreateCard = async (columnId:string, title:string) => {
-    if(!accessToken || !board) throw new Error('Session invalide');
+    if(!accessToken || !board) throw new Error(tBoard('alerts.sessionInvalid'));
   await handleApi(()=>createNode({ title, columnId }, accessToken), { success: tBoard('cards.notifications.created') });
     await refreshActiveBoard();
   };
@@ -1086,7 +1087,7 @@ export function TeamBoardPage(){
 
   const handleRequestMoveCard = (node: BoardNode) => {
     if (!board) {
-      toastError('Kanban actif indisponible pour le déplacement.');
+      toastError(tBoard('alerts.boardUnavailable'));
       return;
     }
     setMoveTarget(node);
@@ -1136,7 +1137,7 @@ export function TeamBoardPage(){
     setDeleteError(null);
     try {
       await apiDeleteNode(deleteTarget.id, { recursive }, accessToken);
-      success(recursive ? 'Tâche et sous-éléments supprimés' : 'Tâche supprimée');
+  success(recursive ? tBoard('cards.notifications.deletedRecursive') : tBoard('cards.notifications.deleted'));
       closeDeleteDialog();
       await refreshActiveBoard();
     } catch (err) {
@@ -1737,7 +1738,7 @@ export function TeamBoardPage(){
             try {
               await refreshActiveBoard();
             } catch (err) {
-              const message = err instanceof Error ? err.message : 'Actualisation du kanban impossible';
+              const message = err instanceof Error && err.message ? err.message : tBoard('alerts.boardRefreshFailed');
               toastError(message);
             }
           }}

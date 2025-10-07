@@ -362,6 +362,130 @@
         "NONE": "Aucune"
       }
     },
+    "taskDrawer": {
+      "multiSelect": {
+        "clear": "Effacer",
+        "placeholder": "Sélectionner des membres",
+        "searchPlaceholder": "Rechercher un membre…",
+        "empty": "Aucun membre disponible",
+        "noResults": "Aucun membre trouvé"
+      },
+      "confirm": {
+        "archive": "Archiver cette carte ? Elle sera masquée du tableau.",
+        "unarchive": "Désarchiver cette carte ? Elle sera de nouveau visible dans le tableau."
+      },
+      "toasts": {
+        "archived": "Carte archivée",
+        "unarchived": "Carte désarchivée",
+        "archiveCounterReset": "Compteur d'archive réinitialisé",
+        "raciTeamSaved": "Équipe RACI enregistrée",
+        "saved": "Tâche mise à jour",
+        "collaboratorAdded": "Collaborateur ajouté",
+        "collaboratorRemoved": "Collaborateur retiré"
+      },
+      "errors": {
+        "archiveFailed": "Échec de l'archivage",
+        "unarchiveFailed": "Échec du désarchivage",
+        "archiveCounterFailed": "Échec de la réinitialisation",
+        "invalidEmail": "Email invalide",
+        "sessionExpired": "Session expirée, veuillez vous reconnecter",
+        "emptyRaciSelection": "Sélectionnez au moins une personne dans la matrice RACI",
+        "invalidRaciName": "Nom invalide, veuillez réessayer",
+        "raciTeamSaveFailed": "Impossible d'enregistrer l'équipe RACI",
+        "invalidBacklogSnooze": "Date de réapparition backlog invalide",
+        "updateFailed": "Impossible de mettre à jour la tâche",
+        "tagTooLong": "Tag >32 caractères",
+        "tagLimit": "Maximum 20 tags",
+        "emptyCollaboratorEmail": "Veuillez saisir un email",
+        "collaboratorInviteFailed": "Impossible d'ajouter le collaborateur"
+      },
+      "effort": {
+        "none": "(non défini)"
+      },
+      "prompts": {
+        "raciTeamName": "Nom de votre équipe RACI"
+      },
+      "backlog": {
+        "title": "Cycle backlog",
+        "tooltip": {
+          "title": "Cycle automatique de revue",
+          "intro": "Les cartes backlog sont automatiquement réévaluées pour vous rappeler de les traiter.",
+          "points": {
+            "reappear": "Les cartes réapparaissent selon le dernier rappel configuré.",
+            "snooze": "Vous pouvez masquer temporairement une carte (snooze) jusqu'à une date précise.",
+            "manual": "Le cycle se relance automatiquement, mais vous pouvez aussi le forcer manuellement."
+          },
+          "footer": "Gardez le contrôle de votre backlog sans perdre de vue vos tâches importantes."
+        },
+        "description": "Ajustez la date de réapparition d’une carte backlog et relancez le cycle si besoin.",
+        "hideUntil": {
+          "label": "Masquer jusqu’au"
+        },
+        "resetSnooze": "Réinitialiser le snooze",
+        "summary": {
+          "nextReview": "Prochaine revue",
+          "lastReminder": "Dernier rappel",
+          "reviewStarted": "Cycle démarré",
+          "lastInteraction": "Dernière interaction"
+        },
+        "restart": {
+          "scheduled": "Relance programmée",
+          "now": "Relancer la revue maintenant",
+          "noSnooze": "Sans snooze, la tâche restera visible en backlog.",
+          "scheduledHint": "La sauvegarde recalculera immédiatement la prochaine revue et réinitialisera les rappels.",
+          "frequencyHint": "Les rappels suivent la fréquence configurée sur la colonne backlog."
+        },
+        "snoozeCountdown": {
+          "futureOne": "Réapparition dans 1 jour",
+          "futureOther": "Réapparition dans {count} jours",
+          "today": "Réapparition aujourd'hui",
+          "pastOne": "Réapparue depuis 1 jour",
+          "pastOther": "Réapparue depuis {count} jours"
+        },
+        "archiveCountdown": {
+          "imminent": "⚠️ Archivage imminent",
+          "criticalOne": "⏰ Archivage dans 1 jour",
+          "criticalOther": "⏰ Archivage dans {count} jours",
+          "scheduledOne": "📦 Archive prévue dans 1 jour",
+          "scheduledOther": "📦 Archive prévue dans {count} jours",
+          "criticalHint": "Cliquez sur « Garder » pour confirmer l'intérêt et réinitialiser le compteur.",
+          "scheduledHint": "Prochaine archive automatique : {date}"
+        },
+        "keep": {
+          "default": "♻️ Garder",
+          "working": "En cours…"
+        }
+      },
+      "blocked": {
+        "title": "Blocage",
+        "reason": {
+          "label": "Qu'est-ce qui est attendu ?",
+          "placeholder": "Décrivez ce qui est attendu pour débloquer cette tâche…"
+        },
+        "emails": {
+          "label": "Email(s) du/des bloqueur(s)",
+          "placeholder": "ajouter@exemple.com (Entrée pour ajouter)"
+        },
+        "interval": {
+          "label": "Relance automatique",
+          "options": {
+            "never": "Jamais",
+            "daily": "Tous les jours",
+            "everyTwo": "Tous les 2 jours",
+            "everyThree": "Tous les 3 jours",
+            "everyFive": "Tous les 5 jours",
+            "everySeven": "Toutes les semaines",
+            "everyFourteen": "Toutes les 2 semaines"
+          }
+        },
+        "eta": {
+          "label": "Date estimée de déblocage"
+        },
+        "since": "Bloqué depuis : {date}",
+        "resolved": "Blocage résolu (arrête les relances automatiques)",
+        "autoReminderInfo": "Les relances automatiques incluent le titre de la tâche, ce qui est attendu et un lien vers le kanban."
+      }
+    },
     "columns": {
       "header": {
         "title": "Colonnes du board",
@@ -456,7 +580,13 @@
         "errors": {
           "sessionInvalid": "Session invalide",
           "nameRequired": "Nom obligatoire",
-          "wipInvalid": "WIP invalide"
+          "wipInvalid": "WIP invalide",
+          "backlogDelaysRequired": "Tous les délais backlog sont requis",
+          "backlogReviewAfterRange": "La première revue doit être comprise entre 1 et 365 jours",
+          "backlogReviewEveryRange": "La relance doit être comprise entre 1 et 365 jours",
+          "backlogArchiveRange": "L'archivage automatique doit être compris entre 1 et 730 jours",
+          "doneArchiveRequired": "L'archivage automatique est requis",
+          "doneArchiveRange": "L'archivage automatique doit être compris entre 0 et 730 jours"
         }
       },
       "notifications": {
@@ -472,6 +602,12 @@
       },
       "snoozedBadge": "Carte en pause",
       "snoozedAria": "Cette carte est en pause",
+      "blockedOverdue": "Blocage en retard (date prévue dépassée)",
+      "blockedOverdueAria": "Blocage en retard",
+      "menuAria": "Actions carte",
+      "noAssignee": "Aucun assigné",
+      "openSubBoard": "Ouvrir le sous-board",
+      "openSubBoardAria": "Ouvrir le sous-board",
       "menu": {
         "open": "Ouvrir",
         "rename": "Renommer",
@@ -647,7 +783,8 @@
       "wipLimitReached": "Limite WIP atteinte",
       "archivedLoadFailed": "Impossible de charger les cartes archivées.",
       "snoozedLoadFailed": "Impossible de charger les cartes reportées.",
-      "boardUnavailable": "Kanban actif indisponible pour cette action.",
+  "boardUnavailable": "Kanban actif indisponible pour cette action.",
+  "boardRefreshFailed": "Actualisation du kanban impossible",
       "unexpectedError": "Erreur inattendue"
     }
   }

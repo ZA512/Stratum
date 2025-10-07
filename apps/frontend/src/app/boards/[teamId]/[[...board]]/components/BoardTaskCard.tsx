@@ -255,7 +255,7 @@ export function BoardTaskCard({
         onMenuButtonClick={() => setMenuOpen(prev => !prev)}
         className="cursor-grab active:cursor-grabbing"
       />
-      {(node as any).isSnoozed && (
+      {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
         <div
           className="absolute left-3 top-3 z-10 flex items-center gap-0.5 rounded-full bg-cyan-400/90 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow"
           title={tBoard('cards.snoozedBadge')}

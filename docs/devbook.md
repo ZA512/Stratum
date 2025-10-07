@@ -80,15 +80,146 @@ pm run seed:reset (drop + migrate + seed) pour synchroniser les environnements.
 - [ ] Tests automatisés : ajouter la couverture sur la validation numérique et la persistance RACI.
 
 ## 🗓️ Tâches courantes - 07/10/2025
-- [ ] **I18n board** : recenser toutes les chaînes en dur (ColumnPanel, BoardTaskCard, BoardPageShell, dialogues snooze/archivage, formulaires colonne/carte).
-  - [~] Restant : passer en revue `AddCardForm.tsx`, `ColumnPanel.tsx`, `TaskDrawer` (labels effort/priority) et vérifier les toasts d'erreur côté `BoardPageShell`.
+ - [x] **I18n board** : recenser toutes les chaînes en dur (ColumnPanel, BoardTaskCard, BoardPageShell, dialogues snooze/archivage, formulaires colonne/carte).
+   - [x] Terminé : `BoardPageShell` (toasts/action handlers), `AddCardForm.tsx` (placeholder/validation), `ColumnPanel.tsx` (menus, tooltips) + `TaskDrawer` (toasts archivage/backlog/RACI/tags/collaborateurs, labels prio/effort, cycle backlog + section blocage localisés) + `CardItem.tsx` (badges blocage/sous-board, aria-labels) branchés sur `useTranslation("board")`.
 - [x] **Catalogue EN** : ajouter les clés manquantes dans `apps/frontend/src/i18n/locales/en.json` pour couvrir le board.
+  - Ajouté : `cards.blockedOverdue`, `cards.blockedOverdueAria`, `cards.menuAria`, `cards.noAssignee`, `cards.openSubBoard`, `cards.openSubBoardAria`.
 - [x] **Catalogue FR** : aligner `apps/frontend/src/i18n/locales/fr.json` sur la nouvelle structure avec traductions françaises.
-- [~] **Refactor UI** : brancher `useTranslation("board")` sur les composants et remplacer les littéraux.
-  - Reste à traiter : `ColumnPanel` (menus), `AddCardForm` (placeholders/validation), `TaskDrawer` (tooltips), `BoardTaskCard` (badges).
-  - Terminé : `MoveCardDialog` (dialogue de déplacement) → traductions branchées + tests manuels basiques OK.
-- [ ] **Vérification langue** : vérifier le switch langue, la persistance (localStorage), et les tooltips/ARIA.
-  - À planifier après refactor complet ; prévoir run manuel + automatisation éventuelle (Vitest i18n?).
+  - Aligné : toutes les clés EN traduites en FR avec terminologie cohérente.
+- [x] **Refactor UI** : brancher `useTranslation("board")` sur les composants et remplacer les littéraux.
+  - Terminé : `MoveCardDialog` (dialogue de déplacement) + `AddCardForm`, `ColumnPanel`, `BoardTaskCard` (menus/badges), `TaskDrawer` (selects prio/effort, multi-select équipe, cycle backlog, section blocage), `BoardPageShell` (toasts/action handlers), `CardItem.tsx` (tous tooltips/aria) → translations branchées + lint passé (0 erreur).
+- [~] **Vérification langue** : vérifier le switch langue, la persistance (localStorage), et les tooltips/ARIA.
+  - Infrastructure prête : système i18n avec persistance localStorage (`preferred-language`), détection langue navigateur, switch dans `/settings`.
+  - Tests manuels à effectuer :
+    1. **Switch langue** : aller sur `/settings` → changer EN/FR → vérifier board refresh avec nouvelles traductions.
+    2. **Persistance** : changer langue → refresh page → vérifier langue conservée.
+    3. **Tooltips** : survol badges (effort, priorité, blocage, sous-board) → vérifier texte localisé.
+    4. **ARIA labels** : vérifier lecteur d'écran (ou inspecter DOM) pour aria-label localisés (menu carte, "aucun assigné", etc.).
+    5. **Toast/Erreurs** : déclencher actions (créer colonne, supprimer carte, erreurs validation) → vérifier messages localisés.
+
+## 📋 Guide de tests i18n (Board)
+
+### Préparation
+- Démarrer backend (`npm run dev --workspace backend`)
+- Démarrer frontend (`npm run dev --workspace frontend`)
+- Se connecter avec un utilisateur de test
+- Ouvrir un board existant
+
+### Tests de base
+
+#### 1. Switch de langue (Settings)
+- [ ] Naviguer vers `/settings`
+- [ ] Sélectionner "English" dans le dropdown
+- [ ] Vérifier : titre "Settings", labels "Language", "RACI Teams"
+- [ ] Sélectionner "Français"
+- [ ] Vérifier : titre "Paramètres", labels "Langue", "Équipes RACI"
+- [ ] Retourner au board → vérifier colonnes/cartes en FR
+- [ ] Ouvrir Developer Tools → Console → vérifier `localStorage.getItem('preferred-language')` retourne "fr"
+
+#### 2. Persistance localStorage
+- [ ] Avec langue FR active, rafraîchir la page (F5 ou Ctrl+R)
+- [ ] Vérifier : l'interface reste en FR après reload
+- [ ] Changer pour EN → refresh → vérifier persistance EN
+- [ ] Tester navigation inter-pages (home → board → settings) → langue conservée
+
+#### 3. Détection langue navigateur (optionnel)
+- [ ] Ouvrir fenêtre navigation privée
+- [ ] Changer langue navigateur (Chrome: `chrome://settings/languages`, Firefox: `about:preferences#general`)
+- [ ] Accéder à l'app → vérifier détection automatique
+- [ ] Note : localStorage prime sur détection (si déjà défini)
+
+### Tests composants Board
+
+#### 4. AddCardForm
+- [ ] EN : placeholder "Add a new card…", bouton "+" title "Create card"
+- [ ] FR : placeholder "Ajouter une nouvelle carte…", bouton "+" title "Créer une carte"
+- [ ] Soumettre carte vide → toast d'erreur localisé
+  - EN: "Please provide a title."
+  - FR: "Veuillez fournir un titre."
+
+#### 5. ColumnPanel (menus, tooltips, validation)
+- [ ] Survol icône "+" colonne → tooltip localisé
+  - EN: "Add a column"
+  - FR: "Ajouter une colonne"
+- [ ] Ouvrir settings colonne (⚙️) → vérifier labels formulaire
+  - EN: "Column name", "Behaviour", "WIP limit (optional)"
+  - FR: "Nom de la colonne", "Comportement", "Limite WIP (optionnel)"
+- [ ] Soumettre nom vide → erreur "Name is required" / "Le nom est obligatoire"
+- [ ] Tester validation backlog delays (entrer 0 ou 1000) → messages d'erreur localisés
+- [ ] Supprimer colonne → dialogue confirmation avec nom colonne interpolé
+
+#### 6. BoardTaskCard / CardItem (badges, tooltips, menu)
+- [ ] **Badge effort** : survol → tooltip "Effort: M" / "Effort : M"
+- [ ] **Badge priorité** : survol → tooltip "Priority: HIGH" / "Priorité : HIGH"
+- [ ] **Badge blocage** (si applicable) : survol → "Blocker overdue (expected date passed)" / "Blocage en retard (date prévue dépassée)"
+- [ ] **Bouton sous-board** (grille icon) : survol → "Open sub-board" / "Ouvrir le sous-board"
+- [ ] **Menu carte** (trois points) : aria-label inspecté → "Card actions" / "Actions carte"
+- [ ] **Avatar vide** : aria-label inspecté → "No assignee" / "Aucun assigné"
+- [ ] Ouvrir menu → options localisées : "Open" / "Ouvrir", "Rename" / "Renommer", "Move…" / "Déplacer…", "Delete" / "Supprimer"
+
+#### 7. TaskDrawer (sections, labels, toasts)
+- [ ] **En-tête** : vérifier affichage compteur (a.b.c.d) sans texte en dur
+- [ ] **Section Priorité** : labels "Critical" → "Critique", "High" → "Élevée", etc.
+- [ ] **Section Effort** : labels "XS", "S", "M" identiques (pas de traduction), tooltips OK
+- [ ] **Section RACI** : labels "Responsible", "Accountable", "Consulted", "Informed" / "Responsable", "Redevable", "Consulté", "Informé"
+- [ ] **Section Tags** : placeholder "Add tag" / "Ajouter un tag"
+- [ ] **Section Blocage** (si colonne BLOCKED) : labels "What is expected?", "Blocker email(s)", "Automatic reminder" / "Qu'est-ce qui est attendu ?", "Email(s) du bloqueur", "Rappel automatique"
+- [ ] **Cycle Backlog** : countdown "Reappears in X days" / "Réapparaît dans X jours", bouton "♻️ Keep" / "♻️ Conserver"
+- [ ] **Archivage automatique** : countdown "Archive in X day(s)" / "Archive dans X jour(s)"
+- [ ] Sauvegarder modifications → toast "Task updated" / "Tâche mise à jour"
+- [ ] Archiver carte → dialogue "Archive this card?" / "Archiver cette carte ?"
+
+#### 8. MoveCardDialog (déplacement multi-board)
+- [ ] Ouvrir dialogue déplacement (menu carte → "Move…")
+- [ ] Vérifier titre modal : "Move card" / "Déplacer la carte"
+- [ ] Vérifier labels : "Destination board", "Target column" / "Board de destination", "Colonne cible"
+- [ ] Annuler → bouton "Cancel" / "Annuler"
+- [ ] Confirmer → bouton "Move" / "Déplacer"
+- [ ] Toast succès : "Card moved" / "Carte déplacée"
+
+#### 9. BoardPageShell (filtres, toasts globaux)
+- [ ] **Recherche** : placeholder "Title, description, #id, @assignee, !priority…" / "Titre, description, #id, @assigné, !priorité…"
+- [ ] **Quick filters** : "My tasks" / "Mes tâches", "Sort by priority" / "Trier par priorité", "Expert on/off" / "Expert activé/désactivé"
+- [ ] **Filtres avancés** : bouton tooltip "Show advanced filters" / "Afficher les filtres avancés"
+- [ ] Ouvrir panel filtres → titres "Assignees", "Priorities", "Effort", "Options" / "Assignés", "Priorités", "Effort", "Options"
+- [ ] Option "Hide DONE columns" / "Masquer les colonnes DONE"
+- [ ] Bouton reset filtres → "Reset filters" / "Réinitialiser les filtres"
+- [ ] **Session invalide** : simuler 401 (ou attendre expiration token) → toast "Invalid session" / "Session invalide" + redirection login
+- [ ] **Erreurs colonne** : soumettre colonne backlog avec delays invalides → messages d'erreur contextuels localisés
+- [ ] **Confirmation suppression colonne** : "Delete column "{name}"?" / "Supprimer la colonne "{nom}" ?"
+
+### Tests ARIA (accessibilité)
+
+#### 10. Navigation clavier & lecteur d'écran
+- [ ] Activer lecteur d'écran (NVDA/JAWS sur Windows, VoiceOver sur Mac)
+- [ ] Tab through board → vérifier annonces :
+  - Bouton menu carte : "Card actions" / "Actions carte"
+  - Avatar vide : "No assignee" / "Aucun assigné"
+  - Badge blocage : "Blocker overdue" / "Blocage en retard"
+  - Bouton sous-board : "Open sub-board" / "Ouvrir le sous-board"
+- [ ] Ouvrir menu carte (Enter sur bouton trois-points) → annoncer "menu" et options localisées
+- [ ] Focus sur input colonne → label annoncé correctement ("Column name" / "Nom de la colonne")
+
+### Tests Edge Cases
+
+#### 11. Interpolation dynamique
+- [ ] Créer colonne "Test123" → supprimer → vérifier dialogue "Delete column "Test123"?" / "Supprimer la colonne "Test123" ?"
+- [ ] TaskDrawer countdown : vérifier pluriel (1 day / 1 jour, 5 days / 5 jours)
+- [ ] Filtres : sélectionner 3 assignés → vérifier affichage compact avec compteur
+
+#### 12. Fallback clés manquantes
+- [ ] Inspecter console browser (F12) → vérifier absence warnings "Missing translation key"
+- [ ] Si clé manquante détectée : elle s'affiche telle quelle (ex: "board.cards.unknownKey") → à corriger
+
+### Validation finale
+- [ ] Aucune chaîne en dur française/anglaise visible dans le board (hors données utilisateur : titres cartes, descriptions)
+- [ ] Tous les tooltips/aria-labels localisés
+- [ ] Tous les toasts/erreurs localisés
+- [ ] Persistance localStorage OK
+- [ ] Switch langue temps réel (pas de reload nécessaire pour settings page)
+- [ ] Lint passe avec 0 erreur ✅
+
+---
 
 ℹ️ Notes :
 - `npm run prisma:migrate --workspace backend -- --name add_node_short_id` échoue ici faute de `DATABASE_URL`; migration SQL créée manuellement.

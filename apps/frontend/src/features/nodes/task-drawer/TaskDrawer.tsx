@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
+import { useTranslation } from '@/i18n';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useTaskDrawer } from './TaskDrawerContext';
 import { useTaskDetail } from './useTaskDetail';
@@ -80,6 +81,7 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
   onChange,
   disabled = false,
 }) => {
+  const { t: tBoard } = useTranslation('board');
   const options = useMemo(
     () => members.map((member) => ({
       id: member.id,
@@ -101,7 +103,7 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
             className="text-[11px] text-slate-500 transition hover:text-foreground"
             disabled={disabled}
           >
-            Effacer
+            {tBoard('taskDrawer.multiSelect.clear')}
           </button>
         )}
       </div>
@@ -109,53 +111,75 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
         options={options}
         selectedIds={selectedIds}
         onChange={onChange}
-        placeholder="Sélectionner des membres"
-        searchPlaceholder="Rechercher un membre…"
-        emptyMessage="Aucun membre disponible"
-        noResultsMessage="Aucun membre trouvé"
+        placeholder={tBoard('taskDrawer.multiSelect.placeholder')}
+        searchPlaceholder={tBoard('taskDrawer.multiSelect.searchPlaceholder')}
+        emptyMessage={tBoard('taskDrawer.multiSelect.empty')}
+        noResultsMessage={tBoard('taskDrawer.multiSelect.noResults')}
         disabled={disabled}
       />
     </div>
   );
 };
 
-const formatDateTime = (iso: string | null | undefined): string => {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
-};
-
-const formatDateInputDisplay = (value: string): string => {
-  if (!value) return '—';
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('fr-FR', { dateStyle: 'long' });
-};
-
-const describeSnoozeCountdown = (value: string): string | null => {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  const diffMs = date.getTime() - Date.now();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays > 0) {
-    return `Réapparition dans ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
-  }
-  if (diffDays === 0) {
-    return "Réapparition aujourd'hui";
-  }
-  const pastDays = Math.abs(diffDays);
-  return `Réapparue depuis ${pastDays} jour${pastDays > 1 ? 's' : ''}`;
-};
-
 export const TaskDrawer: React.FC = () => {
+  const { t: tBoard, locale } = useTranslation('board');
   const { openedNodeId, close } = useTaskDrawer();
   const { detail, loading, error, refresh } = useTaskDetail();
   const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
   const { teamId, refreshActiveBoard, board } = useBoardData();
+
+  const formatDate = useCallback(
+    (input: string | Date | null | undefined, options: Intl.DateTimeFormatOptions): string => {
+      if (!input) return '—';
+      const date = input instanceof Date ? input : new Date(input);
+      if (Number.isNaN(date.getTime())) return '—';
+      return new Intl.DateTimeFormat(locale, options).format(date);
+    },
+    [locale],
+  );
+
+  const formatDateTime = useCallback(
+    (input: string | Date | null | undefined): string =>
+      formatDate(input, { dateStyle: 'medium', timeStyle: 'short' }),
+    [formatDate],
+  );
+
+  const formatDateLong = useCallback(
+    (input: string | Date | null | undefined): string =>
+      formatDate(input, { dateStyle: 'long' }),
+    [formatDate],
+  );
+
+  const formatDateMedium = useCallback(
+    (input: string | Date | null | undefined): string =>
+      formatDate(input, { dateStyle: 'medium' }),
+    [formatDate],
+  );
+
+  const describeSnoozeCountdown = useCallback(
+    (value: string): string | null => {
+      if (!value) return null;
+      const date = new Date(`${value}T00:00:00Z`);
+      if (Number.isNaN(date.getTime())) return null;
+      const diffMs = date.getTime() - Date.now();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays > 0) {
+        return diffDays === 1
+          ? tBoard('taskDrawer.backlog.snoozeCountdown.futureOne')
+          : tBoard('taskDrawer.backlog.snoozeCountdown.futureOther', { count: diffDays });
+      }
+      if (diffDays === 0) {
+        return tBoard('taskDrawer.backlog.snoozeCountdown.today');
+      }
+      const pastDays = Math.abs(diffDays);
+      return pastDays === 1
+        ? tBoard('taskDrawer.backlog.snoozeCountdown.pastOne')
+        : tBoard('taskDrawer.backlog.snoozeCountdown.pastOther', { count: pastDays });
+    },
+    [tBoard],
+  );
 
   // Form state
   const [saving, setSaving] = useState(false);
@@ -254,13 +278,13 @@ export const TaskDrawer: React.FC = () => {
   const isBacklogCard = currentColumnBehavior === 'BACKLOG';
 
   const backlogHiddenDisplay = useMemo(
-    () => formatDateInputDisplay(backlogHiddenUntil),
-    [backlogHiddenUntil],
+    () => (backlogHiddenUntil ? formatDateLong(`${backlogHiddenUntil}T00:00:00Z`) : '—'),
+    [backlogHiddenUntil, formatDateLong],
   );
 
   const snoozeCountdown = useMemo(
     () => describeSnoozeCountdown(backlogHiddenUntil),
-    [backlogHiddenUntil],
+    [backlogHiddenUntil, describeSnoozeCountdown],
   );
 
   const backlogAutomationLabels = useMemo(
@@ -275,15 +299,17 @@ export const TaskDrawer: React.FC = () => {
       detail?.backlogLastReminderAt,
       detail?.backlogReviewStartedAt,
       detail?.backlogLastInteractionAt,
+      formatDateTime,
     ],
   );
 
   const archiveCountdown = useMemo(() => {
     if (!isBacklogCard || !detail || !board) return null;
-    const column = board.columns.find((c) => c.id === detail.columnId);
-    if (!column?.settings) return null;
-    const settings = typeof column.settings === 'object' && column.settings !== null ? column.settings as Record<string, any> : {};
-    const archiveAfterDays = typeof settings.archiveAfterDays === 'number' ? settings.archiveAfterDays : null;
+  const column = board.columns.find((c) => c.id === detail.columnId);
+  if (!column?.settings) return null;
+  const settings = typeof column.settings === 'object' && column.settings !== null ? column.settings as Record<string, unknown> : {};
+  const archiveAfterDaysValue = settings.archiveAfterDays;
+  const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
     if (archiveAfterDays === null) return null;
     const lastInteraction = detail.backlogLastInteractionAt;
     if (!lastInteraction) return null;
@@ -298,6 +324,31 @@ export const TaskDrawer: React.FC = () => {
     return { daysRemaining, isCritical, isExpired, archiveDate };
   }, [isBacklogCard, detail, board]);
 
+  const archiveCountdownLabel = useMemo(() => {
+    if (!archiveCountdown) return null;
+    if (archiveCountdown.isExpired) {
+      return tBoard('taskDrawer.backlog.archiveCountdown.imminent');
+    }
+    if (archiveCountdown.isCritical) {
+      return archiveCountdown.daysRemaining === 1
+        ? tBoard('taskDrawer.backlog.archiveCountdown.criticalOne')
+        : tBoard('taskDrawer.backlog.archiveCountdown.criticalOther', { count: archiveCountdown.daysRemaining });
+    }
+    return archiveCountdown.daysRemaining === 1
+      ? tBoard('taskDrawer.backlog.archiveCountdown.scheduledOne')
+      : tBoard('taskDrawer.backlog.archiveCountdown.scheduledOther', { count: archiveCountdown.daysRemaining });
+  }, [archiveCountdown, tBoard]);
+
+  const archiveCountdownDescription = useMemo(() => {
+    if (!archiveCountdown) return null;
+    if (archiveCountdown.isExpired || archiveCountdown.isCritical) {
+      return tBoard('taskDrawer.backlog.archiveCountdown.criticalHint');
+    }
+    return tBoard('taskDrawer.backlog.archiveCountdown.scheduledHint', {
+      date: formatDateMedium(archiveCountdown.archiveDate),
+    });
+  }, [archiveCountdown, formatDateMedium, tBoard]);
+
   const [resettingArchiveCounter, setResettingArchiveCounter] = useState(false);
 
   const handleArchiveCard = useCallback(async () => {
@@ -305,8 +356,8 @@ export const TaskDrawer: React.FC = () => {
     
     const isArchived = !!detail.archivedAt;
     const confirmMessage = isArchived 
-      ? 'Désarchiver cette carte ? Elle sera de nouveau visible dans le tableau.'
-      : 'Archiver cette carte ? Elle sera masquée du tableau.';
+      ? tBoard('taskDrawer.confirm.unarchive')
+      : tBoard('taskDrawer.confirm.archive');
     
     if (!window.confirm(confirmMessage)) return;
     
@@ -314,7 +365,7 @@ export const TaskDrawer: React.FC = () => {
     try {
       const newArchivedAt = isArchived ? null : new Date().toISOString();
       await updateNode(detail.id, { archivedAt: newArchivedAt }, accessToken);
-      success(isArchived ? 'Carte désarchivée' : 'Carte archivée');
+  success(isArchived ? tBoard('taskDrawer.toasts.unarchived') : tBoard('taskDrawer.toasts.archived'));
       await refresh();
       
       // Si on désarchive, émettre un événement pour rafraîchir la liste des archivés
@@ -328,11 +379,11 @@ export const TaskDrawer: React.FC = () => {
       refreshActiveBoard();
     } catch (error) {
       console.error('Erreur archivage/désarchivage carte:', error);
-      toastError(isArchived ? 'Échec du désarchivage' : 'Échec de l\'archivage');
+  toastError(isArchived ? tBoard('taskDrawer.errors.unarchiveFailed') : tBoard('taskDrawer.errors.archiveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [detail, accessToken, updateNode, success, refresh, close, refreshActiveBoard, toastError]);
+  }, [detail, accessToken, success, refresh, close, refreshActiveBoard, toastError, tBoard]);
 
   const handleResetArchiveCounter = useCallback(async () => {
     if (!detail || !accessToken || !board?.id) return;
@@ -340,15 +391,15 @@ export const TaskDrawer: React.FC = () => {
     try {
       const { resetBacklogArchiveCounter } = await import('@/features/nodes/nodes-api');
       await resetBacklogArchiveCounter(board.id, detail.id, accessToken);
-      success('Compteur d\'archive réinitialisé');
+  success(tBoard('taskDrawer.toasts.archiveCounterReset'));
       await refresh();
     } catch (error) {
       console.error('Erreur reset compteur archive:', error);
-      toastError('Échec de la réinitialisation');
+  toastError(tBoard('taskDrawer.errors.archiveCounterFailed'));
     } finally {
       setResettingArchiveCounter(false);
     }
-  }, [detail, accessToken, board, refresh, success, toastError]);
+  }, [detail, accessToken, board, refresh, success, toastError, tBoard]);
 
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -391,7 +442,7 @@ export const TaskDrawer: React.FC = () => {
     if (!email) return;
     const emailRegex = /.+@.+\..+/;
     if (!emailRegex.test(email)) {
-      toastError('Email invalide');
+      toastError(tBoard('taskDrawer.errors.invalidEmail'));
       return;
     }
     if (blockedEmails.includes(email)) {
@@ -400,7 +451,7 @@ export const TaskDrawer: React.FC = () => {
     }
     setBlockedEmails((prev) => [...prev, email]);
     setBlockedEmailInput('');
-  }, [blockedEmailInput, blockedEmails, toastError]);
+  }, [blockedEmailInput, blockedEmails, toastError, tBoard]);
 
   const removeBlockedEmail = useCallback((email: string) => {
     setBlockedEmails((prev) => prev.filter((value) => value !== email));
@@ -648,7 +699,7 @@ export const TaskDrawer: React.FC = () => {
 
   const handleSaveCurrentRaciTeam = useCallback(() => {
     if (!accessToken) {
-      toastError('Session expirée, veuillez vous reconnecter');
+      toastError(tBoard('taskDrawer.errors.sessionExpired'));
       return;
     }
     const totalSelected =
@@ -657,15 +708,15 @@ export const TaskDrawer: React.FC = () => {
       rConsulted.length +
       rInformed.length;
     if (totalSelected === 0) {
-      toastError("Sélectionnez au moins une personne dans la matrice RACI");
+      toastError(tBoard('taskDrawer.errors.emptyRaciSelection'));
       return;
     }
     const defaultName = `Équipe ${savedRaciTeamsCount + 1}`;
-    const name = window.prompt('Nom de votre équipe RACI', defaultName);
+    const name = window.prompt(tBoard('taskDrawer.prompts.raciTeamName'), defaultName);
     if (name === null) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      toastError('Nom invalide, veuillez réessayer');
+      toastError(tBoard('taskDrawer.errors.invalidRaciName'));
       return;
     }
     setSavingRaciTeam(true);
@@ -690,10 +741,10 @@ export const TaskDrawer: React.FC = () => {
         });
         setSelectedRaciTeamId(team.id);
         setSavedRaciTeamsError(null);
-        success('Équipe RACI enregistrée');
+        success(tBoard('taskDrawer.toasts.raciTeamSaved'));
       })
       .catch(() => {
-        toastError("Impossible d'enregistrer l'équipe RACI");
+        toastError(tBoard('taskDrawer.errors.raciTeamSaveFailed'));
       })
       .finally(() => {
         setSavingRaciTeam(false);
@@ -707,6 +758,7 @@ export const TaskDrawer: React.FC = () => {
     savedRaciTeamsCount,
     success,
     toastError,
+    tBoard,
   ]);
 
   useEffect(() => {
@@ -929,7 +981,7 @@ export const TaskDrawer: React.FC = () => {
       } else {
         const snoozeDate = new Date(backlogHiddenUntil + 'T00:00:00Z');
         if (Number.isNaN(snoozeDate.getTime())) {
-          toastError('Date de réapparition backlog invalide');
+          toastError(tBoard('taskDrawer.errors.invalidBacklogSnooze'));
           return false;
         }
         payload.backlogHiddenUntil = snoozeDate.toISOString();
@@ -994,7 +1046,7 @@ export const TaskDrawer: React.FC = () => {
 
       await updateNode(detail.id, payload, accessToken);
       await refreshActiveBoard();
-      success('Tâche mise à jour');
+  success(tBoard('taskDrawer.toasts.saved'));
       setInitialSnapshot({
         title: title.trim()||'',
         description: description.trim()===''? null : description,
@@ -1041,8 +1093,8 @@ export const TaskDrawer: React.FC = () => {
       close();
       return true;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erreur mise à jour';
-      toastError(msg);
+  const msg = e instanceof Error ? e.message : tBoard('taskDrawer.errors.updateFailed');
+  toastError(msg);
       return false;
     } finally {
       setSaving(false);
@@ -1260,7 +1312,7 @@ export const TaskDrawer: React.FC = () => {
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1.5">
                               <span className="text-base">⚡</span>
-                              Priorité
+                              {tBoard('filters.priority.title')}
                             </span>
                             <select
                               value={priority}
@@ -1268,18 +1320,18 @@ export const TaskDrawer: React.FC = () => {
                               className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
                               disabled={saving}
                             >
-                              <option value="NONE">None</option>
-                              <option value="CRITICAL">Critical</option>
-                              <option value="HIGH">High</option>
-                              <option value="MEDIUM">Medium</option>
-                              <option value="LOW">Low</option>
-                              <option value="LOWEST">Lowest</option>
+                              <option value="NONE">{tBoard('priority.labels.NONE')}</option>
+                              <option value="CRITICAL">{tBoard('priority.labels.CRITICAL')}</option>
+                              <option value="HIGH">{tBoard('priority.labels.HIGH')}</option>
+                              <option value="MEDIUM">{tBoard('priority.labels.MEDIUM')}</option>
+                              <option value="LOW">{tBoard('priority.labels.LOW')}</option>
+                              <option value="LOWEST">{tBoard('priority.labels.LOWEST')}</option>
                             </select>
                           </label>
                           <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1.5">
                               <span className="text-base">⏱️</span>
-                              Effort
+                              {tBoard('filters.effort.title')}
                             </span>
                             <select
                               value={effort ?? ''}
@@ -1287,14 +1339,14 @@ export const TaskDrawer: React.FC = () => {
                               className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
                               disabled={saving}
                             >
-                              <option value="">(non défini)</option>
-                              <option value="UNDER2MIN">&lt; 2 min</option>
-                              <option value="XS">XS</option>
-                              <option value="S">S</option>
-                              <option value="M">M</option>
-                              <option value="L">L</option>
-                              <option value="XL">XL</option>
-                              <option value="XXL">XXL</option>
+                              <option value="">{tBoard('taskDrawer.effort.none')}</option>
+                              <option value="UNDER2MIN">{tBoard('filters.effort.options.UNDER2MIN')}</option>
+                              <option value="XS">{tBoard('filters.effort.options.XS')}</option>
+                              <option value="S">{tBoard('filters.effort.options.S')}</option>
+                              <option value="M">{tBoard('filters.effort.options.M')}</option>
+                              <option value="L">{tBoard('filters.effort.options.L')}</option>
+                              <option value="XL">{tBoard('filters.effort.options.XL')}</option>
+                              <option value="XXL">{tBoard('filters.effort.options.XXL')}</option>
                             </select>
                           </label>
                         </div>
@@ -1305,7 +1357,7 @@ export const TaskDrawer: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">history_toggle_off</span>
                             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              Cycle backlog
+                              {tBoard('taskDrawer.backlog.title')}
                             </h3>
                             <div className="group relative">
                               <span className="material-symbols-outlined cursor-help text-[18px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -1315,32 +1367,32 @@ export const TaskDrawer: React.FC = () => {
                                 <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-emerald-500/20 bg-slate-800"></div>
                                 <h4 className="mb-2 flex items-center gap-2 font-semibold text-emerald-400">
                                   <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                  Cycle automatique de revue
+                                  {tBoard('taskDrawer.backlog.tooltip.title')}
                                 </h4>
                                 <div className="space-y-2 text-slate-300">
                                   <p>
-                                    Les cartes en <strong className="text-white">backlog</strong> sont automatiquement réévaluées périodiquement pour vous rappeler de les traiter.
+                                    {tBoard('taskDrawer.backlog.tooltip.intro')}
                                   </p>
                                   <ul className="ml-4 list-disc space-y-1 text-[11px]">
-                                    <li>Les cartes réapparaissent selon le dernier rappel configuré</li>
-                                    <li>Vous pouvez <strong className="text-emerald-300">masquer temporairement</strong> une carte (snooze) jusqu'à une date précise</li>
-                                    <li>Le cycle se relance automatiquement, mais vous pouvez aussi le <strong className="text-emerald-300">forcer manuellement</strong></li>
+                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.reappear')}</li>
+                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.snooze')}</li>
+                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.manual')}</li>
                                   </ul>
                                   <p className="pt-2 text-[11px] italic text-slate-400">
-                                    Gardez le contrôle de votre backlog sans perdre de vue vos tâches importantes.
+                                    {tBoard('taskDrawer.backlog.tooltip.footer')}
                                   </p>
                                 </div>
                               </div>
                             </div>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Ajustez la date de réapparition d’une carte backlog et, si besoin, relancez manuellement le cycle de revue.
+                            {tBoard('taskDrawer.backlog.description')}
                           </p>
                           <div className="grid gap-4 sm:grid-cols-2">
                             <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                               <span className="flex items-center gap-1.5">
                                 <span className="material-symbols-outlined text-[18px]">visibility_off</span>
-                                Masquer jusqu’au
+                                {tBoard('taskDrawer.backlog.hideUntil.label')}
                               </span>
                               <input
                                 type="date"
@@ -1361,21 +1413,21 @@ export const TaskDrawer: React.FC = () => {
                                 className="self-start rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 transition hover:border-emerald-400/50 hover:text-emerald-500 disabled:opacity-50"
                                 disabled={saving || !backlogHiddenUntil}
                               >
-                                Réinitialiser le snooze
+                                {tBoard('taskDrawer.backlog.resetSnooze')}
                               </button>
                             </label>
                             <div className="space-y-1 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-500 dark:text-slate-400">
                               <p>
-                                Prochaine revue : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.nextReview}</span>
+                                {tBoard('taskDrawer.backlog.summary.nextReview')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.nextReview}</span>
                               </p>
                               <p>
-                                Dernier rappel : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastReminder}</span>
+                                {tBoard('taskDrawer.backlog.summary.lastReminder')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastReminder}</span>
                               </p>
                               <p>
-                                Cycle démarré : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.reviewStarted}</span>
+                                {tBoard('taskDrawer.backlog.summary.reviewStarted')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.reviewStarted}</span>
                               </p>
                               <p>
-                                Dernière interaction : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastInteraction}</span>
+                                {tBoard('taskDrawer.backlog.summary.lastInteraction')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastInteraction}</span>
                               </p>
                             </div>
                           </div>
@@ -1390,11 +1442,13 @@ export const TaskDrawer: React.FC = () => {
                               }`}
                               disabled={saving}
                             >
-                              {backlogRestartRequested ? 'Relance programmée' : 'Relancer la revue maintenant'}
+                              {backlogRestartRequested
+                                ? tBoard('taskDrawer.backlog.restart.scheduled')
+                                : tBoard('taskDrawer.backlog.restart.now')}
                             </button>
                             {!backlogHiddenUntil && (
                               <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                Sans snooze, la tâche restera visible en backlog.
+                                {tBoard('taskDrawer.backlog.restart.noSnooze')}
                               </span>
                             )}
                           </div>
@@ -1415,27 +1469,23 @@ export const TaskDrawer: React.FC = () => {
                                       ? 'text-orange-600 dark:text-orange-400'
                                       : 'text-slate-600 dark:text-slate-400'
                                   }`}>
-                                    {archiveCountdown.isExpired
-                                      ? '⚠️ Archivage imminent'
-                                      : archiveCountdown.isCritical
-                                      ? `⏰ Archivage dans ${archiveCountdown.daysRemaining} jour${archiveCountdown.daysRemaining > 1 ? 's' : ''}`
-                                      : `📦 Archive prévue dans ${archiveCountdown.daysRemaining} jours`
-                                    }
+                                    {archiveCountdownLabel}
                                   </p>
-                                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                    {archiveCountdown.isExpired || archiveCountdown.isCritical
-                                      ? 'Cliquez sur "Garder" pour confirmer l\'intérêt et réinitialiser le compteur.'
-                                      : `Prochaine archive automatique : ${archiveCountdown.archiveDate.toLocaleDateString('fr-FR', { dateStyle: 'medium' })}`
-                                    }
-                                  </p>
+                                  {archiveCountdownDescription && (
+                                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                      {archiveCountdownDescription}
+                                    </p>
+                                  )}
                                 </div>
                                 <button
                                   type="button"
                                   onClick={handleResetArchiveCounter}
                                   disabled={resettingArchiveCounter || saving}
-                                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-emerald-400 dark:hover:text-emerald-300"
+                                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
                                 >
-                                  {resettingArchiveCounter ? 'En cours…' : '♻️ Garder'}
+                                  {resettingArchiveCounter
+                                    ? tBoard('taskDrawer.backlog.keep.working')
+                                    : tBoard('taskDrawer.backlog.keep.default')}
                                 </button>
                               </div>
                             </div>
@@ -1443,11 +1493,11 @@ export const TaskDrawer: React.FC = () => {
                           {backlogRestartRequested ? (
                             <p className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                               <span className="material-symbols-outlined text-[16px]">autorenew</span>
-                              La sauvegarde recalculera immédiatement la prochaine revue et réinitialisera les rappels.
+                              {tBoard('taskDrawer.backlog.restart.scheduledHint')}
                             </p>
                           ) : (
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Les rappels suivent la fréquence configurée sur la colonne backlog.
+                              {tBoard('taskDrawer.backlog.restart.frequencyHint')}
                             </p>
                           )}
                         </section>
@@ -1485,8 +1535,8 @@ export const TaskDrawer: React.FC = () => {
                                 const raw = tagInput.trim();
                                 if(!raw) return;
                                 if(tags.includes(raw)) { setTagInput(''); return; }
-                                if(raw.length>32) { toastError('Tag >32 caractères'); return; }
-                                if(tags.length>=20) { toastError('Maximum 20 tags'); return; }
+                                if(raw.length>32) { toastError(tBoard('taskDrawer.errors.tagTooLong')); return; }
+                                if(tags.length>=20) { toastError(tBoard('taskDrawer.errors.tagLimit')); return; }
                                 setTags([...tags, raw]);
                                 setTagInput('');
                               }
@@ -1502,8 +1552,8 @@ export const TaskDrawer: React.FC = () => {
                                 const raw = tagInput.trim();
                                 if(!raw) return;
                                 if(tags.includes(raw)) { setTagInput(''); return; }
-                                if(raw.length>32) { toastError('Tag >32 caractères'); return; }
-                                if(tags.length>=20) { toastError('Maximum 20 tags'); return; }
+                                if(raw.length>32) { toastError(tBoard('taskDrawer.errors.tagTooLong')); return; }
+                                if(tags.length>=20) { toastError(tBoard('taskDrawer.errors.tagLimit')); return; }
                                 setTags([...tags, raw]);
                                 setTagInput('');
                               }}
@@ -1524,21 +1574,21 @@ export const TaskDrawer: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[24px] text-rose-600 dark:text-rose-400">block</span>
                               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                                Blocage
+                                {tBoard('taskDrawer.blocked.title')}
                               </h3>
                             </div>
 
                             <label className="block text-xs text-slate-500 dark:text-slate-400">
                               <span className="mb-1 flex items-center gap-1.5">
                                 <span className="text-base">📝</span>
-                                Qu&apos;est-ce qui est attendu ?
+                                {tBoard('taskDrawer.blocked.reason.label')}
                               </span>
                               <textarea
                                 value={blockedReason}
                                 onChange={e=>setBlockedReason(e.target.value)}
                                 rows={3}
                                 className="mt-1 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
-                                placeholder="Décrivez ce qui est attendu pour débloquer cette tâche..."
+                                placeholder={tBoard('taskDrawer.blocked.reason.placeholder')}
                                 disabled={saving}
                               />
                             </label>
@@ -1547,7 +1597,7 @@ export const TaskDrawer: React.FC = () => {
                               <label className="block text-xs text-slate-500 dark:text-slate-400">
                                 <span className="mb-1 flex items-center gap-1.5">
                                   <span className="text-base">📧</span>
-                                  Email(s) du/des bloqueur(s)
+                                  {tBoard('taskDrawer.blocked.emails.label')}
                                 </span>
                                 <div className="space-y-2">
                                   {blockedEmails.length > 0 && (
@@ -1581,7 +1631,7 @@ export const TaskDrawer: React.FC = () => {
                                       }
                                     }}
                                     className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
-                                    placeholder="ajouter@exemple.com (Entrée pour ajouter)"
+                                    placeholder={tBoard('taskDrawer.blocked.emails.placeholder')}
                                     disabled={saving}
                                   />
                                 </div>
@@ -1592,7 +1642,7 @@ export const TaskDrawer: React.FC = () => {
                               <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                                 <span className="flex items-center gap-1.5">
                                   <span className="text-base">⏰</span>
-                                  Relance automatique
+                                  {tBoard('taskDrawer.blocked.interval.label')}
                                 </span>
                                 <select
                                   value={blockedInterval}
@@ -1600,20 +1650,20 @@ export const TaskDrawer: React.FC = () => {
                                   className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
                                   disabled={saving}
                                 >
-                                  <option value="">Jamais</option>
-                                  <option value="1">Tous les jours</option>
-                                  <option value="2">Tous les 2 jours</option>
-                                  <option value="3">Tous les 3 jours</option>
-                                  <option value="5">Tous les 5 jours</option>
-                                  <option value="7">Toutes les semaines</option>
-                                  <option value="14">Toutes les 2 semaines</option>
+                                  <option value="">{tBoard('taskDrawer.blocked.interval.options.never')}</option>
+                                  <option value="1">{tBoard('taskDrawer.blocked.interval.options.daily')}</option>
+                                  <option value="2">{tBoard('taskDrawer.blocked.interval.options.everyTwo')}</option>
+                                  <option value="3">{tBoard('taskDrawer.blocked.interval.options.everyThree')}</option>
+                                  <option value="5">{tBoard('taskDrawer.blocked.interval.options.everyFive')}</option>
+                                  <option value="7">{tBoard('taskDrawer.blocked.interval.options.everySeven')}</option>
+                                  <option value="14">{tBoard('taskDrawer.blocked.interval.options.everyFourteen')}</option>
                                 </select>
                               </label>
 
                               <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
                                 <span className="flex items-center gap-1.5">
                                   <span className="text-base">📅</span>
-                                  Date estimée déblocage
+                                  {tBoard('taskDrawer.blocked.eta.label')}
                                 </span>
                                 <input
                                   type="date"
@@ -1627,7 +1677,7 @@ export const TaskDrawer: React.FC = () => {
 
                             {blockedSince && (
                               <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-[16px]">push_pin</span><span className="material-symbols-outlined text-[16px]">push_pin</span> Bloqué depuis : <strong>{new Date(blockedSince).toLocaleDateString('fr-FR', { dateStyle: 'long' })}</strong>
+                                <span className="material-symbols-outlined text-[16px]">push_pin</span><span className="material-symbols-outlined text-[16px]">push_pin</span> {tBoard('taskDrawer.blocked.since', { date: formatDateLong(blockedSince) })}
                               </p>
                             )}
 
@@ -1640,12 +1690,12 @@ export const TaskDrawer: React.FC = () => {
                                 disabled={saving}
                               />
                               <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span><span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> Blocage résolu (arrête<span className="material-symbols-outlined text-[14px] text-amber-500">info</span> Les relances automatiques)
+                                <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span><span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> {tBoard('taskDrawer.blocked.resolved')}
                               </span>
                             </label>
 
                             <p className="text-[11px] text-slate-500 flex items-start gap-1">
-                              <span className="material-symbols-outlined text-[14px] text-amber-500">info</span><span className="material-symbols-outlined text-[14px] text-amber-500">info</span> Les relances automatiques incluront le titre de la tâche, ce qui est attendu, et un lien vers le kanban.
+                              <span className="material-symbols-outlined text-[14px] text-amber-500">info</span><span className="material-symbols-outlined text-[14px] text-amber-500">info</span> {tBoard('taskDrawer.blocked.autoReminderInfo')}
                             </p>
                           </section>
                         );
@@ -1844,7 +1894,7 @@ export const TaskDrawer: React.FC = () => {
                               if (!detail?.id || !accessToken) return;
                               const trimmedEmail = inviteEmail.trim();
                               if (!trimmedEmail) {
-                                toastError('Veuillez saisir un email');
+                                toastError(tBoard('taskDrawer.errors.emptyCollaboratorEmail'));
                                 return;
                               }
                               setInviteSubmitting(true);
@@ -1854,10 +1904,10 @@ export const TaskDrawer: React.FC = () => {
                                   setCollaboratorInvites(response.invitations);
                                   setCollaboratorsError(null);
                                   setInviteEmail('');
-                                  success('Collaborateur ajouté');
+                                  success(tBoard('taskDrawer.toasts.collaboratorAdded'));
                                 })
                                 .catch((inviteError) => {
-                                  const message = inviteError instanceof Error ? inviteError.message : "Impossible d'ajouter le collaborateur";
+                                  const message = inviteError instanceof Error ? inviteError.message : tBoard('taskDrawer.errors.collaboratorInviteFailed');
                                   toastError(message);
                                 })
                                 .finally(() => {
@@ -1951,7 +2001,7 @@ export const TaskDrawer: React.FC = () => {
                                               setCollaborators(response.collaborators);
                                               setCollaboratorInvites(response.invitations);
                                               setCollaboratorsError(null);
-                                              success('Collaborateur retiré');
+                                              success(tBoard('taskDrawer.toasts.collaboratorRemoved'));
                                             })
                                             .catch((removeError) => {
                                               const message = removeError instanceof Error ? removeError.message : "Impossible de retirer le collaborateur";

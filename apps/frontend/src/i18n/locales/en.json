@@ -350,6 +350,130 @@
         "NONE": "None"
       }
     },
+    "taskDrawer": {
+      "multiSelect": {
+        "clear": "Clear",
+        "placeholder": "Select members",
+        "searchPlaceholder": "Search a member…",
+        "empty": "No member available",
+        "noResults": "No member found"
+      },
+      "confirm": {
+        "archive": "Archive this card? It will disappear from the board.",
+        "unarchive": "Restore this card? It will be visible on the board again."
+      },
+      "toasts": {
+        "archived": "Card archived",
+        "unarchived": "Card restored",
+        "archiveCounterReset": "Archive counter reset",
+        "raciTeamSaved": "RACI team saved",
+        "saved": "Task updated",
+        "collaboratorAdded": "Collaborator added",
+        "collaboratorRemoved": "Collaborator removed"
+      },
+      "errors": {
+        "archiveFailed": "Failed to archive the card.",
+        "unarchiveFailed": "Failed to restore the card.",
+        "archiveCounterFailed": "Failed to reset the archive counter.",
+        "invalidEmail": "Invalid email address.",
+        "sessionExpired": "Session expired — please sign in again.",
+        "emptyRaciSelection": "Select at least one person in the RACI matrix.",
+        "invalidRaciName": "Invalid name, please try again.",
+        "raciTeamSaveFailed": "Could not save the RACI team.",
+        "invalidBacklogSnooze": "Invalid backlog snooze date.",
+        "updateFailed": "Failed to update the task.",
+        "tagTooLong": "Tag must not exceed 32 characters.",
+        "tagLimit": "Maximum 20 tags.",
+        "emptyCollaboratorEmail": "Enter an email address.",
+        "collaboratorInviteFailed": "Could not add the collaborator."
+      },
+      "effort": {
+        "none": "(not set)"
+      },
+      "prompts": {
+        "raciTeamName": "Name of your RACI team"
+      },
+      "backlog": {
+        "title": "Backlog cycle",
+        "tooltip": {
+          "title": "Automatic review cycle",
+          "intro": "Backlog cards are periodically revisited to remind you to take action.",
+          "points": {
+            "reappear": "Cards reappear according to the last configured reminder.",
+            "snooze": "You can temporarily hide a card (snooze) until a specific date.",
+            "manual": "The cycle restarts automatically but you can trigger it manually at any time."
+          },
+          "footer": "Keep control of your backlog without losing sight of important work."
+        },
+        "description": "Adjust when the backlog card resurfaces and restart the review cycle if needed.",
+        "hideUntil": {
+          "label": "Hide until"
+        },
+        "resetSnooze": "Reset snooze",
+        "summary": {
+          "nextReview": "Next review",
+          "lastReminder": "Last reminder",
+          "reviewStarted": "Cycle started",
+          "lastInteraction": "Last interaction"
+        },
+        "restart": {
+          "scheduled": "Restart scheduled",
+          "now": "Restart review now",
+          "noSnooze": "Without snooze, the card stays visible in backlog.",
+          "scheduledHint": "Saving will recompute the next review and reset reminders immediately.",
+          "frequencyHint": "Reminders follow the frequency configured on the backlog column."
+        },
+        "snoozeCountdown": {
+          "futureOne": "Reappears in 1 day",
+          "futureOther": "Reappears in {count} days",
+          "today": "Reappears today",
+          "pastOne": "Reappeared 1 day ago",
+          "pastOther": "Reappeared {count} days ago"
+        },
+        "archiveCountdown": {
+          "imminent": "⚠️ Archive imminent",
+          "criticalOne": "⏰ Archive in 1 day",
+          "criticalOther": "⏰ Archive in {count} days",
+          "scheduledOne": "📦 Archive scheduled in 1 day",
+          "scheduledOther": "📦 Archive scheduled in {count} days",
+          "criticalHint": "Click “Keep” to confirm interest and reset the counter.",
+          "scheduledHint": "Next automatic archive: {date}"
+        },
+        "keep": {
+          "default": "♻️ Keep",
+          "working": "Processing…"
+        }
+      },
+      "blocked": {
+        "title": "Blocker",
+        "reason": {
+          "label": "What is expected?",
+          "placeholder": "Describe what is needed to unblock this task…"
+        },
+        "emails": {
+          "label": "Blocker email(s)",
+          "placeholder": "add@example.com (press Enter to add)"
+        },
+        "interval": {
+          "label": "Automatic reminder",
+          "options": {
+            "never": "Never",
+            "daily": "Every day",
+            "everyTwo": "Every 2 days",
+            "everyThree": "Every 3 days",
+            "everyFive": "Every 5 days",
+            "everySeven": "Every week",
+            "everyFourteen": "Every 2 weeks"
+          }
+        },
+        "eta": {
+          "label": "Estimated unblock date"
+        },
+        "since": "Blocked since: {date}",
+        "resolved": "Block resolved (stops automatic reminders)",
+        "autoReminderInfo": "Automatic reminders include the task title, the expected outcome, and a link to the board."
+      }
+    },
       "columns": {
       "header": {
         "title": "Board columns",
@@ -444,7 +568,13 @@
         "errors": {
           "sessionInvalid": "Session invalid",
           "nameRequired": "Name is required",
-          "wipInvalid": "WIP limit must be a positive number"
+          "wipInvalid": "WIP limit must be a positive number",
+          "backlogDelaysRequired": "All backlog delays are required",
+          "backlogReviewAfterRange": "First review must be between 1 and 365 days",
+          "backlogReviewEveryRange": "Reminder interval must be between 1 and 365 days",
+          "backlogArchiveRange": "Automatic archive must be between 1 and 730 days",
+          "doneArchiveRequired": "Automatic archive delay is required",
+          "doneArchiveRange": "Automatic archive must be between 0 and 730 days"
         }
       },
       "notifications": {
@@ -460,6 +590,12 @@
       },
       "snoozedBadge": "Snoozed card",
       "snoozedAria": "This card is snoozed",
+      "blockedOverdue": "Blocker overdue (expected date passed)",
+      "blockedOverdueAria": "Blocker overdue",
+      "menuAria": "Card actions",
+      "noAssignee": "No assignee",
+      "openSubBoard": "Open sub-board",
+      "openSubBoardAria": "Open sub-board",
       "menu": {
         "open": "Open",
         "rename": "Rename",
@@ -635,7 +771,8 @@
       "wipLimitReached": "WIP limit reached",
       "archivedLoadFailed": "Unable to load archived cards.",
       "snoozedLoadFailed": "Unable to load snoozed cards.",
-      "boardUnavailable": "Active board unavailable for this action.",
+  "boardUnavailable": "Active board unavailable for this action.",
+  "boardRefreshFailed": "Could not refresh the board.",
       "unexpectedError": "Unexpected error"
     }
   }
