@@ -176,7 +176,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               </div>
             )}
             
-            {snoozedCount > 0 && (
+            {(snoozedCount > 0 || viewMode === 'snoozed') && (
               <div className="group relative">
                 <button
                   type="button"
@@ -202,7 +202,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               </div>
             )}
             
-            {archivedCount > 0 && (
+            {(archivedCount > 0 || viewMode === 'archived') && (
               <div className="group relative">
                 <button
                   type="button"
