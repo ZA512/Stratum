@@ -233,7 +233,7 @@ export class MetricsService {
       const diffNs = Number(process.hrtime.bigint() - start);
       const lagSeconds = diffNs / 1e9 - intervalMs / 1000;
       const safe = Math.max(0, lagSeconds);
-      this.eventLoopLagSeconds.set({ phase: 'max' }, safe); // simplified (could average samples)
+      this.eventLoopLagSeconds?.set({ phase: 'max' }, safe); // simplified (could average samples)
     });
   }
 }

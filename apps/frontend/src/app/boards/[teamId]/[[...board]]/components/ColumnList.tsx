@@ -4,7 +4,7 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
-import type { NodeChildBoard, BoardNode } from '@/features/boards/boards-api';
+import type { NodeChildBoard, BoardNode, ArchivedBoardNode } from '@/features/boards/boards-api';
 import type { ColumnEditingValues } from './types';
 import { ColumnPanel } from './ColumnPanel';
 
@@ -37,6 +37,10 @@ interface ColumnListProps {
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
   onShowArchived: (column: BoardColumnWithNodes) => void;
+  onShowSnoozed: (column: BoardColumnWithNodes) => void;
+  snoozedColumnId?: string | null;
+  columnViewMode: Record<string, 'snoozed' | 'archived' | null>;
+  archivedNodesByColumn: Record<string, ArchivedBoardNode[]>;
 }
 
 type ColumnListItemProps = {
@@ -70,6 +74,10 @@ type ColumnListItemProps = {
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
   onShowArchived: (column: BoardColumnWithNodes) => void;
+  onShowSnoozed: (column: BoardColumnWithNodes) => void;
+  snoozedColumnId?: string | null;
+  viewMode: 'snoozed' | 'archived' | null;
+  archivedNodes?: ArchivedBoardNode[];
 };
 
 const ColumnListItem: React.FC<ColumnListItemProps> = ({
@@ -94,6 +102,10 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   onRequestMoveCard,
   onRequestDeleteCard,
   onShowArchived,
+  onShowSnoozed,
+  snoozedColumnId,
+  viewMode,
+  archivedNodes,
 }) => {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -106,13 +118,24 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   };
 
   const isEditing = editingColumnId === column.id;
-  const cards = column.nodes || [];
+  
+  // Filtrer les cartes selon le mode d'affichage
+  let cards: BoardNode[] = [];
+  if (viewMode === 'snoozed') {
+    cards = (column.nodes || []).filter((node) => node.isSnoozed);
+  } else if (viewMode !== 'archived') {
+    // Mode normal : afficher seulement les cartes non snoozées
+    cards = (column.nodes || []).filter((node) => !node.isSnoozed);
+  }
+  // Pour archived, cards reste vide et ColumnPanel affichera archivedNodes
 
   return (
     <ColumnPanel
       ref={setNodeRef}
       column={column}
       cards={cards}
+      archivedNodes={viewMode === 'archived' ? (archivedNodes || []) : []}
+      viewMode={viewMode}
       isEditing={isEditing}
       isFirst={index === 0}
       isLast={index === total - 1}
@@ -130,6 +153,8 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       onRequestMoveCard={onRequestMoveCard}
       onRequestDeleteCard={onRequestDeleteCard}
       onShowArchived={onShowArchived}
+      onShowSnoozed={onShowSnoozed}
+      snoozedOpen={snoozedColumnId === column.id}
       childBoards={childBoards}
       loadingCards={loadingCards}
       displayOptions={displayOptions}
@@ -159,6 +184,7 @@ export function ColumnList(props: ColumnListProps){
             display: 'flex',
             gap: GAP,
             overflowX: 'auto',
+            overflowY: 'visible',
             paddingBottom: '4px',
             justifyContent: (typeof window !== 'undefined' && totalWidth <= window.innerWidth - 160) ? 'center' : 'flex-start',
           }}
@@ -187,6 +213,10 @@ export function ColumnList(props: ColumnListProps){
               onRequestMoveCard={props.onRequestMoveCard}
               onRequestDeleteCard={props.onRequestDeleteCard}
               onShowArchived={props.onShowArchived}
+              onShowSnoozed={props.onShowSnoozed}
+              snoozedColumnId={props.snoozedColumnId}
+              viewMode={props.columnViewMode[column.id] ?? null}
+              archivedNodes={props.archivedNodesByColumn[column.id]}
             />
           ))}
         </div>

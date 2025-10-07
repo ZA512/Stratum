@@ -941,7 +941,7 @@ function progressOverdue(): WidgetDefinition {
           columnBehaviorKey: task.columnBehaviorKey,
           columnName: task.columnName,
           dueAt: task.dueAt,
-          overdueDays: differenceInDays(now, task.dueAt),
+          overdueDays: task.dueAt ? differenceInDays(now, task.dueAt) : 0,
         }))
         .sort((a, b) => b.overdueDays - a.overdueDays);
 

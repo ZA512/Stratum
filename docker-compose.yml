@@ -20,6 +20,20 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: stratum-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -29,8 +43,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
+      REDIS_URL: redis://redis:6379
       PORT: ${BACKEND_PORT}
     entrypoint: ["/bin/sh", "/app/apps/backend/entrypoint-backend.sh"]
     ports:
@@ -76,3 +93,5 @@ services:
 volumes:
   pg_data:
     name: stratum_pg_data
+  redis_data:
+    name: stratum_redis_data

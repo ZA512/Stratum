@@ -31,6 +31,7 @@ interface BoardDataContextValue {
   prefetchBoard: (id: string) => Promise<void>;
   openChildBoard: (boardId: string) => void;
   refreshActiveBoard: () => Promise<void>;
+  refreshArchivedNodesForColumn?: (columnId: string) => Promise<void>;
   registerDescendTrigger: (fn: (href: string) => void) => void;
 }
 

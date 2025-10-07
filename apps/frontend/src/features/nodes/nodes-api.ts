@@ -37,6 +37,9 @@ export type UpdateNodeInput = {
   plannedBudget?: number | null;
   consumedBudgetValue?: number | null;
   consumedBudgetPercent?: number | null;
+  backlogHiddenUntil?: string | null;
+  backlogReviewRestart?: boolean;
+  archivedAt?: string | null;
 };
 
 export async function createNode(input: CreateNodeInput, accessToken: string): Promise<BoardNode> {
@@ -100,6 +103,18 @@ export async function updateNode(nodeId: string, input: UpdateNodeInput, accessT
     await throwNodeError(response, "Impossible de mettre a jour la tache");
   }
   return (await response.json()) as NodeDetail;
+}
+
+export async function resetBacklogArchiveCounter(boardId: string, nodeId: string, accessToken: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/nodes/${nodeId}/reset-archive-counter`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de reinitialiser le compteur d'archive");
+  }
 }
 
 export async function fetchNodeDetail(nodeId: string, accessToken: string): Promise<NodeDetail> {

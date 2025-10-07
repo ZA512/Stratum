@@ -26,9 +26,7 @@
     "db:reset": "prisma migrate reset --force && npm run db:seed"
   },
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/modifiers": "^9.0.0",
-    "@dnd-kit/sortable": "^10.0.0",
+    "@nestjs/bullmq": "^11.0.3",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -38,18 +36,16 @@
     "@nestjs/swagger": "^11.2.0",
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
+    "bullmq": "^5.61.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
-    "lucide-react": "^0.544.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "prom-client": "^15.1.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1",
-    "swagger-ui-express": "^5.0.1",
-    "prom-client": "^15.1.2"
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
@@ -68,7 +64,6 @@
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
-    "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
@@ -82,8 +77,12 @@
       "ts"
     ],
     "rootDir": "src",
-    "testMatch": ["**/*.spec.ts"],
-    "extensionsToTreatAsEsm": [".ts"],
+    "testMatch": [
+      "**/*.spec.ts"
+    ],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "moduleNameMapper": {
       "^(\\\\.{1,2}/.*)\\\\.js$": "$1"
     },

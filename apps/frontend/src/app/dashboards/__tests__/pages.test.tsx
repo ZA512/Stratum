@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { renderWithProviders } from '@/test/test-utils';
+import { renderWithProviders } from '@test/test-utils';
 
 const shellSpy = vi.fn((props: Record<string, unknown>) => (
   <div data-testid="dashboard-shell" data-props={JSON.stringify(props)} />

@@ -192,4 +192,11 @@ export class UpdateNodeDto {
       'Force le redémarrage du cycle de revue backlog (recalcule nextReviewAt)',
   })
   backlogReviewRestart?: boolean;
+
+  @ApiPropertyOptional({
+    example: '2025-02-10T00:00:00.000Z',
+    nullable: true,
+    description: 'Date d\'archivage de la tâche (null = non archivée)',
+  })
+  archivedAt?: string | null;
 }

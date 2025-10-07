@@ -15,7 +15,7 @@ WORKDIR /app/apps/backend
 RUN npx prisma generate
 
 # Build
-RUN npm run build:backend
+RUN npm run build
 
 # --- Image de production ---
 FROM node:20-alpine AS prod
@@ -26,6 +26,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/apps/backend/dist ./apps/backend/dist
+COPY --from=base /app/apps/backend/prisma ./apps/backend/prisma
 COPY docker/entrypoint-backend.sh /app/apps/backend/entrypoint-backend.sh
 
 WORKDIR /app/apps/backend

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders } from '@/test/test-utils';
+import { renderWithProviders } from '@test/test-utils';
 import { screen } from '@testing-library/react';
 import { HiddenWidgetsPanel } from '../HiddenWidgetsPanel';
 

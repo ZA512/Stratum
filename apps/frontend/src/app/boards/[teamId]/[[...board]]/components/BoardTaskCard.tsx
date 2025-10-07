@@ -254,6 +254,15 @@ export function BoardTaskCard({
         onMenuButtonClick={() => setMenuOpen(prev => !prev)}
         className="cursor-grab active:cursor-grabbing"
       />
+      {(node as any).isSnoozed && (
+        <div
+          className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full bg-cyan-400/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow"
+          title="Tâche reportée (snooze)"
+          aria-label="Tâche reportée"
+        >
+          <span className="material-symbols-outlined text-[16px] leading-none">snooze</span>
+        </div>
+      )}
       {showReminderBadge && reminderValue !== null && (
         <div
           className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow"

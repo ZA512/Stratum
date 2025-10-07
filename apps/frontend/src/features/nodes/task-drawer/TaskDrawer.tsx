@@ -278,6 +278,78 @@ export const TaskDrawer: React.FC = () => {
     ],
   );
 
+  const archiveCountdown = useMemo(() => {
+    if (!isBacklogCard || !detail || !board) return null;
+    const column = board.columns.find((c) => c.id === detail.columnId);
+    if (!column?.settings) return null;
+    const settings = typeof column.settings === 'object' && column.settings !== null ? column.settings as Record<string, any> : {};
+    const archiveAfterDays = typeof settings.archiveAfterDays === 'number' ? settings.archiveAfterDays : null;
+    if (archiveAfterDays === null) return null;
+    const lastInteraction = detail.backlogLastInteractionAt;
+    if (!lastInteraction) return null;
+    const lastDate = new Date(lastInteraction);
+    if (Number.isNaN(lastDate.getTime())) return null;
+    const archiveDate = new Date(lastDate.getTime() + archiveAfterDays * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const diffMs = archiveDate.getTime() - now.getTime();
+    const daysRemaining = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    const isCritical = daysRemaining <= 7 && daysRemaining > 0;
+    const isExpired = daysRemaining <= 0;
+    return { daysRemaining, isCritical, isExpired, archiveDate };
+  }, [isBacklogCard, detail, board]);
+
+  const [resettingArchiveCounter, setResettingArchiveCounter] = useState(false);
+
+  const handleArchiveCard = useCallback(async () => {
+    if (!detail || !accessToken) return;
+    
+    const isArchived = !!detail.archivedAt;
+    const confirmMessage = isArchived 
+      ? 'Désarchiver cette carte ? Elle sera de nouveau visible dans le tableau.'
+      : 'Archiver cette carte ? Elle sera masquée du tableau.';
+    
+    if (!window.confirm(confirmMessage)) return;
+    
+    setSaving(true);
+    try {
+      const newArchivedAt = isArchived ? null : new Date().toISOString();
+      await updateNode(detail.id, { archivedAt: newArchivedAt }, accessToken);
+      success(isArchived ? 'Carte désarchivée' : 'Carte archivée');
+      await refresh();
+      
+      // Si on désarchive, émettre un événement pour rafraîchir la liste des archivés
+      if (isArchived && detail.columnId) {
+        window.dispatchEvent(new CustomEvent('refreshArchivedNodes', { 
+          detail: { columnId: detail.columnId } 
+        }));
+      }
+      
+      close();
+      refreshActiveBoard();
+    } catch (error) {
+      console.error('Erreur archivage/désarchivage carte:', error);
+      toastError(isArchived ? 'Échec du désarchivage' : 'Échec de l\'archivage');
+    } finally {
+      setSaving(false);
+    }
+  }, [detail, accessToken, updateNode, success, refresh, close, refreshActiveBoard, toastError]);
+
+  const handleResetArchiveCounter = useCallback(async () => {
+    if (!detail || !accessToken || !board?.id) return;
+    setResettingArchiveCounter(true);
+    try {
+      const { resetBacklogArchiveCounter } = await import('@/features/nodes/nodes-api');
+      await resetBacklogArchiveCounter(board.id, detail.id, accessToken);
+      success('Compteur d\'archive réinitialisé');
+      await refresh();
+    } catch (error) {
+      console.error('Erreur reset compteur archive:', error);
+      toastError('Échec de la réinitialisation');
+    } finally {
+      setResettingArchiveCounter(false);
+    }
+  }, [detail, accessToken, board, refresh, success, toastError]);
+
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -1022,6 +1094,19 @@ export const TaskDrawer: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={handleArchiveCard}
+                  disabled={saving || !detail}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                    detail?.archivedAt
+                      ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-600 hover:border-cyan-500 hover:bg-cyan-500/20 dark:text-cyan-400'
+                      : 'border-orange-500/40 bg-orange-500/10 text-orange-600 hover:border-orange-500 hover:bg-orange-500/20 dark:text-orange-400'
+                  }`}
+                  title={detail?.archivedAt ? 'Désarchiver cette carte' : 'Archiver cette carte'}
+                >
+                  {detail?.archivedAt ? '📂 Désarchiver' : '📦 Archiver'}
+                </button>
+                <button
                   onClick={() => { void onSave(); }}
                   disabled={saving || !hasDirty}
                   className="rounded px-3 py-1 text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1222,6 +1307,31 @@ export const TaskDrawer: React.FC = () => {
                             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                               Cycle backlog
                             </h3>
+                            <div className="group relative">
+                              <span className="material-symbols-outlined cursor-help text-[18px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                info
+                              </span>
+                              <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-emerald-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
+                                <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-emerald-500/20 bg-slate-800"></div>
+                                <h4 className="mb-2 flex items-center gap-2 font-semibold text-emerald-400">
+                                  <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                  Cycle automatique de revue
+                                </h4>
+                                <div className="space-y-2 text-slate-300">
+                                  <p>
+                                    Les cartes en <strong className="text-white">backlog</strong> sont automatiquement réévaluées périodiquement pour vous rappeler de les traiter.
+                                  </p>
+                                  <ul className="ml-4 list-disc space-y-1 text-[11px]">
+                                    <li>Les cartes réapparaissent selon le dernier rappel configuré</li>
+                                    <li>Vous pouvez <strong className="text-emerald-300">masquer temporairement</strong> une carte (snooze) jusqu'à une date précise</li>
+                                    <li>Le cycle se relance automatiquement, mais vous pouvez aussi le <strong className="text-emerald-300">forcer manuellement</strong></li>
+                                  </ul>
+                                  <p className="pt-2 text-[11px] italic text-slate-400">
+                                    Gardez le contrôle de votre backlog sans perdre de vue vos tâches importantes.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             Ajustez la date de réapparition d’une carte backlog et, si besoin, relancez manuellement le cycle de revue.
@@ -1288,6 +1398,48 @@ export const TaskDrawer: React.FC = () => {
                               </span>
                             )}
                           </div>
+                          {archiveCountdown && (
+                            <div className={`rounded-lg border p-3 ${
+                              archiveCountdown.isExpired
+                                ? 'border-red-500/40 bg-red-500/10'
+                                : archiveCountdown.isCritical
+                                ? 'border-orange-500/40 bg-orange-500/10'
+                                : 'border-slate-500/20 bg-slate-500/5'
+                            }`}>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex-1">
+                                  <p className={`text-xs font-semibold ${
+                                    archiveCountdown.isExpired
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : archiveCountdown.isCritical
+                                      ? 'text-orange-600 dark:text-orange-400'
+                                      : 'text-slate-600 dark:text-slate-400'
+                                  }`}>
+                                    {archiveCountdown.isExpired
+                                      ? '⚠️ Archivage imminent'
+                                      : archiveCountdown.isCritical
+                                      ? `⏰ Archivage dans ${archiveCountdown.daysRemaining} jour${archiveCountdown.daysRemaining > 1 ? 's' : ''}`
+                                      : `📦 Archive prévue dans ${archiveCountdown.daysRemaining} jours`
+                                    }
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                    {archiveCountdown.isExpired || archiveCountdown.isCritical
+                                      ? 'Cliquez sur "Garder" pour confirmer l\'intérêt et réinitialiser le compteur.'
+                                      : `Prochaine archive automatique : ${archiveCountdown.archiveDate.toLocaleDateString('fr-FR', { dateStyle: 'medium' })}`
+                                    }
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleResetArchiveCounter}
+                                  disabled={resettingArchiveCounter || saving}
+                                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-emerald-400 dark:hover:text-emerald-300"
+                                >
+                                  {resettingArchiveCounter ? 'En cours…' : '♻️ Garder'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           {backlogRestartRequested ? (
                             <p className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                               <span className="material-symbols-outlined text-[16px]">autorenew</span>

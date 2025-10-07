@@ -39,6 +39,7 @@ export type BoardNode = {
   lastKnownColumnId?: string | null;
   lastKnownColumnBehavior?: ColumnBehaviorKey | null;
   doneArchiveScheduledAt?: string | null;
+  isSnoozed?: boolean;
 };
 
 export type ArchivedBoardNode = {

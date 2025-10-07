@@ -611,7 +611,7 @@ export class NodesService {
       await tx.node.update({
         where: { id: child.id },
         data: {
-          columnId: targetColumn.id,
+          column: { connect: { id: targetColumn.id } },
           position: (aggregate._max.position ?? 0) + 1,
           statusMetadata: statusMeta as any,
           ...blockedTransitionUpdate,
@@ -776,7 +776,7 @@ export class NodesService {
         const id = finalOrder[i];
         const data: Prisma.NodeUpdateInput = {
           position: i,
-          columnId: targetColumn.id,
+          column: { connect: { id: targetColumn.id } },
         };
         if (id === child.id) {
           data.statusMetadata = statusMeta as any;
@@ -991,9 +991,9 @@ export class NodesService {
       const updated = await tx.node.update({
         where: { id: node.id },
         data: {
-          parentId: board.node.id,
-          teamId: board.node.teamId,
-          columnId: targetColumn.id,
+          parent: { connect: { id: board.node.id } },
+          team: { connect: { id: board.node.teamId } },
+          column: { connect: { id: targetColumn.id } },
           position: targetPosition,
           path: newPath,
           depth: board.node.depth + 1,
@@ -1315,7 +1315,8 @@ export class NodesService {
       dto.consumedBudgetValue === undefined &&
       dto.consumedBudgetPercent === undefined &&
       dto.backlogHiddenUntil === undefined &&
-      dto.backlogReviewRestart === undefined
+      dto.backlogReviewRestart === undefined &&
+      dto.archivedAt === undefined
     ) {
       throw new BadRequestException('Aucun champ a mettre a jour');
     }
@@ -1707,6 +1708,26 @@ export class NodesService {
       financialsChanged = true;
     }
 
+    if (dto.archivedAt !== undefined) {
+      if (dto.archivedAt === null) {
+        data.archivedAt = null;
+      } else {
+        const archivedAt = new Date(dto.archivedAt);
+        if (Number.isNaN(archivedAt.getTime())) {
+          throw new BadRequestException('Date d\'archivage invalide');
+        }
+        data.archivedAt = archivedAt;
+        
+        // Save the column ID in metadata so archived nodes can be counted by column
+        if (node.columnId) {
+          const workflowMeta = metadata.workflow || {};
+          workflowMeta.lastKnownColumnId = node.columnId;
+          metadata.workflow = workflowMeta;
+          metadataChanged = true;
+        }
+      }
+    }
+
     if (timeTrackingChanged) {
       metadata.timeTracking = { ...nextTimeTracking };
       metadataChanged = true;
@@ -1916,7 +1937,7 @@ export class NodesService {
 
       const updateData: Prisma.NodeUpdateInput = {
         archivedAt: null,
-        columnId: targetColumn.id,
+        column: { connect: { id: targetColumn.id } },
         position: nextPosition,
         statusMetadata: statusMeta as Prisma.InputJsonValue,
       };
@@ -3267,7 +3288,7 @@ export class NodesService {
           position: def.position,
           wipLimit: def.wipLimit,
           behaviorId: behavior.id,
-          settings,
+          settings: settings ?? Prisma.JsonNull,
         },
       });
     }
@@ -3393,6 +3414,7 @@ export class NodesService {
       lastKnownColumnId: metadata.workflow.backlog.lastKnownColumnId,
       lastKnownColumnBehavior: metadata.workflow.backlog.lastKnownBehavior,
       doneArchiveScheduledAt: metadata.workflow.done.archiveScheduledAt,
+      archivedAt: node.archivedAt ? node.archivedAt.toISOString() : null,
       priority: (node as any).priority ?? 'NONE',
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],
@@ -3730,8 +3752,8 @@ export class NodesService {
       ColumnBehaviorKey.IN_PROGRESS,
       ColumnBehaviorKey.CUSTOM,
     ]);
-    const backlogLastBehavior = allowedBehaviors.has(
-      backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM' | null,
+    const backlogLastBehavior = backlogLastBehaviorRaw && allowedBehaviors.has(
+      backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM',
     )
       ? (backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM')
       : null;
@@ -4099,7 +4121,7 @@ export class NodesService {
   }
 
   private async processBlockedReminders(now: Date): Promise<void> {
-    const nodes = await this.prisma.node.findMany({
+    const nodes = (await this.prisma.node.findMany({
       where: {
         archivedAt: null,
         column: { behavior: { key: ColumnBehaviorKey.BLOCKED } },
@@ -4111,12 +4133,11 @@ export class NodesService {
         title: true,
         blockedReminderEmails: true,
         blockedReminderIntervalDays: true,
-        blockedReminderLastSentAt: true,
         blockedSince: true,
         blockedReason: true,
         isBlockResolved: true,
       },
-    });
+    })) as any;
 
     if (!nodes.length) {
       return;
@@ -4135,7 +4156,7 @@ export class NodesService {
       if (!emails.length) continue;
       const recipients = this.buildEmailRecipients(emails);
       if (!recipients.length) continue;
-      const baseline = node.blockedReminderLastSentAt ?? node.blockedSince;
+      const baseline = (node as any).blockedReminderLastSentAt ?? node.blockedSince;
       if (!baseline) continue;
       const baselineMs = baseline.getTime();
       if (Number.isNaN(baselineMs)) continue;
@@ -4144,7 +4165,7 @@ export class NodesService {
 
       await this.prisma.node.update({
         where: { id: node.id },
-        data: { blockedReminderLastSentAt: now },
+        data: { blockedReminderLastSentAt: now } as any,
       });
 
       await this.appendMailLog({

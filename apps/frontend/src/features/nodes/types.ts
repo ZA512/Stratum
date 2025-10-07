@@ -69,6 +69,7 @@ export type NodeDetail = {
   lastKnownColumnId: string | null;
   lastKnownColumnBehavior: 'BACKLOG' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CUSTOM' | null;
   doneArchiveScheduledAt: string | null;
+  archivedAt: string | null;
   priority: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   effort: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];

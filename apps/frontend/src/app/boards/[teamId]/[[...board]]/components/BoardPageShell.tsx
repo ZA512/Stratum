@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, FormEvent, useMemo, useEffect, useRef } from 'react';
+import React, { useState, FormEvent, useMemo, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/features/auth/auth-provider';
@@ -33,7 +33,6 @@ import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
-import { ArchivedCardsDialog } from './ArchivedCardsDialog';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 
 
@@ -306,6 +305,17 @@ export function TeamBoardPage(){
   const [archivedError, setArchivedError] = useState<string | null>(null);
   const [archivedSubmittingId, setArchivedSubmittingId] = useState<string | null>(null);
   const [archivedSubmittingAction, setArchivedSubmittingAction] = useState<'restore' | 'delete' | null>(null);
+  const [snoozedColumn, setSnoozedColumn] = useState<{
+    id: string;
+    name: string;
+    behavior: ColumnBehaviorKey;
+  } | null>(null);
+  // Mode d'affichage par colonne: null = normal, 'snoozed' = voir snoozées, 'archived' = voir archivées
+  const [columnViewMode, setColumnViewMode] = useState<Record<string, 'snoozed' | 'archived' | null>>({});
+  const [snoozedNodes, setSnoozedNodes] = useState<BoardNode[]>([]);
+  const [snoozedLoading, setSnoozedLoading] = useState(false);
+  const [snoozedError, setSnoozedError] = useState<string | null>(null);
+  const [snoozedSubmittingId, setSnoozedSubmittingId] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
   const advancedFiltersActive =
@@ -889,7 +899,49 @@ export function TeamBoardPage(){
     } catch { /* toast déjà affiché */ }
   };
 
+  const refreshArchivedNodesForColumn = useCallback(async (columnId: string) => {
+    if (!board || !accessToken) return;
+    if (archivedColumnIdRef.current !== columnId) return; // Seulement si cette colonne est en mode archived
+    
+    try {
+      const items = await fetchArchivedNodes(board.id, columnId, accessToken);
+      if (archivedColumnIdRef.current === columnId) {
+        setArchivedNodes(items);
+      }
+    } catch (err) {
+      console.error('Erreur rafraîchissement tâches archivées:', err);
+    }
+  }, [board, accessToken]);
+
+  // Exposer la fonction de rafraichissement via un event custom
+  useEffect(() => {
+    const handleRefreshArchived = (event: CustomEvent<{ columnId: string }>) => {
+      void refreshArchivedNodesForColumn(event.detail.columnId);
+    };
+    window.addEventListener('refreshArchivedNodes', handleRefreshArchived as EventListener);
+    return () => {
+      window.removeEventListener('refreshArchivedNodes', handleRefreshArchived as EventListener);
+    };
+  }, [refreshArchivedNodesForColumn]);
+
   const handleShowArchived = async (column: BoardColumnWithNodes) => {
+    const currentMode = columnViewMode[column.id];
+    if (currentMode === 'archived') {
+      // Déjà en mode archived, revenir en normal
+      setColumnViewMode((prev) => ({
+        ...prev,
+        [column.id]: null,
+      }));
+      closeArchivedDialog();
+      return;
+    }
+
+    // Passer en mode archived
+    setColumnViewMode((prev) => ({
+      ...prev,
+      [column.id]: 'archived',
+    }));
+
     if (!board) {
       return;
     }
@@ -917,6 +969,41 @@ export function TeamBoardPage(){
       if (archivedColumnIdRef.current === column.id) {
         setArchivedLoading(false);
       }
+    }
+  };
+
+  const handleShowSnoozed = (column: BoardColumnWithNodes) => {
+    const currentMode = columnViewMode[column.id];
+    setColumnViewMode((prev) => ({
+      ...prev,
+      [column.id]: currentMode === 'snoozed' ? null : 'snoozed',
+    }));
+  };
+
+  const closeSnoozedDialog = () => {
+    setSnoozedColumn(null);
+    setSnoozedNodes([]);
+    setSnoozedLoading(false);
+    setSnoozedError(null);
+    setSnoozedSubmittingId(null);
+  };
+
+  const handleUnsnoozeSnoozed = async (nodeId: string) => {
+    if (!accessToken) {
+      toastError('Session invalide — veuillez vous reconnecter.');
+      return;
+    }
+    setSnoozedSubmittingId(nodeId);
+    try {
+      await updateNode(nodeId, { backlogHiddenUntil: null }, accessToken);
+      setSnoozedNodes((prev) => prev.filter((node) => node.id !== nodeId));
+      await refreshActiveBoard();
+      success('Carte réveillée avec succès.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de réveiller la carte.';
+      toastError(message);
+    } finally {
+      setSnoozedSubmittingId(null);
     }
   };
 
@@ -1512,6 +1599,10 @@ export function TeamBoardPage(){
                   onRequestMoveCard={handleRequestMoveCard}
                   onRequestDeleteCard={handleRequestDeleteCard}
                   onShowArchived={handleShowArchived}
+                  onShowSnoozed={handleShowSnoozed}
+                  snoozedColumnId={snoozedColumn?.id ?? null}
+                  columnViewMode={columnViewMode}
+                  archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
                 />
                 <DragOverlay dropAnimation={null}>
                   {draggingCard && (
@@ -1529,21 +1620,6 @@ export function TeamBoardPage(){
           </section>
         )}
       </main>
-      {archivedColumn && (
-        <ArchivedCardsDialog
-          open={true}
-          columnName={archivedColumn.name}
-          columnBehavior={archivedColumn.behavior}
-          nodes={archivedNodes}
-          loading={archivedLoading}
-          error={archivedError}
-          onClose={closeArchivedDialog}
-          onRestore={handleRestoreArchived}
-          onDelete={handleDeleteArchived}
-          submittingNodeId={archivedSubmittingId}
-          submittingAction={archivedSubmittingAction}
-        />
-      )}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">

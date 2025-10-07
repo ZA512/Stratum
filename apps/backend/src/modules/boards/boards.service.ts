@@ -172,7 +172,9 @@ export class BoardsService {
           },
         },
         columns: {
-          include: { behavior: true },
+          include: { 
+            behavior: true,
+          },
           orderBy: { position: 'asc' },
         },
       },
@@ -235,6 +237,8 @@ export class BoardsService {
       const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
       workflowByNode.set(node.id, workflow);
       const behavior = node.columnId ? behaviorByColumn.get(node.columnId) : null;
+      // Marquer les nodes snoozées au lieu de les filtrer
+      let isSnoozed = false;
       if (
         behavior === ColumnBehaviorKey.BACKLOG &&
         workflow.backlogHiddenUntil &&
@@ -242,14 +246,14 @@ export class BoardsService {
       ) {
         const hiddenTs = Date.parse(workflow.backlogHiddenUntil);
         if (!Number.isNaN(hiddenTs) && hiddenTs > nowMs) {
+          isSnoozed = true;
           snoozedCounts.set(
             node.columnId,
             (snoozedCounts.get(node.columnId) ?? 0) + 1,
           );
-          continue;
         }
       }
-      nodes.push(node);
+      nodes.push({ ...node, isSnoozed } as any);
     }
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
@@ -398,6 +402,7 @@ export class BoardsService {
             : Math.ceil(remainingMs / DAY_IN_MS);
         }
       }
+      const workflow = workflowByNode.get(node.id) ?? this.parseWorkflowMetadata(node.metadata ?? null);
       bucket.push({
         id: node.id,
         title: node.title,
@@ -447,20 +452,23 @@ export class BoardsService {
         lastKnownColumnId: workflow.lastKnownColumnId,
         lastKnownColumnBehavior: workflow.lastKnownBehavior,
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
-      });
+        isSnoozed: (node as any).isSnoozed ?? false,
+      } as any);
     }
 
     const archivedNodes = await this.prisma.node.findMany({
       where: { parentId: board.nodeId, archivedAt: { not: null } },
-      select: { metadata: true },
+      select: { metadata: true, columnId: true },
     });
     const archivedCounts = new Map<string, number>();
     for (const archived of archivedNodes) {
       const workflow = this.parseWorkflowMetadata(archived.metadata ?? null);
-      if (workflow.lastKnownColumnId) {
+      // Utiliser lastKnownColumnId OU columnId actuel
+      const targetColumnId = workflow.lastKnownColumnId ?? archived.columnId;
+      if (targetColumnId) {
         archivedCounts.set(
-          workflow.lastKnownColumnId,
-          (archivedCounts.get(workflow.lastKnownColumnId) ?? 0) + 1,
+          targetColumnId,
+          (archivedCounts.get(targetColumnId) ?? 0) + 1,
         );
       }
     }
@@ -609,6 +617,24 @@ export class BoardsService {
     const nextPosition =
       board.columns.length > 0 ? board.columns[0].position + 1 : 0;
 
+    // Initialiser les settings par défaut selon le comportement
+    let initialSettings: Prisma.InputJsonValue | undefined;
+    if (requestedBehaviorKey === ColumnBehaviorKey.BACKLOG) {
+      initialSettings = {
+        backlog: {
+          reviewAfterDays: DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
+          reviewEveryDays: DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
+          archiveAfterDays: DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
+        },
+      };
+    } else if (requestedBehaviorKey === ColumnBehaviorKey.DONE) {
+      initialSettings = {
+        done: {
+          archiveAfterDays: DEFAULT_DONE_SETTINGS.archiveAfterDays,
+        },
+      };
+    }
+
     const created = await this.prisma.column.create({
       data: {
         boardId,
@@ -616,6 +642,7 @@ export class BoardsService {
         behaviorId: behavior.id,
         position: nextPosition,
         wipLimit,
+        settings: initialSettings,
       },
       include: {
         behavior: true,
@@ -1124,5 +1151,56 @@ export class BoardsService {
       lastKnownBehavior,
       doneArchiveScheduledAt,
     };
+  }
+
+  async resetBacklogArchiveCounter(
+    boardId: string,
+    nodeId: string,
+    userId: string,
+  ): Promise<void> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      include: { node: { select: { teamId: true } } },
+    });
+    if (!board) {
+      throw new NotFoundException('Board introuvable');
+    }
+
+    await this.ensureUserCanWrite(board.node.teamId, userId);
+
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: { id: true, metadata: true, columnId: true },
+    });
+
+    if (!node) {
+      throw new NotFoundException('Tache introuvable');
+    }
+
+    const workflow = this.parseWorkflowMetadata(node.metadata);
+    const now = new Date();
+    const updatedMetadata = {
+      ...(typeof node.metadata === 'object' && node.metadata !== null
+        ? node.metadata
+        : {}),
+      workflow: {
+        ...(typeof (node.metadata as any)?.workflow === 'object' &&
+        (node.metadata as any)?.workflow !== null
+          ? (node.metadata as any).workflow
+          : {}),
+        backlog: {
+          ...(typeof (node.metadata as any)?.workflow?.backlog === 'object' &&
+          (node.metadata as any)?.workflow?.backlog !== null
+            ? (node.metadata as any).workflow.backlog
+            : {}),
+          lastInteractionAt: now.toISOString(),
+        },
+      },
+    };
+
+    await this.prisma.node.update({
+      where: { id: nodeId },
+      data: { metadata: updatedMetadata as Prisma.InputJsonValue },
+    });
   }
 }

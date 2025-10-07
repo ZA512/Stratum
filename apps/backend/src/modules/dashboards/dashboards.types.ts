@@ -123,6 +123,7 @@ export interface WidgetDefinition {
   dataDependencies?: {
     tasks?: boolean;
     snapshots?: boolean;
+    columns?: boolean;
   };
   compute(ctx: WidgetContext): Promise<WidgetResult>;
 }

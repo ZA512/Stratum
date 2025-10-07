@@ -122,4 +122,27 @@ export class BoardsController {
   ): Promise<void> {
     await this.boardsService.deleteColumn(boardId, columnId, user.id);
   }
+
+  @Post(':boardId/nodes/:nodeId/reset-archive-counter')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({
+    summary:
+      'Remet à zéro le compteur d\'archivage automatique d\'une carte backlog',
+  })
+  @ApiParam({ name: 'boardId', example: 'board_123' })
+  @ApiParam({ name: 'nodeId', example: 'node_456' })
+  @ApiNoContentResponse()
+  async resetBacklogArchiveCounter(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+    @Param('nodeId') nodeId: string,
+  ): Promise<void> {
+    await this.boardsService.resetBacklogArchiveCounter(
+      boardId,
+      nodeId,
+      user.id,
+    );
+  }
 }

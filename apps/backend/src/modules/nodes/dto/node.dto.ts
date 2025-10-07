@@ -181,6 +181,9 @@ export class NodeDto {
   @ApiProperty({ example: '2025-03-15T00:00:00.000Z', nullable: true })
   doneArchiveScheduledAt!: string | null;
 
+  @ApiProperty({ example: '2025-03-20T00:00:00.000Z', nullable: true })
+  archivedAt!: string | null;
+
   @ApiProperty({
     example: 'HIGH',
     enum: ['NONE', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'LOWEST'],
