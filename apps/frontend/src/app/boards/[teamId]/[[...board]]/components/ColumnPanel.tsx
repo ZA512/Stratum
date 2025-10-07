@@ -63,6 +63,7 @@ interface ColumnPanelProps {
   snoozedOpen?: boolean;
   viewMode?: 'snoozed' | 'archived' | null;
   archivedNodes?: ArchivedBoardNode[];
+  helpMode?: boolean;
 }
 
 export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(function ColumnPanel(props, ref) {
@@ -74,7 +75,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
     childBoards, loadingCards, displayOptions, onOpenChildBoard,
     dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
     isColumnDragging, onShowArchived, onShowSnoozed, snoozedOpen,
-    viewMode, archivedNodes,
+    viewMode, archivedNodes, helpMode,
   } = props;
 
   const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || '';
@@ -106,9 +107,9 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
   const behaviorLabel = BEHAVIOR_LABELS[column.behaviorKey as keyof typeof BEHAVIOR_LABELS] || column.behaviorKey;
   const backlogArchiveDelay = backlogArchiveAfter == null ? null : backlogArchiveAfter;
   const backlogArchiveBadge = backlogArchiveDelay == null ? '∞' : `${backlogArchiveDelay} j`;
-  const backlogArchiveTooltip = backlogArchiveDelay == null
+  const backlogArchiveTooltip = backlogArchiveDelay == null || backlogArchiveDelay === 0
     ? 'Archivage automatique désactivé : les cartes restent ici tant que vous ne les archivez pas manuellement.'
-    : `Les cartes sont archivées après ${backlogArchiveDelay} jour(s) d\'inactivité. Mettez la valeur à 0 pour forcer un archivage immédiat.`;
+    : `Les cartes sont archivées après ${backlogArchiveDelay} jour(s) d\'inactivité. Mettez la valeur à 0 ou laissez vide pour désactiver l\'archivage automatique.`;
   const doneArchiveDelay = doneArchiveAfter ?? DONE_DEFAULTS.archiveAfterDays;
   const doneArchiveBadge = `J+${doneArchiveDelay}`;
   const archivedButtonProps = {
@@ -144,14 +145,16 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{typeof column.wipLimit === 'number' ? column.wipLimit : '∞'}</span>
               </span>
-              <div
-                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                style={{ transitionDelay: '320ms' }}
-              >
-                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                <p>{typeof column.wipLimit === 'number' ? `Vous avez défini une limite de ${column.wipLimit} carte(s) simultanées pour fluidifier le flux.` : 'Aucune limite de WIP : la colonne accepte un nombre illimité de cartes.'}</p>
-                <p className="mt-1 text-[10px] text-slate-400">Astuce : ajustez cette limite dans les paramètres de colonne.</p>
-              </div>
+              {helpMode && (
+                <div
+                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  style={{ transitionDelay: '150ms' }}
+                >
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <p>{typeof column.wipLimit === 'number' ? `Vous avez défini une limite de ${column.wipLimit} carte(s) simultanées pour fluidifier le flux.` : 'Aucune limite de WIP : la colonne accepte un nombre illimité de cartes.'}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Astuce : ajustez cette limite dans les paramètres de colonne.</p>
+                </div>
+              )}
             </div>
             <div className="group relative">
               <button
@@ -164,13 +167,15 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               >
                 <GripVertical className="h-4 w-4" aria-hidden="true" />
               </button>
-              <div
-                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-52 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                style={{ transitionDelay: '320ms' }}
-              >
-                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                <p>Glissez-déposez ce bouton pour réordonner les colonnes du tableau.</p>
-              </div>
+              {helpMode && (
+                <div
+                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-52 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  style={{ transitionDelay: '150ms' }}
+                >
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <p>Glissez-déposez ce bouton pour réordonner les colonnes du tableau.</p>
+                </div>
+              )}
             </div>
             <div className="group relative">
               <button
@@ -181,14 +186,16 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               >
                 <Settings2 className="h-4 w-4" aria-hidden="true" />
               </button>
-              <div
-                className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                style={{ transitionDelay: '320ms' }}
-                role="tooltip"
-              >
-                <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                <p>{isEditing ? 'Fermez le panneau de paramétrage.' : 'Configurez le nom, la limite WIP et les automatisations de cette colonne.'}</p>
-              </div>
+              {helpMode && (
+                <div
+                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  style={{ transitionDelay: '150ms' }}
+                  role="tooltip"
+                >
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <p>{isEditing ? 'Fermez le panneau de paramétrage.' : 'Configurez le nom, la limite WIP et les automatisations de cette colonne.'}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -199,13 +206,15 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 <Layers className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{behaviorLabel}</span>
               </span>
-              <div
-                className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
-                style={{ transitionDelay: '80ms' }}
-              >
-                <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                <p>Type de colonne : {behaviorLabel}. Certains comportements (archivage, déplacement auto…) sont activés automatiquement.</p>
-              </div>
+              {helpMode && (
+                <div
+                  className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                  style={{ transitionDelay: '150ms' }}
+                >
+                  <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <p>Type de colonne : {behaviorLabel}. Certains comportements (archivage, déplacement auto…) sont activés automatiquement.</p>
+                </div>
+              )}
             </div>
             {(column.behaviorKey === 'BACKLOG' || column.behaviorKey === 'DONE') && (
               <div className="group relative">
@@ -215,23 +224,25 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                     {column.behaviorKey === 'BACKLOG' ? backlogArchiveBadge : doneArchiveBadge}
                   </span>
                 </span>
-                <div
-                  className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
-                  style={{ transitionDelay: '80ms' }}
-                >
-                  <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                  {column.behaviorKey === 'BACKLOG' ? (
-                    <>
-                      <p>{backlogArchiveTooltip}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">Dans une carte, utilisez le bouton « ♻️ Garder » pour remettre le compteur à zéro manuellement.</p>
-                    </>
-                  ) : (
-                    <>
-                      <p>Les cartes faites sont archivées automatiquement {doneArchiveDelay} jour(s) après leur arrivée.</p>
-                      <p className="mt-1 text-[10px] text-slate-400">Ajustez le délai dans les paramètres de colonne si besoin.</p>
-                    </>
-                  )}
-                </div>
+                {helpMode && (
+                  <div
+                    className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                    style={{ transitionDelay: '150ms' }}
+                  >
+                    <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                    {column.behaviorKey === 'BACKLOG' ? (
+                      <>
+                        <p>{backlogArchiveTooltip}</p>
+                        <p className="mt-1 text-[10px] text-slate-400">Dans une carte, utilisez le bouton « ♻️ Garder » pour remettre le compteur à zéro manuellement.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Les cartes faites sont archivées automatiquement {doneArchiveDelay} jour(s) après leur arrivée.</p>
+                        <p className="mt-1 text-[10px] text-slate-400">Ajustez le délai dans les paramètres de colonne si besoin.</p>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -254,7 +265,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 </button>
                 <div
                   className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-cyan-500/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                  style={{ transitionDelay: '320ms' }}
+                  style={{ transitionDelay: '200ms' }}
                 >
                   <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-900/95" />
                   <h4 className="mb-1 font-semibold text-cyan-300">Cartes en snooze</h4>
@@ -281,7 +292,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 </button>
                 <div
                   className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-amber-400/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-                  style={{ transitionDelay: '320ms' }}
+                  style={{ transitionDelay: '200ms' }}
                 >
                   <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-amber-400/20 bg-slate-900/95" />
                   <h4 className="mb-1 font-semibold text-amber-300">Cartes archivées</h4>

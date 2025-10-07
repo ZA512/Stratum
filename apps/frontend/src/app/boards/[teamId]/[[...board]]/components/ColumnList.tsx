@@ -41,6 +41,7 @@ interface ColumnListProps {
   snoozedColumnId?: string | null;
   columnViewMode: Record<string, 'snoozed' | 'archived' | null>;
   archivedNodesByColumn: Record<string, ArchivedBoardNode[]>;
+  helpMode?: boolean;
 }
 
 type ColumnListItemProps = {
@@ -78,6 +79,7 @@ type ColumnListItemProps = {
   snoozedColumnId?: string | null;
   viewMode: 'snoozed' | 'archived' | null;
   archivedNodes?: ArchivedBoardNode[];
+  helpMode?: boolean;
 };
 
 const ColumnListItem: React.FC<ColumnListItemProps> = ({
@@ -106,6 +108,7 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   snoozedColumnId,
   viewMode,
   archivedNodes,
+  helpMode,
 }) => {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
     id: column.id,
@@ -163,12 +166,13 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       dragHandleListeners={listeners}
       dragHandleRef={setActivatorNodeRef}
       isColumnDragging={isDragging}
+      helpMode={helpMode}
     />
   );
 };
 
 export function ColumnList(props: ColumnListProps){
-  const { columns, childBoards, editingColumnId, editingValues, loadingCards, displayOptions } = props;
+  const { columns, childBoards, editingColumnId, editingValues, loadingCards, displayOptions, helpMode } = props;
   // Largeur approximative d'une colonne (panel) + gap
   const ESTIMATED_COLUMN_WIDTH = 320; // px (panel max)
   const GAP = 16; // gap-4
@@ -217,6 +221,7 @@ export function ColumnList(props: ColumnListProps){
               snoozedColumnId={props.snoozedColumnId}
               viewMode={props.columnViewMode[column.id] ?? null}
               archivedNodes={props.archivedNodesByColumn[column.id]}
+              helpMode={helpMode}
             />
           ))}
         </div>

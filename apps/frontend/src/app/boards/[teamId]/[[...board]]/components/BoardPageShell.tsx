@@ -7,6 +7,7 @@ import { useBoardData } from '@/features/boards/board-data-provider';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useTranslation } from '@/i18n';
+import { useHelpMode } from '@/hooks/useHelpMode';
 import {
   createBoardColumn,
   updateBoardColumn,
@@ -240,6 +241,7 @@ export function TeamBoardPage(){
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { expertMode, setExpertMode } = useBoardUiSettings();
+  const { helpMode, toggleHelpMode } = useHelpMode();
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -1540,6 +1542,29 @@ export function TeamBoardPage(){
                 >
                   +
                 </button>
+                <button
+                  type="button"
+                  onClick={toggleHelpMode}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-lg transition group relative ${
+                    helpMode
+                      ? 'border-accent bg-accent/20 text-accent'
+                      : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
+                  }`}
+                  title={helpMode ? 'Désactiver l\'aide contextuelle' : 'Activer l\'aide contextuelle'}
+                  aria-label={helpMode ? 'Désactiver l\'aide contextuelle' : 'Activer l\'aide contextuelle'}
+                  aria-pressed={helpMode}
+                >
+                  ?
+                  <div
+                    className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                    style={{ transitionDelay: '200ms' }}
+                  >
+                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                    <h4 className="mb-1 font-semibold text-accent">💡 Mode Découverte</h4>
+                    <p>Activez ce mode pour afficher des tooltips explicatifs sur toutes les fonctionnalités de l&apos;interface.</p>
+                    <p className="mt-2 text-[10px] text-slate-400">Idéal pour découvrir l&apos;outil ou former de nouveaux utilisateurs. Les tooltips avec données dynamiques restent toujours visibles.</p>
+                  </div>
+                </button>
               </div>
               <span className="text-xs uppercase tracking-wide text-muted">
                 {detailLoading? 'Actualisation…': board.columns.length===0? 'Aucune colonne': `${board.columns.length} colonne(s)`}
@@ -1603,6 +1628,7 @@ export function TeamBoardPage(){
                   snoozedColumnId={snoozedColumn?.id ?? null}
                   columnViewMode={columnViewMode}
                   archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
+                  helpMode={helpMode}
                 />
                 <DragOverlay dropAnimation={null}>
                   {draggingCard && (
