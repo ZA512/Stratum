@@ -17,6 +17,19 @@ export interface TaskAssignee {
 
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
 
+type TooltipCopy = {
+  title?: string;
+  description?: React.ReactNode;
+  hint?: React.ReactNode;
+};
+
+type TooltipEntry = {
+  help?: TooltipCopy;
+  info?: TooltipCopy;
+  align?: "left" | "right";
+  widthClassName?: string;
+};
+
 export interface TaskCardProps {
   id: number | string;
   priority: TaskPriority;
@@ -57,12 +70,7 @@ export interface TaskCardProps {
   helpMode?: boolean;
   helpMessages?: Partial<Record<
     "id" | "priority" | "menu" | "assignees" | "dueDate" | "progress" | "effort" | "fractal",
-    {
-      title?: string;
-      description: React.ReactNode;
-      hint?: React.ReactNode;
-      align?: "left" | "right";
-    }
+    TooltipEntry
   >>;
 }
 
@@ -73,6 +81,36 @@ const priorityBadgeClasses: Record<TaskPriority, string> = {
   High: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
   Critical: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
 };
+
+function pickTooltipEntry(entry: TooltipEntry | undefined, helpMode: boolean): (TooltipCopy & {
+  align?: "left" | "right";
+  widthClassName?: string;
+}) | null {
+  if (!entry) {
+    return null;
+  }
+
+  const source = helpMode ? (entry.help ?? entry.info) : entry.info;
+  if (!source) {
+    return null;
+  }
+
+  const hasDescription = typeof source.description === "string" ? source.description.trim().length > 0 : Boolean(source.description);
+  const hasTitle = typeof source.title === "string" ? source.title.trim().length > 0 : Boolean(source.title);
+  const hasHint = typeof source.hint === "string" ? source.hint.trim().length > 0 : Boolean(source.hint);
+
+  if (!hasTitle && !hasDescription && !hasHint) {
+    return null;
+  }
+
+  return {
+    title: source.title,
+    description: source.description,
+    hint: source.hint,
+    align: entry.align,
+    widthClassName: entry.widthClassName,
+  };
+}
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   id,
@@ -163,25 +201,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* En-tête */}
       <div className="flex items-start justify-between px-4 pt-3 pb-2">
         <div className="flex items-center gap-2">
-          {showId && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.id?.title}
-              description={helpMessages?.id?.description ?? ""}
-              hint={helpMessages?.id?.hint}
-              align={helpMessages?.id?.align}
-            >
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>
-            </HelpTooltip>
-          )}
-          {showPriority && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.priority?.title}
-              description={helpMessages?.priority?.description ?? ""}
-              hint={helpMessages?.priority?.hint}
-              align={helpMessages?.priority?.align}
-            >
+          {showId && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.id, helpMode);
+            const content = <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>;
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align}
+                widthClassName={tooltip.widthClassName}
+              >
+                {content}
+              </HelpTooltip>
+            ) : content;
+          })()}
+          {showPriority && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.priority, helpMode);
+            const content = (
               <span
                 className={cx(
                   "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
@@ -190,17 +229,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 {priority}
               </span>
-            </HelpTooltip>
-          )}
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align}
+                widthClassName={tooltip.widthClassName}
+              >
+                {content}
+              </HelpTooltip>
+            ) : content;
+          })()}
         </div>
-        {!hideInternalMenuButton && (
-          <HelpTooltip
-            helpMode={helpMode}
-            title={helpMessages?.menu?.title}
-            description={helpMessages?.menu?.description ?? ""}
-            hint={helpMessages?.menu?.hint}
-            align={helpMessages?.menu?.align ?? "right"}
-          >
+        {!hideInternalMenuButton && (() => {
+          const tooltip = pickTooltipEntry(helpMessages?.menu, helpMode);
+          const button = (
             <button
               type="button"
               aria-label="Actions de la tâche"
@@ -209,8 +256,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             >
               <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
             </button>
-          </HelpTooltip>
-        )}
+          );
+          return tooltip ? (
+            <HelpTooltip
+              helpMode={helpMode}
+              mode="always"
+              title={tooltip.title}
+              description={tooltip.description}
+              hint={tooltip.hint}
+              align={tooltip.align ?? "right"}
+              widthClassName={tooltip.widthClassName}
+            >
+              {button}
+            </HelpTooltip>
+          ) : button;
+        })()}
       </div>
       {/* Corps */}
       <div className={cx("px-4", compact ? "pb-2" : "pb-3")}>        
@@ -223,14 +283,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
-          {showAssignees && assignees.length > 0 && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.assignees?.title}
-              description={helpMessages?.assignees?.description ?? ""}
-              hint={helpMessages?.assignees?.hint}
-              align={helpMessages?.assignees?.align}
-            >
+          {showAssignees && assignees.length > 0 && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.assignees, helpMode);
+            const avatarStack = (
               <div
                 className="relative flex -space-x-2 min-w-[28px]"
                 onMouseEnter={computedTooltip ? handleRaciOpen : undefined}
@@ -265,16 +320,24 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   </div>
                 )}
               </div>
-            </HelpTooltip>
-          )}
-          {showDueDate && typeof lateness === "number" && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.dueDate?.title}
-              description={helpMessages?.dueDate?.description ?? ""}
-              hint={helpMessages?.dueDate?.hint}
-              align={helpMessages?.dueDate?.align}
-            >
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align}
+                widthClassName={tooltip.widthClassName}
+              >
+                {avatarStack}
+              </HelpTooltip>
+            ) : avatarStack;
+          })()}
+          {showDueDate && typeof lateness === "number" && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.dueDate, helpMode);
+            const badge = (
               <div className={cx(
                 "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
                 // Très en retard (< -7 jours) : rouge vif
@@ -291,19 +354,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="material-icons-outlined" style={{ fontSize: 16 }}>timer</span>
                 <span className="-mt-px">{lateness}</span>
               </div>
-            </HelpTooltip>
-          )}
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align}
+                widthClassName={tooltip.widthClassName}
+              >
+                {badge}
+              </HelpTooltip>
+            ) : badge;
+          })()}
         </div>
         <div className="col-span-5 flex items-center justify-end gap-4">
           {/* Slot progression (fixe) - on garde seulement le pourcentage */}
-          {showProgress && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.progress?.title}
-              description={helpMessages?.progress?.description ?? ""}
-              hint={helpMessages?.progress?.hint}
-              align={helpMessages?.progress?.align ?? "right"}
-            >
+          {showProgress && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.progress, helpMode);
+            const chip = (
               <div
                 className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
                 title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
@@ -311,30 +382,46 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 {typeof progress === 'number' ? `${Math.min(Math.max(Math.round(progress), 0), 100)}%` : '--'}
               </div>
-            </HelpTooltip>
-          )}
-          {showEffort && complexity && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.effort?.title}
-              description={helpMessages?.effort?.description ?? ""}
-              hint={helpMessages?.effort?.hint}
-              align={helpMessages?.effort?.align ?? "right"}
-            >
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align ?? "right"}
+                widthClassName={tooltip.widthClassName}
+              >
+                {chip}
+              </HelpTooltip>
+            ) : chip;
+          })()}
+          {showEffort && complexity && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.effort, helpMode);
+            const badge = (
               <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>
                 <span className="text-xs font-medium">{complexity}</span>
               </div>
-            </HelpTooltip>
-          )}
-          {fractalPath && (
-            <HelpTooltip
-              helpMode={helpMode}
-              title={helpMessages?.fractal?.title}
-              description={helpMessages?.fractal?.description ?? ""}
-              hint={helpMessages?.fractal?.hint}
-              align={helpMessages?.fractal?.align ?? "right"}
-            >
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align ?? "right"}
+                widthClassName={tooltip.widthClassName}
+              >
+                {badge}
+              </HelpTooltip>
+            ) : badge;
+          })()}
+          {fractalPath && (() => {
+            const tooltip = pickTooltipEntry(helpMessages?.fractal, helpMode);
+            const button = (
               <button
                 type="button"
                 onClick={(e) => {
@@ -358,8 +445,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   })()}
                 </span>
               </button>
-            </HelpTooltip>
-          )}
+            );
+            return tooltip ? (
+              <HelpTooltip
+                helpMode={helpMode}
+                mode="always"
+                title={tooltip.title}
+                description={tooltip.description}
+                hint={tooltip.hint}
+                align={tooltip.align ?? "right"}
+                widthClassName={tooltip.widthClassName}
+              >
+                {button}
+              </HelpTooltip>
+            ) : button;
+          })()}
         </div>
       </div>
       <div className="pointer-events-none absolute inset-0 rounded-lg ring-0 group-hover:ring-2 ring-blue-500/10 transition" />

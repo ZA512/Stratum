@@ -230,6 +230,28 @@ function BoardSkeleton(){
   );
 }
 
+type TooltipVariant = {
+  title?: string;
+  description?: React.ReactNode;
+  hint?: React.ReactNode;
+};
+
+function pickTooltipVariant(helpMode: boolean, variants: { help?: TooltipVariant; info?: TooltipVariant }): TooltipVariant | null {
+  const candidate = helpMode ? (variants.help ?? variants.info ?? null) : (variants.info ?? null);
+  if (!candidate) {
+    return null;
+  }
+
+  const hasContent = [candidate.title, candidate.description, candidate.hint].some((value) => {
+    if (typeof value === 'string') {
+      return value.trim().length > 0;
+    }
+    return Boolean(value);
+  });
+
+  return hasContent ? candidate : null;
+}
+
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
@@ -1377,34 +1399,53 @@ export function TeamBoardPage(){
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="relative flex-1 min-w-[240px]">
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.search.title')}
-                          description={tBoard('help.search.body')}
-                          hint={tBoard('help.search.hint')}
-                          className="block"
-                        >
-                          <label className="flex flex-col gap-1 text-xs text-muted">
-                            <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
-                            <input
-                              type="search"
-                              value={searchDraft}
-                              onChange={(event) => setSearchDraft(event.target.value)}
-                              onFocus={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                setSearchFocused(true);
-                              }}
-                              onBlur={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                              }}
-                              placeholder={tBoard('search.placeholder')}
-                              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                              aria-label={tBoard('search.aria')}
-                            />
-                            <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
-                          </label>
-                        </HelpTooltip>
+                        {(() => {
+                          const tooltip = pickTooltipVariant(helpMode, {
+                            help: {
+                              title: tBoard('help.search.title'),
+                              description: tBoard('help.search.body'),
+                              hint: tBoard('help.search.hint'),
+                            },
+                            info: {
+                              title: tBoard('help.search.title'),
+                              description: tBoard('help.search.info'),
+                            },
+                          });
+                          const field = (
+                            <label className="flex flex-col gap-1 text-xs text-muted">
+                              <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
+                              <input
+                                type="search"
+                                value={searchDraft}
+                                onChange={(event) => setSearchDraft(event.target.value)}
+                                onFocus={() => {
+                                  if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                  setSearchFocused(true);
+                                }}
+                                onBlur={() => {
+                                  if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                  searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                                }}
+                                placeholder={tBoard('search.placeholder')}
+                                className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                                aria-label={tBoard('search.aria')}
+                              />
+                              <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
+                            </label>
+                          );
+                          return tooltip ? (
+                            <HelpTooltip
+                              helpMode={helpMode}
+                              mode="always"
+                              title={tooltip.title}
+                              description={tooltip.description}
+                              hint={tooltip.hint}
+                              className="block"
+                            >
+                              {field}
+                            </HelpTooltip>
+                          ) : field;
+                        })()}
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
                             <ul className="max-h-56 overflow-y-auto py-2 text-sm">
