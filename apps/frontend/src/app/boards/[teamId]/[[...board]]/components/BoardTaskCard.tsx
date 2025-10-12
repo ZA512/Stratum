@@ -25,6 +25,8 @@ interface BoardTaskCardProps {
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 
+type CardHelpMessages = NonNullable<TaskCardProps['helpMessages']>;
+
 function getInitials(name: string): string {
   if (!name) return '';
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -127,34 +129,51 @@ export function BoardTaskCard({
     displayName: a.displayName,
   }));
 
-  const raciTooltip = useMemo(() => {
-    // Toujours 4 lignes (R, A, C, I). Format demandé: 'R nom prénom, nom prénom' (sans deux-points) ou 'R -' si vide.
-    const buildLine = (label: string, list: { displayName: string }[] | undefined) => {
-      const names = (list || [])
-        .map(e => e.displayName)
-        .filter(Boolean)
-        .sort((a,b)=> a.localeCompare(b,'fr',{sensitivity:'base'}));
-      return names.length ? `${label} ${names.join(', ')}` : `${label} -`;
+  const raciDetails = useMemo(() => {
+    const collect = (members?: { displayName: string }[] | null) => {
+      return (members || [])
+        .map((member) => member.displayName?.trim())
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
     };
-    let result: string;
+
     if (!node.raci) {
-      // Fallback: tout le monde en R, autres vides
-      const rNames = (node.assignees||[]).map(a=>a.displayName).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
-      const rLine = rNames.length ? `R ${rNames.join(', ')}` : 'R -';
-      result = [rLine, 'A -', 'C -', 'I -'].join('\n');
-    } else {
-      result = [
-        buildLine('R', node.raci.responsible),
-        buildLine('A', node.raci.accountable),
-        buildLine('C', node.raci.consulted),
-        buildLine('I', node.raci.informed),
-      ].join('\n');
+      return {
+        R: collect(node.assignees ?? []),
+        A: [] as string[],
+        C: [] as string[],
+        I: [] as string[],
+      };
     }
+
+    return {
+      R: collect(node.raci.responsible),
+      A: collect(node.raci.accountable),
+      C: collect(node.raci.consulted),
+      I: collect(node.raci.informed),
+    };
+  }, [node.raci, node.assignees]);
+
+  const raciTooltip = useMemo(() => {
+    const lines = (['R', 'A', 'C', 'I'] as const).map((letter) => {
+      const names = raciDetails[letter];
+      return names.length ? `${letter} ${names.join(', ')}` : `${letter} -`;
+    });
+
+    const result = lines.join('\n');
+
     if (process.env.NODE_ENV !== 'production') {
-      console.debug('[RACI tooltip]', { nodeId: node.id, hasRaci: !!node.raci, assigneesCount: node.assignees?.length || 0, tooltip: result, showOwner: displayOptions.showOwner });
+      console.debug('[RACI tooltip]', {
+        nodeId: node.id,
+        hasRaci: !!node.raci,
+        assigneesCount: node.assignees?.length || 0,
+        tooltip: result,
+        showOwner: displayOptions.showOwner,
+      });
     }
+
     return result;
-  }, [node.raci, node.assignees, node.id, displayOptions.showOwner]);
+  }, [raciDetails, node.id, node.raci, node.assignees, displayOptions.showOwner]);
 
   const lateness = useMemo(() => {
     if (!node.dueAt) return undefined;
@@ -210,59 +229,113 @@ export function BoardTaskCard({
     return undefined;
   }, [showReminderBadge, node.blockedReminderDueInDays, node.blockedReminderIntervalDays, tBoard]);
 
-  const helpMessages = useMemo(() => {
-    if (!helpMode) return undefined;
-    return {
-      id: {
+  const helpMessages = useMemo<CardHelpMessages>(() => {
+    const messages: CardHelpMessages = {};
+
+    messages.id = {
+      help: {
         title: tBoard("help.cards.id.title"),
         description: tBoard("help.cards.id.body"),
       },
-      priority: {
+    };
+
+    messages.priority = {
+      help: {
         title: tBoard("help.cards.priority.title"),
         description: tBoard("help.cards.priority.body"),
       },
-      menu: {
+      info: {
+        title: tBoard("help.cards.priority.title"),
+        description: tBoard("help.cards.priority.info"),
+      },
+    };
+
+    messages.menu = {
+      help: {
         title: tBoard("help.cards.menu.title"),
         description: tBoard("help.cards.menu.body"),
         hint: tBoard("help.cards.menu.hint"),
-        align: "right" as const,
       },
-      assignees: {
+      info: {
+        title: tBoard("help.cards.menu.title"),
+        description: tBoard("help.cards.menu.info"),
+      },
+      align: "right",
+    };
+
+    messages.assignees = {
+      help: {
         title: tBoard("help.cards.assignees.title"),
         description: tBoard("help.cards.assignees.body"),
         hint: tBoard("help.cards.assignees.hint"),
       },
-      dueDate: node.dueAt
-        ? {
-            title: tBoard("help.cards.dueDate.title"),
-            description: tBoard("help.cards.dueDate.body"),
-            hint: tBoard("help.cards.dueDate.hint"),
-          }
-        : undefined,
-      progress: displayOptions.showProgress
-        ? {
-            title: tBoard("help.cards.progress.title"),
-            description: tBoard("help.cards.progress.body"),
-          }
-        : undefined,
-      effort: node.effort
-        ? {
-            title: tBoard("help.cards.effort.title"),
-            description: tBoard("help.cards.effort.body"),
-          }
-        : undefined,
-      fractal: fractalPath
-        ? {
-            title: tBoard("help.cards.fractal.title"),
-            description: tBoard("help.cards.fractal.body"),
-            hint: childBoard
-              ? tBoard("help.cards.fractal.hintExisting")
-              : tBoard("help.cards.fractal.hintCreate"),
-            align: "right" as const,
-          }
-        : undefined,
+      info: {
+        title: tBoard("help.cards.assignees.title"),
+        description: tBoard("help.cards.assignees.info"),
+      },
     };
-  }, [helpMode, tBoard, node.dueAt, node.effort, displayOptions.showProgress, fractalPath, childBoard]);
+
+    if (node.dueAt) {
+      messages.dueDate = {
+        help: {
+          title: tBoard("help.cards.dueDate.title"),
+          description: tBoard("help.cards.dueDate.body"),
+          hint: tBoard("help.cards.dueDate.hint"),
+        },
+        info: {
+          title: tBoard("help.cards.dueDate.title"),
+          description: tBoard("help.cards.dueDate.info"),
+        },
+      };
+    }
+
+    if (displayOptions.showProgress) {
+      messages.progress = {
+        help: {
+          title: tBoard("help.cards.progress.title"),
+          description: tBoard("help.cards.progress.body"),
+        },
+        info: {
+          title: tBoard("help.cards.progress.title"),
+          description: tBoard("help.cards.progress.info"),
+        },
+        align: "right",
+      };
+    }
+
+    if (node.effort) {
+      messages.effort = {
+        help: {
+          title: tBoard("help.cards.effort.title"),
+          description: tBoard("help.cards.effort.body"),
+        },
+        info: {
+          title: tBoard("help.cards.effort.title"),
+          description: tBoard("help.cards.effort.info"),
+        },
+        align: "right",
+      };
+    }
+
+    if (fractalPath) {
+      messages.fractal = {
+        help: {
+          title: tBoard("help.cards.fractal.title"),
+          description: tBoard("help.cards.fractal.body"),
+          hint: childBoard
+            ? tBoard("help.cards.fractal.hintExisting")
+            : tBoard("help.cards.fractal.hintCreate"),
+        },
+        info: {
+          title: tBoard("help.cards.fractal.title"),
+          description: tBoard("help.cards.fractal.info"),
+        },
+        align: "right",
+      };
+    }
+
+    return messages;
+  }, [tBoard, raciDetails, node.dueAt, node.effort, displayOptions.showProgress, fractalPath, childBoard]);
 
   return (
     <div
