@@ -695,6 +695,150 @@
         }
       }
     },
+    "help": {
+      "search": {
+        "title": "Recherche intelligente",
+        "body": "Saisissez au moins trois caractères pour lancer la recherche automatique. Utilisez @nom pour filtrer par personne, #123 pour un identifiant de tâche et !haute pour cibler une priorité.",
+        "hint": "Combinez la recherche texte avec les filtres rapides pour aller droit à l'essentiel."
+      },
+      "quickFilters": {
+        "mine": {
+          "title": "Mes tâches",
+          "body": "Affiche uniquement les cartes dont vous êtes responsable ou participant. Idéal pour préparer votre quotidien."
+        },
+        "priority": {
+          "title": "Tri par priorité",
+          "body": "Réordonne chaque colonne en plaçant les urgences en tête. Les priorités visuelles deviennent cohérentes d'une colonne à l'autre."
+        },
+        "dueDate": {
+          "title": "Tri par échéance",
+          "body": "Classe les cartes de la plus urgente à la plus lointaine dans chaque colonne. Pratique pour balayer rapidement les délais."
+        },
+        "expert": {
+          "title": "Mode expert",
+          "body": "Active par défaut les onglets avancés (temps, coûts, automatisations) dans la fiche tâche.",
+          "hint": "Désactivez-le pour alléger l'interface lors de l'onboarding ou des revues rapides."
+        }
+      },
+      "filtersButton": {
+        "title": "Filtres avancés",
+        "body": "Ouvre le mode de recherche avancée pour combiner plusieurs critères et limiter les cartes affichées.",
+        "hint": "Idéal pour préparer une réunion thématique ou un reporting ciblé."
+      },
+      "filters": {
+        "assignees": {
+          "title": "Utilisateurs",
+          "body": "Sélectionnez une ou plusieurs personnes depuis la liste pour ne garder que leurs tâches.",
+          "hint": "La recherche accepte le nom complet, les initiales ou l'email."
+        },
+        "priorities": {
+          "title": "Priorités",
+          "body": "Activez un badge pour filtrer les cartes sur cette priorité et masquer les autres.",
+          "hint": "Vous pouvez cumuler plusieurs priorités pour créer une vue intermédiaire."
+        },
+        "options": {
+          "title": "Options",
+          "body": "Masquez les colonnes DONE ou n'affichez que les cartes liées à un sous-kanban.",
+          "hint": "Parfait pour préparer un comité de suivi sans bruit visuel."
+        },
+        "effort": {
+          "title": "Effort",
+          "body": "Filtrez les cartes selon la charge estimée (XS à XXL) pour isoler les tâches rapides ou lourdes.",
+          "hint": "Combinez avec la recherche texte pour préparer un lot de tâches ciblé."
+        },
+        "columns": {
+          "title": "Hauteur des colonnes",
+          "body": "Choisissez entre une colonne fixe avec ascenseur interne ou un défilement fluide sur toute la page.",
+          "hint": "Adaptez la vue à vos habitudes : atelier en salle ou suivi quotidien."
+        },
+        "display": {
+          "title": "Détails des cartes",
+          "body": "Affichez ou masquez les éléments visuels des cartes (identifiant, priorité, effort, etc.).",
+          "hint": "Créez une vue épurée pour la direction ou détaillée pour l'équipe projet."
+        }
+      },
+      "columns": {
+        "add": {
+          "title": "Créer une colonne",
+          "body": "Ajoutez autant de colonnes que nécessaire puis renseignez le formulaire pour définir son rôle.",
+          "hint": "Vous pourrez ajuster le paramétrage après création sans perdre les cartes."
+        },
+        "form": {
+          "name": {
+            "title": "Nom de la colonne",
+            "body": "Choisissez un intitulé clair : il sera visible sur le kanban et peut être modifié à tout moment."
+          },
+          "behavior": {
+            "title": "Comportement",
+            "body": "Chaque comportement active ses automatismes :\n• Backlog : rappels automatiques, archivage optionnel et snooze.\n• En cours : colonne classique sans automatisme.\n• Bloqué : ajoute les champs de relance et d'email du bloqueur.\n• Terminé : permet d'archiver automatiquement les cartes closes.",
+            "hint": "Dupliquez un comportement pour créer plusieurs colonnes (ex. « En cours » et « En test »)."
+          },
+          "wip": {
+            "title": "Limite WIP",
+            "body": "Fixez le nombre maximal de cartes simultanées pour éviter la surcharge. Laissez vide pour aucune limite."
+          }
+        },
+        "settings": {
+          "name": {
+            "title": "Nom de la colonne",
+            "body": "Renommez la colonne pour refléter une étape précise ou un flux parallèle."
+          },
+          "wip": {
+            "title": "Limite WIP",
+            "body": "Ajustez la limite de travail en cours pour garder un flux maîtrisé."
+          },
+          "backlogArchive": {
+            "title": "Archivage automatique (Backlog)",
+            "body": "Définissez après combien de jours d'inactivité une carte backlog sera archivée automatiquement.",
+            "hint": "Mettez 0 pour désactiver l'archivage. Utilisez le snooze ou le bouton « Garder » pour prolonger une carte."
+          },
+          "doneArchive": {
+            "title": "Archivage automatique (Terminé)",
+            "body": "Planifiez le passage en archive des cartes DONE après un certain nombre de jours.",
+            "hint": "Idéal pour garder une colonne DONE légère tout en conservant l'historique."
+          }
+        }
+      },
+      "cards": {
+        "id": {
+          "title": "Identifiant court",
+          "body": "Le numéro (#55) facilite les échanges en réunion et la recherche rapide."
+        },
+        "priority": {
+          "title": "Badge de priorité",
+          "body": "La pastille colorée rappelle l'urgence de la carte et s'aligne sur les tris par priorité."
+        },
+        "menu": {
+          "title": "Actions rapides",
+          "body": "Ouvrir, renommer, déplacer vers un autre kanban ou supprimer la carte.",
+          "hint": "Utile quand le glisser-déposer n'est pas possible ou pour accéder aux fonctions avancées."
+        },
+        "assignees": {
+          "title": "Responsables",
+          "body": "Les initiales indiquent la personne principale. Survolez pour afficher la matrice RACI complète.",
+          "hint": "R = Responsable, A = Accountable, C = Consulted, I = Informed."
+        },
+        "dueDate": {
+          "title": "Échéance",
+          "body": "Affiche le nombre de jours restants ou de dépassement avec un code couleur automatique.",
+          "hint": "Rouge = en retard, orange = sous tension, vert = dans les temps."
+        },
+        "progress": {
+          "title": "Progression",
+          "body": "Pourcentage de complétion synchronisé avec les sous-tâches et les mises à jour de la fiche."
+        },
+        "effort": {
+          "title": "Effort",
+          "body": "La lettre (XS à XXL) reflète la complexité estimée pour équilibrer la charge du sprint."
+        },
+        "fractal": {
+          "title": "Kanban enfant",
+          "body": "Une tâche peut héberger son propre mini-kanban pour piloter un sous-projet. Les quatre chiffres indiquent le nombre de cartes en Backlog, En cours, Bloqué et Terminé.",
+          "hintExisting": "Cliquez pour ouvrir le kanban existant et parcourir ses colonnes.",
+          "hintCreate": "S'il n'existe pas encore, un clic crée automatiquement le kanban enfant."
+        }
+      }
+    },
     "helpMode": {
       "tooltip": {
         "enableTitle": "Activer l'aide contextuelle",

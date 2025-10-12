@@ -683,6 +683,150 @@
         }
       }
     },
+    "help": {
+      "search": {
+        "title": "Smart search",
+        "body": "Type at least three characters to trigger the live search. Use @name for people, #123 for task numbers and !high for priorities.",
+        "hint": "Combine the query with quick filters to zoom in instantly."
+      },
+      "quickFilters": {
+        "mine": {
+          "title": "My tasks",
+          "body": "Shows only the cards where you are responsible or part of the team. Perfect for your daily focus."
+        },
+        "priority": {
+          "title": "Priority sort",
+          "body": "Reorders each column by urgency so the most critical items stay on top everywhere."
+        },
+        "dueDate": {
+          "title": "Due-date sort",
+          "body": "Sorts cards from the most urgent deadline to the furthest one inside every column."
+        },
+        "expert": {
+          "title": "Expert mode",
+          "body": "Displays the advanced tabs (time, costs, automation) in the task drawer by default.",
+          "hint": "Switch it off to simplify onboarding sessions or lightweight reviews."
+        }
+      },
+      "filtersButton": {
+        "title": "Advanced filters",
+        "body": "Opens the advanced search panel so you can combine multiple criteria and limit the visible cards.",
+        "hint": "Ideal to prepare a themed meeting or a focused report."
+      },
+      "filters": {
+        "assignees": {
+          "title": "Users",
+          "body": "Pick one or more people from the list to keep only their cards.",
+          "hint": "You can search with the full name, initials or email."
+        },
+        "priorities": {
+          "title": "Priorities",
+          "body": "Enable a badge to keep only that priority and hide the others.",
+          "hint": "Combine several badges to build an intermediate view."
+        },
+        "options": {
+          "title": "Options",
+          "body": "Hide DONE columns or show only cards that have a child kanban.",
+          "hint": "Great for steering committees without extra noise."
+        },
+        "effort": {
+          "title": "Effort",
+          "body": "Filter cards by their effort estimate (XS to XXL) to surface quick wins or heavy work.",
+          "hint": "Pair it with the search bar to prepare a dedicated batch."
+        },
+        "columns": {
+          "title": "Column height",
+          "body": "Choose between fixed columns with their own scrollbar or seamless full-page scrolling.",
+          "hint": "Pick the layout that suits your rituals: workshops or daily follow-up."
+        },
+        "display": {
+          "title": "Card details",
+          "body": "Show or hide visual elements on cards (ID, priority, effort, etc.).",
+          "hint": "Craft a minimal view for leadership or a detailed one for the project team."
+        }
+      },
+      "columns": {
+        "add": {
+          "title": "Create a column",
+          "body": "Add as many columns as you need, then fill the form to define how it behaves.",
+          "hint": "You can tweak the configuration later without losing cards."
+        },
+        "form": {
+          "name": {
+            "title": "Column name",
+            "body": "Pick a clear label: it appears on the board and remains editable at any time."
+          },
+          "behavior": {
+            "title": "Behavior",
+            "body": "Each behavior unlocks dedicated automation:\n• Backlog: automatic reminders, optional archive and snooze.\n• In progress: a classic column without automation.\n• Blocked: adds reminder fields and blocker emails.\n• Done: lets you auto-archive finished cards.",
+            "hint": "Duplicate a behavior to create parallel lanes (e.g. “In progress” and “In testing”)."
+          },
+          "wip": {
+            "title": "WIP limit",
+            "body": "Set the maximum number of simultaneous cards to prevent overload. Leave blank for no limit."
+          }
+        },
+        "settings": {
+          "name": {
+            "title": "Column name",
+            "body": "Rename the column to reflect a specific step or parallel workflow."
+          },
+          "wip": {
+            "title": "WIP limit",
+            "body": "Adjust the work-in-progress limit to keep the flow under control."
+          },
+          "backlogArchive": {
+            "title": "Auto-archive (Backlog)",
+            "body": "Decide after how many inactive days a backlog card should be archived automatically.",
+            "hint": "Use 0 to disable the archive. Snooze or hit “Keep” to extend a card’s life."
+          },
+          "doneArchive": {
+            "title": "Auto-archive (Done)",
+            "body": "Schedule when DONE cards move to the archive after completion.",
+            "hint": "Keeps the DONE column lean while preserving history."
+          }
+        }
+      },
+      "cards": {
+        "id": {
+          "title": "Short ID",
+          "body": "The number (#55) makes discussions and quick searches easier."
+        },
+        "priority": {
+          "title": "Priority badge",
+          "body": "The colored badge reminds everyone of the urgency and aligns with priority sorting."
+        },
+        "menu": {
+          "title": "Quick actions",
+          "body": "Open, rename, move to another kanban or delete the card.",
+          "hint": "Use it when drag-and-drop is not handy or to reach advanced actions."
+        },
+        "assignees": {
+          "title": "Owners",
+          "body": "Initials show the main assignee. Hover to reveal the full RACI matrix.",
+          "hint": "R = Responsible, A = Accountable, C = Consulted, I = Informed."
+        },
+        "dueDate": {
+          "title": "Due date",
+          "body": "Displays remaining or overdue days with automatic color coding.",
+          "hint": "Red = late, orange = at risk, green = on track."
+        },
+        "progress": {
+          "title": "Progress",
+          "body": "Completion percentage synced with subtasks and task updates."
+        },
+        "effort": {
+          "title": "Effort",
+          "body": "The letter (XS to XXL) reflects the estimated complexity to balance workloads."
+        },
+        "fractal": {
+          "title": "Child kanban",
+          "body": "A card can host its own mini-kanban to manage a sub-project. The four numbers show the backlog, in-progress, blocked and done counts.",
+          "hintExisting": "Click to open the existing child board and browse its columns.",
+          "hintCreate": "If none exists yet, clicking will create it automatically."
+        }
+      }
+    },
     "helpMode": {
       "tooltip": {
         "enableTitle": "Enable contextual help",
