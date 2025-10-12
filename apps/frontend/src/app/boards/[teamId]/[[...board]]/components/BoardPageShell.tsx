@@ -1431,80 +1431,44 @@ export function TeamBoardPage(){
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.quickFilters.mine.title')}
-                          description={tBoard('help.quickFilters.mine.body')}
-                          className="inline-flex"
+                        <button
+                          type="button"
+                          onClick={() => setFilterMine((prev) => !prev)}
+                          className={pillClass(filterMine)}
+                          aria-pressed={filterMine}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setFilterMine((prev) => !prev)}
-                            className={pillClass(filterMine)}
-                            aria-pressed={filterMine}
-                          >
-                            {tBoard('quickFilters.mine')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.quickFilters.priority.title')}
-                          description={tBoard('help.quickFilters.priority.body')}
-                          className="inline-flex"
+                          {tBoard('quickFilters.mine')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortPriority((prev) => !prev)}
+                          className={pillClass(sortPriority)}
+                          aria-pressed={sortPriority}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setSortPriority((prev) => !prev)}
-                            className={pillClass(sortPriority)}
-                            aria-pressed={sortPriority}
-                          >
-                            {tBoard('quickFilters.sortPriority')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.quickFilters.dueDate.title')}
-                          description={tBoard('help.quickFilters.dueDate.body')}
-                          className="inline-flex"
+                          {tBoard('quickFilters.sortPriority')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortDueDate((prev) => !prev)}
+                          className={pillClass(sortDueDate)}
+                          aria-pressed={sortDueDate}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setSortDueDate((prev) => !prev)}
-                            className={pillClass(sortDueDate)}
-                            aria-pressed={sortDueDate}
-                          >
-                            {tBoard('quickFilters.sortDueDate')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.quickFilters.expert.title')}
-                          description={tBoard('help.quickFilters.expert.body')}
-                          hint={tBoard('help.quickFilters.expert.hint')}
-                          className="inline-flex"
+                          {tBoard('quickFilters.sortDueDate')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpertMode(!expertMode)}
+                          className={pillClass(expertMode)}
+                          aria-pressed={expertMode}
+                          aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
+                          title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setExpertMode(!expertMode)}
-                            className={pillClass(expertMode)}
-                            aria-pressed={expertMode}
-                            aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
-                            title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
-                          >
-                            {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
-                          </button>
-                        </HelpTooltip>
+                          {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
+                        </button>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
-                        <HelpTooltip
-                          helpMode={helpMode}
-                          title={tBoard('help.filtersButton.title')}
-                          description={tBoard('help.filtersButton.body')}
-                          hint={tBoard('help.filtersButton.hint')}
-                          className="inline-flex"
-                        >
-                          <button
+                        <button
                             type="button"
                             onClick={() => setFiltersExpanded((prev) => !prev)}
                             className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
@@ -1516,7 +1480,6 @@ export function TeamBoardPage(){
                             </svg>
                             {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
                           </button>
-                        </HelpTooltip>
                       </div>
                     </div>
                   </div>
