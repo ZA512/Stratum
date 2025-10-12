@@ -46,11 +46,7 @@ export function HelpTooltip({
     return <>{children}</>;
   }
 
-  const containerClass = [
-    "relative",
-    "group",
-    className ? className : "inline-flex",
-  ].join(" ");
+  const containerClass = ["relative", "inline-flex", "group", className].filter(Boolean).join(" ");
   const tooltipPosition = align === "right" ? "right-0" : "left-0";
   const arrowPosition = align === "right" ? "right-4" : "left-4";
 
