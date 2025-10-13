@@ -35,6 +35,27 @@ export default function RegisterPage() {
     }
   }
 
+  // Defensive submit handler that can be used from a button onClick.
+  async function doSubmit() {
+    // reuse the same logic as handleSubmit but without the event
+    if (isSubmitting || success) return;
+    if (password !== confirmPassword) {
+      setError(t("register.errors.passwordMismatch"));
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await registerRequest({ displayName, email, password });
+      setSuccess(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card/80 p-8 shadow-xl backdrop-blur">
@@ -112,7 +133,8 @@ export default function RegisterPage() {
           ) : null}
 
           <button
-            type="submit"
+            type="button"
+            onClick={() => doSubmit()}
             disabled={isSubmitting || success}
             className="w-full rounded-full bg-accent px-4 py-3 text-sm font-semibold text-background transition hover:bg-accent-strong disabled:opacity-60"
           >

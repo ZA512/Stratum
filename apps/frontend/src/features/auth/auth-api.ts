@@ -1,9 +1,13 @@
-﻿const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
+﻿// Resolve NEXT_PUBLIC_API_URL defensively: ignore empty strings and trim whitespace.
+const rawPublicUrl = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
+const trimmed = rawPublicUrl ? rawPublicUrl.trim() : "";
+const DEFAULT_API = `http://localhost:${process.env.BACKEND_PORT ?? 4001}/api/v1`;
+const API_BASE_URL = trimmed.length > 0 ? trimmed : DEFAULT_API;
 
-// Debug: show which base URL the frontend uses for API calls (helpful when troubleshooting builds)
+// Debug: show which base URL the frontend uses for API calls (helps troubleshooting builds/runtime)
 if (typeof window !== "undefined") {
   // eslint-disable-next-line no-console
-  console.debug("auth-api: API_BASE_URL=", API_BASE_URL);
+  console.debug("auth-api: NEXT_PUBLIC_API_URL raw=", rawPublicUrl, " resolved API_BASE_URL=", API_BASE_URL);
 }
 
 type LoginResponse = {
