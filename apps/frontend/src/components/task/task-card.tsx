@@ -435,7 +435,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="flex items-center gap-[1px] font-mono text-[11px]">
                   {(() => {
                     const parts = fractalPath.split('.');
-                    const colors = ['text-amber-600 dark:text-amber-400', 'text-sky-600 dark:text-sky-400', 'text-red-600 dark:text-red-400', 'text-emerald-600 dark:text-emerald-400'];
+                    // Ordre des couleurs : Bleu (Backlog), Jaune (En cours), Rouge (Bloqué), Vert (Terminé)
+                    const colors = ['text-sky-600 dark:text-sky-400', 'text-amber-600 dark:text-amber-400', 'text-red-600 dark:text-red-400', 'text-emerald-600 dark:text-emerald-400'];
                     return parts.map((part, i) => (
                       <React.Fragment key={i}>
                         <span className={colors[i] || 'text-gray-500'}>{part}</span>
