@@ -1,15 +1,16 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useTranslation } from "@/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const searchParams = useSearchParams();
   const { t } = useTranslation();
   const [email, setEmail] = useState("alice@stratum.dev");
   const [password, setPassword] = useState("stratum");
@@ -23,7 +24,7 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      const next = searchParams.get('next');
+  const next = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
       if (next && next.startsWith('/')) {
         router.replace(next);
       } else {

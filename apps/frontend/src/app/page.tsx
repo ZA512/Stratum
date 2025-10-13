@@ -115,7 +115,7 @@ export default function Home() {
   if (hasTeams) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface">
-        <span className="text-sm text-muted">{t("home.redirecting", "Redirection vers votre kanban…")}</span>
+  <span className="text-sm text-muted">{t("home.redirecting")}</span>
       </div>
     );
   }
@@ -125,7 +125,7 @@ export default function Home() {
   if (user && isResolvingTeams) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface">
-        <span className="text-sm text-muted">{t("home.loadingTeams", "Chargement de votre espace…")}</span>
+        <span className="text-sm text-muted">{t("home.loadingTeams")}</span>
       </div>
     );
   }
@@ -156,8 +156,8 @@ export default function Home() {
       ) : null}
       <p className="text-sm text-muted">
         {bootstrapping || loadingTeams
-          ? t("home.bootstrapping", "Préparation de votre espace…")
-          : t("home.waitingForTeams", "Aucun kanban disponible pour le moment.")}
+          ? t("home.bootstrapping")
+          : t("home.waitingForTeams")}
       </p>
       <button
         type="button"
@@ -166,8 +166,8 @@ export default function Home() {
         className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
       >
         {bootstrapping
-          ? t("home.bootstrappingAction", "Initialisation en cours…")
-          : t("home.bootstrapCta", "Initialiser mon kanban")}
+          ? t("home.bootstrappingAction")
+          : t("home.bootstrapCta")}
       </button>
       <div className="flex items-center gap-3 text-xs text-muted">
         <Link href="/settings" className="underline-offset-2 hover:underline">
@@ -175,7 +175,7 @@ export default function Home() {
         </Link>
         <button
           type="button"
-          onClick={logout}
+          onClick={() => void logout()}
           className="underline-offset-2 hover:underline"
         >
           {t("common.actions.signOut")}

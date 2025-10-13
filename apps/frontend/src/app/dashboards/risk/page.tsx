@@ -1,14 +1,7 @@
-"use client";
+import RiskDashboardClient from './RiskDashboardClient';
 
-import { DashboardPageShell } from "@/features/dashboards/DashboardPageShell";
+export const dynamic = 'force-dynamic';
 
 export default function RiskDashboardPage() {
-  return (
-    <DashboardPageShell
-      dashboard="RISK"
-      supportedModes={["AGGREGATED", "COMPARISON"]}
-      titleKey="dashboard.risk.title"
-      descriptionKey="dashboard.risk.description"
-    />
-  );
+  return <RiskDashboardClient />;
 }

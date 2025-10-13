@@ -1,14 +1,7 @@
-"use client";
+import ProgressDashboardClient from './ProgressDashboardClient';
 
-import { DashboardPageShell } from "@/features/dashboards/DashboardPageShell";
+export const dynamic = 'force-dynamic';
 
 export default function ProgressDashboardPage() {
-  return (
-    <DashboardPageShell
-      dashboard="PROGRESS"
-      supportedModes={["AGGREGATED", "COMPARISON"]}
-      titleKey="dashboard.progress.title"
-      descriptionKey="dashboard.progress.description"
-    />
-  );
+  return <ProgressDashboardClient />;
 }

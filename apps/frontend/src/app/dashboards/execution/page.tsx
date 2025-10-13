@@ -1,14 +1,7 @@
-"use client";
+import ExecutionDashboardClient from './ExecutionDashboardClient';
 
-import { DashboardPageShell } from "@/features/dashboards/DashboardPageShell";
+export const dynamic = 'force-dynamic';
 
 export default function ExecutionDashboardPage() {
-  return (
-    <DashboardPageShell
-      dashboard="EXECUTION"
-      supportedModes={["AGGREGATED"]}
-      titleKey="dashboard.execution.title"
-      descriptionKey="dashboard.execution.description"
-    />
-  );
+  return <ExecutionDashboardClient />;
 }

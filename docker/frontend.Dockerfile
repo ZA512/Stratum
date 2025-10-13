@@ -11,7 +11,8 @@ RUN npm install --workspace frontend --include-workspace-root --omit=dev=false
 WORKDIR /app/apps/frontend
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-RUN npm run build:frontend
+# call the local frontend package build script (package.json contains "build")
+RUN npm run build
 
 # --- Production image ---
 FROM node:20-alpine AS prod
