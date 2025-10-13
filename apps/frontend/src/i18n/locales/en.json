@@ -504,7 +504,11 @@
         "helpOpen": "Open the settings panel to configure this column."
       },
       "behavior": {
-        "tooltip": "Column behaviour: {label}"
+        "tooltip": "Column behavior: {label}",
+        "BACKLOG": "Backlog: Entry point for new tasks. Auto-archive after X days of inactivity. Use Keep button to extend or Snooze to temporarily hide.",
+        "IN_PROGRESS": "In Progress: Standard workflow column with no special automation. Limit WIP to improve focus.",
+        "BLOCKED": "Blocked: Allows adding a blocker email and scheduling automatic reminders every X days until resolved.",
+        "DONE": "Done: Final column where completed tasks pile up. Auto-archive after X days to keep the column readable."
       },
       "archive": {
         "backlog": {
@@ -685,51 +689,44 @@
     },
     "help": {
       "search": {
-        "title": "Smart search",
-        "body": "Type three characters or more and the lookup runs automatically. Use @sam to target people, #42 to jump to a card ID, and !high to filter by priority.",
-        "hint": "Stack quick filters or advanced filters with the query to narrow the board in seconds.",
-        "info": "Search text, short IDs, people and priorities from one field."
+        "title": "Task search",
+        "body": "Search for tasks using text search. You need a minimum of 3 characters for the search to launch automatically. There are special codes: @ to search in names, # to search in task numbers, ! in priorities.",
+        "hint": "Stack quick filters or advanced filters with the query to narrow the board in seconds."
       },
       "quickFilters": {
         "mine": {
           "title": "My tasks",
-          "body": "Keeps only the cards where you appear in the RACI. Great for your personal focus time.",
-          "info": "Filters the board to cards where you're part of the RACI."
+          "body": "Show only my tasks."
         },
         "priority": {
           "title": "Priority sort",
-          "body": "Reorders every column so the highest priority cards float to the top.",
-          "info": "Sorts each column by priority from highest to lowest."
+          "body": "Sort tasks in each column by priority."
         },
         "dueDate": {
           "title": "Due-date sort",
-          "body": "Sorts each column by upcoming deadlines so the most urgent cards are surfaced first.",
-          "info": "Orders columns by the nearest due dates first."
+          "body": "Sort tasks in each column by due date. At the top, the most urgent tasks to finish."
         },
         "expert": {
           "title": "Expert mode",
-          "body": "Shows the extra tabs in the task drawer (time tracking, automation, integrations) by default.",
-          "hint": "Disable it during onboarding if you want a simpler editor.",
-          "info": "Toggles advanced tabs inside the task drawer."
+          "body": "By default, expert mode is active and you see more tabs in the task editing screen. This allows access to advanced features like time tracking, automation, and integrations.",
+          "hint": "Disable it during onboarding if you want a simpler editor."
         }
       },
       "filtersButton": {
         "title": "Advanced filters",
-        "body": "Opens the advanced panel where you can stack criteria to display only the cards you need.",
-        "hint": "Perfect for preparing a ritual, a review, or a themed board export.",
-        "info": "Opens the advanced filter panel to combine multiple criteria."
+        "body": "Display advanced search mode and also limit what is shown on tasks.",
+        "hint": "Perfect for preparing a ritual, a review, or a themed board export."
       },
       "filters": {
         "assignees": {
           "title": "Users",
-          "body": "Select one or several teammates and the board keeps only their cards.",
+          "body": "Select users from a list, it's simpler.",
           "hint": "Search by full name, initials or email to go faster."
         },
         "priorities": {
           "title": "Priorities",
-          "body": "Toggle a badge to display only the matching priority and hide the rest.",
-          "hint": "Activate multiple badges to craft an intermediate slice.",
-          "info": "Quickly isolate one or more priorities on the board."
+          "body": "Selecting priorities will hide other tasks.",
+          "hint": "Activate multiple badges to craft an intermediate slice."
         },
         "options": {
           "title": "Options",
@@ -739,9 +736,8 @@
         },
         "effort": {
           "title": "Effort",
-          "body": "Filter by effort (XS to XXL) to surface light, medium or heavy tasks depending on your capacity.",
-          "hint": "Combine it with the search bar to assemble a targeted work batch.",
-          "info": "Focus on a specific effort level."
+          "body": "Filter tasks by their estimated complexity (from XS for very simple to XXL for very complex). Useful for isolating quick tasks when you have little time or heavy tasks when planning your sprint.",
+          "hint": "Combine it with the search bar to assemble a targeted work batch."
         },
         "columns": {
           "title": "Column height",
@@ -765,83 +761,89 @@
         "form": {
           "name": {
             "title": "Column name",
-            "body": "Give the column a clear label. You can rename it at any time."
+            "body": "Choose a short and clear name that reflects the step in your workflow (e.g., To Do, In Progress, Review, Done). The name can be changed at any time without impacting tasks."
           },
           "behavior": {
-            "title": "Behavior",
-            "body": "Every behavior brings its own automation:\n• Backlog: archive after N days, extend with the “Keep” action or hide cards temporarily with Snooze.\n• In progress: a classic stage with no extra automation.\n• Blocked: add who is blocking, send reminder emails and set the reminder frequency.\n• Done: move completed cards to the archive after the delay you choose.",
-            "hint": "Duplicate behaviors to map several lanes (e.g. “In progress”, “In testing”, “QA”)."
+            "title": "Column behavior",
+            "body": "You have 4 possible behaviors:\n\n• Backlog: This is where you place new tasks. You can choose the number of days after which tasks automatically move to archive (set to zero to disable). To extend a task's life, there's a button in the task editor. You can also use snooze mode to temporarily hide a task until a chosen date.\n\n• In Progress: No automated behavior for now.\n\n• Blocked: A blocked task reveals 3 new fields: email, message, and delay in days. You can provide the blocker's email with a message, and an email will be sent every X days. Let the tool quietly harass the blocker, or decide to spam yourself.\n\n• Done: You can define the number of days after which Done tasks move to archive.",
+            "hint": "You can have multiple columns with the same behavior: for example 3 Backlog columns (\"Project Backlog\", \"Technical Backlog\", \"Bug Backlog\") or multiple \"In Progress\" (\"In Progress\", \"In Testing\"). Adapt the behavior to your needs."
           },
           "wip": {
-            "title": "WIP limit",
-            "body": "Cap the number of cards allowed at the same time in this column. Leave it empty for no limit."
+            "title": "WIP (Work In Progress) limit",
+            "body": "Set a maximum number of tasks for this column. As soon as the limit is exceeded, a visual warning appears to encourage you to finish what's started before starting new tasks. Leave 0 for no limit.",
+            "hint": "WIP is a key Kanban principle: limiting work in progress improves focus and reduces delivery time."
           }
         },
         "settings": {
           "name": {
             "title": "Column name",
-            "body": "Update the label to reflect a new step or a parallel workflow."
+            "body": "You can rename a column at any time, without breaking tasks or workflow. Useful for adapting terminology as your process evolves."
           },
           "wip": {
             "title": "WIP limit",
-            "body": "Tighten or relax the WIP limit when the team capacity changes."
+            "body": "Adjust the limit when team capacity changes. Leave 0 to remove all limits. A limit too low blocks work, a limit too high dilutes focus.",
+            "hint": "Start with a limit equal to the number of people on the team, then adjust based on results."
           },
           "backlogArchive": {
-            "title": "Auto-archive (Backlog)",
-            "body": "Choose after how many inactive days backlog cards move to the archive automatically.",
-            "hint": "Set 0 to disable it. Use Snooze or the “Keep” button on the card to extend the timer."
+            "title": "Auto-archive (backlog)",
+            "body": "Choose after how many days of inactivity backlog tasks move to the archive automatically. Leave 0 to disable. If you want to keep a card in the backlog, use the Snooze or Keep button directly on the card.",
+            "hint": "A self-cleaning backlog avoids accumulation of obsolete tasks. Recommendation: 30 to 90 days."
           },
           "doneArchive": {
-            "title": "Auto-archive (Done)",
-            "body": "Define when completed cards leave the DONE column to keep it tidy.",
-            "hint": "Keeps the column readable while preserving the history in the archive."
+            "title": "Auto-archive (done)",
+            "body": "Define after how many days completed tasks leave the DONE column. Helps keep the column readable while preserving history in the archive.",
+            "hint": "Keep Done tasks visible for a few days to celebrate wins! Recommendation: 7 to 14 days."
           }
         }
       },
       "cards": {
         "id": {
           "title": "Short ID",
-          "body": "The short number (#55) makes it easy to reference the card in a meeting or in search."
+          "body": "The short number (like #55) makes it easy to reference the card in a meeting, slack, or search. Click it to copy the full URL with the ID."
         },
         "priority": {
           "title": "Priority badge",
-          "body": "Color-coded priority that matches the quick filters and column sorting.",
-          "info": "Shows the urgency level used for sorting and dashboards."
+          "body": "Color-coded priority badge. Click to change the priority level.",
+          "info": "Priority set to {label}."
         },
         "menu": {
           "title": "Quick actions",
-          "body": "Open, rename, move to another board or delete the card.",
+          "body": "Display actions on the task: open in full-screen, rename, move to another board, delete.",
           "hint": "Handy when drag-and-drop is not practical or you need advanced actions.",
           "info": "Opens shortcuts to edit, move or archive the card."
         },
         "assignees": {
-          "title": "Owners",
-          "body": "Initials highlight the main assignee. Hover to reveal the full RACI matrix.",
-          "hint": "R = Responsible, A = Accountable, C = Consulted, I = Informed.",
-          "info": "Hover the avatars to view each RACI role."
+          "title": "Assignees",
+          "body": "Initials of people involved in the task. In normal mode, hover to display RACI roles (Responsible, Accountable, Consulted, Informed) for each person.",
+          "hint": "Use this to quickly know who does what without opening the task.",
+          "info": "Hover the avatars to view each RACI role.",
+          "infoEmpty": "No RACI roles assigned yet.",
+          "infoLine": "{role} · {names}",
+          "infoLineEmpty": "{role} · –"
         },
         "dueDate": {
           "title": "Due date",
-          "body": "Shows the days remaining before the target date or the delay once it is overdue.",
-          "hint": "Green = on track, orange = at risk, red = late.",
-          "info": "Highlights remaining days or lateness at a glance."
+          "body": "Target date for completing the task. In normal mode, the tooltip shows the complete formatted date. A color code helps you prioritize: green = on time, orange = tight, red = overdue.",
+          "hint": "Use it in combination with the due-date sort to see urgent tasks at the top.",
+          "info": "Due {date} ({relative})."
         },
         "progress": {
           "title": "Progress",
-          "body": "Completion in percent, synced with subtasks and workflow updates.",
-          "info": "Live completion synced with subtasks and status changes."
+          "body": "Percentage of completion automatically calculated based on subtasks or workflow status. In normal mode, the tooltip shows the exact percentage.",
+          "info": "{value}% complete.",
+          "infoEmpty": "No progress recorded yet."
         },
         "effort": {
           "title": "Effort",
-          "body": "Effort letter (XS to XXL) that reflects the expected complexity of the card.",
-          "info": "Relative estimate from XS to XXL used in planning."
+          "body": "Estimated complexity: XS (very simple) to XXL (very complex). Allows you to filter tasks by size and plan your capacity.",
+          "info": "Effort set to {label}."
         },
         "fractal": {
-          "title": "Child kanban",
-          "body": "This card hosts a dedicated child kanban. The numbers show Backlog, In progress, Blocked and Done counts.",
+          "title": "Fractal / Child kanban",
+          "body": "This icon indicates that the task has its own child kanban board. The 4 numbers show: backlog, in progress, blocked, done. In normal mode, the tooltip displays the exact count for each state.",
           "hintExisting": "Click to open the child board and follow its progress.",
           "hintCreate": "If no board exists yet, we will create it instantly for you.",
-          "info": "Summarises the linked child kanban status counts."
+          "info": "Backlog {backlog} · In progress {inProgress} · Blocked {blocked} · Done {done}."
         }
       }
     },

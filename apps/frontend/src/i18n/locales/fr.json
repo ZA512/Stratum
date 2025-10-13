@@ -516,7 +516,11 @@
         "helpOpen": "Ouvrez le panneau pour configurer cette colonne."
       },
       "behavior": {
-        "tooltip": "Comportement de la colonne : {label}"
+        "tooltip": "Comportement de la colonne : {label}",
+        "BACKLOG": "Backlog : Point d'entrée pour nouvelles tâches. Archivage auto après X jours d'inactivité. Utilisez le bouton Conserver pour prolonger ou Snooze pour masquer temporairement.",
+        "IN_PROGRESS": "En cours : Colonne de workflow standard sans automatisation particulière. Limitez le WIP pour améliorer le focus.",
+        "BLOCKED": "Bloqué : Permet d'ajouter un email bloqueur et de programmer des relances automatiques tous les X jours jusqu'à résolution.",
+        "DONE": "Terminé : Colonne finale où les tâches complètes s'empilent. Archivage auto après X jours pour garder la colonne lisible."
       },
       "archive": {
         "backlog": {
@@ -697,128 +701,119 @@
     },
     "help": {
       "search": {
-        "title": "Recherche intelligente",
-        "body": "Saisissez au moins trois caractères pour lancer la recherche automatique. Utilisez @nom pour filtrer par personne, #123 pour un identifiant de tâche et !haute pour cibler une priorité.",
-        "hint": "Combinez la recherche texte avec les filtres rapides pour aller droit à l'essentiel.",
-        "info": "Recherchez texte, identifiant court, @utilisateur ou !priorité dans le même champ."
+        "title": "Recherche de tâches",
+        "body": "Permet de rechercher des tâches en recherche de texte. Il faut 3 caractères minimum pour que la recherche se lance automatiquement. Il existe des codes spéciaux : @ pour chercher dans les noms, # pour rechercher dans les numéros de tâche, ! dans les priorités.",
+        "hint": "Combinez la recherche texte avec les filtres rapides pour aller droit à l'essentiel."
       },
       "quickFilters": {
         "mine": {
           "title": "Mes tâches",
-          "body": "Affiche uniquement les cartes dont vous êtes responsable ou participant. Idéal pour préparer votre quotidien.",
-          "info": "Filtre le tableau sur les cartes où vous apparaissez dans la matrice RACI."
+          "body": "Affiche uniquement mes tâches."
         },
         "priority": {
           "title": "Tri par priorité",
-          "body": "Réordonne chaque colonne en plaçant les urgences en tête. Les priorités visuelles deviennent cohérentes d'une colonne à l'autre.",
-          "info": "Trie chaque colonne par priorité décroissante."
+          "body": "Ordonne les tâches de chaque colonne par priorité."
         },
         "dueDate": {
           "title": "Tri par échéance",
-          "body": "Classe les cartes de la plus urgente à la plus lointaine dans chaque colonne. Pratique pour balayer rapidement les délais.",
-          "info": "Ordonne instantanément les colonnes selon l'échéance la plus proche."
+          "body": "Ordonne les tâches de chaque colonne par échéance. En haut, les tâches les plus urgentes à finir."
         },
         "expert": {
           "title": "Mode expert",
-          "body": "Active par défaut les onglets avancés (temps, coûts, automatisations) dans la fiche tâche.",
-          "hint": "Désactivez-le pour alléger l'interface lors de l'onboarding ou des revues rapides.",
-          "info": "Active ou coupe les onglets avancés du tiroir tâche."
+          "body": "Par défaut, le mode expert est actif et vous voyez plus d'onglets dans l'écran de modification des tâches. Cela permet d'avoir accès à des fonctionnalités avancées comme le suivi du temps, les automatisations et les intégrations.",
+          "hint": "Désactivez-le pour alléger l'interface lors de l'onboarding ou des revues rapides."
         }
       },
       "filtersButton": {
         "title": "Filtres avancés",
-        "body": "Ouvre le mode de recherche avancée pour combiner plusieurs critères et limiter les cartes affichées.",
-        "hint": "Idéal pour préparer une réunion thématique ou un reporting ciblé.",
-        "info": "Ouvre le panneau pour superposer plusieurs filtres en un clic."
+        "body": "Permet d'afficher le mode recherche avancé et de limiter aussi ce que l'on affiche sur les tâches.",
+        "hint": "Idéal pour préparer une réunion thématique ou un reporting ciblé."
       },
       "filters": {
         "assignees": {
           "title": "Utilisateurs",
-          "body": "Sélectionnez une ou plusieurs personnes depuis la liste pour ne garder que leurs tâches.",
+          "body": "Permet de sélectionner des utilisateurs dans une liste, c'est plus simple.",
           "hint": "La recherche accepte le nom complet, les initiales ou l'email."
         },
         "priorities": {
           "title": "Priorités",
-          "body": "Activez un badge pour filtrer les cartes sur cette priorité et masquer les autres.",
-          "hint": "Vous pouvez cumuler plusieurs priorités pour créer une vue intermédiaire.",
-          "info": "Isole rapidement une ou plusieurs priorités sur le board."
+          "body": "Sélectionner les priorités cachera les autres tâches.",
+          "hint": "Vous pouvez cumuler plusieurs priorités pour créer une vue intermédiaire."
         },
         "options": {
           "title": "Options",
-          "body": "Masquez les colonnes DONE ou n'affichez que les cartes liées à un sous-kanban.",
-          "hint": "Parfait pour préparer un comité de suivi sans bruit visuel.",
-          "info": "Ajuste l'affichage global (DONE, cartes avec sous-kanban, etc.)."
+          "body": "Il y a l'option qui masque la colonne Done ou l'option qui n'affiche que les tâches qui ont un sous-kanban.",
+          "hint": "Parfait pour préparer un comité de suivi sans bruit visuel."
         },
         "effort": {
           "title": "Effort",
-          "body": "Filtrez les cartes selon la charge estimée (XS à XXL) pour isoler les tâches rapides ou lourdes.",
-          "hint": "Combinez avec la recherche texte pour préparer un lot de tâches ciblé.",
-          "info": "Concentrez-vous sur un niveau d'effort précis."
+          "body": "Permet de filtrer les tâches selon leur complexité estimée (de XS pour très simple à XXL pour très complexe). Utile pour isoler les tâches rapides quand vous avez peu de temps ou les tâches lourdes quand vous planifiez votre sprint.",
+          "hint": "Combinez avec la recherche texte pour préparer un lot de tâches ciblé."
         },
         "columns": {
           "title": "Hauteur des colonnes",
-          "body": "Choisissez entre une colonne fixe avec ascenseur interne ou un défilement fluide sur toute la page.",
-          "hint": "Adaptez la vue à vos habitudes : atelier en salle ou suivi quotidien.",
-          "info": "Basculez entre hauteur automatique et fixe selon le contexte."
+          "body": "Vous pouvez choisir entre voir la colonne en entier sur la même page et avoir un ascenseur pour faire monter descendre les tâches, ou alors avoir la colonne qui défile jusqu'en bas et là vous utilisez l'ascenseur du navigateur. Choisissez ce qui vous plaît le plus en présentation, chacun ses besoins.",
+          "hint": "Adaptez la vue à vos habitudes : atelier en salle ou suivi quotidien."
         },
         "display": {
           "title": "Détails des cartes",
-          "body": "Affichez ou masquez les éléments visuels des cartes (identifiant, priorité, effort, etc.).",
-          "hint": "Créez une vue épurée pour la direction ou détaillée pour l'équipe projet.",
-          "info": "Choisissez quels champs restent visibles sur chaque carte."
+          "body": "Ici vous pouvez choisir d'afficher ou cacher des éléments sur les fiches des kanbans. Vous ne voulez pas voir l'identifiant de la tâche ? Hop, c'est possible de le cacher. Ou bien ne pas voir l'information effort ? Vous choisissez.",
+          "hint": "Créez une vue épurée pour la direction ou détaillée pour l'équipe projet."
         }
       },
       "columns": {
         "add": {
           "title": "Créer une colonne",
-          "body": "Ajoutez autant de colonnes que nécessaire puis renseignez le formulaire pour définir son rôle.",
+          "body": "Vous pouvez créer autant de colonnes que vous souhaitez. Cliquez dessus et remplissez le formulaire qui apparaît.",
           "hint": "Vous pourrez ajuster le paramétrage après création sans perdre les cartes."
         },
         "form": {
           "name": {
             "title": "Nom de la colonne",
-            "body": "Choisissez un intitulé clair : il sera visible sur le kanban et peut être modifié à tout moment."
+            "body": "Choisissez un nom court et clair qui reflète l'étape dans votre workflow (ex : À faire, En cours, Revue, Terminé). Le nom est modifiable à tout moment sans impacter les tâches."
           },
           "behavior": {
             "title": "Comportement",
-            "body": "Chaque comportement active ses automatismes :\n• Backlog : rappels automatiques, archivage optionnel et snooze.\n• En cours : colonne classique sans automatisme.\n• Bloqué : ajoute les champs de relance et d'email du bloqueur.\n• Terminé : permet d'archiver automatiquement les cartes closes.",
-            "hint": "Dupliquez un comportement pour créer plusieurs colonnes (ex. « En cours » et « En test »)."
+            "body": "Vous avez 4 comportements possibles :\n\n• Backlog : C'est là où l'on place les nouvelles tâches. Vous pouvez choisir le nombre de jours après lequel les tâches passent automatiquement en archive (mettez zéro pour désactiver). Pour prolonger la vie d'une tâche, il y a un bouton dans la modification de fiche. Vous pouvez aussi utiliser le mode snooze pour masquer temporairement une tâche jusqu'à une date choisie.\n\n• En cours : Ici, pas de comportement automatisé pour le moment.\n\n• Bloqué : Une tâche bloquée fait apparaître 3 nouveaux champs : email, message et délai en jours. Vous pouvez donner l'email de la personne qui bloque avec un message, et un mail sera lancé tous les X jours. Laissez l'outil harceler tranquillement le bloqueur, ou décidez de vous spammer vous-même.\n\n• Terminé : Vous pouvez définir un nombre de jours après lequel les tâches Done partent en archive.",
+            "hint": "Vous pouvez avoir plusieurs colonnes avec le même comportement : par exemple 3 colonnes Backlog (\"Backlog projet\", \"Backlog technique\", \"Backlog debug\") ou plusieurs \"En cours\" (\"En cours\", \"En test\"). Adaptez le comportement à vos besoins."
           },
           "wip": {
-            "title": "Limite WIP",
-            "body": "Fixez le nombre maximal de cartes simultanées pour éviter la surcharge. Laissez vide pour aucune limite."
+            "title": "Limite WIP (Work In Progress)",
+            "body": "Définissez un nombre maximum de tâches pour cette colonne. Dès que la limite est dépassée, un avertissement visuel apparaît pour vous encourager à terminer ce qui est en cours avant de commencer de nouvelles tâches. Laissez 0 pour aucune limite.",
+            "hint": "Le WIP est un principe Kanban clé : limiter le travail en cours améliore le focus et réduit les délais de livraison."
           }
         },
         "settings": {
           "name": {
             "title": "Nom de la colonne",
-            "body": "Renommez la colonne pour refléter une étape précise ou un flux parallèle."
+            "body": "Vous pouvez renommer une colonne à tout moment, sans casser les tâches ni le workflow. Utile pour adapter la terminologie à l'évolution de votre processus."
           },
           "wip": {
             "title": "Limite WIP",
-            "body": "Ajustez la limite de travail en cours pour garder un flux maîtrisé."
+            "body": "Ajustez la limite quand la capacité de l'équipe change. Laissez 0 pour retirer toute limite. Une limite trop basse bloque le travail, une limite trop haute dilue le focus.",
+            "hint": "Commencez par une limite égale au nombre de personnes dans l'équipe, puis ajustez selon les résultats."
           },
           "backlogArchive": {
             "title": "Archivage automatique (Backlog)",
-            "body": "Définissez après combien de jours d'inactivité une carte backlog sera archivée automatiquement.",
-            "hint": "Mettez 0 pour désactiver l'archivage. Utilisez le snooze ou le bouton « Garder » pour prolonger une carte."
+            "body": "Nombre de jours avant archivage d'une tâche backlog inactive. Mettez 0 pour désactiver l'archivage.",
+            "hint": "Utilisez le snooze ou le bouton \"Garder\" pour prolonger une carte."
           },
           "doneArchive": {
             "title": "Archivage automatique (Terminé)",
-            "body": "Planifiez le passage en archive des cartes DONE après un certain nombre de jours.",
-            "hint": "Idéal pour garder une colonne DONE légère tout en conservant l'historique."
+            "body": "Définissez après combien de jours les tâches terminées quittent la colonne DONE. Aide à garder la colonne lisible tout en préservant l'historique dans l'archive.",
+            "hint": "Gardez les tâches Done visibles quelques jours pour célébrer les victoires ! Recommandation : 7 à 14 jours."
           }
         }
       },
       "cards": {
         "id": {
-          "title": "Identifiant court",
-          "body": "Le numéro (#55) facilite les échanges en réunion et la recherche rapide."
+          "title": "Numéro de tâche",
+          "body": "Il s'agit du numéro de la tâche. Le numéro court (#55) facilite les échanges en réunion et la recherche rapide."
         },
         "priority": {
           "title": "Badge de priorité",
-          "body": "La pastille colorée rappelle l'urgence de la carte et s'aligne sur les tris par priorité.",
-          "info": "Indique le niveau d'urgence utilisé pour les tris et les dashboards."
+          "body": "Il s'agit de la priorité de la tâche (Low, Medium, High, Critical). La pastille colorée rappelle l'urgence de la carte et s'aligne sur les tris par priorité.",
+          "info": "Priorité définie sur {label}."
         },
         "menu": {
           "title": "Actions rapides",
@@ -827,33 +822,37 @@
           "info": "Accédez rapidement aux actions pour éditer, déplacer ou archiver la carte."
         },
         "assignees": {
-          "title": "Responsables",
-          "body": "Les initiales indiquent la personne principale. Survolez pour afficher la matrice RACI complète.",
+          "title": "Propriétaires",
+          "body": "Icône ronde avec les initiales : le nom des propriétaires. Les initiales indiquent la personne principale.",
           "hint": "R = Responsable, A = Accountable, C = Consulted, I = Informed.",
-          "info": "Survolez les avatars pour afficher chaque rôle RACI."
+          "info": "Survolez les avatars pour afficher chaque rôle RACI.",
+          "infoEmpty": "Aucun rôle RACI défini pour l'instant.",
+          "infoLine": "{role} · {names}",
+          "infoLineEmpty": "{role} · –"
         },
         "dueDate": {
           "title": "Échéance",
-          "body": "Affiche le nombre de jours restants ou de dépassement avec un code couleur automatique.",
+          "body": "Le chrono avec un chiffre : le temps avant la date souhaitée ou le nombre de jours de dépassement. Affiche le nombre de jours restants ou de dépassement avec un code couleur automatique.",
           "hint": "Rouge = en retard, orange = sous tension, vert = dans les temps.",
-          "info": "Visualisez immédiatement le délai restant ou le retard."
+          "info": "Échéance {date} ({relative})."
         },
         "progress": {
           "title": "Progression",
-          "body": "Pourcentage de complétion synchronisé avec les sous-tâches et les mises à jour de la fiche.",
-          "info": "Mise à jour automatique selon les sous-tâches et statuts."
+          "body": "Le pourcentage : l'accomplissement en pourcentage. Pourcentage de complétion synchronisé avec les sous-tâches et les mises à jour de la fiche.",
+          "info": "Progression {value} %.",
+          "infoEmpty": "Aucune progression enregistrée pour le moment."
         },
         "effort": {
           "title": "Effort",
-          "body": "La lettre (XS à XXL) reflète la complexité estimée pour équilibrer la charge du sprint.",
-          "info": "Estimation relative (XS à XXL) utile pour la planification."
+          "body": "Le poids avec une lettre comme M : indique la complexité de la tâche. La lettre (XS à XXL) reflète la complexité estimée pour équilibrer la charge du sprint.",
+          "info": "Effort défini sur {label}."
         },
         "fractal": {
           "title": "Kanban enfant",
-          "body": "Une tâche peut héberger son propre mini-kanban pour piloter un sous-projet. Les quatre chiffres indiquent le nombre de cartes en Backlog, En cours, Bloqué et Terminé.",
+          "body": "L'icône lien plus la série de 4 chiffres : chaque tâche peut devenir un kanban. Le premier chiffre est le nombre de tâches en comportement Backlog, le second en En cours, le troisième en Bloqué, et le dernier en Terminé. En cliquant dessus, on ouvre un nouveau kanban. Une tâche peut héberger son propre mini-kanban pour piloter un sous-projet.",
           "hintExisting": "Cliquez pour ouvrir le kanban existant et parcourir ses colonnes.",
           "hintCreate": "S'il n'existe pas encore, un clic crée automatiquement le kanban enfant.",
-          "info": "Résume l'état du kanban enfant associé (Backlog, En cours, Bloqué, Terminé)."
+          "info": "Backlog {backlog} · En cours {inProgress} · Bloqué {blocked} · Terminé {done}."
         }
       }
     },

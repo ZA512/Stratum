@@ -209,7 +209,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   style={{ transitionDelay: '150ms' }}
                 >
                   <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                  <p>{tBoard('columns.behavior.tooltip', { label: behaviorLabel })}</p>
+                  <p className="font-semibold text-accent mb-1">{behaviorLabel}</p>
+                  <p>{tBoard(`columns.behavior.${column.behaviorKey}`)}</p>
                 </div>
               )}
             </div>
@@ -429,6 +430,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 onRequestMove={onRequestMoveCard}
                 onRequestDelete={onRequestDeleteCard}
                 displayOptions={displayOptions}
+                helpMode={helpMode}
               />
             ))}
           </div>

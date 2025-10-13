@@ -62,7 +62,7 @@ export function BoardTaskCard({
     data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
   });
   const { accessToken } = useAuth();
-  const { t: tBoard } = useTranslation("board");
+  const { t: tBoard, locale } = useTranslation("board");
   
   const style: React.CSSProperties = { 
     transform: CSS.Transform.toString(transform), 
@@ -232,6 +232,74 @@ export function BoardTaskCard({
   const helpMessages = useMemo<CardHelpMessages>(() => {
     const messages: CardHelpMessages = {};
 
+    const raciOrder = ['R', 'A', 'C', 'I'] as const;
+    const raciEntries = raciOrder.map(role => ({
+      role,
+      names: raciDetails[role],
+    }));
+    const raciLines = raciEntries.map(entry => {
+      if (entry.names.length > 0) {
+        return tBoard("help.cards.assignees.infoLine", {
+          role: entry.role,
+          names: entry.names.join(", "),
+        });
+      }
+      return tBoard("help.cards.assignees.infoLineEmpty", { role: entry.role });
+    });
+    const raciInfoDescription = raciEntries.some(entry => entry.names.length > 0)
+      ? raciLines.join("\n")
+      : [tBoard("help.cards.assignees.infoEmpty"), raciLines.join("\n")].join("\n");
+
+    const dueDateInfoDescription = (() => {
+      if (!node.dueAt) return undefined;
+      const dueDate = new Date(node.dueAt);
+      if (Number.isNaN(dueDate.getTime())) return undefined;
+
+      const formatter = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
+      const formattedDate = formatter.format(dueDate);
+
+      let remainingDays: number;
+      if (typeof lateness === 'number' && Number.isFinite(lateness)) {
+        remainingDays = lateness;
+      } else {
+        const today = new Date();
+        const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const startDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        remainingDays = Math.round((startDue.getTime() - startToday.getTime()) / DAY_IN_MS);
+      }
+
+      const abs = Math.abs(remainingDays);
+      const plural = abs > 1 ? 's' : '';
+
+      let relative: string;
+      if (remainingDays === 0) {
+        relative = locale === 'fr' ? "aujourd'hui" : 'today';
+      } else if (remainingDays > 0) {
+        relative = locale === 'fr'
+          ? `dans ${abs} jour${plural}`
+          : `in ${abs} day${plural}`;
+      } else {
+        relative = locale === 'fr'
+          ? `en retard de ${abs} jour${plural}`
+          : `${abs} day${plural} late`;
+      }
+
+      return tBoard("help.cards.dueDate.info", {
+        date: formattedDate,
+        relative,
+      });
+    })();
+
+    const fractalCounts = node.counts;
+    const fractalInfoDescription = fractalCounts
+      ? tBoard("help.cards.fractal.info", {
+          backlog: fractalCounts.backlog ?? 0,
+          inProgress: fractalCounts.inProgress ?? 0,
+          blocked: fractalCounts.blocked ?? 0,
+          done: fractalCounts.done ?? 0,
+        })
+      : undefined;
+
     messages.id = {
       help: {
         title: tBoard("help.cards.id.title"),
@@ -244,10 +312,6 @@ export function BoardTaskCard({
         title: tBoard("help.cards.priority.title"),
         description: tBoard("help.cards.priority.body"),
       },
-      info: {
-        title: tBoard("help.cards.priority.title"),
-        description: tBoard("help.cards.priority.info"),
-      },
     };
 
     messages.menu = {
@@ -255,10 +319,6 @@ export function BoardTaskCard({
         title: tBoard("help.cards.menu.title"),
         description: tBoard("help.cards.menu.body"),
         hint: tBoard("help.cards.menu.hint"),
-      },
-      info: {
-        title: tBoard("help.cards.menu.title"),
-        description: tBoard("help.cards.menu.info"),
       },
       align: "right",
     };
@@ -271,7 +331,7 @@ export function BoardTaskCard({
       },
       info: {
         title: tBoard("help.cards.assignees.title"),
-        description: tBoard("help.cards.assignees.info"),
+        description: raciInfoDescription,
       },
     };
 
@@ -284,7 +344,7 @@ export function BoardTaskCard({
         },
         info: {
           title: tBoard("help.cards.dueDate.title"),
-          description: tBoard("help.cards.dueDate.info"),
+          description: dueDateInfoDescription,
         },
       };
     }
@@ -295,10 +355,6 @@ export function BoardTaskCard({
           title: tBoard("help.cards.progress.title"),
           description: tBoard("help.cards.progress.body"),
         },
-        info: {
-          title: tBoard("help.cards.progress.title"),
-          description: tBoard("help.cards.progress.info"),
-        },
         align: "right",
       };
     }
@@ -308,10 +364,6 @@ export function BoardTaskCard({
         help: {
           title: tBoard("help.cards.effort.title"),
           description: tBoard("help.cards.effort.body"),
-        },
-        info: {
-          title: tBoard("help.cards.effort.title"),
-          description: tBoard("help.cards.effort.info"),
         },
         align: "right",
       };
@@ -328,14 +380,14 @@ export function BoardTaskCard({
         },
         info: {
           title: tBoard("help.cards.fractal.title"),
-          description: tBoard("help.cards.fractal.info"),
+          description: fractalInfoDescription,
         },
         align: "right",
       };
     }
 
     return messages;
-  }, [tBoard, raciDetails, node.dueAt, node.effort, displayOptions.showProgress, fractalPath, childBoard]);
+  }, [tBoard, locale, raciDetails, node.dueAt, node.effort, node.counts?.backlog, node.counts?.inProgress, node.counts?.blocked, node.counts?.done, displayOptions.showProgress, fractalPath, childBoard, lateness]);
 
   return (
     <div

@@ -230,28 +230,6 @@ function BoardSkeleton(){
   );
 }
 
-type TooltipVariant = {
-  title?: string;
-  description?: React.ReactNode;
-  hint?: React.ReactNode;
-};
-
-function pickTooltipVariant(helpMode: boolean, variants: { help?: TooltipVariant; info?: TooltipVariant }): TooltipVariant | null {
-  const candidate = helpMode ? (variants.help ?? variants.info ?? null) : (variants.info ?? null);
-  if (!candidate) {
-    return null;
-  }
-
-  const hasContent = [candidate.title, candidate.description, candidate.hint].some((value) => {
-    if (typeof value === 'string') {
-      return value.trim().length > 0;
-    }
-    return Boolean(value);
-  });
-
-  return hasContent ? candidate : null;
-}
-
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
@@ -1399,53 +1377,32 @@ export function TeamBoardPage(){
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="relative flex-1 min-w-[240px]">
-                        {(() => {
-                          const tooltip = pickTooltipVariant(helpMode, {
-                            help: {
-                              title: tBoard('help.search.title'),
-                              description: tBoard('help.search.body'),
-                              hint: tBoard('help.search.hint'),
-                            },
-                            info: {
-                              title: tBoard('help.search.title'),
-                              description: tBoard('help.search.info'),
-                            },
-                          });
-                          const field = (
-                            <label className="flex flex-col gap-1 text-xs text-muted">
-                              <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
-                              <input
-                                type="search"
-                                value={searchDraft}
-                                onChange={(event) => setSearchDraft(event.target.value)}
-                                onFocus={() => {
-                                  if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                  setSearchFocused(true);
-                                }}
-                                onBlur={() => {
-                                  if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                  searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                                }}
-                                placeholder={tBoard('search.placeholder')}
-                                className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                                aria-label={tBoard('search.aria')}
-                              />
-                              <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
-                            </label>
-                          );
-                          return tooltip ? (
-                            <HelpTooltip
-                              helpMode={helpMode}
-                              mode="always"
-                              title={tooltip.title}
-                              description={tooltip.description}
-                              hint={tooltip.hint}
-                              className="block"
-                            >
-                              {field}
-                            </HelpTooltip>
-                          ) : field;
-                        })()}
+                        <HelpTooltip
+                          title={tBoard('help.search.title')}
+                          description={tBoard('help.search.body')}
+                          hint={tBoard('help.search.hint')}
+                        >
+                          <label className="flex flex-col gap-1 text-xs text-muted">
+                            <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
+                            <input
+                              type="search"
+                              value={searchDraft}
+                              onChange={(event) => setSearchDraft(event.target.value)}
+                              onFocus={() => {
+                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                setSearchFocused(true);
+                              }}
+                              onBlur={() => {
+                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                                searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                              }}
+                              placeholder={tBoard('search.placeholder')}
+                              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                              aria-label={tBoard('search.aria')}
+                            />
+                            <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
+                          </label>
+                        </HelpTooltip>
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
                             <ul className="max-h-56 overflow-y-auto py-2 text-sm">
@@ -1472,55 +1429,82 @@ export function TeamBoardPage(){
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setFilterMine((prev) => !prev)}
-                          className={pillClass(filterMine)}
-                          aria-pressed={filterMine}
+                        <HelpTooltip
+                          title={tBoard('help.quickFilters.mine.title')}
+                          description={tBoard('help.quickFilters.mine.body')}
                         >
-                          {tBoard('quickFilters.mine')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSortPriority((prev) => !prev)}
-                          className={pillClass(sortPriority)}
-                          aria-pressed={sortPriority}
+                          <button
+                            type="button"
+                            onClick={() => setFilterMine((prev) => !prev)}
+                            className={pillClass(filterMine)}
+                            aria-pressed={filterMine}
+                          >
+                            {tBoard('quickFilters.mine')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          title={tBoard('help.quickFilters.priority.title')}
+                          description={tBoard('help.quickFilters.priority.body')}
                         >
-                          {tBoard('quickFilters.sortPriority')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSortDueDate((prev) => !prev)}
-                          className={pillClass(sortDueDate)}
-                          aria-pressed={sortDueDate}
+                          <button
+                            type="button"
+                            onClick={() => setSortPriority((prev) => !prev)}
+                            className={pillClass(sortPriority)}
+                            aria-pressed={sortPriority}
+                          >
+                            {tBoard('quickFilters.sortPriority')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          title={tBoard('help.quickFilters.dueDate.title')}
+                          description={tBoard('help.quickFilters.dueDate.body')}
                         >
-                          {tBoard('quickFilters.sortDueDate')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setExpertMode(!expertMode)}
-                          className={pillClass(expertMode)}
-                          aria-pressed={expertMode}
-                          aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
-                          title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
+                          <button
+                            type="button"
+                            onClick={() => setSortDueDate((prev) => !prev)}
+                            className={pillClass(sortDueDate)}
+                            aria-pressed={sortDueDate}
+                          >
+                            {tBoard('quickFilters.sortDueDate')}
+                          </button>
+                        </HelpTooltip>
+                        <HelpTooltip
+                          title={tBoard('help.quickFilters.expert.title')}
+                          description={tBoard('help.quickFilters.expert.body')}
+                          hint={tBoard('help.quickFilters.expert.hint')}
                         >
-                          {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpertMode(!expertMode)}
+                            className={pillClass(expertMode)}
+                            aria-pressed={expertMode}
+                            aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
+                            title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
+                          >
+                            {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
+                          </button>
+                        </HelpTooltip>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
-                        <button
-                            type="button"
-                            onClick={() => setFiltersExpanded((prev) => !prev)}
-                            className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
-                            aria-expanded={filtersExpanded}
-                            aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
-                          >
-                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                              <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
-                            </svg>
-                            {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
-                          </button>
+                        <HelpTooltip
+                          title={tBoard('help.filtersButton.title')}
+                          description={tBoard('help.filtersButton.body')}
+                          hint={tBoard('help.filtersButton.hint')}
+                        >
+                          <button
+                              type="button"
+                              onClick={() => setFiltersExpanded((prev) => !prev)}
+                              className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
+                              aria-expanded={filtersExpanded}
+                              aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
+                              </svg>
+                              {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
+                            </button>
+                        </HelpTooltip>
                       </div>
                     </div>
                   </div>

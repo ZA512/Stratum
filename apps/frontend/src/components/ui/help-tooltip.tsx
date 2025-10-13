@@ -2,6 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
+import { useHelpModeValue } from "@/contexts/HelpModeContext";
 
 export type HelpTooltipMode = "help" | "always";
 
@@ -85,7 +86,7 @@ function composeEventHandlers<E>(
 }
 
 export function HelpTooltip({
-  helpMode,
+  helpMode: helpModeProp,
   title,
   description,
   hint,
@@ -96,6 +97,9 @@ export function HelpTooltip({
   mode = "help",
   children,
 }: HelpTooltipProps) {
+  const helpModeFromContext = useHelpModeValue();
+  const helpMode = helpModeProp ?? helpModeFromContext;
+
   const hasContent = React.useMemo(() => {
     const titleAvailable = hasRichContent(title);
     return titleAvailable || hasRichContent(description) || hasRichContent(hint);
@@ -230,6 +234,12 @@ export function HelpTooltip({
 
   const childIsElement = React.isValidElement(children);
   const safeChild = childIsElement ? children as React.ReactElement : <span>{children}</span>;
+
+  // Pendant le SSR ou avant le montage, retourner l'enfant tel quel sans modification
+  if (!isMounted) {
+    return safeChild;
+  }
+
   const existingRef = childIsElement && "ref" in safeChild ? (safeChild as unknown as { ref?: React.Ref<HTMLElement> }).ref : undefined;
 
   const mergedClassName = mergeClassNames(
@@ -268,7 +278,7 @@ export function HelpTooltip({
         }
       },
     ),
-    className: mergedClassName,
+    ...(mergedClassName ? { className: mergedClassName } : {}),
     "aria-describedby": open
       ? mergeIds(
           childIsElement ? (safeChild.props as { [key: string]: string | undefined })["aria-describedby"] : undefined,
@@ -278,10 +288,6 @@ export function HelpTooltip({
   };
 
   const clonedChild = React.cloneElement(safeChild, childProps);
-
-  if (!isMounted) {
-    return clonedChild;
-  }
 
   const tooltip = open
     ? createPortal(
