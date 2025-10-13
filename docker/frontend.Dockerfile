@@ -28,4 +28,5 @@ COPY --from=base /app/apps/frontend/public ./apps/frontend/public
 
 WORKDIR /app/apps/frontend
 EXPOSE 3000
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]
+# Use absolute path to the next binary located in /app/node_modules (copied from base)
+CMD ["node", "/app/node_modules/next/dist/bin/next", "start", "-p", "3000"]

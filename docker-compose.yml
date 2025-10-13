@@ -49,12 +49,13 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=${POSTGRES_SCHEMA}
       REDIS_URL: redis://redis:6379
       PORT: ${BACKEND_PORT}
+      AUTORUN_MIGRATIONS: "true"
     entrypoint: ["/bin/sh", "/app/apps/backend/entrypoint-backend.sh"]
     ports:
       - "${BACKEND_PORT}:4001"
     restart: unless-stopped
-    volumes:
-      - ./docker/entrypoint-backend.sh:/app/apps/backend/entrypoint-backend.sh:ro
+    # Note: do not mount the host entrypoint here (it may contain CRLF/markdown artifacts).
+    # The image contains a sanitized entrypoint; mounting a host file can override it and break /bin/sh.
 
   frontend:
     build:

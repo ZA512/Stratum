@@ -30,6 +30,10 @@ COPY --from=base /app/apps/backend/prisma ./apps/backend/prisma
 COPY docker/entrypoint-backend.sh /app/apps/backend/entrypoint-backend.sh
 
 WORKDIR /app/apps/backend
+# Normalize entrypoint: remove CR, strip any markdown fences (```), and make executable
+RUN sed -i 's/\r$//' entrypoint-backend.sh || true
+RUN sed -i '/^```/d' entrypoint-backend.sh || true
+RUN sed -i "1s/^\xef\xbb\xbf//" entrypoint-backend.sh || true
 RUN chmod +x entrypoint-backend.sh
 EXPOSE 4001
 

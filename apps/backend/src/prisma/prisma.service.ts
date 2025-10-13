@@ -16,6 +16,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   private installMiddleware() {
     if (!this.metricsEnabled) return;
+    // Guard: ensure Prisma client instance exposes $use before using middleware
+    if (typeof (this as any).$use !== 'function') {
+      this.logger.warn('$use middleware not available on Prisma client - skipping metrics middleware');
+      return;
+    }
     // Cast pour accéder à $use (type déjà présent mais TS peut râler selon config)
     (this as any).$use(async (params: any, next: any) => {
       const start = process.hrtime();
