@@ -1,5 +1,11 @@
 ﻿const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
 
+// Debug: show which base URL the frontend uses for API calls (helpful when troubleshooting builds)
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line no-console
+  console.debug("auth-api: API_BASE_URL=", API_BASE_URL);
+}
+
 type LoginResponse = {
   user: {
     id: string;
