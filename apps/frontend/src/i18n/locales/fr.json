@@ -405,6 +405,16 @@
       "prompts": {
         "raciTeamName": "Nom de votre équipe RACI"
       },
+      "lifecycle": {
+        "title": "Gestion du cycle de vie",
+        "autoArchive": "Archivage automatique",
+        "autoArchiveTooltip": {
+          "title": "Pourquoi l'archivage automatique ?",
+          "description": "L'archivage automatique permet de garder le backlog lisible en archivant les tâches qui n'ont pas été touchées depuis longtemps.",
+          "why": "Certaines tâches perdent de leur actualité. Plutôt que d'encombrer le backlog, elles sont archivées. L'archivage n'est pas une suppression : vous pouvez retrouver ces tâches via les filtres et les désarchiver si besoin.",
+          "config": "Vous pouvez ajuster le délai d'archivage dans les paramètres de la colonne (0 pour désactiver). Cliquer sur « Prolonger » réinitialise le compteur et décale l'archivage."
+        }
+      },
       "backlog": {
         "title": "Cycle backlog",
         "tooltip": {
@@ -432,6 +442,16 @@
           "extending": "En cours…",
           "disabled": "L'archivage automatique n'est pas configuré pour cette colonne backlog.",
           "noCountdown": "Le compteur d'archivage démarrera lors de votre prochaine interaction avec cette tâche."
+        },
+        "lifecycle": {
+          "title": "Gestion du cycle de vie",
+          "autoArchive": "Archivage automatique",
+          "autoArchiveTooltip": {
+            "title": "Pourquoi l'archivage automatique ?",
+            "description": "L'archivage automatique permet de libérer la colonne \"Terminé\" et de vraiment voir ce qui a été fini récemment.",
+            "why": "Les tâches terminées s'accumulent rapidement. L'archivage automatique garde la colonne lisible en déplaçant les anciennes tâches dans l'archive. L'archivage n'est pas une suppression : vous pouvez retrouver ces tâches via les filtres et les désarchiver si besoin.",
+            "config": "Vous pouvez ajuster le délai d'archivage dans les paramètres de la colonne (0 pour désactiver). Cliquer sur \"Prolonger\" réinitialise le compteur et décale l'archivage."
+          }
         },
         "hideUntil": {
           "label": "Masquer jusqu’au"

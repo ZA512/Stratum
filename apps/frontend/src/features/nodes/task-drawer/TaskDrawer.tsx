@@ -1427,16 +1427,18 @@ export const TaskDrawer: React.FC = () => {
                       </section>
 
                       {isBacklogCard && (
-                        <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
-                          {/* Champ snooze avec tooltip */}
-                          <div className="flex flex-col gap-2">
-                            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                              <span className="material-symbols-outlined text-[20px]">snooze</span>
-                              <span>{tBoard('taskDrawer.backlog.snooze.label')}</span>
+                        <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300 mb-3">
+                            {tBoard('taskDrawer.lifecycle.title')}
+                          </h3>
+
+                          {/* Ligne 1: Snooze */}
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="material-symbols-outlined text-[18px] text-sky-600 dark:text-sky-400">snooze</span>
+                              <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.backlog.snooze.label')}</span>
                               <div className="group relative">
-                                <span className="material-symbols-outlined cursor-help text-[18px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                                  info
-                                </span>
+                                <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
                                 <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-sky-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
                                   <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-sky-500/20 bg-slate-800"></div>
                                   <h4 className="mb-2 flex items-center gap-2 font-semibold text-sky-400">
@@ -1444,95 +1446,87 @@ export const TaskDrawer: React.FC = () => {
                                     {tBoard('taskDrawer.backlog.snooze.tooltip.title')}
                                   </h4>
                                   <div className="space-y-2 text-slate-300">
-                                    <p className="text-[11px]">
-                                      {tBoard('taskDrawer.backlog.snooze.tooltip.description')}
-                                    </p>
+                                    <p className="text-[11px]">{tBoard('taskDrawer.backlog.snooze.tooltip.description')}</p>
                                   </div>
                                 </div>
                               </div>
-                            </label>
-                            <input
-                              type="date"
-                              value={backlogHiddenUntil}
-                              onChange={(event) => setBacklogHiddenUntil(event.target.value)}
-                              className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40"
-                              disabled={saving}
-                            />
-                            {backlogHiddenUntil && snoozeCountdown && (
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {snoozeCountdown}
-                              </p>
-                            )}
+                            </div>
+                            <div className="flex-shrink-0 w-48">
+                              <input
+                                type="date"
+                                value={backlogHiddenUntil}
+                                onChange={(event) => setBacklogHiddenUntil(event.target.value)}
+                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                                disabled={saving}
+                              />
+                            </div>
                           </div>
+                          {backlogHiddenUntil && snoozeCountdown && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 ml-6">{snoozeCountdown}</p>
+                          )}
 
-                          {/* Avertissement d'archivage */}
+                          {/* Ligne 2: Archivage automatique */}
                           {backlogArchiveConfig !== null ? (
-                            archiveCountdown ? (
-                              <div className={`rounded-lg border p-3 ${
-                                archiveCountdown.isExpired
-                                  ? 'border-red-500/40 bg-red-500/10'
-                                  : archiveCountdown.isCritical
-                                  ? 'border-orange-500/40 bg-orange-500/10'
-                                  : 'border-amber-500/20 bg-amber-500/5'
-                              }`}>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400">
-                                    {archiveCountdown.isExpired || archiveCountdown.isCritical ? 'warning' : 'schedule'}
-                                  </span>
-                                  <p className={`text-xs font-semibold ${
-                                    archiveCountdown.isExpired
-                                      ? 'text-red-600 dark:text-red-400'
-                                      : archiveCountdown.isCritical
-                                      ? 'text-orange-600 dark:text-orange-400'
-                                      : 'text-amber-600 dark:text-amber-400'
-                                  }`}>
-                                    {tBoard('taskDrawer.backlog.archive.warning')}
-                                  </p>
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`material-symbols-outlined text-[18px] ${
+                                  archiveCountdown?.isExpired || archiveCountdown?.isCritical
+                                    ? 'text-orange-600 dark:text-orange-400'
+                                    : 'text-amber-600 dark:text-amber-400'
+                                }`}>inventory_2</span>
+                                <div className="min-w-0">
+                                  <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.lifecycle.autoArchive')}</span>
+                                  <div className="group relative inline-block ml-1">
+                                    <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
+                                    <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-96 -translate-x-1/2 rounded-lg border border-amber-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
+                                      <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-amber-500/20 bg-slate-800"></div>
+                                      <h4 className="mb-2 flex items-center gap-2 font-semibold text-amber-400">
+                                        <span className="material-symbols-outlined text-[16px]">info</span>
+                                        {tBoard('taskDrawer.lifecycle.autoArchiveTooltip.title')}
+                                      </h4>
+                                      <div className="space-y-2 text-slate-300">
+                                        <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.description')}</p>
+                                        <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.why')}</p>
+                                        <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.config')}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {archiveCountdown && (
+                                    <p className={`text-[11px] truncate ${
+                                      archiveCountdown.isExpired
+                                        ? 'text-red-600 dark:text-red-400'
+                                        : archiveCountdown.isCritical
+                                        ? 'text-orange-600 dark:text-orange-400'
+                                        : 'text-slate-600 dark:text-slate-400'
+                                    }`}>
+                                      {tBoard('taskDrawer.backlog.archive.date', { date: formatDateMedium(archiveCountdown.archiveDate) })}
+                                    </p>
+                                  )}
                                 </div>
-                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
-                                  {tBoard('taskDrawer.backlog.archive.date', {
-                                    date: formatDateMedium(archiveCountdown.archiveDate)
-                                  })}
-                                </p>
+                              </div>
+                              <div className="flex-shrink-0 w-48">
                                 <button
                                   type="button"
                                   onClick={handleResetArchiveCounter}
                                   disabled={resettingArchiveCounter || saving}
-                                  className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
+                                  className="w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-600 transition hover:border-amber-500 hover:bg-amber-500/20 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400 dark:hover:text-amber-300"
                                 >
                                   {resettingArchiveCounter
                                     ? tBoard('taskDrawer.backlog.archive.extending')
                                     : tBoard('taskDrawer.backlog.archive.extend', { days: backlogArchiveConfig })}
                                 </button>
                               </div>
-                            ) : (
-                              <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                                  {tBoard('taskDrawer.backlog.archive.noCountdown')}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={handleResetArchiveCounter}
-                                  disabled={resettingArchiveCounter || saving}
-                                  className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
-                                >
-                                  {resettingArchiveCounter
-                                    ? tBoard('taskDrawer.backlog.archive.extending')
-                                    : tBoard('taskDrawer.backlog.archive.extend', { days: backlogArchiveConfig })}
-                                </button>
-                              </div>
-                            )
+                            </div>
                           ) : (
-                            <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
-                                {tBoard('taskDrawer.backlog.archive.disabled')}
-                              </p>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 italic ml-6">
+                              <span className="material-symbols-outlined text-[16px]">inventory_2</span>
+                              <span>{tBoard('taskDrawer.backlog.archive.disabled')}</span>
                             </div>
                           )}
                         </section>
                       )}
 
-                      {/* Panneau archivage pour colonnes DONE (sans snooze) */}
+                      {/* Panneau "Gestion du cycle de vie" pour colonnes DONE (sans snooze) */}
                       {(() => {
                         const boardToUse = (detail.board || board);
                         const columns = boardToUse?.columns;
@@ -1540,74 +1534,73 @@ export const TaskDrawer: React.FC = () => {
                         const currentCol = columns.find(c => c.id === detail.columnId);
                         const isDone = currentCol?.behaviorKey === 'DONE';
                         if (!isDone) return null;
-                        if (doneArchiveConfig === null) {
-                          return (
-                            <section className="space-y-2 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400">inventory_2</span>
-                                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.done.archive.title')}</h3>
-                              </div>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">{tBoard('taskDrawer.done.archive.disabled')}</p>
-                            </section>
-                          );
-                        }
+                        
                         return (
                           <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400">inventory_2</span>
-                              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.done.archive.title')}</h3>
-                            </div>
-                            {doneArchiveCountdown ? (
-                              <div className={`rounded-lg border p-3 ${
-                                doneArchiveCountdown.isExpired
-                                  ? 'border-red-500/40 bg-red-500/10'
-                                  : doneArchiveCountdown.isCritical
-                                  ? 'border-orange-500/40 bg-orange-500/10'
-                                  : 'border-emerald-500/20 bg-emerald-500/5'
-                              }`}>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="material-symbols-outlined text-[20px] ${doneArchiveCountdown.isExpired || doneArchiveCountdown.isCritical ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">schedule</span>
-                                  <p className={`text-xs font-semibold ${
-                                    doneArchiveCountdown.isExpired
-                                      ? 'text-red-600 dark:text-red-400'
-                                      : doneArchiveCountdown.isCritical
-                                      ? 'text-orange-600 dark:text-orange-400'
-                                      : 'text-emerald-600 dark:text-emerald-400'
-                                  }`}>
-                                    {tBoard('taskDrawer.done.archive.warning')}
-                                  </p>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              {tBoard('taskDrawer.backlog.lifecycle.title')}
+                            </h3>
+                            
+                            {/* Ligne unique: Archivage automatique */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[18px] text-amber-600 dark:text-amber-400">inventory_2</span>
+                                <span className="text-sm text-slate-700 dark:text-slate-300">
+                                  {tBoard('taskDrawer.backlog.lifecycle.autoArchive')}
+                                </span>
+                                {/* Tooltip expliquant l'archivage pour DONE */}
+                                <div className="group relative">
+                                  <button
+                                    type="button"
+                                    className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[11px] text-slate-500 hover:border-slate-400 hover:text-slate-600 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-500"
+                                    aria-label="Info archivage automatique"
+                                  >
+                                    i
+                                  </button>
+                                  <div className="pointer-events-none invisible absolute left-0 top-6 z-50 w-80 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800">
+                                    <p className="font-semibold mb-1 text-slate-900 dark:text-slate-100">
+                                      {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.title')}
+                                    </p>
+                                    <p className="mb-2 text-slate-600 dark:text-slate-300">
+                                      {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.description')}
+                                    </p>
+                                    <p className="mb-2 text-slate-600 dark:text-slate-300">
+                                      {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.why')}
+                                    </p>
+                                    <p className="text-slate-600 dark:text-slate-300">
+                                      {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.config')}
+                                    </p>
+                                  </div>
                                 </div>
-                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
-                                  {tBoard('taskDrawer.done.archive.date', { date: formatDateMedium(doneArchiveCountdown.archiveDate) })}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={handleResetArchiveCounter}
-                                  disabled={resettingArchiveCounter || saving}
-                                  className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
-                                >
-                                  {resettingArchiveCounter
-                                    ? tBoard('taskDrawer.done.archive.extending')
-                                    : tBoard('taskDrawer.done.archive.extend', { days: doneArchiveConfig })}
-                                </button>
                               </div>
-                            ) : (
-                              <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                                  {tBoard('taskDrawer.done.archive.noCountdown')}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={handleResetArchiveCounter}
-                                  disabled={resettingArchiveCounter || saving}
-                                  className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
-                                >
-                                  {resettingArchiveCounter
-                                    ? tBoard('taskDrawer.done.archive.extending')
-                                    : tBoard('taskDrawer.done.archive.extend', { days: doneArchiveConfig })}
-                                </button>
+                              <div className="flex items-center gap-3">
+                                {doneArchiveConfig !== null && doneArchiveCountdown && (
+                                  <p className={`text-xs font-medium ${
+                                    doneArchiveCountdown.isExpired || doneArchiveCountdown.isCritical
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-slate-600 dark:text-slate-400'
+                                  }`}>
+                                    {tBoard('taskDrawer.backlog.archive.date', { date: formatDateMedium(doneArchiveCountdown.archiveDate) })}
+                                  </p>
+                                )}
+                                {doneArchiveConfig !== null ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleResetArchiveCounter}
+                                    disabled={resettingArchiveCounter || saving}
+                                    className="w-48 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-600 transition hover:border-amber-500 hover:bg-amber-500/20 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400 dark:hover:text-amber-300"
+                                  >
+                                    {resettingArchiveCounter
+                                      ? tBoard('taskDrawer.backlog.archive.extending')
+                                      : tBoard('taskDrawer.backlog.archive.extend', { days: doneArchiveConfig })}
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                    {tBoard('taskDrawer.backlog.archive.disabled')}
+                                  </span>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </section>
                         );
                       })()}

@@ -393,6 +393,16 @@
       "prompts": {
         "raciTeamName": "Name of your RACI team"
       },
+      "lifecycle": {
+        "title": "Lifecycle Management",
+        "autoArchive": "Automatic archiving",
+        "autoArchiveTooltip": {
+          "title": "Why automatic archiving?",
+          "description": "Automatic archiving keeps the backlog readable by archiving tasks that haven't been touched in a long time.",
+          "why": "Some tasks lose their relevance. Rather than cluttering the backlog, they are archived. Archiving is not deletion: you can find these tasks via filters and unarchive them if needed.",
+          "config": "You can adjust the archive delay in the column settings (0 to disable). Clicking \"Extend\" resets the counter and postpones the archive."
+        }
+      },
       "backlog": {
         "title": "Backlog cycle",
         "tooltip": {
@@ -420,6 +430,16 @@
           "extending": "Processing…",
           "disabled": "Automatic archiving is not configured for this backlog column.",
           "noCountdown": "The archive countdown will start on your next interaction with this task."
+        },
+        "lifecycle": {
+          "title": "Lifecycle Management",
+          "autoArchive": "Automatic archiving",
+          "autoArchiveTooltip": {
+            "title": "Why automatic archiving?",
+            "description": "Automatic archiving frees up the \"Done\" column so you can truly see what was recently completed.",
+            "why": "Completed tasks accumulate quickly. Automatic archiving keeps the column readable by moving old tasks to the archive. Archiving is not deletion: you can find these tasks via filters and unarchive them if needed.",
+            "config": "You can adjust the archive delay in the column settings (0 to disable). Clicking \"Extend\" resets the counter and postpones the archive."
+          }
         },
         "done": {
           "archive": {
