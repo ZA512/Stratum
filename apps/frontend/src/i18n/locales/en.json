@@ -406,6 +406,20 @@
           "footer": "Keep control of your backlog without losing sight of important work."
         },
         "description": "Adjust when the backlog card resurfaces and restart the review cycle if needed.",
+        "snooze": {
+          "label": "Snooze the task",
+          "tooltip": {
+            "title": "What is snooze?",
+            "description": "Snoozing allows you to temporarily hide a backlog task until a chosen date. During this time, the task doesn't appear in the column, but an icon counter shows how many tasks are snoozed. You can view and modify these tasks anytime via the filters panel."
+          }
+        },
+        "archive": {
+          "warning": "This task will be automatically archived",
+          "date": "Scheduled date: {date}",
+          "extend": "⏰ Extend by {days} days",
+          "extending": "Processing…",
+          "disabled": "Automatic archiving is not configured for this backlog column."
+        },
         "hideUntil": {
           "label": "Hide until"
         },

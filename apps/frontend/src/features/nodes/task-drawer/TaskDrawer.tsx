@@ -321,7 +321,7 @@ export const TaskDrawer: React.FC = () => {
     const daysRemaining = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
     const isCritical = daysRemaining <= 7 && daysRemaining > 0;
     const isExpired = daysRemaining <= 0;
-    return { daysRemaining, isCritical, isExpired, archiveDate };
+    return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays };
   }, [isBacklogCard, detail, board]);
 
   const archiveCountdownLabel = useMemo(() => {
@@ -1354,151 +1354,88 @@ export const TaskDrawer: React.FC = () => {
 
                       {isBacklogCard && (
                         <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">history_toggle_off</span>
-                            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              {tBoard('taskDrawer.backlog.title')}
-                            </h3>
-                            <div className="group relative">
-                              <span className="material-symbols-outlined cursor-help text-[18px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                                info
-                              </span>
-                              <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-emerald-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
-                                <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-emerald-500/20 bg-slate-800"></div>
-                                <h4 className="mb-2 flex items-center gap-2 font-semibold text-emerald-400">
-                                  <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                  {tBoard('taskDrawer.backlog.tooltip.title')}
-                                </h4>
-                                <div className="space-y-2 text-slate-300">
-                                  <p>
-                                    {tBoard('taskDrawer.backlog.tooltip.intro')}
-                                  </p>
-                                  <ul className="ml-4 list-disc space-y-1 text-[11px]">
-                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.reappear')}</li>
-                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.snooze')}</li>
-                                    <li>{tBoard('taskDrawer.backlog.tooltip.points.manual')}</li>
-                                  </ul>
-                                  <p className="pt-2 text-[11px] italic text-slate-400">
-                                    {tBoard('taskDrawer.backlog.tooltip.footer')}
-                                  </p>
+                          {/* Champ snooze avec tooltip */}
+                          <div className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                              <span className="material-symbols-outlined text-[20px]">snooze</span>
+                              <span>{tBoard('taskDrawer.backlog.snooze.label')}</span>
+                              <div className="group relative">
+                                <span className="material-symbols-outlined cursor-help text-[18px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                  info
+                                </span>
+                                <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-sky-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
+                                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-sky-500/20 bg-slate-800"></div>
+                                  <h4 className="mb-2 flex items-center gap-2 font-semibold text-sky-400">
+                                    <span className="material-symbols-outlined text-[16px]">info</span>
+                                    {tBoard('taskDrawer.backlog.snooze.tooltip.title')}
+                                  </h4>
+                                  <div className="space-y-2 text-slate-300">
+                                    <p className="text-[11px]">
+                                      {tBoard('taskDrawer.backlog.snooze.tooltip.description')}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {tBoard('taskDrawer.backlog.description')}
-                          </p>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
-                              <span className="flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-[18px]">visibility_off</span>
-                                {tBoard('taskDrawer.backlog.hideUntil.label')}
-                              </span>
-                              <input
-                                type="date"
-                                value={backlogHiddenUntil}
-                                onChange={(event) => setBacklogHiddenUntil(event.target.value)}
-                                className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
-                                disabled={saving}
-                              />
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                                <span className="font-medium">{backlogHiddenDisplay}</span>
-                                {snoozeCountdown && (
-                                  <span className="ml-1 text-[11px] text-slate-400 dark:text-slate-500">({snoozeCountdown})</span>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setBacklogHiddenUntil('')}
-                                className="self-start rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-500 transition hover:border-emerald-400/50 hover:text-emerald-500 disabled:opacity-50"
-                                disabled={saving || !backlogHiddenUntil}
-                              >
-                                {tBoard('taskDrawer.backlog.resetSnooze')}
-                              </button>
                             </label>
-                            <div className="space-y-1 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-500 dark:text-slate-400">
-                              <p>
-                                {tBoard('taskDrawer.backlog.summary.nextReview')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.nextReview}</span>
-                              </p>
-                              <p>
-                                {tBoard('taskDrawer.backlog.summary.lastReminder')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastReminder}</span>
-                              </p>
-                              <p>
-                                {tBoard('taskDrawer.backlog.summary.reviewStarted')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.reviewStarted}</span>
-                              </p>
-                              <p>
-                                {tBoard('taskDrawer.backlog.summary.lastInteraction')} : <span className="font-medium text-foreground dark:text-slate-200">{backlogAutomationLabels.lastInteraction}</span>
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setBacklogRestartRequested((prev) => !prev)}
-                              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
-                                backlogRestartRequested
-                                  ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-100'
-                                  : 'border-white/15 bg-white/5 text-slate-500 hover:border-emerald-400/50 hover:text-emerald-500'
-                              }`}
+                            <input
+                              type="date"
+                              value={backlogHiddenUntil}
+                              onChange={(event) => setBacklogHiddenUntil(event.target.value)}
+                              className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                               disabled={saving}
-                            >
-                              {backlogRestartRequested
-                                ? tBoard('taskDrawer.backlog.restart.scheduled')
-                                : tBoard('taskDrawer.backlog.restart.now')}
-                            </button>
-                            {!backlogHiddenUntil && (
-                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {tBoard('taskDrawer.backlog.restart.noSnooze')}
-                              </span>
+                            />
+                            {backlogHiddenUntil && snoozeCountdown && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {snoozeCountdown}
+                              </p>
                             )}
                           </div>
-                          {archiveCountdown && (
+
+                          {/* Avertissement d'archivage */}
+                          {archiveCountdown ? (
                             <div className={`rounded-lg border p-3 ${
                               archiveCountdown.isExpired
                                 ? 'border-red-500/40 bg-red-500/10'
                                 : archiveCountdown.isCritical
                                 ? 'border-orange-500/40 bg-orange-500/10'
-                                : 'border-slate-500/20 bg-slate-500/5'
+                                : 'border-amber-500/20 bg-amber-500/5'
                             }`}>
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex-1">
-                                  <p className={`text-xs font-semibold ${
-                                    archiveCountdown.isExpired
-                                      ? 'text-red-600 dark:text-red-400'
-                                      : archiveCountdown.isCritical
-                                      ? 'text-orange-600 dark:text-orange-400'
-                                      : 'text-slate-600 dark:text-slate-400'
-                                  }`}>
-                                    {archiveCountdownLabel}
-                                  </p>
-                                  {archiveCountdownDescription && (
-                                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                      {archiveCountdownDescription}
-                                    </p>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={handleResetArchiveCounter}
-                                  disabled={resettingArchiveCounter || saving}
-                                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
-                                >
-                                  {resettingArchiveCounter
-                                    ? tBoard('taskDrawer.backlog.keep.working')
-                                    : tBoard('taskDrawer.backlog.keep.default')}
-                                </button>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400">
+                                  {archiveCountdown.isExpired || archiveCountdown.isCritical ? 'warning' : 'schedule'}
+                                </span>
+                                <p className={`text-xs font-semibold ${
+                                  archiveCountdown.isExpired
+                                    ? 'text-red-600 dark:text-red-400'
+                                    : archiveCountdown.isCritical
+                                    ? 'text-orange-600 dark:text-orange-400'
+                                    : 'text-amber-600 dark:text-amber-400'
+                                }`}>
+                                  {tBoard('taskDrawer.backlog.archive.warning')}
+                                </p>
                               </div>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
+                                {tBoard('taskDrawer.backlog.archive.date', {
+                                  date: formatDateMedium(archiveCountdown.archiveDate)
+                                })}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={handleResetArchiveCounter}
+                                disabled={resettingArchiveCounter || saving}
+                                className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
+                              >
+                                {resettingArchiveCounter
+                                  ? tBoard('taskDrawer.backlog.archive.extending')
+                                  : tBoard('taskDrawer.backlog.archive.extend', { days: archiveCountdown.archiveAfterDays })}
+                              </button>
                             </div>
-                          )}
-                          {backlogRestartRequested ? (
-                            <p className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                              <span className="material-symbols-outlined text-[16px]">autorenew</span>
-                              {tBoard('taskDrawer.backlog.restart.scheduledHint')}
-                            </p>
                           ) : (
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              {tBoard('taskDrawer.backlog.restart.frequencyHint')}
-                            </p>
+                            <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                {tBoard('taskDrawer.backlog.archive.disabled')}
+                              </p>
+                            </div>
                           )}
                         </section>
                       )}

@@ -417,7 +417,21 @@
           },
           "footer": "Gardez le contrôle de votre backlog sans perdre de vue vos tâches importantes."
         },
-        "description": "Ajustez la date de réapparition d’une carte backlog et relancez le cycle si besoin.",
+        "description": "Ajustez la date de réapparition d'une carte backlog et relancez le cycle si besoin.",
+        "snooze": {
+          "label": "Snooze la tâche",
+          "tooltip": {
+            "title": "À quoi sert le snooze ?",
+            "description": "Le snooze permet de masquer temporairement une tâche du backlog jusqu'à une date choisie. Pendant ce temps, la tâche n'apparaît pas dans la colonne, mais un compteur d'icône indique combien de tâches sont en snooze. Vous pouvez voir et modifier ces tâches à tout moment via le panneau de filtres."
+          }
+        },
+        "archive": {
+          "warning": "Cette tâche sera automatiquement archivée",
+          "date": "Date prévue : {date}",
+          "extend": "⏰ Prolonger de {days} jours",
+          "extending": "En cours…",
+          "disabled": "L'archivage automatique n'est pas configuré pour cette colonne backlog."
+        },
         "hideUntil": {
           "label": "Masquer jusqu’au"
         },
