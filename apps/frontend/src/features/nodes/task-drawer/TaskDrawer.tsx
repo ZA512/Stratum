@@ -512,18 +512,34 @@ export const TaskDrawer: React.FC = () => {
   }, [computedActualCost]);
 
   const addBlockedEmail = useCallback(() => {
-    const email = blockedEmailInput.trim().toLowerCase();
-    if (!email) return;
+    const input = blockedEmailInput.trim();
+    if (!input) return;
+    
+    // Séparer par point-virgule pour permettre l'ajout multiple
+    const emails = input.split(';').map(e => e.trim().toLowerCase()).filter(e => e);
+    
+    if (emails.length === 0) return;
+    
     const emailRegex = /.+@.+\..+/;
-    if (!emailRegex.test(email)) {
-      toastError(tBoard('taskDrawer.errors.invalidEmail'));
-      return;
+    const validEmails: string[] = [];
+    const invalidEmails: string[] = [];
+    
+    for (const email of emails) {
+      if (!emailRegex.test(email)) {
+        invalidEmails.push(email);
+      } else if (!blockedEmails.includes(email) && !validEmails.includes(email)) {
+        validEmails.push(email);
+      }
     }
-    if (blockedEmails.includes(email)) {
-      setBlockedEmailInput('');
-      return;
+    
+    if (invalidEmails.length > 0) {
+      toastError(tBoard('taskDrawer.errors.invalidEmail') + ': ' + invalidEmails.join(', '));
     }
-    setBlockedEmails((prev) => [...prev, email]);
+    
+    if (validEmails.length > 0) {
+      setBlockedEmails((prev) => [...prev, ...validEmails]);
+    }
+    
     setBlockedEmailInput('');
   }, [blockedEmailInput, blockedEmails, toastError, tBoard]);
 
@@ -686,6 +702,30 @@ export const TaskDrawer: React.FC = () => {
       cancelled = true;
     };
   }, [teamId, accessToken]);
+
+  // Effet pour vider les champs blocked quand on quitte la colonne BLOCKED
+  useEffect(() => {
+    if (!detail) return;
+    
+    const isCurrentlyBlocked = currentColumnBehavior === 'BLOCKED';
+    
+    // Si on n'est pas dans BLOCKED et qu'on a des données blocked non vides, les vider
+    if (!isCurrentlyBlocked && (
+      blockedReason !== '' ||
+      blockedEmails.length > 0 ||
+      blockedInterval !== '' ||
+      blockedEta !== '' ||
+      isBlockResolved
+    )) {
+      console.log('🧹 Clearing blocked fields - not in BLOCKED column anymore');
+      setBlockedReason('');
+      setBlockedEmails([]);
+      setBlockedEmailInput('');
+      setBlockedInterval('');
+      setBlockedEta('');
+      setIsBlockResolved(false);
+    }
+  }, [currentColumnBehavior, detail, blockedReason, blockedEmails, blockedInterval, blockedEta, isBlockResolved]);
 
   useEffect(() => {
     if (activeTab !== 'raci') return;

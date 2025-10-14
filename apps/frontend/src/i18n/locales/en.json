@@ -498,7 +498,7 @@
         },
         "emails": {
           "label": "Blocker email(s)",
-          "placeholder": "add@example.com (press Enter to add)"
+          "placeholder": "add@example.com ; other@example.com (press Enter to add)"
         },
         "interval": {
           "label": "Automatic reminder",

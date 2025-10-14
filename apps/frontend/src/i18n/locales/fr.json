@@ -499,7 +499,7 @@
         },
         "emails": {
           "label": "Email(s) du/des bloqueur(s)",
-          "placeholder": "ajouter@exemple.com (Entrée pour ajouter)"
+          "placeholder": "ajouter@exemple.com ; autre@exemple.com (Entrée pour ajouter)"
         },
         "interval": {
           "label": "Relance automatique",
