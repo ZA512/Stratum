@@ -277,6 +277,56 @@ export const TaskDrawer: React.FC = () => {
 
   const isBacklogCard = currentColumnBehavior === 'BACKLOG';
 
+  const backlogArchiveConfig = useMemo(() => {
+    if (!isBacklogCard || !detail) {
+      console.log('🔍 backlogArchiveConfig: conditions not met', { isBacklogCard, hasDetail: !!detail });
+      return null;
+    }
+    
+    // Essayer d'abord avec detail.board (qui peut avoir plus d'infos)
+    const boardToUse = detail.board || board;
+    if (!boardToUse) {
+      console.log('🔍 No board available');
+      return null;
+    }
+    
+    const column = boardToUse.columns.find((c) => c.id === detail.columnId) as any;
+    console.log('🔍 Found column:', column);
+    if (!column?.settings) {
+      console.log('🔍 No settings on column');
+      return null;
+    }
+    const settings = column.settings as Record<string, any>;
+    console.log('🔍 Column settings:', settings);
+    let archiveAfterDaysValue: unknown;
+    // Nouvelle logique: structure nested (backlog / done)
+    if (column.behaviorKey === 'BACKLOG') {
+      archiveAfterDaysValue = settings?.backlog?.archiveAfterDays;
+    } else if (column.behaviorKey === 'DONE') {
+      archiveAfterDaysValue = settings?.done?.archiveAfterDays;
+    } else {
+      // Fallback éventuel si d'autres comportements stockent directement archiveAfterDays à la racine
+      archiveAfterDaysValue = (settings as any).archiveAfterDays;
+    }
+    console.log('🔍 archiveAfterDaysValue (nested):', archiveAfterDaysValue, 'type:', typeof archiveAfterDaysValue);
+    const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
+    console.log('🔍 Final archiveAfterDays (nested):', archiveAfterDays);
+    return archiveAfterDays;
+  }, [isBacklogCard, detail, board]);
+
+  // Config archivage pour colonnes DONE (pas de snooze)
+  const doneArchiveConfig = useMemo(() => {
+    if (!detail) return null;
+    const boardToUse = detail.board || board;
+    if (!boardToUse) return null;
+    const column = boardToUse.columns.find((c) => c.id === detail.columnId) as any;
+    if (!column || column.behaviorKey !== 'DONE') return null;
+    if (!column.settings) return null;
+    const settings = column.settings as Record<string, any>;
+    const value = settings?.done?.archiveAfterDays ?? (settings as any).archiveAfterDays;
+    return typeof value === 'number' ? value : null;
+  }, [detail, board]);
+
   const backlogHiddenDisplay = useMemo(
     () => (backlogHiddenUntil ? formatDateLong(`${backlogHiddenUntil}T00:00:00Z`) : '—'),
     [backlogHiddenUntil, formatDateLong],
@@ -307,8 +357,15 @@ export const TaskDrawer: React.FC = () => {
     if (!isBacklogCard || !detail || !board) return null;
   const column = board.columns.find((c) => c.id === detail.columnId);
   if (!column?.settings) return null;
-  const settings = typeof column.settings === 'object' && column.settings !== null ? column.settings as Record<string, unknown> : {};
-  const archiveAfterDaysValue = settings.archiveAfterDays;
+  const settings = column.settings as Record<string, any>;
+  let archiveAfterDaysValue: unknown;
+  if (column.behaviorKey === 'BACKLOG') {
+    archiveAfterDaysValue = settings?.backlog?.archiveAfterDays;
+  } else if (column.behaviorKey === 'DONE') {
+    archiveAfterDaysValue = settings?.done?.archiveAfterDays;
+  } else {
+    archiveAfterDaysValue = (settings as any).archiveAfterDays;
+  }
   const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
     if (archiveAfterDays === null) return null;
     const lastInteraction = detail.backlogLastInteractionAt;
@@ -323,6 +380,23 @@ export const TaskDrawer: React.FC = () => {
     const isExpired = daysRemaining <= 0;
     return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays };
   }, [isBacklogCard, detail, board]);
+
+  // Countdown pour DONE
+  const doneArchiveCountdown = useMemo(() => {
+    if (!detail || !board || doneArchiveConfig === null) return null;
+    // Pour DONE on part de la dernière interaction backlog si disponible, sinon la date d'archivage (si déjà archivé) sinon pas de base
+    const interaction = detail.backlogLastInteractionAt || detail.archivedAt;
+    if (!interaction) return null;
+    const baseDate = new Date(interaction);
+    if (Number.isNaN(baseDate.getTime())) return null;
+    const archiveDate = new Date(baseDate.getTime() + doneArchiveConfig * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const diffMs = archiveDate.getTime() - now.getTime();
+    const daysRemaining = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    const isCritical = daysRemaining <= 7 && daysRemaining > 0;
+    const isExpired = daysRemaining <= 0;
+    return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays: doneArchiveConfig };
+  }, [detail, board, doneArchiveConfig]);
 
   const archiveCountdownLabel = useMemo(() => {
     if (!archiveCountdown) return null;
@@ -1392,44 +1466,62 @@ export const TaskDrawer: React.FC = () => {
                           </div>
 
                           {/* Avertissement d'archivage */}
-                          {archiveCountdown ? (
-                            <div className={`rounded-lg border p-3 ${
-                              archiveCountdown.isExpired
-                                ? 'border-red-500/40 bg-red-500/10'
-                                : archiveCountdown.isCritical
-                                ? 'border-orange-500/40 bg-orange-500/10'
-                                : 'border-amber-500/20 bg-amber-500/5'
-                            }`}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400">
-                                  {archiveCountdown.isExpired || archiveCountdown.isCritical ? 'warning' : 'schedule'}
-                                </span>
-                                <p className={`text-xs font-semibold ${
-                                  archiveCountdown.isExpired
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : archiveCountdown.isCritical
-                                    ? 'text-orange-600 dark:text-orange-400'
-                                    : 'text-amber-600 dark:text-amber-400'
-                                }`}>
-                                  {tBoard('taskDrawer.backlog.archive.warning')}
+                          {backlogArchiveConfig !== null ? (
+                            archiveCountdown ? (
+                              <div className={`rounded-lg border p-3 ${
+                                archiveCountdown.isExpired
+                                  ? 'border-red-500/40 bg-red-500/10'
+                                  : archiveCountdown.isCritical
+                                  ? 'border-orange-500/40 bg-orange-500/10'
+                                  : 'border-amber-500/20 bg-amber-500/5'
+                              }`}>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400">
+                                    {archiveCountdown.isExpired || archiveCountdown.isCritical ? 'warning' : 'schedule'}
+                                  </span>
+                                  <p className={`text-xs font-semibold ${
+                                    archiveCountdown.isExpired
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : archiveCountdown.isCritical
+                                      ? 'text-orange-600 dark:text-orange-400'
+                                      : 'text-amber-600 dark:text-amber-400'
+                                  }`}>
+                                    {tBoard('taskDrawer.backlog.archive.warning')}
+                                  </p>
+                                </div>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
+                                  {tBoard('taskDrawer.backlog.archive.date', {
+                                    date: formatDateMedium(archiveCountdown.archiveDate)
+                                  })}
                                 </p>
+                                <button
+                                  type="button"
+                                  onClick={handleResetArchiveCounter}
+                                  disabled={resettingArchiveCounter || saving}
+                                  className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
+                                >
+                                  {resettingArchiveCounter
+                                    ? tBoard('taskDrawer.backlog.archive.extending')
+                                    : tBoard('taskDrawer.backlog.archive.extend', { days: backlogArchiveConfig })}
+                                </button>
                               </div>
-                              <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
-                                {tBoard('taskDrawer.backlog.archive.date', {
-                                  date: formatDateMedium(archiveCountdown.archiveDate)
-                                })}
-                              </p>
-                              <button
-                                type="button"
-                                onClick={handleResetArchiveCounter}
-                                disabled={resettingArchiveCounter || saving}
-                                className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
-                              >
-                                {resettingArchiveCounter
-                                  ? tBoard('taskDrawer.backlog.archive.extending')
-                                  : tBoard('taskDrawer.backlog.archive.extend', { days: archiveCountdown.archiveAfterDays })}
-                              </button>
-                            </div>
+                            ) : (
+                              <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                                  {tBoard('taskDrawer.backlog.archive.noCountdown')}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={handleResetArchiveCounter}
+                                  disabled={resettingArchiveCounter || saving}
+                                  className="w-full rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sky-600 transition hover:border-sky-500 hover:bg-sky-500/20 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400 dark:hover:text-sky-300"
+                                >
+                                  {resettingArchiveCounter
+                                    ? tBoard('taskDrawer.backlog.archive.extending')
+                                    : tBoard('taskDrawer.backlog.archive.extend', { days: backlogArchiveConfig })}
+                                </button>
+                              </div>
+                            )
                           ) : (
                             <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
                               <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
@@ -1439,6 +1531,86 @@ export const TaskDrawer: React.FC = () => {
                           )}
                         </section>
                       )}
+
+                      {/* Panneau archivage pour colonnes DONE (sans snooze) */}
+                      {(() => {
+                        const boardToUse = (detail.board || board);
+                        const columns = boardToUse?.columns;
+                        if (!columns) return null;
+                        const currentCol = columns.find(c => c.id === detail.columnId);
+                        const isDone = currentCol?.behaviorKey === 'DONE';
+                        if (!isDone) return null;
+                        if (doneArchiveConfig === null) {
+                          return (
+                            <section className="space-y-2 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400">inventory_2</span>
+                                <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.done.archive.title')}</h3>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">{tBoard('taskDrawer.done.archive.disabled')}</p>
+                            </section>
+                          );
+                        }
+                        return (
+                          <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400">inventory_2</span>
+                              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.done.archive.title')}</h3>
+                            </div>
+                            {doneArchiveCountdown ? (
+                              <div className={`rounded-lg border p-3 ${
+                                doneArchiveCountdown.isExpired
+                                  ? 'border-red-500/40 bg-red-500/10'
+                                  : doneArchiveCountdown.isCritical
+                                  ? 'border-orange-500/40 bg-orange-500/10'
+                                  : 'border-emerald-500/20 bg-emerald-500/5'
+                              }`}>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="material-symbols-outlined text-[20px] ${doneArchiveCountdown.isExpired || doneArchiveCountdown.isCritical ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">schedule</span>
+                                  <p className={`text-xs font-semibold ${
+                                    doneArchiveCountdown.isExpired
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : doneArchiveCountdown.isCritical
+                                      ? 'text-orange-600 dark:text-orange-400'
+                                      : 'text-emerald-600 dark:text-emerald-400'
+                                  }`}>
+                                    {tBoard('taskDrawer.done.archive.warning')}
+                                  </p>
+                                </div>
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3">
+                                  {tBoard('taskDrawer.done.archive.date', { date: formatDateMedium(doneArchiveCountdown.archiveDate) })}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={handleResetArchiveCounter}
+                                  disabled={resettingArchiveCounter || saving}
+                                  className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                >
+                                  {resettingArchiveCounter
+                                    ? tBoard('taskDrawer.done.archive.extending')
+                                    : tBoard('taskDrawer.done.archive.extend', { days: doneArchiveConfig })}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                                  {tBoard('taskDrawer.done.archive.noCountdown')}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={handleResetArchiveCounter}
+                                  disabled={resettingArchiveCounter || saving}
+                                  className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                >
+                                  {resettingArchiveCounter
+                                    ? tBoard('taskDrawer.done.archive.extending')
+                                    : tBoard('taskDrawer.done.archive.extend', { days: doneArchiveConfig })}
+                                </button>
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })()}
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">

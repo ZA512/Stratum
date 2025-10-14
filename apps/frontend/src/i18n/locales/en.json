@@ -418,7 +418,19 @@
           "date": "Scheduled date: {date}",
           "extend": "⏰ Extend by {days} days",
           "extending": "Processing…",
-          "disabled": "Automatic archiving is not configured for this backlog column."
+          "disabled": "Automatic archiving is not configured for this backlog column.",
+          "noCountdown": "The archive countdown will start on your next interaction with this task."
+        },
+        "done": {
+          "archive": {
+            "title": "Automatic archiving",
+            "warning": "This task will be archived soon",
+            "date": "Archive scheduled on {{date}}",
+            "extend": "Extend by {{days}} days",
+            "extending": "Extending…",
+            "noCountdown": "Archive countdown not available.",
+            "disabled": "Automatic archiving disabled for this column."
+          }
         },
         "hideUntil": {
           "label": "Hide until"

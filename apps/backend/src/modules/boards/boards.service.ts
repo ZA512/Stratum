@@ -102,6 +102,9 @@ export class BoardsService {
       throw new NotFoundException();
     }
 
+    // Auto-réparation: persister les settings par défaut si absents.
+    await this.repairMissingColumnSettings(board.columns);
+
     return {
       id: board.id,
       nodeId: board.nodeId,
@@ -183,6 +186,9 @@ export class BoardsService {
     if (!board) {
       throw new NotFoundException();
     }
+
+    // Auto-réparation: persister les settings par défaut si absents.
+    await this.repairMissingColumnSettings(board.columns);
 
     const columnIds = board.columns.map((column) => column.id);
     const rawNodes = columnIds.length
@@ -1098,6 +1104,54 @@ export class BoardsService {
       return null;
     }
     return { ...(value as Record<string, any>) };
+  }
+
+  /**
+   * Répare les colonnes ayant settings null en écrivant les defaults.
+   * Cette opération est idempotente et ne modifie pas les colonnes déjà configurées.
+   */
+  private async repairMissingColumnSettings(columns: Array<{ id: string; behavior: { key: ColumnBehaviorKey }; settings: Prisma.JsonValue | null }>): Promise<void> {
+    const repairs: Array<{ id: string; payload: Prisma.InputJsonValue }> = [];
+    for (const col of columns) {
+      const raw = this.normalizeColumnSettings(col.settings ?? null);
+      if (raw) continue; // déjà configuré
+      if (col.behavior.key === ColumnBehaviorKey.BACKLOG) {
+        repairs.push({
+          id: col.id,
+          payload: {
+            backlog: {
+              reviewAfterDays: DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
+              reviewEveryDays: DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
+              archiveAfterDays: DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
+            },
+          } as Prisma.InputJsonValue,
+        });
+      } else if (col.behavior.key === ColumnBehaviorKey.DONE) {
+        repairs.push({
+          id: col.id,
+          payload: {
+            done: {
+              archiveAfterDays: DEFAULT_DONE_SETTINGS.archiveAfterDays,
+            },
+          } as Prisma.InputJsonValue,
+        });
+      }
+    }
+    if (!repairs.length) return;
+    // Effectuer les updates en batch via transaction pour minimiser l'impact.
+    await this.prisma.$transaction(async (tx) => {
+      for (const entry of repairs) {
+        await tx.column.update({ where: { id: entry.id }, data: { settings: entry.payload } });
+      }
+    });
+    // Mettre à jour l'objet columns en mémoire avec les nouvelles valeurs pour réponse immédiate.
+    const map = new Map(repairs.map(r => [r.id, r.payload]));
+    for (const col of columns) {
+      const payload = map.get(col.id);
+      if (payload) {
+        (col as any).settings = payload;
+      }
+    }
   }
 
   private parseWorkflowMetadata(metadata: unknown): ParsedWorkflowSnapshot {

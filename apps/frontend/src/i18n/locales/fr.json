@@ -430,7 +430,8 @@
           "date": "Date prévue : {date}",
           "extend": "⏰ Prolonger de {days} jours",
           "extending": "En cours…",
-          "disabled": "L'archivage automatique n'est pas configuré pour cette colonne backlog."
+          "disabled": "L'archivage automatique n'est pas configuré pour cette colonne backlog.",
+          "noCountdown": "Le compteur d'archivage démarrera lors de votre prochaine interaction avec cette tâche."
         },
         "hideUntil": {
           "label": "Masquer jusqu’au"

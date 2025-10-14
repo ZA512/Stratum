@@ -2037,7 +2037,11 @@ export class NodesService {
           select: {
             id: true,
             columns: {
-              select: { id: true, behavior: { select: { key: true } } },
+              select: { 
+                id: true, 
+                behavior: { select: { key: true } },
+                settings: true
+              },
             },
           },
         },
@@ -2088,10 +2092,31 @@ export class NodesService {
     const board = node.board
       ? {
           id: node.board.id,
-          columns: node.board.columns.map((c: any) => ({
-            id: c.id,
-            behaviorKey: c.behavior?.key ?? null,
-          })),
+          columns: node.board.columns.map((c: any) => {
+            const behaviorKey = c.behavior?.key ?? null;
+            let settings = this.normalizeColumnSettings(c.settings ?? null);
+            
+            // Si settings est null, on retourne les valeurs par défaut selon le comportement
+            if (!settings) {
+              if (behaviorKey === 'BACKLOG') {
+                settings = {
+                  reviewAfterDays: DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
+                  reviewEveryDays: DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
+                  archiveAfterDays: DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
+                };
+              } else if (behaviorKey === 'DONE') {
+                settings = {
+                  archiveAfterDays: DEFAULT_DONE_SETTINGS.archiveAfterDays,
+                };
+              }
+            }
+            
+            return {
+              id: c.id,
+              behaviorKey,
+              settings,
+            };
+          }),
         }
       : undefined;
 
