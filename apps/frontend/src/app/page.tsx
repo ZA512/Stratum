@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
-import { fetchTeams, bootstrapTeams, type Team } from "@/features/teams/teams-api";
+import { fetchTeams, bootstrapTeams, type Team, type BootstrapTeamResponse } from "@/features/teams/teams-api";
 import { useTranslation } from "@/i18n";
 
 export default function Home() {
@@ -12,6 +12,7 @@ export default function Home() {
   const { t } = useTranslation();
   const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
+  const [bootstrapResult, setBootstrapResult] = useState<BootstrapTeamResponse | null>(null);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
@@ -43,7 +44,8 @@ export default function Home() {
           bootstrapAttemptedRef.current = true;
           setBootstrapping(true);
           try {
-            await bootstrapTeams(accessToken);
+            const boot = await bootstrapTeams(accessToken);
+            setBootstrapResult(boot);
             if (cancelled) return;
             const again = await fetchTeams(accessToken);
             if (!cancelled) {
@@ -51,7 +53,13 @@ export default function Home() {
             }
           } catch (err) {
             if (!cancelled) {
-              setError(err instanceof Error ? err.message : String(err));
+              const message = err instanceof Error ? err.message : String(err);
+              // If API reports unauthenticated, force logout to clear state and show login
+              if (message === 'Non authentifie') {
+                void logout();
+                return;
+              }
+              setError(message);
             }
           } finally {
             if (!cancelled) {
@@ -82,12 +90,17 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) return;
-    if (!hasTeams) return;
-    const [first] = teams;
-    if (first) {
-      router.replace(`/boards/${first.id}`);
+    // Redirect as soon as we have both teamId & boardId from bootstrap
+    if (bootstrapResult?.boardId && bootstrapResult?.team?.id) {
+      router.replace(`/boards/${bootstrapResult.team.id}/${bootstrapResult.boardId}`);
+      return;
     }
-  }, [user, hasTeams, teams, router]);
+    // Fallback: if user already has teams (e.g. existed before reload), go to /boards/{teamId}
+    // The BoardDataProvider will fetch the root board and set activeBoardId.
+    if (teams.length > 0) {
+      router.replace(`/boards/${teams[0].id}`);
+    }
+  }, [user, bootstrapResult, teams, router]);
 
   if (initializing) {
     return (
@@ -135,12 +148,18 @@ export default function Home() {
     setBootstrapping(true);
     setError(null);
     try {
-      await bootstrapTeams(accessToken);
+  const boot = await bootstrapTeams(accessToken);
+  setBootstrapResult(boot);
       bootstrapAttemptedRef.current = true;
       const again = await fetchTeams(accessToken);
       setTeams(again);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === 'Non authentifie') {
+        void logout();
+        return;
+      }
+      setError(message);
     } finally {
       setBootstrapping(false);
       setTeamsResolved(true);

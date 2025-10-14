@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiOperation,
@@ -12,6 +12,8 @@ import {
   AuthenticatedUser,
 } from '../auth/decorators/current-user.decorator';
 import { TeamsService } from './teams.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { TeamMemberDto } from './dto/team-member.dto';
 
 @ApiTags('Teams')
@@ -20,6 +22,8 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'List teams for the authenticated user' })
   @ApiOkResponse({ type: TeamDto, isArray: true })
   listTeams(): Promise<TeamDto[]> {
@@ -27,6 +31,8 @@ export class TeamsController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Retrieve a single team' })
   @ApiParam({ name: 'id', example: 'team_demo' })
   @ApiOkResponse({ type: TeamDto })
@@ -35,6 +41,8 @@ export class TeamsController {
   }
 
   @Get(':id/members')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Liste les membres actifs de l’équipe' })
   @ApiParam({ name: 'id', example: 'team_demo' })
   @ApiOkResponse({ type: TeamMemberDto, isArray: true })
@@ -43,16 +51,15 @@ export class TeamsController {
   }
 
   @Post('bootstrap')
-  @ApiOperation({
-    summary: 'Bootstrap initial pour un utilisateur sans equipe',
-  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Bootstrap initial pour un utilisateur sans equipe' })
   @ApiOkResponse({ type: BootstrapTeamResponseDto })
   async bootstrap(
     @CurrentUser() user: AuthenticatedUser | undefined,
   ): Promise<BootstrapTeamResponseDto> {
     if (!user) {
-      // Dans un contexte réel on renverrait 401; simplification ici
-      throw new Error('Non authentifie');
+      throw new UnauthorizedException('Non authentifie');
     }
     const result = await this.teamsService.bootstrapForUser(user.id);
     return {
