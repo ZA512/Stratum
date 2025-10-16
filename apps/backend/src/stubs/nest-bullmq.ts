@@ -57,7 +57,10 @@ export class BullModule {
     }));
 
     const exportTokens: Array<string | symbol> = providers.map(
-      (provider) => (typeof provider === 'object' && 'provide' in provider ? provider.provide : provider) as string | symbol,
+      (provider) =>
+        (typeof provider === 'object' && 'provide' in provider
+          ? provider.provide
+          : provider) as string | symbol,
     );
 
     return {

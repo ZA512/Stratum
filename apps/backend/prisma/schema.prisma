@@ -60,6 +60,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   invitationsSent  Invitation[] @relation("UserInvitations")
   settings        UserSettings?
+  ownedBoards     Board[]       @relation("UserOwnedBoards")
 }
 
 model Team {
@@ -75,6 +76,7 @@ model Team {
   columnBehaviors  ColumnBehavior[]
   automationRules  AutomationRule[]
   invitations      Invitation[]
+  isPersonal       Boolean           @default(false)
 }
 
 model Membership {
@@ -143,10 +145,13 @@ model Board {
   themeOverride   Json?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  ownerUserId     String?
+  isPersonal      Boolean           @default(false)
 
   node            Node              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   columns         Column[]
   dailySnapshots  BoardDailySnapshot[]
+  owner           User?             @relation("UserOwnedBoards", fields: [ownerUserId], references: [id], onDelete: SetNull)
 }
 
 model Column {

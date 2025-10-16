@@ -81,7 +81,27 @@ type ParsedWorkflowSnapshot = {
 export class BoardsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getBoard(boardId: string): Promise<BoardDto> {
+  /**
+   * Diagnostic interne: retourne les flags de propriété d'un board sans appliquer restrictions.
+   * A n'exposer qu'en environnement dev via le controller si nécessaire.
+   */
+  async diagnosticFlags(boardId: string): Promise<{ boardId: string; ownerUserId: string | null; isPersonal: boolean; teamId: string | null }> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      include: { node: { select: { teamId: true } } },
+    });
+    if (!board) {
+      throw new NotFoundException('Board introuvable');
+    }
+    return {
+      boardId: board.id,
+      ownerUserId: (board as any).ownerUserId ?? null,
+      isPersonal: (board as any).isPersonal ?? false,
+      teamId: board.node?.teamId ?? null,
+    };
+  }
+
+  async getBoard(boardId: string, userId?: string): Promise<BoardDto> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
@@ -105,18 +125,39 @@ export class BoardsService {
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
 
+    // Contrôle d'accès minimal boards personnels
+    if (
+      (board as any).isPersonal &&
+      userId &&
+      (board as any).ownerUserId &&
+      (board as any).ownerUserId !== userId
+    ) {
+      // Log diagnostic pour comprendre les mismatches éventuels
+      // eslint-disable-next-line no-console
+      console.warn('[boards.getBoard] Forbidden mismatch', {
+        boardId,
+        ownerUserId: (board as any).ownerUserId,
+        requestUserId: userId,
+        isPersonal: (board as any).isPersonal,
+      });
+      throw new ForbiddenException('Board personnel inaccessible');
+    }
+
+    const b: any = board;
     return {
-      id: board.id,
-      nodeId: board.nodeId,
-      name: board.node.title,
-      columns: board.columns.map((column) => ({
+      id: b.id,
+      nodeId: b.nodeId,
+      name: b.node.title,
+      columns: b.columns.map((column: any) => ({
         id: column.id,
         name: column.name,
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings((column as any).settings ?? null),
+        settings: this.normalizeColumnSettings(column.settings ?? null),
       })),
+      ownerUserId: b.ownerUserId ?? null,
+      isPersonal: b.isPersonal ?? false,
     };
   }
 
@@ -149,22 +190,28 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable pour cette equipe');
     }
 
+    const b: any = board;
     return {
-      id: board.id,
-      nodeId: board.nodeId,
-      name: board.node.title,
-      columns: board.columns.map((column) => ({
+      id: b.id,
+      nodeId: b.nodeId,
+      name: b.node.title,
+      columns: b.columns.map((column: any) => ({
         id: column.id,
         name: column.name,
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings((column as any).settings ?? null),
+        settings: this.normalizeColumnSettings(column.settings ?? null),
       })),
+      ownerUserId: b.ownerUserId ?? null,
+      isPersonal: b.isPersonal ?? false,
     };
   }
 
-  async getBoardWithNodes(boardId: string): Promise<BoardWithNodesDto> {
+  async getBoardWithNodes(
+    boardId: string,
+    userId?: string,
+  ): Promise<BoardWithNodesDto> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
@@ -175,7 +222,7 @@ export class BoardsService {
           },
         },
         columns: {
-          include: { 
+          include: {
             behavior: true,
           },
           orderBy: { position: 'asc' },
@@ -190,6 +237,24 @@ export class BoardsService {
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
 
+    // Contrôle d'accès board personnel
+    if (
+      (board as any).isPersonal &&
+      userId &&
+      (board as any).ownerUserId &&
+      (board as any).ownerUserId !== userId
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn('[boards.getBoardWithNodes] Forbidden mismatch', {
+        boardId,
+        ownerUserId: (board as any).ownerUserId,
+        requestUserId: userId,
+        isPersonal: (board as any).isPersonal,
+      });
+      throw new ForbiddenException('Board personnel inaccessible');
+    }
+
+    // Préparation typée plutôt que cast any pour éviter retours unsafe
     const columnIds = board.columns.map((column) => column.id);
     const rawNodes = columnIds.length
       ? await this.prisma.node.findMany({
@@ -242,7 +307,9 @@ export class BoardsService {
     for (const node of rawNodes) {
       const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
       workflowByNode.set(node.id, workflow);
-      const behavior = node.columnId ? behaviorByColumn.get(node.columnId) : null;
+      const behavior = node.columnId
+        ? behaviorByColumn.get(node.columnId)
+        : null;
       // Marquer les nodes snoozées au lieu de les filtrer
       let isSnoozed = false;
       if (
@@ -403,12 +470,13 @@ export class BoardsService {
         if (baselineDate && !Number.isNaN(baselineDate.getTime())) {
           const nextDueMs = baselineDate.getTime() + intervalMs;
           const remainingMs = nextDueMs - nowMs;
-          blockedReminderDueInDays = remainingMs <= 0
-            ? 0
-            : Math.ceil(remainingMs / DAY_IN_MS);
+          blockedReminderDueInDays =
+            remainingMs <= 0 ? 0 : Math.ceil(remainingMs / DAY_IN_MS);
         }
       }
-      const workflow = workflowByNode.get(node.id) ?? this.parseWorkflowMetadata(node.metadata ?? null);
+      const workflow =
+        workflowByNode.get(node.id) ??
+        this.parseWorkflowMetadata(node.metadata ?? null);
       bucket.push({
         id: node.id,
         title: node.title,
@@ -431,9 +499,7 @@ export class BoardsService {
         blockedReminderLastSentAt: blockedReminderLastSentDate
           ? blockedReminderLastSentDate.toISOString()
           : null,
-        blockedSince: blockedSinceDate
-          ? blockedSinceDate.toISOString()
-          : null,
+        blockedSince: blockedSinceDate ? blockedSinceDate.toISOString() : null,
         tags: node.tags ?? [],
         estimatedDurationDays: estimatedDuration ?? null,
         assignees,
@@ -479,7 +545,7 @@ export class BoardsService {
       }
     }
 
-    return {
+    const result = {
       id: board.id,
       nodeId: board.nodeId,
       name: board.node.title,
@@ -489,14 +555,17 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings((column as any).settings ?? null),
+        settings: this.normalizeColumnSettings(
+          (column as any).settings ?? null,
+        ),
         badges: {
           archived: archivedCounts.get(column.id) ?? 0,
           snoozed: snoozedCounts.get(column.id) ?? 0,
         },
         nodes: nodesByColumn.get(column.id) ?? [],
       })),
-    };
+    } as BoardWithNodesDto;
+    return result;
   }
 
   async listArchivedNodes(
@@ -1015,7 +1084,7 @@ export class BoardsService {
     const source =
       settings && isPlainObject((settings as any).backlog)
         ? ((settings as any).backlog as Record<string, any>)
-        : settings ?? {};
+        : (settings ?? {});
     const ensure = (
       value: unknown,
       fallback: number,
@@ -1057,7 +1126,7 @@ export class BoardsService {
     const source =
       settings && isPlainObject((settings as any).done)
         ? ((settings as any).done as Record<string, any>)
-        : settings ?? {};
+        : (settings ?? {});
     const ensure = (value: unknown, fallback: number) => {
       const num = Number(value);
       if (!Number.isFinite(num)) return fallback;
@@ -1110,7 +1179,13 @@ export class BoardsService {
    * Répare les colonnes ayant settings null en écrivant les defaults.
    * Cette opération est idempotente et ne modifie pas les colonnes déjà configurées.
    */
-  private async repairMissingColumnSettings(columns: Array<{ id: string; behavior: { key: ColumnBehaviorKey }; settings: Prisma.JsonValue | null }>): Promise<void> {
+  private async repairMissingColumnSettings(
+    columns: Array<{
+      id: string;
+      behavior: { key: ColumnBehaviorKey };
+      settings: Prisma.JsonValue | null;
+    }>,
+  ): Promise<void> {
     const repairs: Array<{ id: string; payload: Prisma.InputJsonValue }> = [];
     for (const col of columns) {
       const raw = this.normalizeColumnSettings(col.settings ?? null);
@@ -1141,11 +1216,14 @@ export class BoardsService {
     // Effectuer les updates en batch via transaction pour minimiser l'impact.
     await this.prisma.$transaction(async (tx) => {
       for (const entry of repairs) {
-        await tx.column.update({ where: { id: entry.id }, data: { settings: entry.payload } });
+        await tx.column.update({
+          where: { id: entry.id },
+          data: { settings: entry.payload },
+        });
       }
     });
     // Mettre à jour l'objet columns en mémoire avec les nouvelles valeurs pour réponse immédiate.
-    const map = new Map(repairs.map(r => [r.id, r.payload]));
+    const map = new Map(repairs.map((r) => [r.id, r.payload]));
     for (const col of columns) {
       const payload = map.get(col.id);
       if (payload) {
@@ -1160,24 +1238,28 @@ export class BoardsService {
         ? (metadata as Record<string, any>)
         : {};
     const workflow =
-      root.workflow && typeof root.workflow === 'object' && !Array.isArray(root.workflow)
+      root.workflow &&
+      typeof root.workflow === 'object' &&
+      !Array.isArray(root.workflow)
         ? (root.workflow as Record<string, any>)
         : {};
     const backlog =
-      workflow.backlog && typeof workflow.backlog === 'object' && !Array.isArray(workflow.backlog)
+      workflow.backlog &&
+      typeof workflow.backlog === 'object' &&
+      !Array.isArray(workflow.backlog)
         ? (workflow.backlog as Record<string, any>)
         : {};
     const done =
-      workflow.done && typeof workflow.done === 'object' && !Array.isArray(workflow.done)
+      workflow.done &&
+      typeof workflow.done === 'object' &&
+      !Array.isArray(workflow.done)
         ? (workflow.done as Record<string, any>)
         : {};
 
     const backlogHiddenUntil = toIsoDateTime(backlog.hiddenUntil);
     const backlogNextReviewAt = toIsoDateTime(backlog.nextReviewAt);
     const backlogReviewStartedAt = toIsoDateTime(backlog.reviewStartedAt);
-    const backlogLastInteractionAt = toIsoDateTime(
-      backlog.lastInteractionAt,
-    );
+    const backlogLastInteractionAt = toIsoDateTime(backlog.lastInteractionAt);
     const backlogLastReminderAt = toIsoDateTime(backlog.lastReminderAt);
     const lastKnownColumnId =
       typeof backlog.lastKnownColumnId === 'string'
@@ -1185,7 +1267,7 @@ export class BoardsService {
         : null;
     const lastKnownBehaviorRaw =
       typeof backlog.lastKnownBehavior === 'string'
-        ? (backlog.lastKnownBehavior as string)
+        ? backlog.lastKnownBehavior
         : null;
     const validBehaviors = new Set(Object.values(ColumnBehaviorKey));
     const lastKnownBehavior = validBehaviors.has(
@@ -1231,7 +1313,6 @@ export class BoardsService {
       throw new NotFoundException('Tache introuvable');
     }
 
-    const workflow = this.parseWorkflowMetadata(node.metadata);
     const now = new Date();
     const updatedMetadata = {
       ...(typeof node.metadata === 'object' && node.metadata !== null

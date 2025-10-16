@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { NodeDetail } from '../types';
 import { fetchNodeDetail } from '../nodes-api';
 import { useAuth } from '@/features/auth/auth-provider';
@@ -105,6 +105,32 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       void load(nodeId, { background: true });
     }
   }, [load]);
+
+  // Ecouter les mouvements de carte pour mettre à jour la fiche sans reload
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const custom = evt as CustomEvent<{ nodeId: string; targetColumnId: string }>;
+      const movedId = custom?.detail?.nodeId;
+      const targetColumnId = custom?.detail?.targetColumnId;
+      if (!movedId || !targetColumnId) return;
+      // Patch cache pour que la prochaine ouverture reflète immédiatement la bonne colonne
+      const cached = cacheRef.current.get(movedId);
+      if (cached) {
+        cacheRef.current.set(movedId, {
+          detail: { ...cached.detail, columnId: targetColumnId } as any,
+          fetchedAt: Date.now(),
+        });
+      }
+      if (openedNodeId === movedId) {
+        // Optimistic update en direct si la fiche est ouverte
+        setDetail((prev) => (prev ? { ...prev, columnId: targetColumnId } : prev) as any);
+        // Rafraîchir en arrière-plan pour récupérer les settings de colonne à jour
+        void load(movedId, { background: true });
+      }
+    };
+    window.addEventListener('nodeMoved', handler as EventListener);
+    return () => window.removeEventListener('nodeMoved', handler as EventListener);
+  }, [openedNodeId, load]);
 
   return (
     <Ctx.Provider value={{ openedNodeId, detail, loading, error, open, close, refresh, prefetch, applyDetail }}>

@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiOperation,
@@ -53,7 +60,9 @@ export class TeamsController {
   @Post('bootstrap')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Bootstrap initial pour un utilisateur sans equipe' })
+  @ApiOperation({
+    summary: 'Bootstrap initial pour un utilisateur sans equipe',
+  })
   @ApiOkResponse({ type: BootstrapTeamResponseDto })
   async bootstrap(
     @CurrentUser() user: AuthenticatedUser | undefined,

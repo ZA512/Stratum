@@ -8,5 +8,6 @@
   "moduleNameMapper": {
     "^@nestjs/bullmq$": "<rootDir>/../src/stubs/nest-bullmq.ts",
     "^bullmq$": "<rootDir>/../src/stubs/bullmq.ts"
-  }
+  },
+  "maxWorkers": 1
 }

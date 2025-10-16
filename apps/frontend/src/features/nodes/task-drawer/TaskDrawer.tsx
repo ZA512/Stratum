@@ -94,18 +94,8 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <span className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
-        {selectedIds.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange([])}
-            className="text-[11px] text-slate-500 transition hover:text-foreground"
-            disabled={disabled}
-          >
-            {tBoard('taskDrawer.multiSelect.clear')}
-          </button>
-        )}
       </div>
       <MultiSelectCombo
         options={options}
@@ -368,9 +358,12 @@ export const TaskDrawer: React.FC = () => {
   }
   const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
     if (archiveAfterDays === null) return null;
-    const lastInteraction = detail.backlogLastInteractionAt;
-    if (!lastInteraction) return null;
-    const lastDate = new Date(lastInteraction);
+  // Prefer the last backlog interaction as the start of the countdown.
+  // If missing, try the node creation date (if backend returns it) or the doneArchiveScheduledAt.
+  const maybeCreated = (detail as any).createdAt ?? (detail as any).doneArchiveScheduledAt ?? null;
+  const lastInteraction = detail.backlogLastInteractionAt || maybeCreated;
+  if (!lastInteraction) return null;
+  const lastDate = new Date(lastInteraction);
     if (Number.isNaN(lastDate.getTime())) return null;
     const archiveDate = new Date(lastDate.getTime() + archiveAfterDays * 24 * 60 * 60 * 1000);
     const now = new Date();
@@ -385,9 +378,12 @@ export const TaskDrawer: React.FC = () => {
   const doneArchiveCountdown = useMemo(() => {
     if (!detail || !board || doneArchiveConfig === null) return null;
     // Pour DONE on part de la dernière interaction backlog si disponible, sinon la date d'archivage (si déjà archivé) sinon pas de base
-    const interaction = detail.backlogLastInteractionAt || detail.archivedAt;
-    if (!interaction) return null;
-    const baseDate = new Date(interaction);
+  // For DONE cards we prefer the last backlog interaction, otherwise fall back to
+  // the creation date (if available), then doneArchiveScheduledAt, then archivedAt.
+  const maybeCreated2 = (detail as any).createdAt ?? (detail as any).doneArchiveScheduledAt ?? null;
+  const interaction = detail.backlogLastInteractionAt || maybeCreated2 || detail.archivedAt;
+  if (!interaction) return null;
+  const baseDate = new Date(interaction);
     if (Number.isNaN(baseDate.getTime())) return null;
     const archiveDate = new Date(baseDate.getTime() + doneArchiveConfig * 24 * 60 * 60 * 1000);
     const now = new Date();
@@ -548,6 +544,7 @@ export const TaskDrawer: React.FC = () => {
   }, []);
 
   const previousNodeIdRef = useRef<string | null>(null);
+  const previousBehaviorRef = useRef<string | null>(null);
 
   // Sync form when detail loads or node changes
   useEffect(() => {
@@ -726,6 +723,15 @@ export const TaskDrawer: React.FC = () => {
       setIsBlockResolved(false);
     }
   }, [currentColumnBehavior, detail, blockedReason, blockedEmails, blockedInterval, blockedEta, isBlockResolved]);
+
+  // Quand on entre dans la colonne BLOQUÉE, basculer une seule fois vers l'onglet Détails
+  useEffect(() => {
+    const prev = previousBehaviorRef.current;
+    if (prev !== currentColumnBehavior && currentColumnBehavior === 'BLOCKED') {
+      setActiveTab('details');
+    }
+    previousBehaviorRef.current = currentColumnBehavior ?? null;
+  }, [currentColumnBehavior]);
 
   useEffect(() => {
     if (activeTab !== 'raci') return;
@@ -1706,10 +1712,13 @@ export const TaskDrawer: React.FC = () => {
                         <p className="text-[11px] text-slate-500">Entrée pour ajouter. Max 20, longueur ≤32. Doublons ignorés.</p>
                       </section>
 
-                      {detail.board && detail.board.columns && (()=>{
-                        const currentCol = detail.board.columns.find(c=>c.id===detail.columnId);
+                      {(() => {
+                        const boardToUse = detail.board || board;
+                        const columns = boardToUse?.columns;
+                        if (!columns) return null;
+                        const currentCol = columns.find(c => c.id === detail.columnId);
                         const isBlocked = currentCol?.behaviorKey === 'BLOCKED';
-                        if(!isBlocked) return null;
+                        if (!isBlocked) return null;
 
                         return (
                           <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
@@ -1763,7 +1772,16 @@ export const TaskDrawer: React.FC = () => {
                                     </div>
                                   )}
                                   <input
-                                    type="email"
+                                    type="text"
+                                    inputMode="email"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="none"
+                                    name="blocked-reminder-list"
+                                    data-bwignore
+                                    data-bitwarden-watching="false"
+                                    data-1p-ignore
+                                    data-lpignore="true"
                                     value={blockedEmailInput}
                                     onChange={e=>setBlockedEmailInput(e.target.value)}
                                     onKeyDown={e => {
@@ -1786,20 +1804,23 @@ export const TaskDrawer: React.FC = () => {
                                   <span className="text-base">⏰</span>
                                   {tBoard('taskDrawer.blocked.interval.label')}
                                 </span>
-                                <select
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
                                   value={blockedInterval}
-                                  onChange={e=>setBlockedInterval(e.target.value)}
+                                  onChange={e=>{
+                                    const v = e.target.value;
+                                    if (v === '') { setBlockedInterval(''); return; }
+                                    // autoriser seulement des entiers positifs
+                                    const n = Number(v);
+                                    if (Number.isNaN(n) || n < 0) return;
+                                    setBlockedInterval(String(Math.floor(n)));
+                                  }}
+                                  placeholder="0 = jamais"
                                   className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
                                   disabled={saving}
-                                >
-                                  <option value="">{tBoard('taskDrawer.blocked.interval.options.never')}</option>
-                                  <option value="1">{tBoard('taskDrawer.blocked.interval.options.daily')}</option>
-                                  <option value="2">{tBoard('taskDrawer.blocked.interval.options.everyTwo')}</option>
-                                  <option value="3">{tBoard('taskDrawer.blocked.interval.options.everyThree')}</option>
-                                  <option value="5">{tBoard('taskDrawer.blocked.interval.options.everyFive')}</option>
-                                  <option value="7">{tBoard('taskDrawer.blocked.interval.options.everySeven')}</option>
-                                  <option value="14">{tBoard('taskDrawer.blocked.interval.options.everyFourteen')}</option>
-                                </select>
+                                />
                               </label>
 
                               <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
@@ -1819,7 +1840,7 @@ export const TaskDrawer: React.FC = () => {
 
                             {blockedSince && (
                               <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                                <span className="material-symbols-outlined text-[16px]">push_pin</span><span className="material-symbols-outlined text-[16px]">push_pin</span> {tBoard('taskDrawer.blocked.since', { date: formatDateLong(blockedSince) })}
+                                <span className="material-symbols-outlined text-[16px]">push_pin</span> {tBoard('taskDrawer.blocked.since', { date: formatDateLong(blockedSince) })}
                               </p>
                             )}
 
@@ -1832,12 +1853,12 @@ export const TaskDrawer: React.FC = () => {
                                 disabled={saving}
                               />
                               <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span><span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> {tBoard('taskDrawer.blocked.resolved')}
+                                <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> {tBoard('taskDrawer.blocked.resolved')}
                               </span>
                             </label>
 
                             <p className="text-[11px] text-slate-500 flex items-start gap-1">
-                              <span className="material-symbols-outlined text-[14px] text-amber-500">info</span><span className="material-symbols-outlined text-[14px] text-amber-500">info</span> {tBoard('taskDrawer.blocked.autoReminderInfo')}
+                              <span className="material-symbols-outlined text-[14px] text-amber-500">info</span> {tBoard('taskDrawer.blocked.autoReminderInfo')}
                             </p>
                           </section>
                         );
@@ -1849,7 +1870,7 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">👥</span>
+                          <span className="material-symbols-outlined text-[20px] text-slate-600 dark:text-slate-300">group</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                             Matrice RACI
                           </h3>
@@ -1919,83 +1940,70 @@ export const TaskDrawer: React.FC = () => {
                         )}
                       </section>
 
-                      <div className="space-y-4">
-                        <div className="space-y-3 rounded-lg border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-950/20 p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">👤</span>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                      <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">Rôles et responsabilités</h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              <span className="material-symbols-outlined text-[18px] text-slate-500">person</span>
                               Responsable (R)
-                            </span>
+                            </label>
+                            <MemberMultiSelect
+                              label=""
+                              members={teamMembers}
+                              selectedIds={rResponsible}
+                              onChange={handleRResponsibleChange}
+                              disabled={saving}
+                            />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) qui réalise(nt) la tâche.</p>
                           </div>
-                          <MemberMultiSelect
-                            label=""
-                            members={teamMembers}
-                            selectedIds={rResponsible}
-                            onChange={handleRResponsibleChange}
-                            disabled={saving}
-                          />
-                          <p className="text-[10px] text-blue-600 dark:text-blue-400">
-                            Personne(s) qui réalise(nt) la tâche.
-                          </p>
-                        </div>
 
-                        <div className="space-y-3 rounded-lg border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🎯</span>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              <span className="material-symbols-outlined text-[18px] text-slate-500">task_alt</span>
                               Approbateur (A)
-                            </span>
+                            </label>
+                            <MemberMultiSelect
+                              label=""
+                              members={teamMembers}
+                              selectedIds={rAccountable}
+                              onChange={handleRAccountableChange}
+                              disabled={saving}
+                            />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne qui valide le résultat.</p>
                           </div>
-                          <MemberMultiSelect
-                            label=""
-                            members={teamMembers}
-                            selectedIds={rAccountable}
-                            onChange={handleRAccountableChange}
-                            disabled={saving}
-                          />
-                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
-                            Personne qui valide le résultat.
-                          </p>
-                        </div>
 
-                        <div className="space-y-3 rounded-lg border border-purple-200 dark:border-purple-900/30 bg-purple-50 dark:bg-purple-950/20 p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">💬</span>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              <span className="material-symbols-outlined text-[18px] text-slate-500">chat</span>
                               Consulté (C)
-                            </span>
+                            </label>
+                            <MemberMultiSelect
+                              label=""
+                              members={teamMembers}
+                              selectedIds={rConsulted}
+                              onChange={handleRConsultedChange}
+                              disabled={saving}
+                            />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) consultée(s) avant décision.</p>
                           </div>
-                          <MemberMultiSelect
-                            label=""
-                            members={teamMembers}
-                            selectedIds={rConsulted}
-                            onChange={handleRConsultedChange}
-                            disabled={saving}
-                          />
-                          <p className="text-[10px] text-purple-600 dark:text-purple-400">
-                            Personne(s) consultée(s) avant décision.
-                          </p>
-                        </div>
 
-                        <div className="space-y-3 rounded-lg border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">📢</span>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              <span className="material-symbols-outlined text-[18px] text-slate-500">campaign</span>
                               Informé (I)
-                            </span>
+                            </label>
+                            <MemberMultiSelect
+                              label=""
+                              members={teamMembers}
+                              selectedIds={rInformed}
+                              onChange={handleRInformedChange}
+                              disabled={saving}
+                            />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) tenue(s) informée(s) du résultat.</p>
                           </div>
-                          <MemberMultiSelect
-                            label=""
-                            members={teamMembers}
-                            selectedIds={rInformed}
-                            onChange={handleRInformedChange}
-                            disabled={saving}
-                          />
-                          <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                            Personne(s) tenue(s) informée(s) du résultat.
-                          </p>
                         </div>
-                      </div>
+                      </section>
                     </div>
                   )}
 

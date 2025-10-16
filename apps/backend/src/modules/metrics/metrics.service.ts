@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { collectDefaultMetrics, Registry, Histogram, Counter, Gauge } from 'prom-client';
+import {
+  collectDefaultMetrics,
+  Registry,
+  Histogram,
+  Counter,
+  Gauge,
+} from 'prom-client';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -107,19 +113,47 @@ export class MetricsService {
       });
       this.eventLoopLagSeconds = new Gauge({
         name: 'stratum_event_loop_lag_seconds',
-        help: 'Lag estimé de la boucle d\'évènements Node.js (moyenne approximative)',
+        help: "Lag estimé de la boucle d'évènements Node.js (moyenne approximative)",
         registers: [this.register],
         labelNames: ['phase'],
       });
     } else {
       // Créer des stubs no-op pour éviter les if partout
-      this.httpRequestsTotal = new Counter({ name: 'noop_total', help: 'noop', registers: [] });
-      this.httpRequestDuration = new Histogram({ name: 'noop_duration', help: 'noop', registers: [] });
-      this.httpErrorsTotal = new Counter({ name: 'noop_errors', help: 'noop', registers: [] });
-      this.activeUsersGauge = new Gauge({ name: 'noop_gauge', help: 'noop', registers: [] });
-      this.prismaQueryDuration = new Histogram({ name: 'noop_prisma_duration', help: 'noop', registers: [] });
-      this.prismaQueriesTotal = new Counter({ name: 'noop_prisma_total', help: 'noop', registers: [] });
-      this.prismaErrorsTotal = new Counter({ name: 'noop_prisma_errors', help: 'noop', registers: [] });
+      this.httpRequestsTotal = new Counter({
+        name: 'noop_total',
+        help: 'noop',
+        registers: [],
+      });
+      this.httpRequestDuration = new Histogram({
+        name: 'noop_duration',
+        help: 'noop',
+        registers: [],
+      });
+      this.httpErrorsTotal = new Counter({
+        name: 'noop_errors',
+        help: 'noop',
+        registers: [],
+      });
+      this.activeUsersGauge = new Gauge({
+        name: 'noop_gauge',
+        help: 'noop',
+        registers: [],
+      });
+      this.prismaQueryDuration = new Histogram({
+        name: 'noop_prisma_duration',
+        help: 'noop',
+        registers: [],
+      });
+      this.prismaQueriesTotal = new Counter({
+        name: 'noop_prisma_total',
+        help: 'noop',
+        registers: [],
+      });
+      this.prismaErrorsTotal = new Counter({
+        name: 'noop_prisma_errors',
+        help: 'noop',
+        registers: [],
+      });
       this.nodesTotal = undefined;
       this.nodesBlockedTotal = undefined;
       this.refreshTokensActive = undefined;
@@ -144,18 +178,33 @@ export class MetricsService {
   }
 
   /* ---------------------- Recording Helpers ---------------------- */
-  recordHttp(method: string, route: string, status: number, durationSeconds: number, isError: boolean) {
+  recordHttp(
+    method: string,
+    route: string,
+    status: number,
+    durationSeconds: number,
+    isError: boolean,
+  ) {
     if (!this.enabled) return;
     if (this.sampleRate < 1 && Math.random() > this.sampleRate) return; // sampling
     const statusStr = String(status);
     this.httpRequestsTotal.inc({ method, route, status: statusStr });
-    this.httpRequestDuration.observe({ method, route, status: statusStr }, durationSeconds);
+    this.httpRequestDuration.observe(
+      { method, route, status: statusStr },
+      durationSeconds,
+    );
     if (isError || status >= 500) {
       this.httpErrorsTotal.inc({ method, route });
     }
   }
 
-  recordPrisma(model: string, action: string, status: 'ok' | 'error', seconds: number, errorCategory?: string) {
+  recordPrisma(
+    model: string,
+    action: string,
+    status: 'ok' | 'error',
+    seconds: number,
+    errorCategory?: string,
+  ) {
     if (!this.enabled) return;
     this.prismaQueriesTotal.inc({ model, action, status });
     this.prismaQueryDuration.observe({ model, action, status }, seconds);
@@ -166,15 +215,19 @@ export class MetricsService {
 
   /* ---------------------- Schedulers ---------------------- */
   private startSchedulers() {
-    const intervalMs = Number(process.env.METRICS_ENTITY_SNAPSHOT_INTERVAL_MS || '15000');
+    const intervalMs = Number(
+      process.env.METRICS_ENTITY_SNAPSHOT_INTERVAL_MS || '15000',
+    );
     this.snapshotTimer = setInterval(() => {
-      this.safeCollectBusiness();
-      this.safeCollectBackupAge();
+      void this.safeCollectBusiness();
+      void this.safeCollectBackupAge();
     }, intervalMs).unref();
 
-    const loopLagInterval = Number(process.env.METRICS_EVENT_LOOP_INTERVAL_MS || '5000');
+    const loopLagInterval = Number(
+      process.env.METRICS_EVENT_LOOP_INTERVAL_MS || '5000',
+    );
     this.loopLagTimer = setInterval(() => {
-      this.measureEventLoopLag(loopLagInterval);
+      void this.measureEventLoopLag(loopLagInterval);
     }, loopLagInterval).unref();
   }
 
@@ -201,7 +254,7 @@ export class MetricsService {
         });
         this.refreshTokensActive.set(active);
       }
-    } catch (e) {
+    } catch {
       // swallow errors to avoid crashing metrics
     }
   }
@@ -221,7 +274,7 @@ export class MetricsService {
       const newest = files[0];
       const ageSeconds = (Date.now() - fs.statSync(newest).mtimeMs) / 1000;
       this.backupAgeSeconds.set(ageSeconds);
-    } catch (e) {
+    } catch {
       // ignore
     }
   }

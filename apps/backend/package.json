@@ -23,7 +23,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "ts-node --project tsconfig.json prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force && npm run db:seed"
+  "db:reset": "prisma migrate reset --force && npm run db:seed && ts-node --project tsconfig.json prisma/reset-personal.ts",
+  "db:reset:personal": "ts-node --project tsconfig.json prisma/reset-personal.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

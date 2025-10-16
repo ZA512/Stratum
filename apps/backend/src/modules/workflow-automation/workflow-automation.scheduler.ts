@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { NodesService } from '../nodes/nodes.service';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -15,7 +20,9 @@ export class WorkflowAutomationScheduler
 
   async onModuleInit(): Promise<void> {
     if (process.env.WORKFLOW_AUTOMATION_DISABLED === 'true') {
-      this.logger.warn('Workflow automation disabled via WORKFLOW_AUTOMATION_DISABLED');
+      this.logger.warn(
+        'Workflow automation disabled via WORKFLOW_AUTOMATION_DISABLED',
+      );
       return;
     }
 
@@ -24,7 +31,9 @@ export class WorkflowAutomationScheduler
     this.timer = setInterval(() => {
       void this.safeRun();
     }, interval).unref();
-    this.logger.log(`Workflow automation scheduler started (interval=${interval}ms)`);
+    this.logger.log(
+      `Workflow automation scheduler started (interval=${interval}ms)`,
+    );
   }
 
   onModuleDestroy(): void {
@@ -35,7 +44,9 @@ export class WorkflowAutomationScheduler
   }
 
   private resolveInterval(): number {
-    const raw = Number(process.env.WORKFLOW_AUTOMATION_INTERVAL_MS ?? DEFAULT_INTERVAL_MS);
+    const raw = Number(
+      process.env.WORKFLOW_AUTOMATION_INTERVAL_MS ?? DEFAULT_INTERVAL_MS,
+    );
     if (!Number.isFinite(raw) || raw <= 0) {
       return DEFAULT_INTERVAL_MS;
     }
@@ -47,7 +58,10 @@ export class WorkflowAutomationScheduler
       await this.nodesService.runWorkflowAutomation();
     } catch (error) {
       const err = error as Error;
-      this.logger.error('Workflow automation tick failed', err.stack ?? err.message);
+      this.logger.error(
+        'Workflow automation tick failed',
+        err.stack ?? err.message,
+      );
     }
   }
 }

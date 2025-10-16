@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { TeamsService } from '../teams/teams.service';
 import { AuthenticatedUser } from './decorators/current-user.decorator';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -33,6 +34,7 @@ export class AuthService {
 
   constructor(
     private readonly usersService: UsersService,
+    private readonly teamsService: TeamsService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     configService: ConfigService,
@@ -48,14 +50,23 @@ export class AuthService {
       rawRefreshTtl,
       DEFAULT_REFRESH_MS,
     );
-    this.resetTokenTtlMs = configService.get<number>(
+    // Utiliser le parseur générique pour éviter NaN si la valeur env est "1h", "30m", etc.
+    const DEFAULT_RESET_MS = 1000 * 60 * 60; // 1h
+    const rawResetTtl: unknown = configService.get(
       'RESET_TOKEN_TTL_MS',
-      1000 * 60 * 60,
-    ); // 1h
-    this.invitationTtlMs = configService.get<number>(
+      DEFAULT_RESET_MS,
+    );
+    this.resetTokenTtlMs = this.parseDurationMs(rawResetTtl, DEFAULT_RESET_MS);
+
+    const DEFAULT_INVITATION_MS = 1000 * 60 * 60 * 24 * 7; // 7 jours
+    const rawInvitationTtl: unknown = configService.get(
       'INVITATION_TTL_MS',
-      1000 * 60 * 60 * 24 * 7,
-    ); // 7 jours
+      DEFAULT_INVITATION_MS,
+    );
+    this.invitationTtlMs = this.parseDurationMs(
+      rawInvitationTtl,
+      DEFAULT_INVITATION_MS,
+    );
   }
 
   /**
@@ -224,7 +235,12 @@ export class AuthService {
       passwordHash,
     });
 
-    // Générer les tokens
+    // Bootstrap espace personnel idempotent
+    try {
+      await this.teamsService.bootstrapForUser(user.id);
+    } catch {
+      // On ignore l'erreur bootstrap pour ne pas bloquer l'inscription
+    }
     const tokens = await this.issueTokens({ id: user.id, email: user.email });
 
     return {
@@ -312,6 +328,16 @@ export class AuthService {
     if (!membership) {
       throw new ForbiddenException(
         'Vous ne pouvez pas inviter sur cette equipe',
+      );
+    }
+
+    // Bloquer l'invitation sur une équipe personnelle
+    const team = await this.prisma.team.findUnique({
+      where: { id: dto.teamId },
+    });
+    if ((team as any)?.isPersonal) {
+      throw new BadRequestException(
+        'Les equipes personnelles ne supportent pas les invitations',
       );
     }
 

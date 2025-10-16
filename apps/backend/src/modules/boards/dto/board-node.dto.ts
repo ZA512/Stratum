@@ -133,4 +133,7 @@ export class BoardNodeDto {
 
   @ApiPropertyOptional({ example: '2025-03-15T00:00:00.000Z', nullable: true })
   doneArchiveScheduledAt?: string | null;
+
+  @ApiPropertyOptional({ example: false })
+  isSnoozed?: boolean;
 }

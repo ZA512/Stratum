@@ -181,8 +181,7 @@ export class UpdateNodeDto {
   @ApiPropertyOptional({
     example: '2025-02-10T00:00:00.000Z',
     nullable: true,
-    description:
-      'Date jusqu\'à laquelle la tâche backlog est masquée (snooze)',
+    description: "Date jusqu'à laquelle la tâche backlog est masquée (snooze)",
   })
   backlogHiddenUntil?: string | null;
 
@@ -196,7 +195,7 @@ export class UpdateNodeDto {
   @ApiPropertyOptional({
     example: '2025-02-10T00:00:00.000Z',
     nullable: true,
-    description: 'Date d\'archivage de la tâche (null = non archivée)',
+    description: "Date d'archivage de la tâche (null = non archivée)",
   })
   archivedAt?: string | null;
 }

@@ -103,7 +103,8 @@ export class NodeDto {
   @ApiProperty({ example: null, nullable: true })
   parentId!: string | null;
 
-  // Champ 'type' supprimé (legacy)
+  @ApiProperty({ example: 'SIMPLE', enum: ['SIMPLE', 'COMPLEX'] })
+  type!: 'SIMPLE' | 'COMPLEX';
 
   @ApiProperty({ example: 'Implement auth flow' })
   title!: string;
@@ -116,6 +117,9 @@ export class NodeDto {
 
   @ApiProperty({ example: 1 })
   depth!: number;
+
+  @ApiProperty({ example: '2025-01-10T12:34:56.000Z' })
+  createdAt!: string;
 
   @ApiProperty({ example: 'col_progress', nullable: true })
   columnId!: string | null;
@@ -176,7 +180,13 @@ export class NodeDto {
     enum: ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CUSTOM'],
     nullable: true,
   })
-  lastKnownColumnBehavior!: 'BACKLOG' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CUSTOM' | null;
+  lastKnownColumnBehavior!:
+    | 'BACKLOG'
+    | 'IN_PROGRESS'
+    | 'BLOCKED'
+    | 'DONE'
+    | 'CUSTOM'
+    | null;
 
   @ApiProperty({ example: '2025-03-15T00:00:00.000Z', nullable: true })
   doneArchiveScheduledAt!: string | null;

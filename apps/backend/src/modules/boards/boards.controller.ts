@@ -28,28 +28,40 @@ import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
 import { BoardsService } from './boards.service';
 import { ArchivedBoardNodeDto } from './dto/archived-board-node.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @ApiTags('Boards')
 @Controller('boards')
 export class BoardsController {
-  constructor(private readonly boardsService: BoardsService) {}
+  constructor(
+    private readonly boardsService: BoardsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get(':boardId')
   @ApiOperation({ summary: 'Retrieve a board with its columns' })
   @ApiParam({ name: 'boardId', example: 'board_123' })
   @ApiOkResponse({ type: BoardDto })
-  getBoard(@Param('boardId') boardId: string): Promise<BoardDto> {
-    return this.boardsService.getBoard(boardId);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getBoard(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+  ): Promise<BoardDto> {
+    return this.boardsService.getBoard(boardId, user.id);
   }
 
   @Get(':boardId/detail')
   @ApiOperation({ summary: 'Retrieve a board with its columns and nodes' })
   @ApiParam({ name: 'boardId', example: 'board_123' })
   @ApiOkResponse({ type: BoardWithNodesDto })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   getBoardWithNodes(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('boardId') boardId: string,
   ): Promise<BoardWithNodesDto> {
-    return this.boardsService.getBoardWithNodes(boardId);
+    return this.boardsService.getBoardWithNodes(boardId, user.id);
   }
 
   @Get(':boardId/columns/:columnId/archived')
@@ -129,7 +141,7 @@ export class BoardsController {
   @HttpCode(204)
   @ApiOperation({
     summary:
-      'Remet à zéro le compteur d\'archivage automatique d\'une carte backlog',
+      "Remet à zéro le compteur d'archivage automatique d'une carte backlog",
   })
   @ApiParam({ name: 'boardId', example: 'board_123' })
   @ApiParam({ name: 'nodeId', example: 'node_456' })
@@ -144,5 +156,73 @@ export class BoardsController {
       nodeId,
       user.id,
     );
+  }
+
+  // --- Diagnostics & réparation (dev seulement) ---
+  @Get(':boardId/diagnostic')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Diagnostic flags board (dev)' })
+  async diagnostic(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+  ): Promise<any> {
+    const flags = await this.boardsService.diagnosticFlags(boardId);
+    const membership = flags.teamId
+      ? await this.prisma.membership.findFirst({
+          where: { userId: user.id, teamId: flags.teamId },
+        })
+      : null;
+    return { ...flags, currentUserId: user.id, hasMembership: Boolean(membership) };
+  }
+
+  @Post(':boardId/diagnostic/fix')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Répare flags board personnel (dev)' })
+  async fix(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+  ): Promise<any> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      include: {
+        node: { select: { teamId: true } },
+      },
+    });
+    if (!board) {
+      return { status: 'NOT_FOUND' };
+    }
+    const team = await this.prisma.team.findUnique({ where: { id: board.node.teamId } });
+    const repair: any = {};
+    let changed = false;
+    const boardFlags = await this.prisma.board.findUnique({ where: { id: boardId } });
+    if (boardFlags) {
+      const t: any = team as any;
+      const b: any = boardFlags as any;
+      if (t?.isPersonal && !b.isPersonal) {
+        (repair as any).isPersonal = true; changed = true;
+      }
+      if (t?.isPersonal && b.ownerUserId !== user.id) {
+        (repair as any).ownerUserId = user.id; changed = true;
+      }
+      if (!t?.isPersonal && b.isPersonal) {
+        (repair as any).isPersonal = false; changed = true;
+      }
+    }
+    if (changed) {
+      await this.prisma.board.update({ where: { id: board.id }, data: repair });
+    }
+    // Ensure membership
+    const existingMembership = await this.prisma.membership.findFirst({
+      where: { teamId: board.node.teamId, userId: user.id },
+    });
+    if (!existingMembership) {
+      await this.prisma.membership.create({
+        data: { teamId: board.node.teamId, userId: user.id, status: 'ACTIVE' },
+      });
+    }
+    const refreshed = await this.boardsService.diagnosticFlags(boardId);
+    return { status: 'OK', changed, board: refreshed };
   }
 }

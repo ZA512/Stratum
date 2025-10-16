@@ -135,6 +135,47 @@ export class TeamsService {
         createdAt: existingMembership.team.createdAt.toISOString(),
       };
       if (rootComplex?.board?.id) {
+        // Réparation opportuniste : si la team est personnelle mais le board
+        // ne reflète pas ownerUserId ou isPersonal correctement (ex: migration
+        // ancienne ou bug de création), on synchronise.
+        try {
+          const existingBoard = await this.prisma.board.findUnique({
+            where: { id: rootComplex.board.id },
+            select: { id: true, ownerUserId: true, isPersonal: true },
+          });
+          if (existingBoard) {
+            // Utiliser BoardUncheckedUpdateInput pour modifier directement les scalars (ownerUserId, isPersonal)
+            const repairData: Prisma.BoardUncheckedUpdateInput = {};
+            let needsRepair = false;
+            if (existingMembership.team.isPersonal && !existingBoard.isPersonal) {
+              repairData.isPersonal = true;
+              needsRepair = true;
+            }
+            if (
+              existingMembership.team.isPersonal &&
+              existingBoard.ownerUserId !== existingMembership.userId
+            ) {
+              repairData.ownerUserId = existingMembership.userId;
+              needsRepair = true;
+            }
+            // Cas inverse : team non-personnelle mais board marqué personnel par erreur
+            if (!existingMembership.team.isPersonal && existingBoard.isPersonal) {
+              repairData.isPersonal = false;
+              // Ne pas toucher ownerUserId (peut être utile historiquement) mais on pourrait le nuller si nécessaire.
+              needsRepair = true;
+            }
+            if (needsRepair) {
+              await this.prisma.board.update({
+                where: { id: existingBoard.id },
+                data: repairData,
+              });
+            }
+          }
+        } catch (err) {
+          // Log silencieux (on évite d'empêcher le bootstrap si la réparation échoue)
+          // eslint-disable-next-line no-console
+          console.warn('[teams.bootstrapForUser] repair skipped', err);
+        }
         return {
           team: teamDto,
           rootNodeId: rootComplex.id,
@@ -148,7 +189,7 @@ export class TeamsService {
     const result = await this.prisma.$transaction(async (tx) => {
       const teamId = randomUUID();
       const team = await tx.team.create({
-        data: { id: teamId, name: 'Mon Espace', slug: null },
+        data: { id: teamId, name: 'Mon Espace', slug: null, isPersonal: true },
       });
       await tx.membership.create({
         data: { teamId: team.id, userId, status: MembershipStatus.ACTIVE },
@@ -172,7 +213,13 @@ export class TeamsService {
       // Promote: réutiliser logique de NodesService? (ici ré-implémentée légère)
       let board = await tx.board.findUnique({ where: { nodeId: rootNode.id } });
       if (!board) {
-        board = await tx.board.create({ data: { nodeId: rootNode.id } });
+        board = await tx.board.create({
+          data: {
+            nodeId: rootNode.id,
+            ownerUserId: userId,
+            isPersonal: true,
+          },
+        });
         // Comportements + colonnes par défaut
         const behaviors = await tx.columnBehavior.findMany({
           where: { teamId: team.id },

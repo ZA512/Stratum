@@ -388,6 +388,11 @@ export function MoveCardDialog({
       );
       const nodeName = selectedNode?.name ?? tBoard('moveDialog.fallbackTaskName');
       success(tBoard('moveDialog.success', { title: node.title, destination: nodeName }));
+      try {
+        window.dispatchEvent(new CustomEvent('nodeMoved', {
+          detail: { nodeId: node.id, targetColumnId: selectedColumnId },
+        }));
+      } catch { /* no-op */ }
       await onSuccess({ boardId: targetBoardId, boardName: nodeName });
       onClose();
     } catch (err) {

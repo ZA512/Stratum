@@ -38,9 +38,7 @@ export class MailService {
 
   async sendMail(options: MailSendOptions): Promise<void> {
     if (!this.webhookUrl) {
-      this.logger.debug(
-        'MAIL_WEBHOOK_URL non configuré, envoi d’email ignoré',
-      );
+      this.logger.debug('MAIL_WEBHOOK_URL non configuré, envoi d’email ignoré');
       return;
     }
 
@@ -115,7 +113,11 @@ export class MailService {
             responseBody += chunk;
           });
           res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            if (
+              res.statusCode &&
+              res.statusCode >= 200 &&
+              res.statusCode < 300
+            ) {
               resolve();
             } else {
               reject(

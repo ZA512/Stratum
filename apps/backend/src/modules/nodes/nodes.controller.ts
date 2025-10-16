@@ -40,6 +40,7 @@ import {
 } from './dto/node-share.dto';
 import { NodesService } from './nodes.service';
 import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
+import { ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Nodes')
 @Controller('nodes')
@@ -74,10 +75,13 @@ export class NodesController {
   })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeChildBoardDto, isArray: true })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   listChildBoards(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('nodeId') nodeId: string,
   ): Promise<NodeChildBoardDto[]> {
-    return this.nodesService.listChildBoards(nodeId);
+    return this.nodesService.listChildBoards(nodeId, user.id);
   }
 
   @Post()
@@ -378,5 +382,28 @@ export class NodesController {
     @Param('nodeId') nodeId: string,
   ): Promise<{ boardId: string }> {
     return this.nodesService.ensureBoardOnly(nodeId, user.id);
+  }
+
+  @Post(':nodeId/convert')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Convertit une tâche SIMPLE en COMPLEX en forçant la création de son board interne (legacy compat)',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiBody({
+    schema: {
+      properties: { targetType: { type: 'string', example: 'COMPLEX' } },
+    },
+  })
+  @ApiOkResponse({ type: NodeDto })
+  @HttpCode(200)
+  convertNode(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+  ): Promise<NodeDto> {
+    // Le body targetType est ignoré (uniquement COMPLEX supporté) pour compat tests
+    return this.nodesService.convertNode(nodeId, user.id);
   }
 }

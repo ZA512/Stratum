@@ -449,7 +449,53 @@ export class NodesService {
     return this.mapNode(node);
   }
 
-  // convertNode supprimé (endpoint retiré)
+  async convertNode(nodeId: string, userId: string): Promise<NodeDto> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      include: {
+        board: { include: { columns: { include: { behavior: true } } } },
+      },
+    });
+    if (!node) throw new NotFoundException('Tâche introuvable');
+    await this.ensureUserCanWrite(node.teamId, userId);
+    // Si board déjà présent => retourner directement
+    if (node.board) {
+      // garantir presence boardId dans statusMetadata si absent
+      const statusMeta = normalizeJson(node.statusMetadata) || {};
+      if (!statusMeta.boardId) {
+        statusMeta.boardId = node.board.id;
+        await this.prisma.node.update({
+          where: { id: node.id },
+          data: { statusMetadata: statusMeta as any },
+        });
+        const refreshedDirect = await this.prisma.node.findUnique({
+          where: { id: node.id },
+        });
+        if (refreshedDirect) return this.mapNode(refreshedDirect as any);
+      }
+      return this.mapNode(node as unknown as NodeModel);
+    }
+    // Créer board + colonnes standard via ensureBoardWithColumns
+    await this.prisma.$transaction(async (tx) => {
+      await this.ensureBoardWithColumns(tx, node as unknown as NodeModel);
+      // Inject boardId dans statusMetadata
+      const board = await tx.board.findUnique({ where: { nodeId: node.id } });
+      if (board) {
+        const statusMeta = normalizeJson(node.statusMetadata) || {};
+        statusMeta.boardId = board.id;
+        await tx.node.update({
+          where: { id: node.id },
+          data: { statusMetadata: statusMeta as any },
+        });
+      }
+    });
+    const refreshed = await this.prisma.node.findUnique({
+      where: { id: node.id },
+      include: { board: { include: { columns: true } } },
+    });
+    if (!refreshed) throw new NotFoundException('Tâche introuvable');
+    return this.mapNode(refreshed as unknown as NodeModel);
+  }
 
   async createChildNode(
     parentId: string,
@@ -604,7 +650,7 @@ export class NodesService {
         targetKey,
       );
       const workflowUpdate = this.buildWorkflowTransitionUpdate(
-        child as NodeModel,
+        child,
         targetColumn,
         now,
       );
@@ -757,8 +803,8 @@ export class NodesService {
         if (!('doneAt' in statusMeta)) statusMeta.doneAt = nowIso;
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso; // fallback si jamais allé IN_PROGRESS
       }
-      const currentBehavior = columns.find((c) => c.id === child.columnId)?.behavior
-        ?.key;
+      const currentBehavior = columns.find((c) => c.id === child.columnId)
+        ?.behavior?.key;
       const blockedTransitionUpdate = sameColumn
         ? {}
         : this.buildBlockedTransitionUpdate(
@@ -767,11 +813,7 @@ export class NodesService {
           );
       const workflowUpdate = sameColumn
         ? {}
-        : this.buildWorkflowTransitionUpdate(
-            child as NodeModel,
-            targetColumn,
-            now,
-          );
+        : this.buildWorkflowTransitionUpdate(child, targetColumn, now);
       for (let i = 0; i < finalOrder.length; i++) {
         const id = finalOrder[i];
         const data: Prisma.NodeUpdateInput = {
@@ -960,12 +1002,12 @@ export class NodesService {
       const nowIso = now.toISOString();
       const behaviorKey = targetColumn.behavior.key;
       const sourceBehavior = freshNode.columnId
-        ? (
+        ? ((
             await tx.column.findUnique({
               where: { id: freshNode.columnId },
               include: { behavior: true },
             })
-          )?.behavior.key ?? null
+          )?.behavior.key ?? null)
         : null;
       if (behaviorKey === ColumnBehaviorKey.IN_PROGRESS) {
         if (!('startedAt' in statusMeta)) statusMeta.startedAt = nowIso;
@@ -983,7 +1025,9 @@ export class NodesService {
         {
           id: targetColumn.id,
           behavior: { key: behaviorKey },
-          settings: this.normalizeColumnSettings((targetColumn as any).settings ?? null),
+          settings: this.normalizeColumnSettings(
+            (targetColumn as any).settings ?? null,
+          ),
         },
         now,
       );
@@ -1150,7 +1194,9 @@ export class NodesService {
     }
 
     if (targetColumn.behavior.key === ColumnBehaviorKey.BACKLOG) {
-      const backlogSettings = this.normalizeBacklogSettings(targetColumn.settings);
+      const backlogSettings = this.normalizeBacklogSettings(
+        targetColumn.settings,
+      );
       const nextReview = this.addDaysIso(now, backlogSettings.reviewAfterDays);
       if (workflowState.backlog.hiddenUntil !== null) {
         workflowState.backlog.hiddenUntil = null;
@@ -1580,6 +1626,12 @@ export class NodesService {
       dto.raciInformedIds !== undefined
     ) {
       shouldUpdateAssignments = true;
+      // Charger membres actifs de l'équipe pour valider que chaque utilisateur RACI appartient à la team
+      const activeMemberships = await this.prisma.membership.findMany({
+        where: { teamId: node.teamId, status: MembershipStatus.ACTIVE },
+        select: { userId: true },
+      });
+      const memberSet = new Set(activeMemberships.map((m) => m.userId));
       const responsible =
         dto.raciResponsibleIds !== undefined
           ? sanitizeIds(dto.raciResponsibleIds)
@@ -1596,6 +1648,22 @@ export class NodesService {
         dto.raciInformedIds !== undefined
           ? sanitizeIds(dto.raciInformedIds)
           : nextRaci.I;
+
+      // Vérifier qu'aucun id ne sort du périmètre de l'équipe
+      const allRaciIds = [
+        ...responsible,
+        ...accountable,
+        ...consulted,
+        ...informed,
+      ];
+      const invalidIds = Array.from(
+        new Set(allRaciIds.filter((id) => !memberSet.has(id))),
+      );
+      if (invalidIds.length) {
+        throw new BadRequestException(
+          `Utilisateurs hors équipe pour RACI: ${invalidIds.join(', ')}`,
+        );
+      }
 
       nextRaci.R = responsible;
       nextRaci.A = accountable;
@@ -1714,10 +1782,10 @@ export class NodesService {
       } else {
         const archivedAt = new Date(dto.archivedAt);
         if (Number.isNaN(archivedAt.getTime())) {
-          throw new BadRequestException('Date d\'archivage invalide');
+          throw new BadRequestException("Date d'archivage invalide");
         }
         data.archivedAt = archivedAt;
-        
+
         // Save the column ID in metadata so archived nodes can be counted by column
         if (node.columnId) {
           const workflowMeta = metadata.workflow || {};
@@ -1821,7 +1889,7 @@ export class NodesService {
     }
 
     if (!archived.archivedAt) {
-      throw new BadRequestException('La tâche n\'est pas archivée');
+      throw new BadRequestException("La tâche n'est pas archivée");
     }
 
     await this.ensureUserCanWrite(archived.teamId, userId);
@@ -1851,7 +1919,7 @@ export class NodesService {
       }
 
       if (!freshNode.archivedAt) {
-        throw new BadRequestException('La tâche n\'est pas archivée');
+        throw new BadRequestException("La tâche n'est pas archivée");
       }
 
       if (!freshNode.parentId) {
@@ -1879,7 +1947,9 @@ export class NodesService {
         );
       }
 
-      const targetColumn = columns.find((column) => column.id === targetColumnId);
+      const targetColumn = columns.find(
+        (column) => column.id === targetColumnId,
+      );
 
       if (!targetColumn) {
         throw new NotFoundException('Colonne cible introuvable');
@@ -2037,10 +2107,10 @@ export class NodesService {
           select: {
             id: true,
             columns: {
-              select: { 
-                id: true, 
+              select: {
+                id: true,
                 behavior: { select: { key: true } },
-                settings: true
+                settings: true,
               },
             },
           },
@@ -2063,6 +2133,26 @@ export class NodesService {
 
     if (!node) {
       throw new NotFoundException();
+    }
+
+    // Auto-réparation: si aucune date d'interaction backlog n'existe, initialiser à createdAt
+    // pour garantir un point de départ au compteur d'auto-archivage.
+    const extracted = this.extractMetadata(node);
+    let patchedNode = node;
+    if (!extracted.workflow.backlog.lastInteractionAt) {
+      const createdIso =
+        node.createdAt instanceof Date
+          ? node.createdAt.toISOString()
+          : new Date().toISOString();
+      // Écrire dans le workflow en respectant la structure raw
+      extracted.workflowRaw.backlog.lastInteractionAt = createdIso as any;
+      // Mettre à jour en mémoire (évite un re-fetch volumineux)
+      const nextMetadata = extracted.raw as Prisma.InputJsonValue;
+      await client.node.update({
+        where: { id: node.id },
+        data: { metadata: nextMetadata },
+      });
+      patchedNode = { ...node, metadata: extracted.raw } as typeof node;
     }
 
     const assignmentsSource = node.assignments as Array<{
@@ -2095,7 +2185,7 @@ export class NodesService {
           columns: node.board.columns.map((c: any) => {
             const behaviorKey = c.behavior?.key ?? null;
             let settings = this.normalizeColumnSettings(c.settings ?? null);
-            
+
             // Si settings est null, on retourne les valeurs par défaut selon le comportement
             if (!settings) {
               if (behaviorKey === 'BACKLOG') {
@@ -2110,7 +2200,7 @@ export class NodesService {
                 };
               }
             }
-            
+
             return {
               id: c.id,
               behaviorKey,
@@ -2144,7 +2234,7 @@ export class NodesService {
     );
 
     return {
-      ...this.mapNode(node),
+      ...this.mapNode(patchedNode),
       assignments,
       children,
       summary,
@@ -2457,7 +2547,9 @@ export class NodesService {
   }
 
   private resolveMailLogMaxBytes(): number {
-    const raw = Number(process.env.MAIL_LOG_MAX_BYTES ?? DEFAULT_MAIL_LOG_MAX_BYTES);
+    const raw = Number(
+      process.env.MAIL_LOG_MAX_BYTES ?? DEFAULT_MAIL_LOG_MAX_BYTES,
+    );
     if (!Number.isFinite(raw) || raw <= 0) {
       return DEFAULT_MAIL_LOG_MAX_BYTES;
     }
@@ -2465,7 +2557,9 @@ export class NodesService {
   }
 
   private resolveMailLogMaxFiles(): number {
-    const raw = Number(process.env.MAIL_LOG_MAX_FILES ?? DEFAULT_MAIL_LOG_MAX_FILES);
+    const raw = Number(
+      process.env.MAIL_LOG_MAX_FILES ?? DEFAULT_MAIL_LOG_MAX_FILES,
+    );
     if (!Number.isFinite(raw) || raw < 1) {
       return DEFAULT_MAIL_LOG_MAX_FILES;
     }
@@ -2497,20 +2591,16 @@ export class NodesService {
       Object.assign(metadata, payload.metadata);
     }
 
-    try {
-      await this.mailService.sendMail({
-        to: recipients.map((recipient) => ({
-          email: recipient.email,
-          displayName: recipient.displayName,
-        })),
-        subject: payload.subject,
-        text: payload.text,
-        html: payload.html,
-        metadata,
-      });
-    } catch (error) {
-      throw error;
-    }
+    await this.mailService.sendMail({
+      to: recipients.map((recipient) => ({
+        email: recipient.email,
+        displayName: recipient.displayName,
+      })),
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      metadata,
+    });
   }
 
   private buildMailPayload(entry: MailLogEntry): MailPayload | null {
@@ -2572,9 +2662,9 @@ export class NodesService {
             ? `<p>La dernière date planifiée était le <strong>${escapeHtml(nextReview)}</strong>.</p>`
             : `<p>La dernière date planifiée n'a pas pu être déterminée.</p>`,
           frequency
-            ? `<p>Fréquence configurée : tous les <strong>${escapeHtml(String(
-                frequency,
-              ))}</strong> jours.</p>`
+            ? `<p>Fréquence configurée : tous les <strong>${escapeHtml(
+                String(frequency),
+              )}</strong> jours.</p>`
             : '<p>La fréquence configurée est indisponible.</p>',
           '<p>Merci de planifier une action ou de mettre à jour la tâche.</p>',
         ];
@@ -3116,9 +3206,12 @@ export class NodesService {
     return mapped[0];
   }
 
-  async listChildBoards(nodeId: string): Promise<NodeChildBoardDto[]> {
+  async listChildBoards(
+    nodeId: string,
+    userId?: string,
+  ): Promise<NodeChildBoardDto[]> {
     // Nouveau: on ne se base plus sur le type mais sur la présence d'un board
-    const boards = await this.prisma.board.findMany({
+    const rawBoards = await this.prisma.board.findMany({
       where: { node: { parentId: nodeId } },
       select: {
         id: true,
@@ -3126,7 +3219,14 @@ export class NodesService {
       },
       orderBy: { node: { position: 'asc' } },
     });
-    return boards.map((b) => ({
+    // Filtrer si personal et non propriétaire (si info isPersonal disponible via cast)
+    const boards = rawBoards.filter((b: any) => {
+      if (b.isPersonal && b.ownerUserId && userId && b.ownerUserId !== userId) {
+        return false;
+      }
+      return true;
+    });
+    return boards.map((b: any) => ({
       nodeId: b.node.id,
       boardId: b.id,
       name: b.node.title,
@@ -3333,11 +3433,11 @@ export class NodesService {
   ): BacklogColumnSettings {
     const source =
       settings && typeof settings === 'object' && !Array.isArray(settings)
-        ? (settings.backlog &&
-            typeof settings.backlog === 'object' &&
-            !Array.isArray(settings.backlog)
-            ? settings.backlog
-            : settings)
+        ? settings.backlog &&
+          typeof settings.backlog === 'object' &&
+          !Array.isArray(settings.backlog)
+          ? settings.backlog
+          : settings
         : {};
     const ensure = (value: unknown, fallback: number, max: number) => {
       const num = Number(value);
@@ -3348,17 +3448,17 @@ export class NodesService {
       return rounded;
     };
     const reviewAfterDays = ensure(
-      (source as any).reviewAfterDays,
+      source.reviewAfterDays,
       DEFAULT_BACKLOG_SETTINGS.reviewAfterDays,
       365,
     );
     const reviewEveryDays = ensure(
-      (source as any).reviewEveryDays,
+      source.reviewEveryDays,
       DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
       365,
     );
     const archiveAfterDays = ensure(
-      (source as any).archiveAfterDays,
+      source.archiveAfterDays,
       DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
       730,
     );
@@ -3374,11 +3474,11 @@ export class NodesService {
   ): DoneColumnSettings {
     const source =
       settings && typeof settings === 'object' && !Array.isArray(settings)
-        ? (settings.done &&
-            typeof settings.done === 'object' &&
-            !Array.isArray(settings.done)
-            ? settings.done
-            : settings)
+        ? settings.done &&
+          typeof settings.done === 'object' &&
+          !Array.isArray(settings.done)
+          ? settings.done
+          : settings
         : {};
     const ensure = (value: unknown, fallback: number) => {
       const num = Number(value);
@@ -3389,7 +3489,7 @@ export class NodesService {
       return rounded;
     };
     const archiveAfterDays = ensure(
-      (source as any).archiveAfterDays,
+      source.archiveAfterDays,
       DEFAULT_DONE_SETTINGS.archiveAfterDays,
     );
     return { archiveAfterDays };
@@ -3403,19 +3503,31 @@ export class NodesService {
 
   private mapNode(node: NodeModel): NodeDto {
     const metadata = this.extractMetadata(node);
+    // type dérivé: présence d'un board => COMPLEX, sinon SIMPLE
+    const derivedType =
+      (node as any).boardId || (node as any).board ? 'COMPLEX' : 'SIMPLE';
+    const statusMeta = normalizeJson(node.statusMetadata) || {};
+    // Inject boardId pour compat si board présent
+    if (!statusMeta.boardId) {
+      const existingBoard = (node as any).boardId || (node as any).board?.id;
+      if (existingBoard) statusMeta.boardId = existingBoard;
+    }
     return {
       id: node.id,
       shortId: Number(node.shortId ?? 0),
       teamId: node.teamId,
       parentId: node.parentId,
-      // type supprimé
+      type: derivedType,
       title: node.title,
       description: node.description,
       path: node.path,
       depth: node.depth,
+      createdAt: node.createdAt
+        ? node.createdAt.toISOString()
+        : new Date(0).toISOString(),
       columnId: node.columnId,
       dueAt: node.dueAt ? node.dueAt.toISOString() : null,
-      statusMetadata: normalizeJson(node.statusMetadata),
+      statusMetadata: statusMeta,
       progress: (node as any).progress ?? 0,
       blockedReason: (node as any).blockedReason ?? null,
       blockedReminderEmails: (node as any).blockedReminderEmails ?? [],
@@ -3732,8 +3844,7 @@ export class NodesService {
     const backlogHiddenUntil = toIsoDateTimeOrNull(
       backlogWorkflowRaw.hiddenUntil,
     );
-    if (backlogHiddenUntil === null)
-      delete backlogWorkflowRaw.hiddenUntil;
+    if (backlogHiddenUntil === null) delete backlogWorkflowRaw.hiddenUntil;
     else backlogWorkflowRaw.hiddenUntil = backlogHiddenUntil;
     const backlogReviewStartedAt = toIsoDateTimeOrNull(
       backlogWorkflowRaw.reviewStartedAt,
@@ -3756,8 +3867,7 @@ export class NodesService {
     const backlogNextReviewAt = toIsoDateTimeOrNull(
       backlogWorkflowRaw.nextReviewAt,
     );
-    if (backlogNextReviewAt === null)
-      delete backlogWorkflowRaw.nextReviewAt;
+    if (backlogNextReviewAt === null) delete backlogWorkflowRaw.nextReviewAt;
     else backlogWorkflowRaw.nextReviewAt = backlogNextReviewAt;
     const backlogLastColumnId =
       typeof backlogWorkflowRaw.lastKnownColumnId === 'string'
@@ -3777,11 +3887,13 @@ export class NodesService {
       ColumnBehaviorKey.IN_PROGRESS,
       ColumnBehaviorKey.CUSTOM,
     ]);
-    const backlogLastBehavior = backlogLastBehaviorRaw && allowedBehaviors.has(
-      backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM',
-    )
-      ? (backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM')
-      : null;
+    const backlogLastBehavior =
+      backlogLastBehaviorRaw &&
+      allowedBehaviors.has(
+        backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM',
+      )
+        ? (backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM')
+        : null;
     if (backlogLastBehavior === null)
       delete backlogWorkflowRaw.lastKnownBehavior;
     else backlogWorkflowRaw.lastKnownBehavior = backlogLastBehavior;
@@ -3894,10 +4006,18 @@ export class NodesService {
   private buildAssignmentRecipients(
     assignments: Array<{
       role: string | null;
-      user: { id: string; email: string | null; displayName: string | null } | null;
+      user: {
+        id: string;
+        email: string | null;
+        displayName: string | null;
+      } | null;
     }> = [],
   ): Array<{ userId: string | null; email: string; displayName: string }> {
-    const recipients: Array<{ userId: string | null; email: string; displayName: string }> = [];
+    const recipients: Array<{
+      userId: string | null;
+      email: string;
+      displayName: string;
+    }> = [];
     const seen = new Set<string>();
     for (const assignment of assignments) {
       if (!assignment.user?.email) continue;
@@ -3918,7 +4038,11 @@ export class NodesService {
   private buildEmailRecipients(
     emails: string[],
   ): Array<{ userId: string | null; email: string; displayName: string }> {
-    const recipients: Array<{ userId: string | null; email: string; displayName: string }> = [];
+    const recipients: Array<{
+      userId: string | null;
+      email: string;
+      displayName: string;
+    }> = [];
     const seen = new Set<string>();
     for (const raw of emails) {
       const email = String(raw).trim().toLowerCase();
@@ -3940,10 +4064,7 @@ export class NodesService {
       await this.processBlockedReminders(now);
     } catch (error) {
       const err = error as Error;
-      this.logger.error(
-        'Workflow automation failed',
-        err.stack ?? err.message,
-      );
+      this.logger.error('Workflow automation failed', err.stack ?? err.message);
     } finally {
       this.workflowAutomationRunning = false;
     }
@@ -3995,9 +4116,8 @@ export class NodesService {
         if (interactionIso) {
           const interactionMs = Date.parse(interactionIso);
           if (!Number.isNaN(interactionMs)) {
-            const archiveDeadline = (
-              interactionMs + backlogSettings.archiveAfterDays * DAY_IN_MS
-            );
+            const archiveDeadline =
+              interactionMs + backlogSettings.archiveAfterDays * DAY_IN_MS;
             if (archiveDeadline <= nowMs) {
               backlogState.reviewStartedAt = null;
               metadata.workflowRaw.backlog.reviewStartedAt = null;
@@ -4181,7 +4301,7 @@ export class NodesService {
       if (!emails.length) continue;
       const recipients = this.buildEmailRecipients(emails);
       if (!recipients.length) continue;
-      const baseline = (node as any).blockedReminderLastSentAt ?? node.blockedSince;
+      const baseline = node.blockedReminderLastSentAt ?? node.blockedSince;
       if (!baseline) continue;
       const baselineMs = baseline.getTime();
       if (Number.isNaN(baselineMs)) continue;

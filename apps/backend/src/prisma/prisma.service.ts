@@ -1,9 +1,18 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Logger, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import type { MetricsService } from '../modules/metrics/metrics.service';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger('PrismaService');
   private metricsEnabled = false;
 
@@ -18,28 +27,38 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (!this.metricsEnabled) return;
     // Guard: ensure Prisma client instance exposes $use before using middleware
     if (typeof (this as any).$use !== 'function') {
-      this.logger.warn('$use middleware not available on Prisma client - skipping metrics middleware');
+      this.logger.warn(
+        '$use middleware not available on Prisma client - skipping metrics middleware',
+      );
       return;
     }
     // Cast pour accéder à $use (type déjà présent mais TS peut râler selon config)
-    (this as any).$use(async (params: any, next: any) => {
-      const start = process.hrtime();
-      const model = params.model || 'raw';
-      const action = params.action || 'unknown';
-      try {
-        const result = await next(params);
-        const diff = process.hrtime(start);
-        const seconds = diff[0] + diff[1] / 1e9;
-        this.metricsService?.recordPrisma(model, action, 'ok', seconds);
-        return result;
-      } catch (e: any) {
-        const diff = process.hrtime(start);
-        const seconds = diff[0] + diff[1] / 1e9;
-        const category = this.categorizeError(e);
-        this.metricsService?.recordPrisma(model, action, 'error', seconds, category);
-        throw e;
-      }
-    });
+    (this as any).$use(
+      async (params: any, next: (p: any) => Promise<unknown>) => {
+        const start = process.hrtime();
+        const model = params.model || 'raw';
+        const action = params.action || 'unknown';
+        try {
+          const result: unknown = await next(params);
+          const diff = process.hrtime(start);
+          const seconds = diff[0] + diff[1] / 1e9;
+          this.metricsService?.recordPrisma(model, action, 'ok', seconds);
+          return result;
+        } catch (e: any) {
+          const diff = process.hrtime(start);
+          const seconds = diff[0] + diff[1] / 1e9;
+          const category = this.categorizeError(e);
+          this.metricsService?.recordPrisma(
+            model,
+            action,
+            'error',
+            seconds,
+            category,
+          );
+          throw e;
+        }
+      },
+    );
     this.logger.log('Prisma metrics middleware actif');
   }
 

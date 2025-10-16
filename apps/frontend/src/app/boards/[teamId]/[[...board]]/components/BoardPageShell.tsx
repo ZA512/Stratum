@@ -1339,6 +1339,12 @@ export function TeamBoardPage(){
       );
       await refreshActiveBoard();
       setOptimisticColumns(null);
+      // Inform listeners (e.g., TaskDrawer) that the node changed column
+      try {
+        window.dispatchEvent(new CustomEvent('nodeMoved', {
+          detail: { nodeId: moving.id, targetColumnId: finalTargetCol.id },
+        }));
+      } catch { /* no-op */ }
     } catch {
       setOptimisticColumns(snapshot); // rollback
     }

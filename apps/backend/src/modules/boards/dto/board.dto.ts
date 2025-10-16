@@ -13,4 +13,10 @@ export class BoardDto {
 
   @ApiProperty({ type: BoardColumnDto, isArray: true })
   columns!: BoardColumnDto[];
+
+  @ApiProperty({ example: 'user_abc', nullable: true })
+  ownerUserId!: string | null;
+
+  @ApiProperty({ example: true })
+  isPersonal!: boolean;
 }

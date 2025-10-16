@@ -28,7 +28,6 @@ import { WorkflowAutomationModule } from './modules/workflow-automation/workflow
     DashboardsModule,
     MetricsModule,
     WorkflowAutomationModule,
-
   ],
   controllers: [AppController],
   providers: [AppService],
