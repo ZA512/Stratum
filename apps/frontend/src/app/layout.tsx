@@ -50,6 +50,7 @@ export default function RootLayout({
   {/* Favicon: inutile d'ajouter <link> car app/favicon.ico est détecté automatiquement */}
       </head>
       <body
+        data-theme={DEFAULT_THEME.id}
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}
       >
         <Providers>{children}</Providers>
