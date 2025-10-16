@@ -53,6 +53,9 @@ const panelVariants: Variants = {
   exit: { x: '100%', opacity: 0, transition: { duration: 0.2 } },
 };
 
+const FIELD_INPUT_BASE =
+  'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
+
 const Skeleton: React.FC = () => (
   <div className="animate-pulse space-y-4">
     <div className="h-6 w-3/4 rounded bg-card/70" />
@@ -1253,13 +1256,13 @@ export const TaskDrawer: React.FC = () => {
             aria-modal="true"
             aria-labelledby="task-drawer-title"
           >
-            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border/40">
               <div className="space-y-2 min-w-0 pr-4 flex-1">
                 <input
                   id="task-drawer-title"
                   value={title}
                   onChange={(e) => { setTitle(e.target.value); }}
-                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-lg font-semibold focus:outline-none focus:ring focus:ring-emerald-500/40"
+                  className={`w-full ${FIELD_INPUT_BASE} px-3 py-2.5 text-lg font-semibold`}
                   placeholder="Titre de la tâche"
                   disabled={saving}
                 />
@@ -1285,7 +1288,7 @@ export const TaskDrawer: React.FC = () => {
                 >{saving ? '...' : 'Valider'}</button>
                 <button
                   onClick={requestClose}
-                  className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring"
+                  className="rounded p-2 transition hover:bg-card/80 focus:outline-none focus:ring"
                   aria-label="Fermer"
                 >
                   <CloseIcon className="w-5 h-5" />
@@ -1347,7 +1350,7 @@ export const TaskDrawer: React.FC = () => {
                           value={description}
                           onChange={(e) => { setDescription(e.target.value); }}
                           rows={5}
-                          className="w-full resize-y rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                          className={`w-full resize-y ${FIELD_INPUT_BASE} px-3 py-2 text-sm`}
                           placeholder="Description de la tâche"
                           disabled={saving}
                         />
@@ -1389,7 +1392,7 @@ export const TaskDrawer: React.FC = () => {
                               const v = parseInt(e.target.value, 10);
                               if (!Number.isNaN(v)) setProgress(Math.min(100, Math.max(0, v)));
                             }}
-                            className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                            className={`w-16 ${FIELD_INPUT_BASE} px-2 py-1 text-sm text-center`}
                             disabled={saving}
                           />
                           <span className="text-xs text-slate-500">%</span>
@@ -1425,7 +1428,7 @@ export const TaskDrawer: React.FC = () => {
                               type="date"
                               value={dueAt}
                               onChange={(e) => { setDueAt(e.target.value); }}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -1437,7 +1440,7 @@ export const TaskDrawer: React.FC = () => {
                             <select
                               value={priority}
                               onChange={(e)=> setPriority(e.target.value as Priority)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             >
                               <option value="NONE">{tBoard('priority.labels.NONE')}</option>
@@ -1456,7 +1459,7 @@ export const TaskDrawer: React.FC = () => {
                             <select
                               value={effort ?? ''}
                               onChange={(e)=> setEffort(e.target.value ? (e.target.value as Exclude<Effort, null>) : null)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-foreground focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             >
                               <option value="">{tBoard('taskDrawer.effort.none')}</option>
@@ -1485,8 +1488,8 @@ export const TaskDrawer: React.FC = () => {
                               <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.backlog.snooze.label')}</span>
                               <div className="group relative">
                                 <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
-                                <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-sky-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
-                                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-sky-500/20 bg-slate-800"></div>
+                                <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-sky-500/20 bg-card p-4 text-xs shadow-2xl group-hover:block">
+                                  <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-sky-500/20 bg-card"></div>
                                   <h4 className="mb-2 flex items-center gap-2 font-semibold text-sky-400">
                                     <span className="material-symbols-outlined text-[16px]">info</span>
                                     {tBoard('taskDrawer.backlog.snooze.tooltip.title')}
@@ -1502,7 +1505,7 @@ export const TaskDrawer: React.FC = () => {
                                 type="date"
                                 value={backlogHiddenUntil}
                                 onChange={(event) => setBacklogHiddenUntil(event.target.value)}
-                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                                className={`w-full ${FIELD_INPUT_BASE} px-3 py-1.5 text-sm text-foreground focus:ring-accent/40`}
                                 disabled={saving}
                               />
                             </div>
@@ -1524,8 +1527,8 @@ export const TaskDrawer: React.FC = () => {
                                   <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.lifecycle.autoArchive')}</span>
                                   <div className="group relative inline-block ml-1">
                                     <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
-                                    <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-96 -translate-x-1/2 rounded-lg border border-amber-500/20 bg-slate-800 p-4 text-xs shadow-2xl group-hover:block">
-                                      <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-amber-500/20 bg-slate-800"></div>
+                                <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-96 -translate-x-1/2 rounded-lg border border-amber-500/20 bg-card p-4 text-xs shadow-2xl group-hover:block">
+                                      <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-amber-500/20 bg-card"></div>
                                       <h4 className="mb-2 flex items-center gap-2 font-semibold text-amber-400">
                                         <span className="material-symbols-outlined text-[16px]">info</span>
                                         {tBoard('taskDrawer.lifecycle.autoArchiveTooltip.title')}
@@ -1598,12 +1601,12 @@ export const TaskDrawer: React.FC = () => {
                                 <div className="group relative">
                                   <button
                                     type="button"
-                                    className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[11px] text-slate-500 hover:border-slate-400 hover:text-slate-600 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-500"
+                                    className="flex h-4 w-4 items-center justify-center rounded-full border border-border/60 text-[11px] text-muted transition hover:border-border hover:text-foreground"
                                     aria-label="Info archivage automatique"
                                   >
                                     i
                                   </button>
-                                  <div className="pointer-events-none invisible absolute left-0 top-6 z-50 w-80 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800">
+                                <div className="pointer-events-none invisible absolute left-0 top-6 z-50 w-80 rounded-lg border border-border/50 bg-card p-3 text-xs shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100">
                                     <p className="font-semibold mb-1 text-slate-900 dark:text-slate-100">
                                       {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.title')}
                                     </p>
@@ -1660,7 +1663,7 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap gap-2 mb-2">
                           {tags.map(t => (
-                            <span key={t} className="group inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-xs text-slate-700 dark:text-slate-200">
+                            <span key={t} className="group inline-flex items-center gap-1 rounded bg-card/50 px-2 py-0.5 text-xs text-muted">
                               {t}
                               <button
                                 type="button"
@@ -1690,7 +1693,7 @@ export const TaskDrawer: React.FC = () => {
                               }
                             }}
                             placeholder="Nouveau tag puis Entrée"
-                            className="flex-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                            className={`flex-1 ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                             disabled={saving}
                           />
                           {tagInput && (
@@ -1705,7 +1708,7 @@ export const TaskDrawer: React.FC = () => {
                                 setTags([...tags, raw]);
                                 setTagInput('');
                               }}
-                              className="px-2 py-1 text-xs rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600"
+                              className="rounded bg-card/60 px-2 py-1 text-xs text-muted transition hover:bg-card/80 hover:text-foreground"
                             >Ajouter</button>
                           )}
                         </div>
@@ -1738,7 +1741,7 @@ export const TaskDrawer: React.FC = () => {
                                 value={blockedReason}
                                 onChange={e=>setBlockedReason(e.target.value)}
                                 rows={3}
-                                className="mt-1 w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                className={`mt-1 w-full ${FIELD_INPUT_BASE} px-2 py-1.5 text-sm`}
                                 placeholder={tBoard('taskDrawer.blocked.reason.placeholder')}
                                 disabled={saving}
                               />
@@ -1790,7 +1793,7 @@ export const TaskDrawer: React.FC = () => {
                                         addBlockedEmail();
                                       }
                                     }}
-                                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                    className={`w-full ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                                     placeholder={tBoard('taskDrawer.blocked.emails.placeholder')}
                                     disabled={saving}
                                   />
@@ -1818,7 +1821,7 @@ export const TaskDrawer: React.FC = () => {
                                     setBlockedInterval(String(Math.floor(n)));
                                   }}
                                   placeholder="0 = jamais"
-                                  className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                  className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                                   disabled={saving}
                                 />
                               </label>
@@ -1832,7 +1835,7 @@ export const TaskDrawer: React.FC = () => {
                                   type="date"
                                   value={blockedEta}
                                   onChange={e=>setBlockedEta(e.target.value)}
-                                  className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                                  className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                                   disabled={saving}
                                 />
                               </label>
@@ -1849,7 +1852,7 @@ export const TaskDrawer: React.FC = () => {
                                 type="checkbox"
                                 checked={isBlockResolved}
                                 onChange={e=>setIsBlockResolved(e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/40"
+                                className="h-4 w-4 rounded border border-border/60 text-emerald-500 focus:ring-accent/40"
                                 disabled={saving}
                               />
                               <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
@@ -1904,7 +1907,7 @@ export const TaskDrawer: React.FC = () => {
                           <button
                             type="button"
                             onClick={handleSaveCurrentRaciTeam}
-                            className="inline-flex items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-emerald-500/50 hover:text-emerald-600 dark:text-slate-200 dark:hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded border border-border/60 bg-input px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={saving || savingRaciTeam}
                           >
                             💾 Enregistrer l’équipe
@@ -1914,7 +1917,7 @@ export const TaskDrawer: React.FC = () => {
                           <select
                             value={selectedRaciTeamId}
                             onChange={handleSelectSavedRaciTeam}
-                            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring focus:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            className={`w-full ${FIELD_INPUT_BASE} px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
                             disabled={savedRaciTeamsLoading || savedRaciTeams.length === 0}
                           >
                             <option value="">Sélectionner une équipe enregistrée</option>
@@ -2034,7 +2037,7 @@ export const TaskDrawer: React.FC = () => {
                             value={inviteEmail}
                             onChange={(event) => setInviteEmail(event.target.value)}
                             placeholder="email@exemple.com"
-                            className="flex-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                            className={`flex-1 ${FIELD_INPUT_BASE} px-3 py-2 text-sm`}
                             disabled={inviteSubmitting}
                             aria-label="Email du collaborateur à inviter"
                           />
@@ -2175,7 +2178,7 @@ export const TaskDrawer: React.FC = () => {
                         )}
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">📧</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -2208,7 +2211,7 @@ export const TaskDrawer: React.FC = () => {
 
                   {expertMode && activeTab === 'time' && (
                     <div className="space-y-5">
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">⏱️</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -2224,7 +2227,7 @@ export const TaskDrawer: React.FC = () => {
                               value={estimatedTime}
                               onChange={(e) => setEstimatedTime(e.target.value)}
                               placeholder="ex : 12,5"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2236,7 +2239,7 @@ export const TaskDrawer: React.FC = () => {
                               value={actualOpex}
                               onChange={(e) => setActualOpex(e.target.value)}
                               placeholder="ex : 4"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2248,7 +2251,7 @@ export const TaskDrawer: React.FC = () => {
                               value={actualCapex}
                               onChange={(e) => setActualCapex(e.target.value)}
                               placeholder="ex : 2,5"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2258,7 +2261,7 @@ export const TaskDrawer: React.FC = () => {
                               type="date"
                               value={plannedStart}
                               onChange={(e) => setPlannedStart(e.target.value)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2268,7 +2271,7 @@ export const TaskDrawer: React.FC = () => {
                               type="date"
                               value={plannedEnd}
                               onChange={(e) => setPlannedEnd(e.target.value)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2278,7 +2281,7 @@ export const TaskDrawer: React.FC = () => {
                               type="date"
                               value={actualEnd}
                               onChange={(e) => setActualEnd(e.target.value)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2287,7 +2290,7 @@ export const TaskDrawer: React.FC = () => {
                             <select
                               value={billingStatus}
                               onChange={(e) => setBillingStatus(e.target.value)}
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             >
                               <option value="">(non défini)</option>
@@ -2299,7 +2302,7 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">💰</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -2315,11 +2318,11 @@ export const TaskDrawer: React.FC = () => {
                               value={hourlyRate}
                               onChange={(e) => setHourlyRate(e.target.value)}
                               placeholder="ex : 85"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
-                          <div className="flex flex-col gap-1 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-800/40 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex flex-col gap-1 rounded border border-dashed border-border/40 bg-card/40 px-3 py-2 text-xs text-muted">
                             Coût réel calculé
                             <span className="text-sm font-medium text-foreground">
                               {formattedActualCost ?? '—'}
@@ -2334,7 +2337,7 @@ export const TaskDrawer: React.FC = () => {
                               value={plannedBudget}
                               onChange={(e) => setPlannedBudget(e.target.value)}
                               placeholder="ex : 12000"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2346,7 +2349,7 @@ export const TaskDrawer: React.FC = () => {
                               value={consumedBudgetValue}
                               onChange={(e) => setConsumedBudgetValue(e.target.value)}
                               placeholder="ex : 4500"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2358,7 +2361,7 @@ export const TaskDrawer: React.FC = () => {
                               value={consumedBudgetPercent}
                               onChange={(e) => setConsumedBudgetPercent(e.target.value)}
                               placeholder="ex : 37"
-                              className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+                              className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                               disabled={saving}
                             />
                           </label>
@@ -2373,7 +2376,7 @@ export const TaskDrawer: React.FC = () => {
           {showUnsavedModal && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
               <div className="absolute inset-0 bg-black/50" onClick={() => setShowUnsavedModal(false)} aria-hidden="true" />
-              <div className="relative z-10 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+              <div className="relative z-10 w-full max-w-sm rounded-lg border border-border/50 bg-card p-6 shadow-xl">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Modifications non sauvegardées</h2>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                   Vous avez des changements non sauvegardés. Voulez-vous les enregistrer avant de fermer&nbsp;?
@@ -2387,7 +2390,7 @@ export const TaskDrawer: React.FC = () => {
                   >{saving ? 'Sauvegarde…' : 'Sauvegarder'}</button>
                   <button
                     type="button"
-                    className="inline-flex justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    className="inline-flex justify-center rounded-md border border-border/60 bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-accent hover:text-accent"
                     onClick={() => {
                       setShowUnsavedModal(false);
                       close();

@@ -7,6 +7,9 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { createChildTask, toggleChildTaskDone, updateChildTask, reorderChildren } from '../../nodes/children-api';
 import { useToast } from '@/components/toast/ToastProvider';
 
+const FIELD_INPUT_BASE =
+  'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
+
 export const ChildTasksSection: React.FC = () => {
   const { detail, refresh, applyDetail } = useTaskDrawer();
   const { accessToken } = useAuth();
@@ -230,7 +233,7 @@ export const ChildTasksSection: React.FC = () => {
           <span className="text-slate-400">.</span>
           <span className="text-emerald-600 dark:text-emerald-400">{localCounts.done}</span>
         </div>
-        <form onSubmit={onCreate} className="flex w-full flex-col gap-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-white/60 dark:bg-slate-800/60 p-3 sm:flex-row sm:items-center">
+        <form onSubmit={onCreate} className="flex w-full flex-col gap-2 rounded-lg border border-dashed border-border/40 bg-card/40 p-3 sm:flex-row sm:items-center">
           <label className="flex-1 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             <span className="sr-only">Nouvelle sous-tâche</span>
             <input
@@ -238,7 +241,7 @@ export const ChildTasksSection: React.FC = () => {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Nouvelle sous-tâche"
-              className="mt-1 w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-emerald-500/40"
+              className={`mt-1 w-full ${FIELD_INPUT_BASE} px-3 py-2 text-sm`}
               disabled={creating}
             />
           </label>
@@ -264,7 +267,7 @@ export const ChildTasksSection: React.FC = () => {
                 key={id}
                 as="div"
                 id={`child-${id}`}
-                className="group flex items-start gap-3 rounded px-3 py-2 bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 text-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-grab transition"
+                className="group flex items-start gap-3 rounded border border-border/50 bg-card px-3 py-2 text-sm text-foreground shadow-sm transition hover:border-accent/40 hover:bg-card/80 cursor-grab"
                 whileDrag={{ scale:1.02, boxShadow:'0 4px 12px rgba(0,0,0,0.18)' }}
               >
                 <button
@@ -273,7 +276,7 @@ export const ChildTasksSection: React.FC = () => {
                   onClick={(e)=>{ e.stopPropagation(); toggle(c.id); }}
                   role="checkbox"
                   aria-checked={isDone}
-                  className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                  className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-input text-muted transition hover:bg-card"
                   title={isDone? 'Remettre en Backlog':'Marquer terminé'}
                 >
                   <span className="material-symbols-outlined text-[18px]" aria-hidden>
@@ -290,9 +293,9 @@ export const ChildTasksSection: React.FC = () => {
           })}
         </Reorder.Group>
         {doneItems.length>0 && (
-          <div className="pt-3 border-t border-slate-300 dark:border-slate-600 space-y-1">
+          <div className="pt-3 border-t border-border/40 space-y-1">
             {doneItems.map(c => (
-              <div key={c.id} id={`child-${c.id}`} className="flex items-start gap-2 rounded px-3 py-2 bg-slate-100 dark:bg-slate-700 text-sm text-slate-500 dark:text-slate-300 line-through">
+              <div key={c.id} id={`child-${c.id}`} className="flex items-start gap-2 rounded bg-card/40 px-3 py-2 text-sm text-muted line-through">
                 <button
                   type="button"
                   onMouseDown={(e)=>{ e.stopPropagation(); }}

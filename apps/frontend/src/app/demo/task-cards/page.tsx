@@ -3,8 +3,8 @@ import TaskCard from '@/components/task/task-card';
 
 export default function TaskCardsDemoPage() {
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark p-8 space-y-8">
-      <h1 className="text-2xl font-bold text-text-light dark:text-text-dark">Demo Task Cards</h1>
+    <div className="min-h-screen bg-background text-foreground p-8 space-y-8">
+      <h1 className="text-2xl font-bold">Demo Task Cards</h1>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <TaskCard
           id={152}

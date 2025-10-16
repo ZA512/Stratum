@@ -7,6 +7,9 @@ import { createNodeComment, fetchNodeComments } from '../node-comments-api';
 import type { NodeComment } from '../types';
 import type { TeamMember } from '@/features/teams/team-members-api';
 
+const FIELD_INPUT_BASE =
+  'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
+
 type CommentsSectionProps = {
   members: TeamMember[];
   membersLoading: boolean;
@@ -222,7 +225,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
 
   return (
     <section className="space-y-5">
-      <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="text-lg">✏️</span>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -235,12 +238,12 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
             value={message}
             onChange={handleInputChange}
             rows={4}
-            className="w-full resize-y rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring focus:ring-emerald-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className={`w-full resize-y ${FIELD_INPUT_BASE} px-3 py-2 text-sm`}
             placeholder="Saisir votre message, utilisez @ pour mentionner quelqu'un"
             disabled={submitting}
           />
           {mentionQuery !== null && (
-            <div className="absolute left-0 top-full z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+            <div className="absolute left-0 top-full z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border/50 bg-card shadow-lg">
               {mentionSuggestions.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">Aucun résultat</div>
               ) : (
@@ -265,7 +268,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
 
         <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
           {notifyOrder.map((key) => (
-            <label key={key} className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-1 dark:border-slate-700">
+            <label key={key} className="inline-flex items-center gap-1 rounded border border-border/50 px-2 py-1">
               <input
                 type="checkbox"
                 checked={notify[key]}
@@ -291,7 +294,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
         </div>
       </form>
 
-      <div className="space-y-2 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+      <div className="space-y-2 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
         <header className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-lg">💬</span>
@@ -317,8 +320,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
         <div className="space-y-3">
           {loading ? (
             <div className="space-y-3">
-              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-              <div className="h-16 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="h-16 w-full animate-pulse rounded bg-card/40" />
+              <div className="h-16 w-full animate-pulse rounded bg-card/40" />
             </div>
           ) : comments.length === 0 ? (
             <p className="text-sm text-slate-500">Aucun commentaire pour le moment.</p>
@@ -340,7 +343,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                 return (
                   <article
                     key={comment.id}
-                    className="space-y-2 rounded border border-slate-200/60 bg-white/90 p-3 text-sm shadow-sm dark:border-slate-700/60 dark:bg-slate-900/70"
+                    className="space-y-2 rounded border border-border/40 bg-card/70 p-3 text-sm shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
@@ -352,7 +355,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                           <p className="text-xs text-slate-500 dark:text-slate-400">{formatted}</p>
                         </div>
                       </div>
-                      <span className="rounded bg-slate-200/70 px-2 py-1 text-[10px] font-semibold tracking-wider text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
+                      <span className="rounded bg-card/50 px-2 py-1 text-[10px] font-semibold tracking-wider text-muted">
                         {renderFlags(comment)}
                       </span>
                     </div>
