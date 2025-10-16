@@ -81,6 +81,30 @@
     "languageHelp": "Your preference is saved on this device.",
     "success": "Language updated",
     "back": "Back to the dashboard",
+    "theme": {
+      "title": "Visual theme",
+      "description": "Pick the mood for Stratum. The selection is stored locally on this device.",
+      "applied": "Theme updated to {theme}",
+      "active": "In use",
+      "tone": {
+        "light": "Light ambience",
+        "dark": "Dark ambience"
+      },
+      "names": {
+        "midnight": "Midnight blueprint",
+        "aurora": "Aurora sky",
+        "solstice": "Solstice sand",
+        "velvet": "Velvet noir",
+        "cyberwave": "Cyberwave neon"
+      },
+      "descriptions": {
+        "midnight": "Current dark layout with teal highlights.",
+        "aurora": "Soft daylight blues with crisp accents for focus.",
+        "solstice": "Warm neutrals inspired by crafted stationery.",
+        "velvet": "Deep purple night tones with luminous lavender.",
+        "cyberwave": "Bold cyberpunk mix of neon magenta over noir."
+      }
+    },
     "raciTeams": {
       "title": "Saved RACI teams",
       "description": "Review and manage the RACI matrices you saved from the task drawer.",
