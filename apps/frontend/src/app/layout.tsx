@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { DEFAULT_THEME } from "@/themes";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      data-theme={DEFAULT_THEME.id}
+      className={DEFAULT_THEME.tone === "dark" ? "dark" : undefined}
+    >
       <head>
         {/* Pré-chargement pour fiabiliser le rendu des icônes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -44,7 +49,9 @@ export default function RootLayout({
         />
   {/* Favicon: inutile d'ajouter <link> car app/favicon.ico est détecté automatiquement */}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>
