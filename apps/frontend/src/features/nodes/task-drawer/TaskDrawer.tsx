@@ -55,13 +55,13 @@ const panelVariants: Variants = {
 
 const Skeleton: React.FC = () => (
   <div className="animate-pulse space-y-4">
-    <div className="h-6 bg-slate-300 dark:bg-slate-700 rounded w-3/4" />
-    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
-    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full" />
-    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-5/6" />
-    <div className="pt-4 space-y-2">
-      <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
-      <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+    <div className="h-6 w-3/4 rounded bg-card/70" />
+    <div className="h-4 w-1/2 rounded bg-card/60" />
+    <div className="h-4 w-full rounded bg-card/60" />
+    <div className="h-4 w-5/6 rounded bg-card/60" />
+    <div className="space-y-2 pt-4">
+      <div className="h-4 w-1/3 rounded bg-card/50" />
+      <div className="h-4 w-2/3 rounded bg-card/50" />
     </div>
   </div>
 );
@@ -1248,7 +1248,7 @@ export const TaskDrawer: React.FC = () => {
             animate="visible"
             exit="exit"
             variants={panelVariants}
-            className="fixed top-0 right-0 h-full w-full sm:w-[640px] md:w-[720px] lg:w-[840px] bg-white dark:bg-slate-900 z-50 shadow-xl border-l border-slate-200 dark:border-slate-800 flex flex-col"
+            className="fixed top-0 right-0 z-50 flex h-full w-full flex-col border-l border-white/10 bg-surface shadow-xl sm:w-[640px] md:w-[720px] lg:w-[840px]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-drawer-title"
@@ -1336,7 +1336,7 @@ export const TaskDrawer: React.FC = () => {
 
                   {activeTab === 'details' && (
                     <div className="space-y-5">
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">edit_note</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1353,7 +1353,7 @@ export const TaskDrawer: React.FC = () => {
                         />
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">checklist</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1363,7 +1363,7 @@ export const TaskDrawer: React.FC = () => {
                         <ChildTasksSection />
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">bar_chart</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1408,7 +1408,7 @@ export const TaskDrawer: React.FC = () => {
 
                   {activeTab === 'planning' && (
                     <div className="space-y-5">
-                      <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">event</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1473,7 +1473,7 @@ export const TaskDrawer: React.FC = () => {
                       </section>
 
                       {isBacklogCard && (
-                        <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                        <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300 mb-3">
                             {tBoard('taskDrawer.lifecycle.title')}
                           </h3>
@@ -1582,7 +1582,7 @@ export const TaskDrawer: React.FC = () => {
                         if (!isDone) return null;
                         
                         return (
-                          <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                          <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                               {tBoard('taskDrawer.backlog.lifecycle.title')}
                             </h3>
@@ -1651,7 +1651,7 @@ export const TaskDrawer: React.FC = () => {
                         );
                       })()}
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">🏷️</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1721,7 +1721,7 @@ export const TaskDrawer: React.FC = () => {
                         if (!isBlocked) return null;
 
                         return (
-                          <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                          <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                             <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[24px] text-rose-600 dark:text-rose-400">block</span>
                               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1868,7 +1868,7 @@ export const TaskDrawer: React.FC = () => {
 
                   {activeTab === 'raci' && (
                     <div className="space-y-5">
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[20px] text-slate-600 dark:text-slate-300">group</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1881,7 +1881,7 @@ export const TaskDrawer: React.FC = () => {
                       </section>
 
                       {membersLoading && (
-                        <div className="rounded-lg border border-white/10 bg-slate-500/5 p-4 text-xs text-slate-500">
+                        <div className="rounded-lg border border-white/10 bg-card/60 p-4 text-xs text-muted">
                           Chargement des membres…
                         </div>
                       )}
@@ -1891,7 +1891,7 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       )}
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -1940,7 +1940,7 @@ export const TaskDrawer: React.FC = () => {
                         )}
                       </section>
 
-                      <section className="space-y-4 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">Rôles et responsabilités</h4>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
@@ -2009,7 +2009,7 @@ export const TaskDrawer: React.FC = () => {
 
                   {activeTab === 'collaborators' && (
                     <div className="space-y-5">
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">🤝</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -2021,7 +2021,7 @@ export const TaskDrawer: React.FC = () => {
                         </p>
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">➕</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
@@ -2078,7 +2078,7 @@ export const TaskDrawer: React.FC = () => {
                         )}
                       </section>
 
-                      <section className="space-y-3 rounded-lg border border-white/10 bg-slate-500/5 p-4 shadow-sm">
+                      <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">👥</span>
                           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">

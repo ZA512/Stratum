@@ -93,6 +93,30 @@
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
     "back": "Retour au tableau de bord",
+    "theme": {
+      "title": "Thème visuel",
+      "description": "Choisissez l'ambiance de Stratum. La sélection est mémorisée localement sur cet appareil.",
+      "applied": "Thème mis à jour : {theme}",
+      "active": "Actif",
+      "tone": {
+        "light": "Ambiance claire",
+        "dark": "Ambiance sombre"
+      },
+      "names": {
+        "midnight": "Midnight blueprint",
+        "aurora": "Ciel d'aurore",
+        "solstice": "Sable du solstice",
+        "velvet": "Velours nocturne",
+        "cyberwave": "Cyberwave néon"
+      },
+      "descriptions": {
+        "midnight": "Thème sombre actuel souligné de turquoise.",
+        "aurora": "Bleus doux de journée avec des accents nets pour se concentrer.",
+        "solstice": "Palette chaude et neutre inspirée par la papeterie artisanale.",
+        "velvet": "Tons violets nocturnes relevés d'une lavande lumineuse.",
+        "cyberwave": "Proposition cyberpunk : magenta néon sur noir profond."
+      }
+    },
     "raciTeams": {
       "title": "Équipes RACI sauvegardées",
       "description": "Retrouvez et gérez vos matrices RACI enregistrées depuis le tiroir tâche.",
