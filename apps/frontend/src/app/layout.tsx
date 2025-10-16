@@ -28,7 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      data-theme={DEFAULT_THEME.id}
+      className={DEFAULT_THEME.tone === "dark" ? "dark" : undefined}
+    >
       <head>
         {/* Pré-chargement pour fiabiliser le rendu des icônes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
