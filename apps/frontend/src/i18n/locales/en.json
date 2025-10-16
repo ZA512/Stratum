@@ -95,14 +95,24 @@
         "aurora": "Aurora sky",
         "solstice": "Solstice sand",
         "velvet": "Velvet noir",
-        "cyberwave": "Cyberwave neon"
+        "cyberwave": "Cyberwave neon",
+        "materialLight": "Material clarity",
+        "solarizedLight": "Solarized daylight",
+        "materialDark": "Material night",
+        "nordDark": "Nord aurora",
+        "draculaDark": "Dracula midnight"
       },
       "descriptions": {
         "midnight": "Current dark layout with teal highlights.",
         "aurora": "Soft daylight blues with crisp accents for focus.",
         "solstice": "Warm neutrals inspired by crafted stationery.",
         "velvet": "Deep purple night tones with luminous lavender.",
-        "cyberwave": "Bold cyberpunk mix of neon magenta over noir."
+        "cyberwave": "Bold cyberpunk mix of neon magenta over noir.",
+        "materialLight": "Material-inspired light mode with teal accents and polished surfaces.",
+        "solarizedLight": "Solarized beige canvas with ocean blue highlights for gentle focus.",
+        "materialDark": "Material design dark mode blending mauve accents with soft contrast.",
+        "nordDark": "Nord-inspired arctic blues offering calm contrast for long sessions.",
+        "draculaDark": "Dracula palette with neon violets over deep slate for dramatic focus."
       }
     },
     "raciTeams": {

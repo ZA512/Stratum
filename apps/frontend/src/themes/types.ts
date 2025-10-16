@@ -7,7 +7,13 @@ export type ThemeCssVariable =
   | "--color-accent"
   | "--color-accent-strong"
   | "--color-foreground"
-  | "--color-muted";
+  | "--color-muted"
+  | "--color-breadcrumb-label"
+  | "--color-breadcrumb-shadow"
+  | "--color-breadcrumb-glow"
+  | "--color-task-label"
+  | "--color-task-heading"
+  | "--color-task-tab";
 
 export interface ThemePreview {
   background: string;

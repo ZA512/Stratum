@@ -11,6 +11,7 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { useBoardData } from '@/features/boards/board-data-provider';
+import type { ColumnBehaviorKey } from '@/features/boards/boards-api';
 import { fetchTeamMembers, type TeamMember } from '@/features/teams/team-members-api';
 import {
   fetchNodeCollaborators,
@@ -56,6 +57,53 @@ const panelVariants: Variants = {
 const FIELD_INPUT_BASE =
   'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+type ColumnLike = {
+  id: string;
+  behaviorKey: ColumnBehaviorKey | null;
+  settings?: Record<string, unknown> | null;
+};
+
+const findColumnById = (
+  columnId: string | null,
+  ...sources: Array<ColumnLike[] | undefined>
+): ColumnLike | null => {
+  if (!columnId) return null;
+  for (const columns of sources) {
+    const found = columns?.find((entry) => entry.id === columnId);
+    if (found) return found;
+  }
+  return null;
+};
+
+const extractArchiveAfterDays = (column: ColumnLike | null): number | null => {
+  if (!column) return null;
+  const settings = column.settings;
+  if (!isRecord(settings)) return null;
+  if (column.behaviorKey === 'BACKLOG') {
+    const backlog = settings.backlog;
+    if (isRecord(backlog)) {
+      const value = backlog.archiveAfterDays;
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+    }
+  }
+  if (column.behaviorKey === 'DONE') {
+    const done = settings.done;
+    if (isRecord(done)) {
+      const value = done.archiveAfterDays;
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+    }
+  }
+  const fallback = settings.archiveAfterDays;
+  return typeof fallback === 'number' && Number.isFinite(fallback) ? fallback : null;
+};
+
 const Skeleton: React.FC = () => (
   <div className="animate-pulse space-y-4">
     <div className="h-6 w-3/4 rounded bg-card/70" />
@@ -98,7 +146,7 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
   return (
     <div className="space-y-2">
       <div className="flex items-center">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+  <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">{label}</span>
       </div>
       <MultiSelectCombo
         options={options}
@@ -271,53 +319,17 @@ export const TaskDrawer: React.FC = () => {
   const isBacklogCard = currentColumnBehavior === 'BACKLOG';
 
   const backlogArchiveConfig = useMemo(() => {
-    if (!isBacklogCard || !detail) {
-      console.log('🔍 backlogArchiveConfig: conditions not met', { isBacklogCard, hasDetail: !!detail });
-      return null;
-    }
-    
-    // Essayer d'abord avec detail.board (qui peut avoir plus d'infos)
-    const boardToUse = detail.board || board;
-    if (!boardToUse) {
-      console.log('🔍 No board available');
-      return null;
-    }
-    
-    const column = boardToUse.columns.find((c) => c.id === detail.columnId) as any;
-    console.log('🔍 Found column:', column);
-    if (!column?.settings) {
-      console.log('🔍 No settings on column');
-      return null;
-    }
-    const settings = column.settings as Record<string, any>;
-    console.log('🔍 Column settings:', settings);
-    let archiveAfterDaysValue: unknown;
-    // Nouvelle logique: structure nested (backlog / done)
-    if (column.behaviorKey === 'BACKLOG') {
-      archiveAfterDaysValue = settings?.backlog?.archiveAfterDays;
-    } else if (column.behaviorKey === 'DONE') {
-      archiveAfterDaysValue = settings?.done?.archiveAfterDays;
-    } else {
-      // Fallback éventuel si d'autres comportements stockent directement archiveAfterDays à la racine
-      archiveAfterDaysValue = (settings as any).archiveAfterDays;
-    }
-    console.log('🔍 archiveAfterDaysValue (nested):', archiveAfterDaysValue, 'type:', typeof archiveAfterDaysValue);
-    const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
-    console.log('🔍 Final archiveAfterDays (nested):', archiveAfterDays);
-    return archiveAfterDays;
+    if (!isBacklogCard || !detail) return null;
+    const column = findColumnById(detail.columnId, board?.columns, detail.board?.columns);
+    return extractArchiveAfterDays(column);
   }, [isBacklogCard, detail, board]);
 
   // Config archivage pour colonnes DONE (pas de snooze)
   const doneArchiveConfig = useMemo(() => {
     if (!detail) return null;
-    const boardToUse = detail.board || board;
-    if (!boardToUse) return null;
-    const column = boardToUse.columns.find((c) => c.id === detail.columnId) as any;
+    const column = findColumnById(detail.columnId, board?.columns, detail.board?.columns);
     if (!column || column.behaviorKey !== 'DONE') return null;
-    if (!column.settings) return null;
-    const settings = column.settings as Record<string, any>;
-    const value = settings?.done?.archiveAfterDays ?? (settings as any).archiveAfterDays;
-    return typeof value === 'number' ? value : null;
+    return extractArchiveAfterDays(column);
   }, [detail, board]);
 
   const backlogHiddenDisplay = useMemo(
@@ -347,26 +359,13 @@ export const TaskDrawer: React.FC = () => {
   );
 
   const archiveCountdown = useMemo(() => {
-    if (!isBacklogCard || !detail || !board) return null;
-  const column = board.columns.find((c) => c.id === detail.columnId);
-  if (!column?.settings) return null;
-  const settings = column.settings as Record<string, any>;
-  let archiveAfterDaysValue: unknown;
-  if (column.behaviorKey === 'BACKLOG') {
-    archiveAfterDaysValue = settings?.backlog?.archiveAfterDays;
-  } else if (column.behaviorKey === 'DONE') {
-    archiveAfterDaysValue = settings?.done?.archiveAfterDays;
-  } else {
-    archiveAfterDaysValue = (settings as any).archiveAfterDays;
-  }
-  const archiveAfterDays = typeof archiveAfterDaysValue === 'number' ? archiveAfterDaysValue : null;
+    if (!isBacklogCard || !detail) return null;
+    const archiveAfterDays = backlogArchiveConfig;
     if (archiveAfterDays === null) return null;
-  // Prefer the last backlog interaction as the start of the countdown.
-  // If missing, try the node creation date (if backend returns it) or the doneArchiveScheduledAt.
-  const maybeCreated = (detail as any).createdAt ?? (detail as any).doneArchiveScheduledAt ?? null;
-  const lastInteraction = detail.backlogLastInteractionAt || maybeCreated;
-  if (!lastInteraction) return null;
-  const lastDate = new Date(lastInteraction);
+    const maybeCreated = detail.createdAt ?? detail.doneArchiveScheduledAt ?? null;
+    const lastInteraction = detail.backlogLastInteractionAt || maybeCreated;
+    if (!lastInteraction) return null;
+    const lastDate = new Date(lastInteraction);
     if (Number.isNaN(lastDate.getTime())) return null;
     const archiveDate = new Date(lastDate.getTime() + archiveAfterDays * 24 * 60 * 60 * 1000);
     const now = new Date();
@@ -375,18 +374,15 @@ export const TaskDrawer: React.FC = () => {
     const isCritical = daysRemaining <= 7 && daysRemaining > 0;
     const isExpired = daysRemaining <= 0;
     return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays };
-  }, [isBacklogCard, detail, board]);
+  }, [isBacklogCard, detail, backlogArchiveConfig]);
 
   // Countdown pour DONE
   const doneArchiveCountdown = useMemo(() => {
-    if (!detail || !board || doneArchiveConfig === null) return null;
-    // Pour DONE on part de la dernière interaction backlog si disponible, sinon la date d'archivage (si déjà archivé) sinon pas de base
-  // For DONE cards we prefer the last backlog interaction, otherwise fall back to
-  // the creation date (if available), then doneArchiveScheduledAt, then archivedAt.
-  const maybeCreated2 = (detail as any).createdAt ?? (detail as any).doneArchiveScheduledAt ?? null;
-  const interaction = detail.backlogLastInteractionAt || maybeCreated2 || detail.archivedAt;
-  if (!interaction) return null;
-  const baseDate = new Date(interaction);
+    if (!detail || doneArchiveConfig === null) return null;
+    const maybeCreated2 = detail.createdAt ?? detail.doneArchiveScheduledAt ?? null;
+    const interaction = detail.backlogLastInteractionAt || maybeCreated2 || detail.archivedAt;
+    if (!interaction) return null;
+    const baseDate = new Date(interaction);
     if (Number.isNaN(baseDate.getTime())) return null;
     const archiveDate = new Date(baseDate.getTime() + doneArchiveConfig * 24 * 60 * 60 * 1000);
     const now = new Date();
@@ -395,7 +391,7 @@ export const TaskDrawer: React.FC = () => {
     const isCritical = daysRemaining <= 7 && daysRemaining > 0;
     const isExpired = daysRemaining <= 0;
     return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays: doneArchiveConfig };
-  }, [detail, board, doneArchiveConfig]);
+  }, [detail, doneArchiveConfig]);
 
   const archiveCountdownLabel = useMemo(() => {
     if (!archiveCountdown) return null;
@@ -1301,38 +1297,38 @@ export const TaskDrawer: React.FC = () => {
                 <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
               )}
               {!loading && detail && (
-                <div className="space-y-6">
+                <div className="space-y-6 text-[color:var(--color-task-tab)]">
                   <div className="flex gap-2 rounded border border-white/10 bg-surface/40 p-1 text-xs">
                     <button
                       type="button"
                       onClick={() => setActiveTab('details')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'details' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">description</span> Détails</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('comments')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'comments' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'comments' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">chat_bubble</span> Commentaires</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('planning')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'planning' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">calendar_month</span> Planning</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('raci')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'raci' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'raci' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">group</span> RACI</button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('collaborators')}
-                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">lock</span> Accès</button>
                     {expertMode && (
                       <button
                         type="button"
                         onClick={() => setActiveTab('time')}
-                        className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-slate-600 dark:text-slate-300'}`}
+                        className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'time' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                       ><span className="material-symbols-outlined text-[18px]">schedule</span> Temps</button>
                     )}
                   </div>
@@ -1341,8 +1337,8 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">edit_note</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">edit_note</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Description
                           </h3>
                         </div>
@@ -1358,8 +1354,8 @@ export const TaskDrawer: React.FC = () => {
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">checklist</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">checklist</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Sous-tâches
                           </h3>
                         </div>
@@ -1368,8 +1364,8 @@ export const TaskDrawer: React.FC = () => {
 
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">bar_chart</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">bar_chart</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Progression
                           </h3>
                         </div>
@@ -1395,7 +1391,7 @@ export const TaskDrawer: React.FC = () => {
                             className={`w-16 ${FIELD_INPUT_BASE} px-2 py-1 text-sm text-center`}
                             disabled={saving}
                           />
-                          <span className="text-xs text-slate-500">%</span>
+                          <span className="text-xs text-[color:var(--color-task-label)]">%</span>
                         </div>
                       </section>
                     </div>
@@ -1413,13 +1409,13 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[24px] text-slate-600 dark:text-slate-300">event</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">event</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Planification
                           </h3>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             <span className="flex items-center gap-1.5">
                               <span className="material-symbols-outlined text-[18px]">calendar_today</span>
                               Echéance
@@ -1432,7 +1428,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             <span className="flex items-center gap-1.5">
                               <span className="text-base">⚡</span>
                               {tBoard('filters.priority.title')}
@@ -1451,7 +1447,7 @@ export const TaskDrawer: React.FC = () => {
                               <option value="LOWEST">{tBoard('priority.labels.LOWEST')}</option>
                             </select>
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             <span className="flex items-center gap-1.5">
                               <span className="text-base">⏱️</span>
                               {tBoard('filters.effort.title')}
@@ -1477,7 +1473,7 @@ export const TaskDrawer: React.FC = () => {
 
                       {isBacklogCard && (
                         <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300 mb-3">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)] mb-3">
                             {tBoard('taskDrawer.lifecycle.title')}
                           </h3>
 
@@ -1485,16 +1481,16 @@ export const TaskDrawer: React.FC = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="material-symbols-outlined text-[18px] text-sky-600 dark:text-sky-400">snooze</span>
-                              <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.backlog.snooze.label')}</span>
+                              <span className="text-sm text-[color:var(--color-task-heading)]">{tBoard('taskDrawer.backlog.snooze.label')}</span>
                               <div className="group relative">
-                                <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
+                                <span className="material-symbols-outlined cursor-help text-[16px] text-[color:var(--color-task-label)] hover:text-[color:var(--color-task-heading)]">info</span>
                                 <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-80 -translate-x-1/2 rounded-lg border border-sky-500/20 bg-card p-4 text-xs shadow-2xl group-hover:block">
                                   <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-sky-500/20 bg-card"></div>
                                   <h4 className="mb-2 flex items-center gap-2 font-semibold text-sky-400">
                                     <span className="material-symbols-outlined text-[16px]">info</span>
                                     {tBoard('taskDrawer.backlog.snooze.tooltip.title')}
                                   </h4>
-                                  <div className="space-y-2 text-slate-300">
+                                  <div className="space-y-2 text-[color:var(--color-task-tab)]">
                                     <p className="text-[11px]">{tBoard('taskDrawer.backlog.snooze.tooltip.description')}</p>
                                   </div>
                                 </div>
@@ -1511,7 +1507,7 @@ export const TaskDrawer: React.FC = () => {
                             </div>
                           </div>
                           {backlogHiddenUntil && snoozeCountdown && (
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 ml-6">{snoozeCountdown}</p>
+                            <p className="text-[11px] text-[color:var(--color-task-label)] ml-6">{snoozeCountdown}</p>
                           )}
 
                           {/* Ligne 2: Archivage automatique */}
@@ -1524,16 +1520,16 @@ export const TaskDrawer: React.FC = () => {
                                     : 'text-amber-600 dark:text-amber-400'
                                 }`}>inventory_2</span>
                                 <div className="min-w-0">
-                                  <span className="text-sm text-slate-700 dark:text-slate-300">{tBoard('taskDrawer.lifecycle.autoArchive')}</span>
+                                  <span className="text-sm text-[color:var(--color-task-heading)]">{tBoard('taskDrawer.lifecycle.autoArchive')}</span>
                                   <div className="group relative inline-block ml-1">
-                                    <span className="material-symbols-outlined cursor-help text-[16px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">info</span>
+                                    <span className="material-symbols-outlined cursor-help text-[16px] text-[color:var(--color-task-label)] hover:text-[color:var(--color-task-heading)]">info</span>
                                 <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-96 -translate-x-1/2 rounded-lg border border-amber-500/20 bg-card p-4 text-xs shadow-2xl group-hover:block">
                                       <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-amber-500/20 bg-card"></div>
                                       <h4 className="mb-2 flex items-center gap-2 font-semibold text-amber-400">
                                         <span className="material-symbols-outlined text-[16px]">info</span>
                                         {tBoard('taskDrawer.lifecycle.autoArchiveTooltip.title')}
                                       </h4>
-                                      <div className="space-y-2 text-slate-300">
+                                      <div className="space-y-2 text-[color:var(--color-task-tab)]">
                                         <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.description')}</p>
                                         <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.why')}</p>
                                         <p className="text-[11px]">{tBoard('taskDrawer.lifecycle.autoArchiveTooltip.config')}</p>
@@ -1546,7 +1542,7 @@ export const TaskDrawer: React.FC = () => {
                                         ? 'text-red-600 dark:text-red-400'
                                         : archiveCountdown.isCritical
                                         ? 'text-orange-600 dark:text-orange-400'
-                                        : 'text-slate-600 dark:text-slate-400'
+                                        : 'text-[color:var(--color-task-tab)]'
                                     }`}>
                                       {tBoard('taskDrawer.backlog.archive.date', { date: formatDateMedium(archiveCountdown.archiveDate) })}
                                     </p>
@@ -1567,7 +1563,7 @@ export const TaskDrawer: React.FC = () => {
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 italic ml-6">
+                            <div className="flex items-center gap-2 text-[11px] text-[color:var(--color-task-label)] italic ml-6">
                               <span className="material-symbols-outlined text-[16px]">inventory_2</span>
                               <span>{tBoard('taskDrawer.backlog.archive.disabled')}</span>
                             </div>
@@ -1586,7 +1582,7 @@ export const TaskDrawer: React.FC = () => {
                         
                         return (
                           <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
-                            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                               {tBoard('taskDrawer.backlog.lifecycle.title')}
                             </h3>
                             
@@ -1594,7 +1590,7 @@ export const TaskDrawer: React.FC = () => {
                             <div className="flex items-center justify-between gap-4">
                               <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-[18px] text-amber-600 dark:text-amber-400">inventory_2</span>
-                                <span className="text-sm text-slate-700 dark:text-slate-300">
+                                <span className="text-sm text-[color:var(--color-task-heading)]">
                                   {tBoard('taskDrawer.backlog.lifecycle.autoArchive')}
                                 </span>
                                 {/* Tooltip expliquant l'archivage pour DONE */}
@@ -1607,16 +1603,16 @@ export const TaskDrawer: React.FC = () => {
                                     i
                                   </button>
                                 <div className="pointer-events-none invisible absolute left-0 top-6 z-50 w-80 rounded-lg border border-border/50 bg-card p-3 text-xs shadow-lg opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100">
-                                    <p className="font-semibold mb-1 text-slate-900 dark:text-slate-100">
+                                    <p className="font-semibold mb-1 text-[color:var(--color-task-heading)]">
                                       {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.title')}
                                     </p>
-                                    <p className="mb-2 text-slate-600 dark:text-slate-300">
+                                    <p className="mb-2 text-[color:var(--color-task-tab)]">
                                       {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.description')}
                                     </p>
-                                    <p className="mb-2 text-slate-600 dark:text-slate-300">
+                                    <p className="mb-2 text-[color:var(--color-task-tab)]">
                                       {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.why')}
                                     </p>
-                                    <p className="text-slate-600 dark:text-slate-300">
+                                    <p className="text-[color:var(--color-task-tab)]">
                                       {tBoard('taskDrawer.backlog.lifecycle.autoArchiveTooltip.config')}
                                     </p>
                                   </div>
@@ -1627,7 +1623,7 @@ export const TaskDrawer: React.FC = () => {
                                   <p className={`text-xs font-medium ${
                                     doneArchiveCountdown.isExpired || doneArchiveCountdown.isCritical
                                       ? 'text-red-600 dark:text-red-400'
-                                      : 'text-slate-600 dark:text-slate-400'
+                                      : 'text-[color:var(--color-task-tab)]'
                                   }`}>
                                     {tBoard('taskDrawer.backlog.archive.date', { date: formatDateMedium(doneArchiveCountdown.archiveDate) })}
                                   </p>
@@ -1644,7 +1640,7 @@ export const TaskDrawer: React.FC = () => {
                                       : tBoard('taskDrawer.backlog.archive.extend', { days: doneArchiveConfig })}
                                   </button>
                                 ) : (
-                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                                  <span className="text-[11px] text-[color:var(--color-task-label)] italic">
                                     {tBoard('taskDrawer.backlog.archive.disabled')}
                                   </span>
                                 )}
@@ -1657,7 +1653,7 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">🏷️</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Tags
                           </h3>
                         </div>
@@ -1673,7 +1669,7 @@ export const TaskDrawer: React.FC = () => {
                               >×</button>
                             </span>
                           ))}
-                          {tags.length===0 && <span className="text-[11px] text-slate-500">Aucun tag</span>}
+                          {tags.length===0 && <span className="text-[11px] text-[color:var(--color-task-label)]">Aucun tag</span>}
                         </div>
                         <div className="flex items-center gap-2">
                           <input
@@ -1712,7 +1708,7 @@ export const TaskDrawer: React.FC = () => {
                             >Ajouter</button>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500">Entrée pour ajouter. Max 20, longueur ≤32. Doublons ignorés.</p>
+                        <p className="text-[11px] text-[color:var(--color-task-label)]">Entrée pour ajouter. Max 20, longueur ≤32. Doublons ignorés.</p>
                       </section>
 
                       {(() => {
@@ -1727,12 +1723,12 @@ export const TaskDrawer: React.FC = () => {
                           <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                             <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[24px] text-rose-600 dark:text-rose-400">block</span>
-                              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                                 {tBoard('taskDrawer.blocked.title')}
                               </h3>
                             </div>
 
-                            <label className="block text-xs text-slate-500 dark:text-slate-400">
+                            <label className="block text-xs text-[color:var(--color-task-label)]">
                               <span className="mb-1 flex items-center gap-1.5">
                                 <span className="text-base">📝</span>
                                 {tBoard('taskDrawer.blocked.reason.label')}
@@ -1748,7 +1744,7 @@ export const TaskDrawer: React.FC = () => {
                             </label>
 
                             <div className="space-y-2">
-                              <label className="block text-xs text-slate-500 dark:text-slate-400">
+                              <label className="block text-xs text-[color:var(--color-task-label)]">
                                 <span className="mb-1 flex items-center gap-1.5">
                                   <span className="text-base">📧</span>
                                   {tBoard('taskDrawer.blocked.emails.label')}
@@ -1802,7 +1798,7 @@ export const TaskDrawer: React.FC = () => {
                             </div>
 
                             <div className="grid gap-4 sm:grid-cols-2">
-                              <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                              <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                                 <span className="flex items-center gap-1.5">
                                   <span className="text-base">⏰</span>
                                   {tBoard('taskDrawer.blocked.interval.label')}
@@ -1826,7 +1822,7 @@ export const TaskDrawer: React.FC = () => {
                                 />
                               </label>
 
-                              <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                              <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                                 <span className="flex items-center gap-1.5">
                                   <span className="text-base">📅</span>
                                   {tBoard('taskDrawer.blocked.eta.label')}
@@ -1842,7 +1838,7 @@ export const TaskDrawer: React.FC = () => {
                             </div>
 
                             {blockedSince && (
-                              <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                              <p className="text-xs text-[color:var(--color-task-label)] flex items-center gap-1.5">
                                 <span className="material-symbols-outlined text-[16px]">push_pin</span> {tBoard('taskDrawer.blocked.since', { date: formatDateLong(blockedSince) })}
                               </p>
                             )}
@@ -1855,12 +1851,12 @@ export const TaskDrawer: React.FC = () => {
                                 className="h-4 w-4 rounded border border-border/60 text-emerald-500 focus:ring-accent/40"
                                 disabled={saving}
                               />
-                              <span className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                              <span className="text-xs text-[color:var(--color-task-tab)] flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span> {tBoard('taskDrawer.blocked.resolved')}
                               </span>
                             </label>
 
-                            <p className="text-[11px] text-slate-500 flex items-start gap-1">
+                            <p className="text-[11px] text-[color:var(--color-task-label)] flex items-start gap-1">
                               <span className="material-symbols-outlined text-[14px] text-amber-500">info</span> {tBoard('taskDrawer.blocked.autoReminderInfo')}
                             </p>
                           </section>
@@ -1873,12 +1869,12 @@ export const TaskDrawer: React.FC = () => {
                     <div className="space-y-5">
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[20px] text-slate-600 dark:text-slate-300">group</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <span className="material-symbols-outlined text-[20px] text-[color:var(--color-task-label)]">group</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Matrice RACI
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-xs text-[color:var(--color-task-label)]">
                           Assignez les rôles RACI pour clarifier les responsabilités autour de cette tâche.
                         </p>
                       </section>
@@ -1897,10 +1893,10 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                               Équipes enregistrées
                             </h4>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">
                               Appliquez vos favoris RACI en un clic.
                             </p>
                           </div>
@@ -1929,7 +1925,7 @@ export const TaskDrawer: React.FC = () => {
                           </select>
                         </div>
                         {savedRaciTeamsLoading && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <p className="text-[11px] text-[color:var(--color-task-label)]">
                             Chargement de vos équipes enregistrées…
                           </p>
                         )}
@@ -1937,18 +1933,18 @@ export const TaskDrawer: React.FC = () => {
                           <p className="text-[11px] text-red-500 dark:text-red-400">{savedRaciTeamsError}</p>
                         )}
                         {!savedRaciTeamsLoading && !savedRaciTeamsError && savedRaciTeams.length === 0 && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <p className="text-[11px] text-[color:var(--color-task-label)]">
                             Aucune équipe enregistrée pour le moment.
                           </p>
                         )}
                       </section>
 
                       <section className="space-y-4 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">Rôles et responsabilités</h4>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">Rôles et responsabilités</h4>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              <span className="material-symbols-outlined text-[18px] text-slate-500">person</span>
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              <span className="material-symbols-outlined text-[18px] text-[color:var(--color-task-label)]">person</span>
                               Responsable (R)
                             </label>
                             <MemberMultiSelect
@@ -1958,12 +1954,12 @@ export const TaskDrawer: React.FC = () => {
                               onChange={handleRResponsibleChange}
                               disabled={saving}
                             />
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) qui réalise(nt) la tâche.</p>
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">Personne(s) qui réalise(nt) la tâche.</p>
                           </div>
 
                           <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              <span className="material-symbols-outlined text-[18px] text-slate-500">task_alt</span>
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              <span className="material-symbols-outlined text-[18px] text-[color:var(--color-task-label)]">task_alt</span>
                               Approbateur (A)
                             </label>
                             <MemberMultiSelect
@@ -1973,12 +1969,12 @@ export const TaskDrawer: React.FC = () => {
                               onChange={handleRAccountableChange}
                               disabled={saving}
                             />
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne qui valide le résultat.</p>
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">Personne qui valide le résultat.</p>
                           </div>
 
                           <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              <span className="material-symbols-outlined text-[18px] text-slate-500">chat</span>
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              <span className="material-symbols-outlined text-[18px] text-[color:var(--color-task-label)]">chat</span>
                               Consulté (C)
                             </label>
                             <MemberMultiSelect
@@ -1988,12 +1984,12 @@ export const TaskDrawer: React.FC = () => {
                               onChange={handleRConsultedChange}
                               disabled={saving}
                             />
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) consultée(s) avant décision.</p>
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">Personne(s) consultée(s) avant décision.</p>
                           </div>
 
                           <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                              <span className="material-symbols-outlined text-[18px] text-slate-500">campaign</span>
+                            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              <span className="material-symbols-outlined text-[18px] text-[color:var(--color-task-label)]">campaign</span>
                               Informé (I)
                             </label>
                             <MemberMultiSelect
@@ -2003,7 +1999,7 @@ export const TaskDrawer: React.FC = () => {
                               onChange={handleRInformedChange}
                               disabled={saving}
                             />
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400">Personne(s) tenue(s) informée(s) du résultat.</p>
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">Personne(s) tenue(s) informée(s) du résultat.</p>
                           </div>
                         </div>
                       </section>
@@ -2015,11 +2011,11 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">🤝</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Gestion des accès
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-xs text-[color:var(--color-task-label)]">
                           Invitez des collaborateurs pour partager cette tâche dans leur kanban. Les accès hérités sont affichés automatiquement.
                         </p>
                       </section>
@@ -2027,7 +2023,7 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">➕</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Ajouter un collaborateur
                           </h3>
                         </div>
@@ -2073,7 +2069,7 @@ export const TaskDrawer: React.FC = () => {
                             {inviteSubmitting ? 'Ajout…' : 'Inviter'}
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="text-[11px] text-[color:var(--color-task-label)]">
                           L&apos;adresse doit correspondre à un compte Stratum. Sinon, une invitation restera en attente.
                         </p>
                         {membersError && (
@@ -2084,7 +2080,7 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/60 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">👥</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Collaborateurs
                           </h3>
                         </div>
@@ -2102,7 +2098,7 @@ export const TaskDrawer: React.FC = () => {
                             {collaboratorsError}
                           </div>
                         ) : collaborators.length === 0 ? (
-                          <p className="text-sm text-slate-500 dark:text-slate-400">Aucun collaborateur pour le moment.</p>
+                          <p className="text-sm text-[color:var(--color-task-tab)]">Aucun collaborateur pour le moment.</p>
                         ) : (
                           <ul className="space-y-3">
                             {collaborators.map((collab) => {
@@ -2116,8 +2112,8 @@ export const TaskDrawer: React.FC = () => {
                                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="space-y-1">
                                       <p className="text-sm font-medium text-foreground">{collab.displayName}</p>
-                                      <p className="text-xs text-slate-500 dark:text-slate-400">{collab.email}</p>
-                                      <div className="flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                      <p className="text-xs text-[color:var(--color-task-label)]">{collab.email}</p>
+                                      <div className="flex flex-wrap gap-2 text-[11px] text-[color:var(--color-task-label)]">
                                         <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 uppercase tracking-wide">
                                           {collab.accessType === 'OWNER'
                                             ? 'Propriétaire'
@@ -2137,7 +2133,7 @@ export const TaskDrawer: React.FC = () => {
                                         ))}
                                       </div>
                                       {addedAtLabel && (
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        <p className="text-[11px] text-[color:var(--color-task-label)]">
                                           Ajouté le {addedAtLabel}
                                           {addedBy ? ` par ${addedBy}` : ''}
                                         </p>
@@ -2181,12 +2177,12 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">📧</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Invitations en attente
                           </h3>
                         </div>
                         {collaboratorInvites.length === 0 ? (
-                          <p className="text-sm text-slate-500 dark:text-slate-400">Aucune invitation en attente.</p>
+                          <p className="text-sm text-[color:var(--color-task-tab)]">Aucune invitation en attente.</p>
                         ) : (
                           <ul className="space-y-2 text-sm text-muted">
                             {collaboratorInvites.map((invite) => (
@@ -2196,7 +2192,7 @@ export const TaskDrawer: React.FC = () => {
                               >
                                 <div className="flex flex-col gap-1">
                                   <span className="font-medium text-foreground">{invite.email}</span>
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                  <span className="text-xs text-[color:var(--color-task-label)]">
                                     Statut : {invite.status === 'PENDING' ? 'En attente' : 'Acceptée'}
                                     {invite.invitedAt ? ` • Envoyée le ${new Date(invite.invitedAt).toLocaleDateString('fr-FR', { dateStyle: 'medium' })}` : ''}
                                   </span>
@@ -2214,12 +2210,12 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">⏱️</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Temps et effort
                           </h3>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Temps estimé (heures)
                             <input
                               type="text"
@@ -2231,7 +2227,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Temps réel OPEX (heures)
                             <input
                               type="text"
@@ -2243,7 +2239,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Temps réel CAPEX (heures)
                             <input
                               type="text"
@@ -2255,7 +2251,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Date début prévue
                             <input
                               type="date"
@@ -2265,7 +2261,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Date fin prévue
                             <input
                               type="date"
@@ -2275,7 +2271,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Date fin réelle
                             <input
                               type="date"
@@ -2285,7 +2281,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Statut facturation
                             <select
                               value={billingStatus}
@@ -2305,12 +2301,12 @@ export const TaskDrawer: React.FC = () => {
                       <section className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
                         <div className="flex items-center gap-2">
                           <span className="text-lg">💰</span>
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
                             Coûts et budgets
                           </h3>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Taux horaire (€)
                             <input
                               type="text"
@@ -2327,9 +2323,9 @@ export const TaskDrawer: React.FC = () => {
                             <span className="text-sm font-medium text-foreground">
                               {formattedActualCost ?? '—'}
                             </span>
-                            <span className="text-[10px] text-slate-400">Calcul automatique : (OPEX + CAPEX) × taux horaire</span>
+                            <span className="text-[10px] text-[color:var(--color-task-label)]">Calcul automatique : (OPEX + CAPEX) × taux horaire</span>
                           </div>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Budget prévu
                             <input
                               type="text"
@@ -2341,7 +2337,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Budget consommé (€)
                             <input
                               type="text"
@@ -2353,7 +2349,7 @@ export const TaskDrawer: React.FC = () => {
                               disabled={saving}
                             />
                           </label>
-                          <label className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400">
+                          <label className="flex flex-col gap-1 text-xs text-[color:var(--color-task-label)]">
                             Budget consommé (%)
                             <input
                               type="text"
@@ -2377,8 +2373,8 @@ export const TaskDrawer: React.FC = () => {
             <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
               <div className="absolute inset-0 bg-black/50" onClick={() => setShowUnsavedModal(false)} aria-hidden="true" />
               <div className="relative z-10 w-full max-w-sm rounded-lg border border-border/50 bg-card p-6 shadow-xl">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Modifications non sauvegardées</h2>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                <h2 className="text-lg font-semibold text-[color:var(--color-task-heading)]">Modifications non sauvegardées</h2>
+                <p className="mt-2 text-sm text-[color:var(--color-task-tab)]">
                   Vous avez des changements non sauvegardés. Voulez-vous les enregistrer avant de fermer&nbsp;?
                 </p>
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">

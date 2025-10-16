@@ -13,6 +13,12 @@ const aurora: ThemeDefinition = {
     "--color-accent-strong": "#1d4ed8",
     "--color-foreground": "#1f2937",
     "--color-muted": "#64748b",
+    "--color-breadcrumb-label": "#1f2937",
+    "--color-breadcrumb-shadow": "rgba(15, 23, 42, 0.22)",
+    "--color-breadcrumb-glow": "rgba(37, 99, 235, 0.32)",
+    "--color-task-label": "#64748b",
+    "--color-task-heading": "#1f2937",
+    "--color-task-tab": "#475569",
   },
   preview: {
     background: "#f5f7fb",

@@ -13,6 +13,12 @@ const midnight: ThemeDefinition = {
     "--color-accent-strong": "#06b6d4",
     "--color-foreground": "#f8fafc",
     "--color-muted": "#94a3b8",
+    "--color-breadcrumb-label": "#f8fafc",
+    "--color-breadcrumb-shadow": "rgba(8, 14, 26, 0.75)",
+    "--color-breadcrumb-glow": "rgba(56, 189, 248, 0.5)",
+    "--color-task-label": "#94a3b8",
+    "--color-task-heading": "#e2e8f0",
+    "--color-task-tab": "#cbd5f5",
   },
   preview: {
     background: "#0f172a",

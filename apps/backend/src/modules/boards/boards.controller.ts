@@ -173,7 +173,11 @@ export class BoardsController {
           where: { userId: user.id, teamId: flags.teamId },
         })
       : null;
-    return { ...flags, currentUserId: user.id, hasMembership: Boolean(membership) };
+    return {
+      ...flags,
+      currentUserId: user.id,
+      hasMembership: Boolean(membership),
+    };
   }
 
   @Post(':boardId/diagnostic/fix')
@@ -193,21 +197,28 @@ export class BoardsController {
     if (!board) {
       return { status: 'NOT_FOUND' };
     }
-    const team = await this.prisma.team.findUnique({ where: { id: board.node.teamId } });
+    const team = await this.prisma.team.findUnique({
+      where: { id: board.node.teamId },
+    });
     const repair: any = {};
     let changed = false;
-    const boardFlags = await this.prisma.board.findUnique({ where: { id: boardId } });
+    const boardFlags = await this.prisma.board.findUnique({
+      where: { id: boardId },
+    });
     if (boardFlags) {
       const t: any = team as any;
       const b: any = boardFlags as any;
       if (t?.isPersonal && !b.isPersonal) {
-        (repair as any).isPersonal = true; changed = true;
+        repair.isPersonal = true;
+        changed = true;
       }
       if (t?.isPersonal && b.ownerUserId !== user.id) {
-        (repair as any).ownerUserId = user.id; changed = true;
+        repair.ownerUserId = user.id;
+        changed = true;
       }
       if (!t?.isPersonal && b.isPersonal) {
-        (repair as any).isPersonal = false; changed = true;
+        repair.isPersonal = false;
+        changed = true;
       }
     }
     if (changed) {

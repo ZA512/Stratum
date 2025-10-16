@@ -147,7 +147,10 @@ export class TeamsService {
             // Utiliser BoardUncheckedUpdateInput pour modifier directement les scalars (ownerUserId, isPersonal)
             const repairData: Prisma.BoardUncheckedUpdateInput = {};
             let needsRepair = false;
-            if (existingMembership.team.isPersonal && !existingBoard.isPersonal) {
+            if (
+              existingMembership.team.isPersonal &&
+              !existingBoard.isPersonal
+            ) {
               repairData.isPersonal = true;
               needsRepair = true;
             }
@@ -159,7 +162,10 @@ export class TeamsService {
               needsRepair = true;
             }
             // Cas inverse : team non-personnelle mais board marqué personnel par erreur
-            if (!existingMembership.team.isPersonal && existingBoard.isPersonal) {
+            if (
+              !existingMembership.team.isPersonal &&
+              existingBoard.isPersonal
+            ) {
               repairData.isPersonal = false;
               // Ne pas toucher ownerUserId (peut être utile historiquement) mais on pourrait le nuller si nécessaire.
               needsRepair = true;
@@ -173,7 +179,7 @@ export class TeamsService {
           }
         } catch (err) {
           // Log silencieux (on évite d'empêcher le bootstrap si la réparation échoue)
-          // eslint-disable-next-line no-console
+
           console.warn('[teams.bootstrapForUser] repair skipped', err);
         }
         return {

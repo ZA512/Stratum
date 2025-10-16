@@ -13,6 +13,12 @@ const velvet: ThemeDefinition = {
     "--color-accent-strong": "#7c3aed",
     "--color-foreground": "#f5f2ff",
     "--color-muted": "#b8a1d9",
+    "--color-breadcrumb-label": "#f5f2ff",
+    "--color-breadcrumb-shadow": "rgba(28, 15, 48, 0.78)",
+    "--color-breadcrumb-glow": "rgba(168, 85, 247, 0.46)",
+    "--color-task-label": "#b8a1d9",
+    "--color-task-heading": "#f5f2ff",
+    "--color-task-tab": "#d9c7f9",
   },
   preview: {
     background: "#161128",

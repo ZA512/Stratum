@@ -10,7 +10,7 @@ import {
   renameRaciTeam,
   type RaciTeamPreset,
 } from "@/features/users/raci-teams-api";
-import { useTheme } from "@/themes/theme-provider";
+import { useTheme, ThemeProvider } from "@/themes/theme-provider";
 import type { ThemeDefinition } from "@/themes";
 
 export default function SettingsPage() {
@@ -142,7 +142,8 @@ export default function SettingsPage() {
       });
   };
 
-  return (
+  // Fallback: si hook lève une erreur (provider absent), on encapsule dynamiquement.
+  let content: React.ReactNode = (
     <div className="min-h-screen bg-surface px-6 py-10">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <div className="flex items-center justify-between">
@@ -310,4 +311,10 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+  // Si aucune erreur jusqu'ici, le ThemeProvider est présent.
+  // Mais par précaution, si activeThemeId est falsy (improbable), on wrap.
+  if (!activeThemeId) {
+    content = <ThemeProvider>{content}</ThemeProvider>;
+  }
+  return content;
 }

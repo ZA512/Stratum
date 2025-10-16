@@ -85,7 +85,12 @@ export class BoardsService {
    * Diagnostic interne: retourne les flags de propriété d'un board sans appliquer restrictions.
    * A n'exposer qu'en environnement dev via le controller si nécessaire.
    */
-  async diagnosticFlags(boardId: string): Promise<{ boardId: string; ownerUserId: string | null; isPersonal: boolean; teamId: string | null }> {
+  async diagnosticFlags(boardId: string): Promise<{
+    boardId: string;
+    ownerUserId: string | null;
+    isPersonal: boolean;
+    teamId: string | null;
+  }> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: { node: { select: { teamId: true } } },
@@ -133,7 +138,7 @@ export class BoardsService {
       (board as any).ownerUserId !== userId
     ) {
       // Log diagnostic pour comprendre les mismatches éventuels
-      // eslint-disable-next-line no-console
+
       console.warn('[boards.getBoard] Forbidden mismatch', {
         boardId,
         ownerUserId: (board as any).ownerUserId,
@@ -244,7 +249,6 @@ export class BoardsService {
       (board as any).ownerUserId &&
       (board as any).ownerUserId !== userId
     ) {
-      // eslint-disable-next-line no-console
       console.warn('[boards.getBoardWithNodes] Forbidden mismatch', {
         boardId,
         ownerUserId: (board as any).ownerUserId,

@@ -13,6 +13,12 @@ const cyberwave: ThemeDefinition = {
     "--color-accent-strong": "#ff4dbe",
     "--color-foreground": "#f4f3ff",
     "--color-muted": "#9d8cff",
+    "--color-breadcrumb-label": "#f4f3ff",
+    "--color-breadcrumb-shadow": "rgba(9, 2, 32, 0.78)",
+    "--color-breadcrumb-glow": "rgba(247, 37, 133, 0.46)",
+    "--color-task-label": "#9d8cff",
+    "--color-task-heading": "#f6f6ff",
+    "--color-task-tab": "#cdc2ff",
   },
   preview: {
     background: "#05010f",

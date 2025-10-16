@@ -228,7 +228,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
       <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-white/10 bg-card/70 p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="text-lg">✏️</span>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
             Nouveau commentaire
           </h3>
         </div>
@@ -245,7 +245,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
           {mentionQuery !== null && (
             <div className="absolute left-0 top-full z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border/50 bg-card shadow-lg">
               {mentionSuggestions.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">Aucun résultat</div>
+                <div className="px-3 py-2 text-xs text-[color:var(--color-task-label)]">Aucun résultat</div>
               ) : (
                 mentionSuggestions.map((member) => (
                   <button
@@ -257,8 +257,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                       handleSelectMention(member);
                     }}
                   >
-                    <span className="font-medium text-slate-700 dark:text-slate-100">{member.displayName}</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">{member.email}</span>
+                    <span className="font-medium text-[color:var(--color-task-heading)]">{member.displayName}</span>
+                    <span className="text-[11px] text-[color:var(--color-task-label)]">{member.email}</span>
                   </button>
                 ))
               )}
@@ -266,7 +266,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
           )}
         </div>
 
-        <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
+        <div className="flex flex-wrap gap-3 text-xs text-[color:var(--color-task-tab)]">
           {notifyOrder.map((key) => (
             <label key={key} className="inline-flex items-center gap-1 rounded border border-border/50 px-2 py-1">
               <input
@@ -276,7 +276,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                 className="h-3.5 w-3.5 accent-emerald-600"
               />
               <span className="font-medium">{key}</span>
-              <span className="text-[11px] text-slate-400">{notifyLabels[key]}</span>
+              <span className="text-[11px] text-[color:var(--color-task-label)]">{notifyLabels[key]}</span>
             </label>
           ))}
         </div>
@@ -298,17 +298,17 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
         <header className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-lg">💬</span>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
               Discussion & journal
             </h3>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-[color:var(--color-task-label)]">
             Mentionnez vos collègues avec @nom et choisissez qui sera notifié via les options RACI / Projet.
           </p>
         </header>
 
         {membersLoading && (
-          <p className="text-xs text-slate-500">Chargement des membres connus…</p>
+          <p className="text-xs text-[color:var(--color-task-label)]">Chargement des membres connus…</p>
         )}
         {membersError && (
           <p className="text-xs text-red-500">{membersError}</p>
@@ -324,7 +324,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
               <div className="h-16 w-full animate-pulse rounded bg-card/40" />
             </div>
           ) : comments.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucun commentaire pour le moment.</p>
+            <p className="text-sm text-[color:var(--color-task-label)]">Aucun commentaire pour le moment.</p>
           ) : (
             <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
               {[...comments].reverse().map((comment) => {
@@ -351,17 +351,17 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                           {initials || '•'}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-700 dark:text-slate-100">{comment.author.displayName}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{formatted}</p>
+                          <p className="font-semibold text-[color:var(--color-task-heading)]">{comment.author.displayName}</p>
+                          <p className="text-xs text-[color:var(--color-task-label)]">{formatted}</p>
                         </div>
                       </div>
                       <span className="rounded bg-card/50 px-2 py-1 text-[10px] font-semibold tracking-wider text-muted">
                         {renderFlags(comment)}
                       </span>
                     </div>
-                    <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{comment.body}</p>
+                    <p className="whitespace-pre-wrap text-[color:var(--color-task-tab)]">{comment.body}</p>
                     {comment.mentions.length > 0 && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                      <div className="text-xs text-[color:var(--color-task-label)]">
                         Mentionnés&nbsp;:
                         {comment.mentions.map((mention) => (
                           <span key={mention.userId} className="ml-1 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
