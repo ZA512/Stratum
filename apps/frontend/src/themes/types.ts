@@ -4,8 +4,6 @@ export type ThemeCssVariable =
   | "--color-background"
   | "--color-surface"
   | "--color-card"
-  | "--color-input"
-  | "--color-border"
   | "--color-accent"
   | "--color-accent-strong"
   | "--color-foreground"

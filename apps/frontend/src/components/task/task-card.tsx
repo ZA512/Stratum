@@ -298,7 +298,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 {assignees.slice(0, 4).map(a => (
                   <div
                     key={a.id}
-                    className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:rgb(var(--color-background))] bg-blue-200 dark:bg-blue-900"
+                    className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-blue-200 dark:bg-blue-900"
                     style={a.color ? { backgroundColor: a.color } : undefined}
                     // Supprime title natif pour éviter conflit avec tooltip multi-ligne
                     aria-label={a.displayName || a.initials}
@@ -307,7 +307,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   </div>
                 ))}
                 {assignees.length > 4 && (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:rgb(var(--color-background))] bg-surface/70">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-surface/70">
                     <span className="text-[10px] font-semibold text-muted">+{assignees.length - 4}</span>
                   </div>
                 )}

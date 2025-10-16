@@ -21,7 +21,6 @@ function applyTheme(theme: ThemeDefinition) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.setAttribute("data-theme", theme.id);
-  root.classList.toggle("dark", theme.tone === "dark");
   root.style.setProperty("color-scheme", theme.tone === "dark" ? "dark" : "light");
   Object.entries(theme.cssVars).forEach(([key, value]) => {
     root.style.setProperty(key, value);
