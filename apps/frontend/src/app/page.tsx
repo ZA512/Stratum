@@ -84,7 +84,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, logout]);
 
   const hasTeams = teams.length > 0;
 

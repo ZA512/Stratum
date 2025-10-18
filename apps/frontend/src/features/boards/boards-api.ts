@@ -40,6 +40,8 @@ export type BoardNode = {
   lastKnownColumnBehavior?: ColumnBehaviorKey | null;
   doneArchiveScheduledAt?: string | null;
   isSnoozed?: boolean;
+  isSharedRoot?: boolean;
+  canDelete?: boolean;
 };
 
 export type ArchivedBoardNode = {
@@ -119,21 +121,48 @@ function createOptions(accessToken: string, init?: RequestInit): RequestInit {
   } satisfies RequestInit;
 }
 
-export async function fetchRootBoard(teamId: string, accessToken: string): Promise<Board> {
-  const response = await fetch(`${API_BASE_URL}/boards/team/${teamId}`, createOptions(accessToken));
+// Cache ETag pour optimiser les requêtes de polling
+const etagCache = new Map<string, string>();
+
+export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board | null> {
+  const cachedETag = etagCache.get(boardId);
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  
+  // Si on a un ETag en cache, l'inclure pour éviter le transfert inutile
+  if (cachedETag) {
+    headers['If-None-Match'] = cachedETag;
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/detail`, {
+    headers,
+    cache: "no-store",
+  });
+
+  // 304 Not Modified = pas de changement, retourner null pour signaler au caller
+  if (response.status === 304) {
+    return null;
+  }
 
   if (!response.ok) {
-    await throwApiError(response, "Impossible de charger le board");
+    await throwApiError(response, "Impossible de charger le detail du board");
+  }
+
+  // Sauvegarder le nouvel ETag pour les prochaines requêtes
+  const newETag = response.headers.get('ETag');
+  if (newETag) {
+    etagCache.set(boardId, newETag);
   }
 
   return (await response.json()) as Board;
 }
 
-export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board> {
-  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/detail`, createOptions(accessToken));
+export async function fetchRootBoard(teamId: string, accessToken: string): Promise<Board> {
+  const response = await fetch(`${API_BASE_URL}/boards/team/${teamId}`, createOptions(accessToken));
 
   if (!response.ok) {
-    await throwApiError(response, "Impossible de charger le detail du board");
+    await throwApiError(response, "Impossible de charger le board");
   }
 
   return (await response.json()) as Board;

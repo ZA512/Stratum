@@ -30,6 +30,29 @@
       "lastCreated": "Last creation: {date}",
       "teamsDescription": "Active teams are synchronised with the backend Prisma module. Select one to open its fractal board."
     },
+    "invitationCenter": {
+      "badge": "Invitations",
+      "badgeAria": "Invitation center, {count} pending",
+      "title": "Incoming invitations",
+      "refresh": "Refresh",
+      "close": "Close",
+      "loading": "Loading invitations…",
+      "empty": "No pending invitations.",
+      "error": "Unable to load invitations.",
+      "invitedBy": "Invited by {name}",
+      "invitedByEmail": "Invited by {email}",
+      "receivedAt": "Received on {value}",
+      "expiresAt": "Expires on {value}",
+      "accept": "Accept",
+      "accepting": "Accepting…",
+      "decline": "Decline",
+      "declining": "Declining…",
+      "openTeam": "Open team",
+      "toast": {
+        "accepted": "Invitation accepted for \"{title}\"",
+        "declined": "Invitation declined for \"{title}\""
+      }
+    },
     "team": {
       "members": "{count} active member(s)",
       "createdAt": "Created on {date}",
@@ -948,7 +971,13 @@
       "deleteSingle": "Delete card",
       "deletingSingle": "Deleting…",
       "deleteRecursive": "Delete all (cascade)",
-      "deletingRecursive": "Deleting…"
+      "deletingRecursive": "Deleting…",
+      "shareBlockedTitle": "Deletion blocked by sharing",
+      "shareBlockedBody": "Remove external collaborators or cancel pending invitations before deleting this primary task.",
+      "shareBlockedCollaborators": "{count, plural, one {{count} external collaborator still has access.} other {{count} external collaborators still have access.}}",
+      "shareBlockedInvitations": "{count, plural, one {{count} pending invitation remains.} other {{count} pending invitations remain.}}",
+      "shareBlockedTooltip": "Remove external collaborators and pending invitations before deleting.",
+      "shareLoadError": "Unable to load sharing information."
     },
     "moveDialog": {
       "title": "Move “{title}” to another board",

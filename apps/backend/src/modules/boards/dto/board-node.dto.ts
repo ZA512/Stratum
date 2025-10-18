@@ -136,4 +136,10 @@ export class BoardNodeDto {
 
   @ApiPropertyOptional({ example: false })
   isSnoozed?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Indique si c\'est une tâche mère partagée' })
+  isSharedRoot?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Indique si l\'utilisateur peut supprimer cette tâche' })
+  canDelete?: boolean;
 }

@@ -218,6 +218,21 @@ export async function moveNodeToBoard(
   return (await response.json()) as NodeDetail;
 }
 
+export async function moveSharedNodePlacement(
+  nodeId: string,
+  input: { columnId: string; position?: number },
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/placement`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de déplacer la tâche partagée");
+  }
+}
+
 export type NodeDeletePreview = {
   id: string;
   hasChildren: boolean;

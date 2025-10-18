@@ -25,7 +25,7 @@ export async function fetchTeams(accessToken: string): Promise<Team[]> {
         throw new Error('Non authentifie');
       }
       throw new Error(msg);
-    } catch (_err) {
+  } catch {
       throw new Error('Impossible de charger les equipes');
     }
   }
@@ -56,7 +56,7 @@ export async function bootstrapTeams(accessToken: string): Promise<BootstrapTeam
         throw new Error('Non authentifie');
       }
       throw new Error(msg);
-    } catch (_err) {
+  } catch {
       throw new Error('Impossible de bootstrap l\'espace');
     }
   }

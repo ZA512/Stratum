@@ -6,6 +6,7 @@ import { BoardUiSettingsProvider } from "@/features/boards/board-ui-settings";
 import { FractalBreadcrumb } from "@/components/fractal-breadcrumb";
 import { TaskDrawerProvider } from "@/features/nodes/task-drawer/TaskDrawerContext";
 import { TaskDrawer } from "@/features/nodes/task-drawer/TaskDrawer";
+import { IncomingInvitationsCenter } from "@/features/nodes/invitations/IncomingInvitationsCenter";
 
 function TeamBoardsShell({ children }: { children: React.ReactNode }) {
   const { breadcrumb, registerDescendTrigger, teamId, prefetchBoard } = useBoardData();
@@ -25,7 +26,10 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
         }}
         onPreNavigate={(item) => { if (item.boardId) prefetchBoard(item.boardId); }}
       >
-        {children}
+        <>
+          <IncomingInvitationsCenter />
+          {children}
+        </>
       </FractalBreadcrumb>
     </div>
   );

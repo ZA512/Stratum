@@ -366,6 +366,29 @@
         "empty": "Aucun utilisateur trouvé"
       }
     },
+    "invitationCenter": {
+      "badge": "Invitations",
+      "badgeAria": "Centre d'invitations, {count} en attente",
+      "title": "Invitations entrantes",
+      "refresh": "Actualiser",
+      "close": "Fermer",
+      "loading": "Chargement des invitations…",
+      "empty": "Aucune invitation en attente.",
+      "error": "Impossible de charger les invitations.",
+      "invitedBy": "Invité par {name}",
+      "invitedByEmail": "Invité par {email}",
+      "receivedAt": "Reçue le {value}",
+      "expiresAt": "Expire le {value}",
+      "accept": "Accepter",
+      "accepting": "Acceptation…",
+      "decline": "Refuser",
+      "declining": "Refus…",
+      "openTeam": "Ouvrir l'équipe",
+      "toast": {
+        "accepted": "Invitation acceptée pour « {title} »",
+        "declined": "Invitation refusée pour « {title} »"
+      }
+    },
     "quickFilters": {
       "mine": "Mes tâches",
       "sortPriority": "Tri prio",
@@ -946,7 +969,13 @@
       "deleteSingle": "Supprimer la carte",
       "deletingSingle": "Suppression…",
       "deleteRecursive": "Supprimer tout (cascade)",
-      "deletingRecursive": "Suppression…"
+      "deletingRecursive": "Suppression…",
+      "shareBlockedTitle": "Suppression bloquée par le partage",
+      "shareBlockedBody": "Retirez les collaborateurs externes ou annulez les invitations en attente avant de supprimer cette tâche principale.",
+      "shareBlockedCollaborators": "{count, plural, one {{count} collaborateur externe a toujours accès.} other {{count} collaborateurs externes ont toujours accès.}}",
+      "shareBlockedInvitations": "{count, plural, one {{count} invitation en attente subsiste.} other {{count} invitations en attente subsistent.}}",
+      "shareBlockedTooltip": "Retirez les collaborateurs externes et les invitations en attente avant de supprimer.",
+      "shareLoadError": "Impossible de charger les informations de partage."
     },
     "moveDialog": {
       "title": "Déplacer « {title} » vers un autre kanban",

@@ -181,12 +181,6 @@ export const TaskDrawer: React.FC = () => {
     [locale],
   );
 
-  const formatDateTime = useCallback(
-    (input: string | Date | null | undefined): string =>
-      formatDate(input, { dateStyle: 'medium', timeStyle: 'short' }),
-    [formatDate],
-  );
-
   const formatDateLong = useCallback(
     (input: string | Date | null | undefined): string =>
       formatDate(input, { dateStyle: 'long' }),
@@ -332,30 +326,9 @@ export const TaskDrawer: React.FC = () => {
     return extractArchiveAfterDays(column);
   }, [detail, board]);
 
-  const backlogHiddenDisplay = useMemo(
-    () => (backlogHiddenUntil ? formatDateLong(`${backlogHiddenUntil}T00:00:00Z`) : '—'),
-    [backlogHiddenUntil, formatDateLong],
-  );
-
   const snoozeCountdown = useMemo(
     () => describeSnoozeCountdown(backlogHiddenUntil),
     [backlogHiddenUntil, describeSnoozeCountdown],
-  );
-
-  const backlogAutomationLabels = useMemo(
-    () => ({
-      nextReview: formatDateTime(detail?.backlogNextReviewAt ?? null),
-      lastReminder: formatDateTime(detail?.backlogLastReminderAt ?? null),
-      reviewStarted: formatDateTime(detail?.backlogReviewStartedAt ?? null),
-      lastInteraction: formatDateTime(detail?.backlogLastInteractionAt ?? null),
-    }),
-    [
-      detail?.backlogNextReviewAt,
-      detail?.backlogLastReminderAt,
-      detail?.backlogReviewStartedAt,
-      detail?.backlogLastInteractionAt,
-      formatDateTime,
-    ],
   );
 
   const archiveCountdown = useMemo(() => {
@@ -393,30 +366,6 @@ export const TaskDrawer: React.FC = () => {
     return { daysRemaining, isCritical, isExpired, archiveDate, archiveAfterDays: doneArchiveConfig };
   }, [detail, doneArchiveConfig]);
 
-  const archiveCountdownLabel = useMemo(() => {
-    if (!archiveCountdown) return null;
-    if (archiveCountdown.isExpired) {
-      return tBoard('taskDrawer.backlog.archiveCountdown.imminent');
-    }
-    if (archiveCountdown.isCritical) {
-      return archiveCountdown.daysRemaining === 1
-        ? tBoard('taskDrawer.backlog.archiveCountdown.criticalOne')
-        : tBoard('taskDrawer.backlog.archiveCountdown.criticalOther', { count: archiveCountdown.daysRemaining });
-    }
-    return archiveCountdown.daysRemaining === 1
-      ? tBoard('taskDrawer.backlog.archiveCountdown.scheduledOne')
-      : tBoard('taskDrawer.backlog.archiveCountdown.scheduledOther', { count: archiveCountdown.daysRemaining });
-  }, [archiveCountdown, tBoard]);
-
-  const archiveCountdownDescription = useMemo(() => {
-    if (!archiveCountdown) return null;
-    if (archiveCountdown.isExpired || archiveCountdown.isCritical) {
-      return tBoard('taskDrawer.backlog.archiveCountdown.criticalHint');
-    }
-    return tBoard('taskDrawer.backlog.archiveCountdown.scheduledHint', {
-      date: formatDateMedium(archiveCountdown.archiveDate),
-    });
-  }, [archiveCountdown, formatDateMedium, tBoard]);
 
   const [resettingArchiveCounter, setResettingArchiveCounter] = useState(false);
 

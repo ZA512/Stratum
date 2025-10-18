@@ -103,6 +103,14 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     try {
       setStatus(cached ? "ready" : "loading");
       const detail = await fetchBoardDetail(boardId, accessToken || "");
+      
+      // Si detail est null, cela signifie 304 Not Modified (pas de changement)
+      // On garde le cache actuel et on ne met rien à jour
+      if (detail === null) {
+        setStatus("ready");
+        return;
+      }
+      
       cachesRef.current.boards.set(boardId, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([
@@ -141,6 +149,10 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     if (cachesRef.current.boards.has(id)) return;
     try {
       const detail = await fetchBoardDetail(id, accessToken || "");
+      
+      // Si null (304 Not Modified), on ne fait rien
+      if (detail === null) return;
+      
       cachesRef.current.boards.set(id, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([

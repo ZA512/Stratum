@@ -3,21 +3,28 @@
   Controller,
   Delete,
   Get,
+  Header,
+  Headers,
   HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiHeader,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
+import * as crypto from 'crypto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -52,16 +59,34 @@ export class BoardsController {
   }
 
   @Get(':boardId/detail')
-  @ApiOperation({ summary: 'Retrieve a board with its columns and nodes' })
+  @ApiOperation({ summary: 'Retrieve a board with its columns and nodes (optimisé avec ETag pour auto-refresh)' })
   @ApiParam({ name: 'boardId', example: 'board_123' })
+  @ApiHeader({ name: 'If-None-Match', required: false, description: 'ETag de la dernière version connue' })
   @ApiOkResponse({ type: BoardWithNodesDto })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  getBoardWithNodes(
+  async getBoardWithNodes(
     @CurrentUser() user: AuthenticatedUser,
     @Param('boardId') boardId: string,
-  ): Promise<BoardWithNodesDto> {
-    return this.boardsService.getBoardWithNodes(boardId, user.id);
+    @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const data = await this.boardsService.getBoardWithNodes(boardId, user.id);
+    
+    // Générer un ETag basé sur le contenu
+    const dataString = JSON.stringify(data);
+    const etag = `"${crypto.createHash('md5').update(dataString).digest('hex')}"`;
+    
+    // Si le client a déjà cette version, retourner 304 Not Modified
+    if (ifNoneMatch === etag) {
+      res.status(HttpStatus.NOT_MODIFIED).end();
+      return;
+    }
+    
+    // Sinon, retourner les données avec le nouvel ETag
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'no-cache'); // Force validation avec ETag
+    res.json(data);
   }
 
   @Get(':boardId/columns/:columnId/archived')

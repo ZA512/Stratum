@@ -36,6 +36,8 @@ import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
 import {
   InviteNodeCollaboratorDto,
   NodeShareCollaboratorDto,
+  NodeShareIncomingInvitationDto,
+  NodeShareInvitationActionResultDto,
   NodeShareSummaryDto,
 } from './dto/node-share.dto';
 
@@ -50,6 +52,12 @@ function normalizeJson(
 
 const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INVITATION_STATUS_VALUES = new Set([
+  'PENDING',
+  'ACCEPTED',
+  'DECLINED',
+  'EXPIRED',
+]);
 
 const DEFAULT_BACKLOG_SETTINGS = Object.freeze({
   reviewAfterDays: 14,
@@ -65,6 +73,7 @@ const DEFAULT_MAIL_LOG_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const DEFAULT_MAIL_LOG_MAX_FILES = 5;
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_INVITE_EXPIRATION_DAYS = 30;
 
 type RaciRole = 'R' | 'A' | 'C' | 'I';
 
@@ -78,7 +87,7 @@ type ShareInvitation = {
   email: string;
   invitedById: string | null;
   invitedAt: string | null;
-  status: 'PENDING' | 'ACCEPTED';
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
 };
 
 type BacklogColumnSettings = {
@@ -303,11 +312,11 @@ function normalizeShare(rawRoot: Record<string, any>): {
       invitedAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
     }
     const statusRaw = entry.status;
-    const status =
-      typeof statusRaw === 'string' &&
-      ['PENDING', 'ACCEPTED'].includes(statusRaw.toUpperCase())
-        ? (statusRaw.toUpperCase() as 'PENDING' | 'ACCEPTED')
-        : 'PENDING';
+    const statusValue =
+      typeof statusRaw === 'string' ? statusRaw.trim().toUpperCase() : '';
+    const status = INVITATION_STATUS_VALUES.has(statusValue)
+      ? (statusValue as ShareInvitation['status'])
+      : 'PENDING';
     invitations.push({ email, invitedById, invitedAt, status });
   }
 
@@ -1850,6 +1859,28 @@ export class NodesService {
     if (!node) throw new NotFoundException();
     await this.ensureUserCanWrite(node.teamId, userId);
 
+    if (!node.parentId) {
+      const fullNode = await this.prisma.node.findUnique({
+        where: { id: node.id },
+      });
+      if (!fullNode) throw new NotFoundException();
+      const summary = await this.buildNodeShareSummary(
+        fullNode as NodeModel,
+        userId,
+      );
+      
+      // Une tâche partagée ne peut JAMAIS être supprimée (même par le créateur)
+      // car personne n'est propriétaire. Pour s'en débarrasser, il faut l'archiver.
+      const hasAnyCollaborator = summary.collaborators.some((collab) => collab.userId);
+      const hasAnyInvitation = summary.invitations.length > 0;
+      
+      if (hasAnyCollaborator || hasAnyInvitation) {
+        throw new ConflictException(
+          'Impossible de supprimer une tâche partagée. Utilisez l\'archivage pour la retirer de votre vue.',
+        );
+      }
+    }
+
     if (!recursive) {
       const childCount = await this.prisma.node.count({
         where: { parentId: node.id },
@@ -2963,12 +2994,18 @@ export class NodesService {
       throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
     }
 
-    const metadata = this.extractMetadata(node);
-    if (metadata.share.invitations.some((invite) => invite.email === email)) {
+    if (
+      currentSummary.invitations.some(
+        (invite) => invite.email.toLowerCase() === email,
+      )
+    ) {
       throw new ConflictException(
         'Une invitation est déjà en attente pour cet email',
       );
     }
+
+    const metadata = this.extractMetadata(node);
+    let nodeForSummary: NodeModel = node;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -2991,45 +3028,362 @@ export class NodesService {
         throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
       }
 
-      const membership = await this.prisma.membership.findFirst({
-        where: {
-          teamId: node.teamId,
-          userId: existingUser.id,
-          status: MembershipStatus.ACTIVE,
+      // Toujours créer une invitation pour que l'utilisateur la voie et l'accepte explicitement,
+      // même s'il est déjà membre de l'équipe. Cela garantit :
+      // 1. Une notification d'invitation entrante
+      // 2. Un processus d'acceptation explicite
+      // 3. Un rafraîchissement du board après acceptation
+    }
+
+    const hasLegacyInvitation = metadata.share.invitations.some(
+      (invite) => invite.email === email,
+    );
+    if (hasLegacyInvitation) {
+      metadata.share.invitations = metadata.share.invitations.filter(
+        (invite) => invite.email !== email,
+      );
+      writeShareBack(metadata);
+      await this.prisma.node.update({
+        where: { id: node.id },
+        data: { metadata: metadata.raw as Prisma.InputJsonValue },
+      });
+      nodeForSummary = { ...node, metadata: metadata.raw } as NodeModel;
+    }
+
+    const expiresAt = new Date(
+      Date.now() + DEFAULT_INVITE_EXPIRATION_DAYS * DAY_IN_MS,
+    );
+
+    try {
+      await this.prisma.nodeShareInvitation.create({
+        data: {
+          nodeId: node.id,
+          inviterId: userId,
+          inviteeEmail: email,
+          inviteeUserId: existingUser?.id ?? null,
+          expiresAt,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Une invitation est déjà en attente pour cet email',
+        );
+      }
+      throw error;
+    }
+
+    return this.buildNodeShareSummary(nodeForSummary, userId);
+  }
+
+  async listIncomingNodeShareInvitations(
+    userId: string,
+  ): Promise<NodeShareIncomingInvitationDto[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) {
+      throw new NotFoundException("Utilisateur introuvable");
+    }
+
+    const normalizedEmail = user.email.trim().toLowerCase();
+    const invitations = await this.prisma.nodeShareInvitation.findMany({
+      where: {
+        status: 'PENDING',
+        OR: [
+          { inviteeUserId: userId },
+          { inviteeUserId: null, inviteeEmail: normalizedEmail },
+        ],
+      },
+      include: {
+        node: { select: { id: true, title: true, teamId: true } },
+        inviter: {
+          select: { id: true, displayName: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const now = new Date();
+    const expiredInvitations: Array<{
+      id: string;
+      inviteeUserId: string | null;
+    }> = [];
+    const linkIds: string[] = [];
+    const results: NodeShareIncomingInvitationDto[] = [];
+
+    for (const invitation of invitations) {
+      if (!invitation.inviteeUserId) {
+        linkIds.push(invitation.id);
+      }
+      if (invitation.expiresAt <= now) {
+        expiredInvitations.push({
+          id: invitation.id,
+          inviteeUserId: invitation.inviteeUserId,
+        });
+        continue;
+      }
+      results.push({
+        id: invitation.id,
+        nodeId: invitation.nodeId,
+        nodeTitle: invitation.node.title ?? invitation.nodeId,
+        teamId: invitation.node.teamId,
+        inviterId: invitation.inviterId,
+        inviterDisplayName:
+          invitation.inviter.displayName ?? invitation.inviterId,
+        inviterEmail: invitation.inviter.email ?? '',
+        invitedAt: invitation.createdAt.toISOString(),
+        expiresAt: invitation.expiresAt.toISOString(),
+        status: invitation.status,
+      });
+    }
+
+    const updates: Prisma.PrismaPromise<unknown>[] = [];
+    if (linkIds.length > 0) {
+      updates.push(
+        this.prisma.nodeShareInvitation.updateMany({
+          where: { id: { in: linkIds } },
+          data: { inviteeUserId: userId },
+        }),
+      );
+    }
+    if (expiredInvitations.length > 0) {
+      for (const entry of expiredInvitations) {
+        updates.push(
+          this.prisma.nodeShareInvitation.update({
+            where: { id: entry.id },
+            data: {
+              status: 'EXPIRED',
+              respondedAt: now,
+              inviteeUserId: entry.inviteeUserId ?? userId,
+            },
+          }),
+        );
+      }
+    }
+    if (updates.length > 0) {
+      await this.prisma.$transaction(updates);
+    }
+
+    return results;
+  }
+
+  async acceptNodeShareInvitation(
+    invitationId: string,
+    userId: string,
+  ): Promise<NodeShareInvitationActionResultDto> {
+    return this.respondToNodeShareInvitation(invitationId, userId, 'ACCEPTED');
+  }
+
+  async declineNodeShareInvitation(
+    invitationId: string,
+    userId: string,
+  ): Promise<NodeShareInvitationActionResultDto> {
+    return this.respondToNodeShareInvitation(invitationId, userId, 'DECLINED');
+  }
+
+  private async respondToNodeShareInvitation(
+    invitationId: string,
+    userId: string,
+    targetStatus: 'ACCEPTED' | 'DECLINED',
+  ): Promise<NodeShareInvitationActionResultDto> {
+    const now = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const invitation = await tx.nodeShareInvitation.findUnique({
+        where: { id: invitationId },
+        include: {
+          node: {
+            select: {
+              id: true,
+              teamId: true,
+              metadata: true,
+              title: true,
+              column: {
+                select: {
+                  id: true,
+                  boardId: true,
+                  behavior: { select: { key: true } },
+                },
+              },
+              board: {
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+          inviter: {
+            select: { id: true, displayName: true, email: true },
+          },
         },
       });
 
-      if (membership) {
-        metadata.share.collaborators.push({
-          userId: existingUser.id,
-          addedById: userId,
-          addedAt: nowIso,
+      if (!invitation) {
+        throw new NotFoundException("Invitation introuvable");
+      }
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true },
+      });
+      if (!user) {
+        throw new NotFoundException("Utilisateur introuvable");
+      }
+
+      const normalizedEmail = user.email.trim().toLowerCase();
+      const invitationForUser =
+        invitation.inviteeUserId === userId ||
+        (!invitation.inviteeUserId &&
+          invitation.inviteeEmail === normalizedEmail);
+      if (!invitationForUser) {
+        throw new ForbiddenException(
+          "Vous n'êtes pas destinataire de cette invitation",
+        );
+      }
+
+      if (invitation.status === 'ACCEPTED' || invitation.status === 'DECLINED') {
+        throw new ConflictException('Invitation déjà traitée');
+      }
+
+      if (invitation.expiresAt <= now || invitation.status === 'EXPIRED') {
+        await tx.nodeShareInvitation.update({
+          where: { id: invitationId },
+          data: {
+            status: 'EXPIRED',
+            respondedAt: now,
+            inviteeUserId: invitation.inviteeUserId ?? userId,
+          },
         });
+        throw new BadRequestException("Invitation expirée ou invalide");
+      }
+
+      const previousStatus = invitation.status;
+
+      const node = await tx.node.findUnique({ where: { id: invitation.nodeId } });
+
+      if (targetStatus === 'ACCEPTED') {
+        if (!node) {
+          await tx.nodeShareInvitation.update({
+            where: { id: invitationId },
+            data: {
+              status: 'DECLINED',
+              respondedAt: now,
+              inviteeUserId: invitation.inviteeUserId ?? userId,
+            },
+          });
+          throw new NotFoundException('Tâche introuvable ou supprimée');
+        }
+
+        const membership = await tx.membership.findFirst({
+          where: {
+            teamId: node.teamId,
+            userId,
+          },
+        });
+        if (!membership) {
+          await tx.membership.create({
+            data: {
+              teamId: node.teamId,
+              userId,
+              status: MembershipStatus.ACTIVE,
+            },
+          });
+        } else if (membership.status !== MembershipStatus.ACTIVE) {
+          await tx.membership.update({
+            where: { id: membership.id },
+            data: { status: MembershipStatus.ACTIVE },
+          });
+        }
+
+  const metadata = this.extractMetadata(node);
+        const alreadyCollaborator = metadata.share.collaborators.some(
+          (collab) => collab.userId === userId,
+        );
+        if (!alreadyCollaborator) {
+          metadata.share.collaborators.push({
+            userId,
+            addedById: invitation.inviterId,
+            addedAt: now.toISOString(),
+          });
+        }
+
+        metadata.share.invitations = metadata.share.invitations.filter(
+          (invite) => invite.email !== invitation.inviteeEmail,
+        );
+
         writeShareBack(metadata);
-        await this.prisma.node.update({
+        await tx.node.update({
           where: { id: node.id },
           data: { metadata: metadata.raw as Prisma.InputJsonValue },
         });
-        const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
-        return this.buildNodeShareSummary(nextNode, userId);
+
+        // Créer un placement personnel pour la tâche partagée dans le board personnel de l'utilisateur
+        const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
+        if (userPersonalBoard && userPersonalBoard.columns.length > 0) {
+          const firstColumn = userPersonalBoard.columns[0];
+          
+          // Vérifier si un placement existe déjà
+          const existingPlacement = await tx.sharedNodePlacement.findUnique({
+            where: {
+              nodeId_userId: {
+                nodeId: node.id,
+                userId,
+              },
+            },
+          });
+
+          if (!existingPlacement) {
+            // Calculer la prochaine position dans la colonne
+            const maxPosition = await tx.sharedNodePlacement.findFirst({
+              where: { columnId: firstColumn.id },
+              orderBy: { position: 'desc' },
+              select: { position: true },
+            });
+
+            await tx.sharedNodePlacement.create({
+              data: {
+                nodeId: node.id,
+                userId,
+                columnId: firstColumn.id,
+                position: maxPosition ? maxPosition.position + 1000 : 0,
+              },
+            });
+          }
+        }
       }
-    }
 
-    metadata.share.invitations.push({
-      email,
-      invitedById: userId,
-      invitedAt: nowIso,
-      status: 'PENDING',
+      const targetBoardId =
+        invitation.node.column?.boardId ?? invitation.node.board?.id ?? null;
+      const targetColumnId = invitation.node.column?.id ?? null;
+      const columnBehaviorKey = invitation.node.column?.behavior?.key ?? null;
+
+      const updated = await tx.nodeShareInvitation.update({
+        where: { id: invitationId },
+        data: {
+          status: targetStatus,
+          respondedAt: now,
+          inviteeUserId: invitation.inviteeUserId ?? userId,
+        },
+      });
+
+      return {
+        id: updated.id,
+        nodeId: updated.nodeId,
+        nodeTitle: invitation.node.title ?? updated.nodeId,
+        teamId: invitation.node.teamId,
+        previousStatus,
+        status: updated.status,
+        respondedAt: updated.respondedAt?.toISOString() ?? now.toISOString(),
+        ...(targetBoardId ? { boardId: targetBoardId } : {}),
+        ...(targetColumnId ? { columnId: targetColumnId } : {}),
+        ...(columnBehaviorKey ? { columnBehaviorKey } : {}),
+      };
     });
-    writeShareBack(metadata);
-
-    await this.prisma.node.update({
-      where: { id: node.id },
-      data: { metadata: metadata.raw as Prisma.InputJsonValue },
-    });
-
-    const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
-    return this.buildNodeShareSummary(nextNode, userId);
   }
 
   async removeNodeCollaborator(
@@ -3057,8 +3411,92 @@ export class NodesService {
       data: { metadata: metadata.raw as Prisma.InputJsonValue },
     });
 
+    // Supprimer le placement personnel si existant
+    await this.prisma.sharedNodePlacement.deleteMany({
+      where: {
+        nodeId: node.id,
+        userId: targetUserId,
+      },
+    });
+
     const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
     return this.buildNodeShareSummary(nextNode, userId);
+  }
+
+  async moveSharedNodePlacement(
+    nodeId: string,
+    userId: string,
+    columnId: string,
+    position?: number,
+  ): Promise<void> {
+    // Vérifier que l'utilisateur est bien collaborateur de cette tâche
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+    });
+
+    if (!node) {
+      throw new NotFoundException('Tâche introuvable');
+    }
+
+    const metadata = this.extractMetadata(node);
+    const isCollaborator = metadata.share.collaborators.some(
+      (collab) => collab.userId === userId,
+    );
+
+    if (!isCollaborator) {
+      throw new ForbiddenException(
+        "Vous n'êtes pas collaborateur de cette tâche",
+      );
+    }
+
+    // Vérifier que la colonne existe et récupérer son board
+    const column = await this.prisma.column.findUnique({
+      where: { id: columnId },
+      include: {
+        board: {
+          include: {
+            node: {
+              select: { teamId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!column) {
+      throw new NotFoundException('Colonne introuvable');
+    }
+
+    // Calculer la position si non fournie
+    let finalPosition = position ?? 0;
+    if (position === undefined) {
+      const maxPosition = await this.prisma.sharedNodePlacement.findFirst({
+        where: { columnId },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      finalPosition = maxPosition ? maxPosition.position + 1000 : 0;
+    }
+
+    // Upsert du placement
+    await this.prisma.sharedNodePlacement.upsert({
+      where: {
+        nodeId_userId: {
+          nodeId,
+          userId,
+        },
+      },
+      create: {
+        nodeId,
+        userId,
+        columnId,
+        position: finalPosition,
+      },
+      update: {
+        columnId,
+        position: finalPosition,
+      },
+    });
   }
 
   async listNodeComments(
@@ -3708,15 +4146,38 @@ export class NodesService {
       };
     });
 
-    return {
-      nodeId: node.id,
-      collaborators,
-      invitations: metadata.share.invitations.map((invite) => ({
+    const dbInvitations = await this.prisma.nodeShareInvitation.findMany({
+      where: { nodeId: node.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const knownInvitationEmails = new Set(
+      dbInvitations.map((invite) => invite.inviteeEmail.toLowerCase()),
+    );
+
+    const legacyInvitations = metadata.share.invitations.filter(
+      (invite) => !knownInvitationEmails.has(invite.email.toLowerCase()),
+    );
+
+    const invitations = [
+      ...dbInvitations.map((invite) => ({
+        email: invite.inviteeEmail,
+        invitedAt: invite.createdAt?.toISOString() ?? null,
+        invitedById: invite.inviterId,
+        status: invite.status as ShareInvitation['status'],
+      })),
+      ...legacyInvitations.map((invite) => ({
         email: invite.email,
         invitedAt: invite.invitedAt,
         invitedById: invite.invitedById,
         status: invite.status,
       })),
+    ];
+
+    return {
+      nodeId: node.id,
+      collaborators,
+      invitations,
     };
   }
 
@@ -4368,6 +4829,61 @@ export class NodesService {
         behavior: { key: c.behavior.key },
         wipLimit: c.wipLimit,
         settings: this.normalizeColumnSettings((c as any).settings ?? null),
+      })),
+    };
+  }
+
+  private async getUserPersonalBoard(
+    tx: Prisma.TransactionClient,
+    userId: string,
+  ): Promise<{
+    id: string;
+    columns: Array<{ id: string; name: string; position: number }>;
+  } | null> {
+    // Trouver le board personnel de l'utilisateur
+    const membership = await tx.membership.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        team: {
+          isPersonal: true,
+        },
+      },
+      include: {
+        team: {
+          include: {
+            nodes: {
+              where: {
+                parentId: null,
+              },
+              include: {
+                board: {
+                  include: {
+                    columns: {
+                      orderBy: {
+                        position: 'asc',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!membership?.team?.nodes?.[0]?.board) {
+      return null;
+    }
+
+    const board = membership.team.nodes[0].board;
+    return {
+      id: board.id,
+      columns: board.columns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        position: c.position,
       })),
     };
   }

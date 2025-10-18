@@ -38,7 +38,6 @@ interface ColumnListProps {
   onRequestDeleteCard: (node: BoardNode) => void;
   onShowArchived: (column: BoardColumnWithNodes) => void;
   onShowSnoozed: (column: BoardColumnWithNodes) => void;
-  snoozedColumnId?: string | null;
   columnViewMode: Record<string, 'snoozed' | 'archived' | null>;
   archivedNodesByColumn: Record<string, ArchivedBoardNode[]>;
   helpMode?: boolean;
@@ -76,7 +75,6 @@ type ColumnListItemProps = {
   onRequestDeleteCard: (node: BoardNode) => void;
   onShowArchived: (column: BoardColumnWithNodes) => void;
   onShowSnoozed: (column: BoardColumnWithNodes) => void;
-  snoozedColumnId?: string | null;
   viewMode: 'snoozed' | 'archived' | null;
   archivedNodes?: ArchivedBoardNode[];
   helpMode?: boolean;
@@ -105,7 +103,6 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   onRequestDeleteCard,
   onShowArchived,
   onShowSnoozed,
-  snoozedColumnId,
   viewMode,
   archivedNodes,
   helpMode,
@@ -157,7 +154,6 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       onRequestDeleteCard={onRequestDeleteCard}
       onShowArchived={onShowArchived}
       onShowSnoozed={onShowSnoozed}
-      snoozedOpen={snoozedColumnId === column.id}
       childBoards={childBoards}
       loadingCards={loadingCards}
       displayOptions={displayOptions}

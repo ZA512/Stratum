@@ -387,7 +387,7 @@ export function BoardTaskCard({
     }
 
     return messages;
-  }, [tBoard, locale, raciDetails, node.dueAt, node.effort, node.counts?.backlog, node.counts?.inProgress, node.counts?.blocked, node.counts?.done, displayOptions.showProgress, fractalPath, childBoard, lateness]);
+  }, [tBoard, locale, raciDetails, node.dueAt, node.effort, node.counts, displayOptions.showProgress, fractalPath, childBoard, lateness]);
 
   return (
     <div

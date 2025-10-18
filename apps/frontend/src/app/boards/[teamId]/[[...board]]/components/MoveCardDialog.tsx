@@ -181,7 +181,7 @@ export function MoveCardDialog({
     return () => {
       cancelled = true;
     };
-  }, [teamId, accessToken]);
+  }, [teamId, accessToken, tBoard]);
 
   // Filtrer les noeuds selon la recherche
   const filteredNodes = useMemo(() => {
@@ -346,6 +346,7 @@ export function MoveCardDialog({
     selectedColumns,
     currentBoardId,
     node.columnId,
+    tBoard,
   ]);
 
   const handleToggleExpand = (nodeId: string) => {

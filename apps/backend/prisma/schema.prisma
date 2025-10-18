@@ -61,6 +61,9 @@ model User {
   invitationsSent  Invitation[] @relation("UserInvitations")
   settings        UserSettings?
   ownedBoards     Board[]       @relation("UserOwnedBoards")
+  nodeShareInvitationsSent NodeShareInvitation[] @relation("NodeShareInvitationsSent")
+  nodeShareInvitationsReceived NodeShareInvitation[] @relation("NodeShareInvitationsReceived")
+  sharedNodePlacements SharedNodePlacement[]
 }
 
 model Team {
@@ -136,6 +139,8 @@ model Node {
   dependents      Dependency[]      @relation("DependencyDependencies")
   attachments     Attachment[]
   comments        Comment[]
+  shareInvitations NodeShareInvitation[]
+  sharedPlacements SharedNodePlacement[]
 }
 
 model Board {
@@ -169,6 +174,7 @@ model Column {
   board           Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
   behavior        ColumnBehavior     @relation(fields: [behaviorId], references: [id], onDelete: Restrict)
   nodes           Node[]
+  sharedNodePlacements SharedNodePlacement[]
 }
 
 model ColumnBehavior {
@@ -266,6 +272,13 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum NodeShareInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
 model RefreshToken {
   id          String   @id @default(cuid())
   userId      String
@@ -310,6 +323,28 @@ model Invitation {
   @@index([teamId])
 }
 
+model NodeShareInvitation {
+  id             String                     @id @default(cuid())
+  nodeId         String
+  inviterId      String
+  inviteeEmail   String
+  inviteeUserId  String?
+  status         NodeShareInvitationStatus  @default(PENDING)
+  expiresAt      DateTime
+  respondedAt    DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  node           Node                       @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  inviter        User                       @relation("NodeShareInvitationsSent", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee        User?                      @relation("NodeShareInvitationsReceived", fields: [inviteeUserId], references: [id], onDelete: SetNull)
+
+  @@unique([nodeId, inviteeEmail])
+  @@index([inviteeEmail])
+  @@index([inviteeUserId])
+  @@index([status])
+}
+
 model UserSettings {
   userId      String   @id
   preferences Json
@@ -335,4 +370,23 @@ model BoardDailySnapshot {
 
   @@unique([boardId, dateUTC])
   @@index([dateUTC])
+}
+
+model SharedNodePlacement {
+  id         String   @id @default(cuid())
+  nodeId     String
+  userId     String
+  columnId   String
+  position   Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  column     Column   @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, userId])
+  @@index([userId])
+  @@index([nodeId])
+  @@index([columnId])
 }

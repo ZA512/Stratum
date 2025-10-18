@@ -11,25 +11,14 @@ import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { useTranslation } from '@/i18n';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 
-const BACKLOG_DEFAULTS = Object.freeze({
-  reviewAfterDays: 14,
-  reviewEveryDays: 7,
-  archiveAfterDays: 60,
-});
-
 const DONE_DEFAULTS = Object.freeze({
   archiveAfterDays: 30,
 });
-
-const HATCHED_SURFACE = 'bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.08)_0,rgba(255,255,255,0.08)_8px,rgba(255,255,255,0)_8px,rgba(255,255,255,0)_16px)]';
-const HATCHED_ACCENT = 'bg-[repeating-linear-gradient(135deg,rgba(127,216,255,0.16)_0,rgba(127,216,255,0.16)_8px,rgba(255,255,255,0)_8px,rgba(255,255,255,0)_16px)]';
 
 interface ColumnPanelProps {
   column: BoardColumnWithNodes;
   cards: BoardNode[];
   isEditing: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   editingValues: ColumnEditingValues | null;
   onRequestEdit: (columnId: string) => void;
   onCancelEdit: () => void;
@@ -44,7 +33,6 @@ interface ColumnPanelProps {
       | 'doneArchiveAfter',
     value: string,
   ) => void;
-  onMove: (direction: -1|1) => void;
   onDelete: () => void;
   onCreateCard: (title: string) => Promise<void> | void;
   onOpenCard: (id: string) => void;              // ouvre le drawer tâche
@@ -62,7 +50,6 @@ interface ColumnPanelProps {
   isColumnDragging?: boolean;
   onShowArchived?: (column: BoardColumnWithNodes) => void;
   onShowSnoozed?: (column: BoardColumnWithNodes) => void;
-  snoozedOpen?: boolean;
   viewMode?: 'snoozed' | 'archived' | null;
   archivedNodes?: ArchivedBoardNode[];
   helpMode?: boolean;
@@ -70,13 +57,13 @@ interface ColumnPanelProps {
 
 export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(function ColumnPanel(props, ref) {
   const {
-    column, cards, isEditing, isFirst, isLast, editingValues,
+    column, cards, isEditing, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
-    onMove, onDelete, onCreateCard, onOpenCard, onRenameCard,
+    onDelete, onCreateCard, onOpenCard, onRenameCard,
     onRequestMoveCard, onRequestDeleteCard,
     childBoards, loadingCards, displayOptions, onOpenChildBoard,
     dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
-    isColumnDragging, onShowArchived, onShowSnoozed, snoozedOpen,
+    isColumnDragging, onShowArchived, onShowSnoozed,
     viewMode, archivedNodes, helpMode,
   } = props;
 
@@ -100,8 +87,6 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
       : null;
 
   // Utiliser les valeurs par défaut si settings est null (colonne pas encore configurée)
-  const backlogReviewAfter = backlogSnapshot?.reviewAfterDays ?? (column.behaviorKey === 'BACKLOG' ? 14 : null);
-  const backlogReviewEvery = backlogSnapshot?.reviewEveryDays ?? (column.behaviorKey === 'BACKLOG' ? 7 : null);
   const backlogArchiveAfter = backlogSnapshot?.archiveAfterDays ?? (column.behaviorKey === 'BACKLOG' ? 60 : null);
   const doneArchiveAfter = doneSnapshot?.archiveAfterDays ?? (column.behaviorKey === 'DONE' ? 30 : null);
 

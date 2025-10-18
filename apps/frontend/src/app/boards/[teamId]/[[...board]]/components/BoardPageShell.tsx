@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
+import { useAutoRefreshBoard } from '@/features/boards/useAutoRefreshBoard';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useTranslation } from '@/i18n';
@@ -22,11 +23,15 @@ import {
   createNode,
   updateNode,
   moveChildNode,
+  moveSharedNodePlacement,
   deleteNode as apiDeleteNode,
   fetchNodeDeletePreview,
-  restoreNode as apiRestoreNode,
   type NodeDeletePreview,
 } from '@/features/nodes/nodes-api';
+import {
+  fetchNodeCollaborators,
+  type NodeCollaboratorsResponse,
+} from '@/features/nodes/node-collaborators-api';
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
@@ -232,13 +237,21 @@ function BoardSkeleton(){
 
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
-  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
+  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
   const { expertMode, setExpertMode } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
+
+  // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
+  useAutoRefreshBoard({
+    intervalMs: 15000, // 15 secondes
+    onRefresh: refreshActiveBoard,
+    enabled: true,
+    boardId: activeBoardId,
+  });
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -294,27 +307,16 @@ export function TeamBoardPage(){
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteShareSummary, setDeleteShareSummary] = useState<NodeCollaboratorsResponse | null>(null);
+  const [deleteShareError, setDeleteShareError] = useState<string | null>(null);
   const [archivedColumn, setArchivedColumn] = useState<{
     id: string;
     name: string;
     behavior: ColumnBehaviorKey;
   } | null>(null);
   const [archivedNodes, setArchivedNodes] = useState<ArchivedBoardNode[]>([]);
-  const [archivedLoading, setArchivedLoading] = useState(false);
-  const [archivedError, setArchivedError] = useState<string | null>(null);
-  const [archivedSubmittingId, setArchivedSubmittingId] = useState<string | null>(null);
-  const [archivedSubmittingAction, setArchivedSubmittingAction] = useState<'restore' | 'delete' | null>(null);
-  const [snoozedColumn, setSnoozedColumn] = useState<{
-    id: string;
-    name: string;
-    behavior: ColumnBehaviorKey;
-  } | null>(null);
   // Mode d'affichage par colonne: null = normal, 'snoozed' = voir snoozées, 'archived' = voir archivées
   const [columnViewMode, setColumnViewMode] = useState<Record<string, 'snoozed' | 'archived' | null>>({});
-  const [snoozedNodes, setSnoozedNodes] = useState<BoardNode[]>([]);
-  const [snoozedLoading, setSnoozedLoading] = useState(false);
-  const [snoozedError, setSnoozedError] = useState<string | null>(null);
-  const [snoozedSubmittingId, setSnoozedSubmittingId] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   const advancedFiltersActive =
     selectedAssignees.length > 0 ||
@@ -965,11 +967,13 @@ export function TeamBoardPage(){
     setArchivedColumn({ id: column.id, name: column.name, behavior: column.behaviorKey });
     archivedColumnIdRef.current = column.id;
     setArchivedNodes([]);
-    setArchivedError(null);
-    setArchivedLoading(true);
     if (!accessToken) {
-      setArchivedLoading(false);
-      setArchivedError(tBoard('alerts.sessionInvalid'));
+      toastError(tBoard('alerts.sessionInvalid'));
+      setColumnViewMode((prev) => ({
+        ...prev,
+        [column.id]: null,
+      }));
+      closeArchivedDialog();
       return;
     }
     try {
@@ -979,13 +983,12 @@ export function TeamBoardPage(){
       }
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : tBoard('alerts.archivedLoadFailed');
-      if (archivedColumnIdRef.current === column.id) {
-        setArchivedError(message);
-      }
-    } finally {
-      if (archivedColumnIdRef.current === column.id) {
-        setArchivedLoading(false);
-      }
+      toastError(message);
+      setColumnViewMode((prev) => ({
+        ...prev,
+        [column.id]: null,
+      }));
+      closeArchivedDialog();
     }
   };
 
@@ -997,83 +1000,10 @@ export function TeamBoardPage(){
     }));
   };
 
-  const closeSnoozedDialog = () => {
-    setSnoozedColumn(null);
-    setSnoozedNodes([]);
-    setSnoozedLoading(false);
-    setSnoozedError(null);
-    setSnoozedSubmittingId(null);
-  };
-
-  const handleUnsnoozeSnoozed = async (nodeId: string) => {
-    if (!accessToken) {
-      toastError(tBoard('alerts.sessionInvalid'));
-      return;
-    }
-    setSnoozedSubmittingId(nodeId);
-    try {
-      await updateNode(nodeId, { backlogHiddenUntil: null }, accessToken);
-      setSnoozedNodes((prev) => prev.filter((node) => node.id !== nodeId));
-      await refreshActiveBoard();
-      success(tBoard('cards.notifications.unsnoozed'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.unsnoozeFailed');
-      toastError(message);
-    } finally {
-      setSnoozedSubmittingId(null);
-    }
-  };
-
   const closeArchivedDialog = () => {
     setArchivedColumn(null);
     setArchivedNodes([]);
-    setArchivedLoading(false);
-    setArchivedError(null);
-    setArchivedSubmittingId(null);
-    setArchivedSubmittingAction(null);
     archivedColumnIdRef.current = null;
-  };
-
-  const handleRestoreArchived = async (nodeId: string) => {
-    if (!accessToken) {
-      toastError(tBoard('alerts.sessionInvalid'));
-      return;
-    }
-    setArchivedSubmittingId(nodeId);
-    setArchivedSubmittingAction('restore');
-    try {
-      await apiRestoreNode(nodeId, accessToken);
-      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
-      await refreshActiveBoard();
-      success(tBoard('cards.notifications.restored'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.restoreFailed');
-      toastError(message);
-    } finally {
-      setArchivedSubmittingId(null);
-      setArchivedSubmittingAction(null);
-    }
-  };
-
-  const handleDeleteArchived = async (nodeId: string) => {
-    if (!accessToken) {
-      toastError(tBoard('alerts.sessionInvalid'));
-      return;
-    }
-    setArchivedSubmittingId(nodeId);
-    setArchivedSubmittingAction('delete');
-    try {
-      await apiDeleteNode(nodeId, { recursive: true }, accessToken);
-      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
-      await refreshActiveBoard();
-      success(tBoard('cards.notifications.archivedDeleted'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.deleteArchivedFailed');
-      toastError(message);
-    } finally {
-      setArchivedSubmittingId(null);
-      setArchivedSubmittingAction(null);
-    }
   };
 
   const handleCreateCard = async (columnId:string, title:string) => {
@@ -1100,6 +1030,8 @@ export function TeamBoardPage(){
     setDeleteError(null);
     setDeleteSubmitting(null);
     setDeleteLoading(true);
+    setDeleteShareSummary(null);
+    setDeleteShareError(null);
   };
 
   const closeDeleteDialog = () => {
@@ -1108,32 +1040,85 @@ export function TeamBoardPage(){
     setDeleteError(null);
     setDeleteSubmitting(null);
     setDeleteLoading(false);
+    setDeleteShareSummary(null);
+    setDeleteShareError(null);
   };
 
   useEffect(() => {
     if (!deleteTarget || !deleteLoading || !accessToken) return;
     let cancelled = false;
     (async () => {
-      try {
-        const preview = await fetchNodeDeletePreview(deleteTarget.id, accessToken);
-        if (!cancelled) {
-          setDeletePreview(preview);
-          setDeleteLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setDeleteError((err as Error).message);
-          setDeleteLoading(false);
-        }
+      const operations: Array<Promise<unknown>> = [
+        fetchNodeDeletePreview(deleteTarget.id, accessToken),
+      ];
+      const shouldCheckShare = !deleteTarget.parentId;
+      const shareIndex = shouldCheckShare
+        ? operations.push(fetchNodeCollaborators(deleteTarget.id, accessToken)) - 1
+        : null;
+      const results = await Promise.allSettled(operations);
+      if (cancelled) return;
+      const previewResult = results[0];
+      if (previewResult.status === 'fulfilled') {
+        setDeletePreview(previewResult.value as NodeDeletePreview);
+      } else {
+        const reason = previewResult.reason;
+        const message = reason instanceof Error && reason.message
+          ? reason.message
+          : tBoard('alerts.unexpectedError');
+        setDeleteError(message);
       }
+      if (shareIndex !== null) {
+        const shareResult = results[shareIndex];
+        if (shareResult.status === 'fulfilled') {
+          setDeleteShareSummary(shareResult.value as NodeCollaboratorsResponse);
+        } else {
+          const reason = shareResult.reason;
+          const message = reason instanceof Error && reason.message
+            ? reason.message
+            : tBoard('deleteDialog.shareLoadError');
+          setDeleteShareError(message);
+        }
+      } else {
+        setDeleteShareSummary(null);
+        setDeleteShareError(null);
+      }
+      setDeleteLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [deleteTarget, deleteLoading, accessToken]);
+  }, [deleteTarget, deleteLoading, accessToken, tBoard]);
+
+  const externalCollaborators = useMemo<NodeCollaboratorsResponse['collaborators']>(() => {
+    if (!deleteShareSummary) return [];
+    return deleteShareSummary.collaborators.filter((collaborator) => {
+      if (!collaborator.userId || collaborator.userId === user?.id) return false;
+      return collaborator.accessType === 'DIRECT' || collaborator.accessType === 'INHERITED';
+    });
+  }, [deleteShareSummary, user?.id]);
+
+  const pendingInvitations = useMemo<NodeCollaboratorsResponse['invitations']>(() => {
+    if (!deleteShareSummary) return [];
+    return deleteShareSummary.invitations.filter((invitation) => invitation.status === 'PENDING');
+  }, [deleteShareSummary]);
+
+  const shouldCheckShareGuard = Boolean(deleteTarget && !deleteTarget.parentId);
+
+  const shareDeletionBlocked = useMemo(() => {
+    if (!shouldCheckShareGuard) return false;
+    return externalCollaborators.length > 0 || pendingInvitations.length > 0;
+  }, [shouldCheckShareGuard, externalCollaborators, pendingInvitations]);
+
+  const singleDeleteBlocked = shareDeletionBlocked || (deletePreview?.hasChildren ?? false);
+  const singleDeleteDisabled = deleteLoading || deleteSubmitting !== null || singleDeleteBlocked;
+  const recursiveDeleteDisabled = deleteLoading || deleteSubmitting !== null || shareDeletionBlocked;
 
   const confirmDelete = async (recursive: boolean) => {
     if (!deleteTarget || !accessToken) return;
+    if (shareDeletionBlocked) {
+      setDeleteError(tBoard('deleteDialog.shareBlockedTooltip'));
+      return;
+    }
     setDeleteSubmitting(recursive ? 'recursive' : 'single');
     setDeleteError(null);
     try {
@@ -1328,15 +1313,28 @@ export function TeamBoardPage(){
     const snapshot = optimisticColumns ? structuredClone(optimisticColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
     setOptimisticColumns(currentCols);
     try {
-      await handleApi(() =>
-        moveChildNode(
-          parentId,
-          moving.id,
-          { targetColumnId: finalTargetCol.id, position: targetIndex },
-          accessToken,
-        ),
-        { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
-      );
+      // Si c'est une tâche mère partagée, utiliser l'endpoint de placement personnel
+      if (moving.isSharedRoot) {
+        await handleApi(() =>
+          moveSharedNodePlacement(
+            moving.id,
+            { columnId: finalTargetCol.id, position: targetIndex },
+            accessToken,
+          ),
+          { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
+        );
+      } else {
+        // Sinon, utiliser le déplacement standard
+        await handleApi(() =>
+          moveChildNode(
+            parentId,
+            moving.id,
+            { targetColumnId: finalTargetCol.id, position: targetIndex },
+            accessToken,
+          ),
+          { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
+        );
+      }
       await refreshActiveBoard();
       setOptimisticColumns(null);
       // Inform listeners (e.g., TaskDrawer) that the node changed column
@@ -1716,7 +1714,6 @@ export function TeamBoardPage(){
                   onRequestDeleteCard={handleRequestDeleteCard}
                   onShowArchived={handleShowArchived}
                   onShowSnoozed={handleShowSnoozed}
-                  snoozedColumnId={snoozedColumn?.id ?? null}
                   columnViewMode={columnViewMode}
                   archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
                   helpMode={helpMode}
@@ -1770,6 +1767,23 @@ export function TeamBoardPage(){
             {deleteError && (
               <p className="mt-3 text-sm text-rose-300">{deleteError}</p>
             )}
+            {shouldCheckShareGuard && deleteShareError && (
+              <p className="mt-3 text-sm text-amber-300">{deleteShareError}</p>
+            )}
+            {shareDeletionBlocked && (
+              <div className="mt-4 rounded-xl border border-amber-400/60 bg-amber-500/10 p-3 text-sm text-amber-100">
+                <p className="font-semibold">{tBoard('deleteDialog.shareBlockedTitle')}</p>
+                <p className="mt-2">{tBoard('deleteDialog.shareBlockedBody')}</p>
+                <ul className="mt-3 space-y-1 text-xs">
+                  {externalCollaborators.length > 0 && (
+                    <li>{tBoard('deleteDialog.shareBlockedCollaborators', { count: externalCollaborators.length })}</li>
+                  )}
+                  {pendingInvitations.length > 0 && (
+                    <li>{tBoard('deleteDialog.shareBlockedInvitations', { count: pendingInvitations.length })}</li>
+                  )}
+                </ul>
+              </div>
+            )}
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -1780,18 +1794,19 @@ export function TeamBoardPage(){
               </button>
               <button
                 type="button"
-                disabled={deleteLoading || deleteSubmitting !== null || (deletePreview?.hasChildren ?? false)}
-                title={deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined}
+                disabled={singleDeleteDisabled}
+                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : (deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined)}
                 onClick={() => confirmDelete(false)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${deletePreview?.hasChildren ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${singleDeleteBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
               >
                 {deleteSubmitting === 'single' ? tBoard('deleteDialog.deletingSingle') : tBoard('deleteDialog.deleteSingle')}
               </button>
               <button
                 type="button"
-                disabled={deleteLoading || deleteSubmitting !== null}
+                disabled={recursiveDeleteDisabled}
+                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : undefined}
                 onClick={() => confirmDelete(true)}
-                className={`rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-200 hover:text-rose-100 ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${shareDeletionBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-rose-400/40 bg-rose-500/10 text-rose-200 hover:border-rose-200 hover:text-rose-100'} ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
               >
                 {deleteSubmitting === 'recursive' ? tBoard('deleteDialog.deletingRecursive') : tBoard('deleteDialog.deleteRecursive')}
               </button>

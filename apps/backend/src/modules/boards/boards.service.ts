@@ -224,6 +224,7 @@ export class BoardsService {
           select: {
             id: true,
             title: true,
+            teamId: true,
           },
         },
         columns: {
@@ -260,43 +261,142 @@ export class BoardsService {
 
     // Préparation typée plutôt que cast any pour éviter retours unsafe
     const columnIds = board.columns.map((column) => column.id);
-    const rawNodes = columnIds.length
-      ? await this.prisma.node.findMany({
-          where: { columnId: { in: columnIds }, archivedAt: null },
-          orderBy: { position: 'asc' },
-          select: {
-            id: true,
-            title: true,
-            columnId: true,
-            position: true,
-            parentId: true,
-            dueAt: true,
-            shortId: true,
-            description: true,
-            effort: true,
-            priority: true,
-            blockedReminderIntervalDays: true,
-            blockedExpectedUnblockAt: true,
-            blockedSince: true,
-            tags: true,
-            metadata: true,
-            statusMetadata: true,
-            progress: true,
-            assignments: {
-              select: {
-                role: true,
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatarUrl: true,
+    
+    // Charger les placements personnalisés de tâches partagées pour cet utilisateur
+    let sharedPlacements: Array<{
+      nodeId: string;
+      columnId: string;
+      position: number;
+      node: any;
+    }> = [];
+    
+    if (userId) {
+      sharedPlacements = await this.prisma.sharedNodePlacement.findMany({
+        where: {
+          userId,
+          columnId: { in: columnIds },
+        },
+        include: {
+          node: {
+            select: {
+              id: true,
+              title: true,
+              columnId: true,
+              position: true,
+              parentId: true,
+              dueAt: true,
+              shortId: true,
+              description: true,
+              effort: true,
+              priority: true,
+              blockedReminderIntervalDays: true,
+              blockedExpectedUnblockAt: true,
+              blockedSince: true,
+              tags: true,
+              metadata: true,
+              statusMetadata: true,
+              progress: true,
+              teamId: true,
+              archivedAt: true,
+              createdById: true,
+              assignments: {
+                select: {
+                  role: true,
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      avatarUrl: true,
+                    },
                   },
                 },
               },
             },
           },
-        })
-      : [];
+        },
+      });
+    }
+    
+    // Charger les tâches appartenant directement au board
+    const rawNodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        columnId: { in: columnIds },
+      },
+      orderBy: { position: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        columnId: true,
+        position: true,
+        parentId: true,
+        dueAt: true,
+        shortId: true,
+        description: true,
+        effort: true,
+        priority: true,
+        blockedReminderIntervalDays: true,
+        blockedExpectedUnblockAt: true,
+        blockedSince: true,
+        tags: true,
+        metadata: true,
+        statusMetadata: true,
+        progress: true,
+        teamId: true,
+        createdById: true,
+        assignments: {
+          select: {
+            role: true,
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    
+    // Fusionner les tâches du board avec les tâches partagées placées
+    const sharedNodeIds = new Set(sharedPlacements.map((p) => p.nodeId));
+    const allNodesMap = new Map<string, any>();
+    
+    // Ajouter les tâches du board (en excluant celles qui sont partagées avec l'utilisateur)
+    for (const node of rawNodes) {
+      // Si la tâche est partagée avec l'utilisateur, on utilisera son placement personnel
+      const isShared = userId && node.metadata
+        ? (() => {
+            try {
+              const meta = node.metadata as any;
+              const collaborators = meta?.share?.collaborators;
+              return Array.isArray(collaborators) && 
+                     collaborators.some((c: any) => c.userId === userId);
+            } catch {
+              return false;
+            }
+          })()
+        : false;
+      
+      if (!isShared || !sharedNodeIds.has(node.id)) {
+        allNodesMap.set(node.id, node);
+      }
+    }
+    
+    // Ajouter les tâches partagées avec leur placement personnel (en écrasant position et columnId)
+    for (const placement of sharedPlacements) {
+      if (placement.node && !placement.node.archivedAt) {
+        allNodesMap.set(placement.nodeId, {
+          ...placement.node,
+          columnId: placement.columnId, // Position personnalisée de l'utilisateur
+          position: placement.position,
+          isSharedRoot: true, // Flag pour identifier les tâches mères partagées
+        });
+      }
+    }
+    
+    const filteredNodes = Array.from(allNodesMap.values());
 
     const behaviorByColumn = new Map<string, ColumnBehaviorKey>();
     for (const column of board.columns) {
@@ -305,10 +405,10 @@ export class BoardsService {
 
     const workflowByNode = new Map<string, ParsedWorkflowSnapshot>();
     const snoozedCounts = new Map<string, number>();
-    const nodes = [] as typeof rawNodes;
+    const nodes = [] as typeof filteredNodes;
     const nowMs = Date.now();
 
-    for (const node of rawNodes) {
+    for (const node of filteredNodes) {
       const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
       workflowByNode.set(node.id, workflow);
       const behavior = node.columnId
@@ -481,6 +581,12 @@ export class BoardsService {
       const workflow =
         workflowByNode.get(node.id) ??
         this.parseWorkflowMetadata(node.metadata ?? null);
+      
+      // Déterminer si c'est une tâche mère partagée et si l'utilisateur peut la supprimer
+      const isSharedRoot = (node as any).isSharedRoot ?? false;
+      const isCreator = userId && (node as any).createdById === userId;
+      const canDelete = !isSharedRoot || isCreator;
+      
       bucket.push({
         id: node.id,
         title: node.title,
@@ -529,6 +635,8 @@ export class BoardsService {
         lastKnownColumnBehavior: workflow.lastKnownBehavior,
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
         isSnoozed: (node as any).isSnoozed ?? false,
+        isSharedRoot,
+        canDelete,
       } as any);
     }
 
