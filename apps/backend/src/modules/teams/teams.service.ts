@@ -105,9 +105,14 @@ export class TeamsService {
   async bootstrapForUser(
     userId: string,
   ): Promise<{ team: TeamDto; rootNodeId: string; boardId: string }> {
-    // Vérifier si l'utilisateur a déjà une team active
+    // SÉCURITÉ CRITIQUE: Vérifier si l'utilisateur a déjà SA team personnelle active
+    // ⚠️ Ne JAMAIS récupérer une team partagée ici pour éviter de voler le ownership
     const existingMembership = await this.prisma.membership.findFirst({
-      where: { userId, status: MembershipStatus.ACTIVE },
+      where: { 
+        userId, 
+        status: MembershipStatus.ACTIVE,
+        team: { isPersonal: true } // ✅ FILTRE CRITIQUE: uniquement les teams personnelles
+      },
       include: {
         team: {
           include: {
@@ -154,9 +159,12 @@ export class TeamsService {
               repairData.isPersonal = true;
               needsRepair = true;
             }
+            // ⚠️ SÉCURITÉ CRITIQUE: Ne JAMAIS modifier ownerUserId si le board a déjà un propriétaire
+            // Cela pourrait "voler" le board d'un autre utilisateur !
+            // On ne modifie que si ownerUserId est NULL (pas encore assigné)
             if (
               existingMembership.team.isPersonal &&
-              existingBoard.ownerUserId !== existingMembership.userId
+              existingBoard.ownerUserId === null // ✅ PROTECTION: uniquement si pas de propriétaire
             ) {
               repairData.ownerUserId = existingMembership.userId;
               needsRepair = true;
