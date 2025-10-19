@@ -74,6 +74,7 @@ export type Board = {
   nodeId: string;
   name: string;
   columns: BoardColumn[];
+  isShared: boolean; // True si le board contient des tâches partagées avec d'autres utilisateurs
 };
 
 export type NodeBreadcrumbItem = {

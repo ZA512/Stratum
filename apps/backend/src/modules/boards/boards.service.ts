@@ -641,10 +641,24 @@ export class BoardsService {
       }
     }
 
+    // Déterminer si le board a des tâches partagées avec d'autres utilisateurs
+    // (polling n'est utile que si collaboration active)
+    let isShared = false;
+    if (userId) {
+      const sharedCount = await this.prisma.sharedNodePlacement.count({
+        where: {
+          columnId: { in: columnIds },
+          userId: { not: userId }, // Autres users que moi
+        },
+      });
+      isShared = sharedCount > 0;
+    }
+
     const result = {
       id: board.id,
       nodeId: board.nodeId,
       name: board.node.title,
+      isShared,
       columns: board.columns.map((column) => ({
         id: column.id,
         name: column.name,

@@ -26,10 +26,7 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
         }}
         onPreNavigate={(item) => { if (item.boardId) prefetchBoard(item.boardId); }}
       >
-        <>
-          <IncomingInvitationsCenter />
-          {children}
-        </>
+        {children}
       </FractalBreadcrumb>
     </div>
   );

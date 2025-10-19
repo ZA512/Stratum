@@ -361,7 +361,7 @@
     },
     "search": {
       "label": "Recherche",
-      "placeholder": "Titre, description, #id, @utilisateur, !priorité…",
+      "placeholder": "Titre, description, #id, @utilisateur, !priorité… (3 car. min.)",
       "aria": "Recherche textuelle avec filtres rapides",
       "helper": "Minimum 3 caractères ou utilisez @, !, #.",
       "mentions": {

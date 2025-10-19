@@ -2,6 +2,7 @@
 import React, { useState, FormEvent, useMemo, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useAutoRefreshBoard } from '@/features/boards/useAutoRefreshBoard';
@@ -11,6 +12,7 @@ import { useTranslation } from '@/i18n';
 import { useHelpMode } from '@/hooks/useHelpMode';
 import { useBoardActivityStats } from '@/features/activity/useActivityLogs';
 import { ActivityPanel } from '@/features/activity/ActivityPanel';
+import { fetchIncomingInvitations, type NodeShareIncomingInvitation } from '@/features/nodes/invitations/node-share-invitations-api';
 import {
   createBoardColumn,
   updateBoardColumn,
@@ -237,6 +239,116 @@ function BoardSkeleton(){
   );
 }
 
+// Panneau d'invitations flottant
+interface InvitationsPanelProps {
+  invitations: NodeShareIncomingInvitation[];
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+}
+
+function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelProps) {
+  const { accessToken } = useAuth();
+  const { t } = useTranslation('board');
+  const { success, error: toastError } = useToast();
+  const { refreshActiveBoard, teamId } = useBoardData();
+  const router = useRouter();
+  const [actionState, setActionState] = useState<{ invitationId: string; action: 'accept' | 'decline' } | null>(null);
+
+  const pendingInvitations = invitations.filter(inv => inv.status === 'PENDING');
+
+  const handleAction = async (invitationId: string, action: 'accept' | 'decline') => {
+    if (!accessToken) return;
+    setActionState({ invitationId, action });
+    try {
+      const { respondToInvitation } = await import('@/features/nodes/invitations/node-share-invitations-api');
+      const result = await respondToInvitation(invitationId, action, accessToken);
+      
+      if (action === 'accept') {
+        success(t('invitationCenter.toast.accepted', { title: result.nodeTitle }));
+        await refreshActiveBoard();
+        if (result.boardId && teamId) {
+          router.push(`/boards/${teamId}/${result.boardId}`);
+        }
+      } else {
+        success(t('invitationCenter.toast.declined', { title: result.nodeTitle }));
+      }
+      await onRefresh();
+    } catch (err) {
+      toastError((err as Error).message || 'Erreur');
+    } finally {
+      setActionState(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-end p-6">
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-[380px] max-w-[90vw] rounded-2xl border border-white/10 bg-background/95 p-5 shadow-2xl backdrop-blur">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-base font-semibold text-foreground">{t('invitationCenter.title')}</h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[18px]">refresh</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        </div>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          {pendingInvitations.length === 0 ? (
+            <p className="text-sm text-muted">{t('invitationCenter.empty')}</p>
+          ) : (
+            pendingInvitations.map(item => (
+              <div key={item.id} className="rounded-xl border border-white/10 bg-surface/80 p-3">
+                <h3 className="text-sm font-semibold text-foreground">{item.nodeTitle}</h3>
+                <p className="text-xs text-muted mt-1">
+                  {item.inviterDisplayName 
+                    ? t('invitationCenter.invitedBy', { name: item.inviterDisplayName })
+                    : t('invitationCenter.invitedByEmail', { email: item.inviterEmail })}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAction(item.id, 'accept')}
+                    disabled={actionState?.invitationId === item.id && actionState.action === 'accept'}
+                    className="flex-1 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-background transition hover:bg-accent-strong disabled:opacity-60"
+                  >
+                    {actionState?.invitationId === item.id && actionState.action === 'accept'
+                      ? t('invitationCenter.accepting')
+                      : t('invitationCenter.accept')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction(item.id, 'decline')}
+                    disabled={actionState?.invitationId === item.id && actionState.action === 'decline'}
+                    className="flex-1 rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-muted transition hover:border-red-400 hover:text-red-200 disabled:opacity-60"
+                  >
+                    {actionState?.invitationId === item.id && actionState.action === 'decline'
+                      ? t('invitationCenter.declining')
+                      : t('invitationCenter.decline')}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId } = useBoardData();
@@ -248,10 +360,24 @@ export function TeamBoardPage(){
   const { helpMode, toggleHelpMode } = useHelpMode();
 
   // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
+  // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
+  const shouldPoll = board?.isShared ?? true; // Default true (safe) si indéterminé
+  
+  // Debug: vérifier le comportement du polling
+  useEffect(() => {
+    if (board && activeBoardId) {
+      console.debug('[BoardPageShell] Polling status:', {
+        boardId: activeBoardId,
+        isShared: board.isShared,
+        shouldPoll,
+      });
+    }
+  }, [board?.isShared, shouldPoll, activeBoardId]);
+  
   useAutoRefreshBoard({
     intervalMs: 15000, // 15 secondes
     onRefresh: refreshActiveBoard,
-    enabled: true,
+    enabled: shouldPoll,
     boardId: activeBoardId,
   });
 
@@ -260,6 +386,25 @@ export function TeamBoardPage(){
 
   // 📜 État du panneau d'activité
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(false);
+
+  // 📬 Invitations entrantes
+  const [invitations, setInvitations] = useState<NodeShareIncomingInvitation[]>([]);
+  const [isInvitationsPanelOpen, setIsInvitationsPanelOpen] = useState(false);
+
+  // Charger les invitations
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchIncomingInvitations(accessToken);
+        if (!cancelled) setInvitations(data);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken]);
+
+  const pendingInvitationsCount = invitations.filter(inv => inv.status === 'PENDING').length;
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -1360,58 +1505,66 @@ export function TeamBoardPage(){
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50">
-        <div className="flex items-center justify-between gap-4 px-8 py-4">
+        <div className="flex items-center justify-between gap-4 px-8 py-3">
           <div className="flex items-center gap-3">
             <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
           </div>
-          <div className="flex items-center gap-3">
-            {/* Badge d'activité avec compteur */}
+          <div className="flex items-center gap-2">
+            {/* Badge invitations avec icône cloud */}
+            {pendingInvitationsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsInvitationsPanelOpen(true)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+                title={`${pendingInvitationsCount} invitation(s) en attente`}
+                aria-label={`${pendingInvitationsCount} invitations en attente`}
+              >
+                <span className="material-symbols-outlined text-[20px]">cloud</span>
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
+                  {pendingInvitationsCount}
+                </span>
+              </button>
+            )}
+            {/* Badge d'activité avec icône receipt */}
             {activityStats && activityStats.todayCount > 0 && (
               <button
                 type="button"
                 onClick={() => setIsActivityPanelOpen(true)}
-                className="relative flex items-center gap-2 rounded-full border border-white/15 bg-surface/70 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground group"
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
                 title={tBoard('activity.badge.tooltip', { count: activityStats.todayCount })}
                 aria-label={tBoard('activity.badge.aria', { count: activityStats.todayCount })}
               >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-background">
+                <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
                   {activityStats.todayCount}
                 </span>
               </button>
             )}
+            {/* Bouton paramètres (icône seule) */}
             <Link
               href="/settings"
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title={t("common.actions.settings")}
+              aria-label={t("common.actions.settings")}
             >
-              {t("common.actions.settings")}
+              <span className="material-symbols-outlined text-[20px]">settings</span>
             </Link>
+            {/* Bouton déconnexion (icône seule) */}
             <button
               onClick={() => logout()}
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title={t("common.actions.signOut")}
+              aria-label={t("common.actions.signOut")}
             >
-              {t("common.actions.signOut")}
+              <span className="material-symbols-outlined text-[20px]">logout</span>
             </button>
           </div>
         </div>
       </header>
-      <main className="flex flex-col gap-8 px-8 pt-8 pb-12 w-full">
+      <main className="flex flex-col gap-6 px-8 pt-6 pb-12 w-full">
         {(showBoardControls || isAddingColumn) && (
-          <section className="grid gap-6">
-            <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6 w-full">
+          <section className="grid gap-4">
+            <div className="relative rounded-xl border border-white/10 bg-card/70 px-6 py-2 w-full">
               {showBoardControls && (
                 <>
                   <div className="flex flex-col gap-4">
@@ -1422,26 +1575,22 @@ export function TeamBoardPage(){
                           description={tBoard('help.search.body')}
                           hint={tBoard('help.search.hint')}
                         >
-                          <label className="flex flex-col gap-1 text-xs text-muted">
-                            <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
-                            <input
-                              type="search"
-                              value={searchDraft}
-                              onChange={(event) => setSearchDraft(event.target.value)}
-                              onFocus={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                setSearchFocused(true);
-                              }}
-                              onBlur={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                              }}
-                              placeholder={tBoard('search.placeholder')}
-                              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                              aria-label={tBoard('search.aria')}
-                            />
-                            <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
-                          </label>
+                          <input
+                            type="search"
+                            value={searchDraft}
+                            onChange={(event) => setSearchDraft(event.target.value)}
+                            onFocus={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              setSearchFocused(true);
+                            }}
+                            onBlur={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                            }}
+                            placeholder={tBoard('search.placeholder')}
+                            className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                            aria-label={tBoard('search.aria')}
+                          />
                         </HelpTooltip>
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
@@ -1876,6 +2025,21 @@ export function TeamBoardPage(){
           onClose={() => setIsActivityPanelOpen(false)}
           onNavigateToTask={(nodeId) => {
             open(nodeId);
+          }}
+        />
+      )}
+
+      {/* Panneau d'invitations */}
+      {isInvitationsPanelOpen && (
+        <InvitationsPanel
+          invitations={invitations}
+          onClose={() => setIsInvitationsPanelOpen(false)}
+          onRefresh={async () => {
+            if (!accessToken) return;
+            try {
+              const data = await fetchIncomingInvitations(accessToken);
+              setInvitations(data);
+            } catch { /* silent */ }
           }}
         />
       )}

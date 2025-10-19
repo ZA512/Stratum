@@ -13,4 +13,7 @@ export class BoardWithNodesDto {
 
   @ApiProperty({ type: BoardColumnWithNodesDto, isArray: true })
   columns!: BoardColumnWithNodesDto[];
+
+  @ApiProperty({ example: false, description: 'True if board has shared tasks with other users' })
+  isShared!: boolean;
 }
