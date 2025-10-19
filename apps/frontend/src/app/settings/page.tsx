@@ -234,7 +234,7 @@ export default function SettingsPage() {
           <div className="mt-6">
             <label className="block text-sm text-muted">
               <span className="mb-2 block font-medium text-foreground">{t("common.language.label")}</span>
-              <select
+                <select
                 className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
                 value={locale}
                 onChange={handleLanguageChange}

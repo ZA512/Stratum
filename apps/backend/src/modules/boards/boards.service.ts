@@ -130,24 +130,6 @@ export class BoardsService {
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
 
-    // Contrôle d'accès minimal boards personnels
-    if (
-      (board as any).isPersonal &&
-      userId &&
-      (board as any).ownerUserId &&
-      (board as any).ownerUserId !== userId
-    ) {
-      // Log diagnostic pour comprendre les mismatches éventuels
-
-      console.warn('[boards.getBoard] Forbidden mismatch', {
-        boardId,
-        ownerUserId: (board as any).ownerUserId,
-        requestUserId: userId,
-        isPersonal: (board as any).isPersonal,
-      });
-      throw new ForbiddenException('Board personnel inaccessible');
-    }
-
     const b: any = board;
     return {
       id: b.id,
@@ -243,25 +225,9 @@ export class BoardsService {
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
 
-    // Contrôle d'accès board personnel
-    if (
-      (board as any).isPersonal &&
-      userId &&
-      (board as any).ownerUserId &&
-      (board as any).ownerUserId !== userId
-    ) {
-      console.warn('[boards.getBoardWithNodes] Forbidden mismatch', {
-        boardId,
-        ownerUserId: (board as any).ownerUserId,
-        requestUserId: userId,
-        isPersonal: (board as any).isPersonal,
-      });
-      throw new ForbiddenException('Board personnel inaccessible');
-    }
-
     // Préparation typée plutôt que cast any pour éviter retours unsafe
     const columnIds = board.columns.map((column) => column.id);
-    
+
     // Charger les placements personnalisés de tâches partagées pour cet utilisateur
     let sharedPlacements: Array<{
       nodeId: string;
@@ -269,7 +235,7 @@ export class BoardsService {
       position: number;
       node: any;
     }> = [];
-    
+
     if (userId) {
       sharedPlacements = await this.prisma.sharedNodePlacement.findMany({
         where: {
@@ -316,7 +282,7 @@ export class BoardsService {
         },
       });
     }
-    
+
     // Charger les tâches appartenant directement au board
     const rawNodes = await this.prisma.node.findMany({
       where: {
@@ -358,32 +324,49 @@ export class BoardsService {
         },
       },
     });
-    
+
     // Fusionner les tâches du board avec les tâches partagées placées
     const sharedNodeIds = new Set(sharedPlacements.map((p) => p.nodeId));
     const allNodesMap = new Map<string, any>();
-    
-    // Ajouter les tâches du board (en excluant celles qui sont partagées avec l'utilisateur)
-    for (const node of rawNodes) {
-      // Si la tâche est partagée avec l'utilisateur, on utilisera son placement personnel
-      const isShared = userId && node.metadata
-        ? (() => {
-            try {
-              const meta = node.metadata as any;
-              const collaborators = meta?.share?.collaborators;
-              return Array.isArray(collaborators) && 
-                     collaborators.some((c: any) => c.userId === userId);
-            } catch {
-              return false;
-            }
-          })()
-        : false;
-      
-      if (!isShared || !sharedNodeIds.has(node.id)) {
-        allNodesMap.set(node.id, node);
+
+    // IMPORTANT: Si c'est un board personnel d'un autre utilisateur,
+    // on ne charge QUE les tâches avec SharedNodePlacement
+    const isOtherPersonalBoard = board.isPersonal && userId && board.ownerUserId && board.ownerUserId !== userId;
+
+    if (isOtherPersonalBoard) {
+      // Sur le board personnel d'Alice, Bob ne voit QUE les tâches avec placement
+      console.log('[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements', {
+        userId,
+        boardOwnerId: board.ownerUserId,
+        sharedPlacementsCount: sharedPlacements.length,
+      });
+    } else {
+      // Sur son propre board, l'utilisateur voit toutes les tâches du board
+      // (sauf celles qui ont un placement personnalisé, qui seront ajoutées après)
+      for (const node of rawNodes) {
+        // Si la tâche est partagée avec l'utilisateur, on utilisera son placement personnel
+        const isShared =
+          userId && node.metadata
+            ? (() => {
+                try {
+                  const meta = node.metadata as any;
+                  const collaborators = meta?.share?.collaborators;
+                  return (
+                    Array.isArray(collaborators) &&
+                    collaborators.some((c: any) => c.userId === userId)
+                  );
+                } catch {
+                  return false;
+                }
+              })()
+            : false;
+
+        if (!isShared || !sharedNodeIds.has(node.id)) {
+          allNodesMap.set(node.id, node);
+        }
       }
     }
-    
+
     // Ajouter les tâches partagées avec leur placement personnel (en écrasant position et columnId)
     for (const placement of sharedPlacements) {
       if (placement.node && !placement.node.archivedAt) {
@@ -395,7 +378,7 @@ export class BoardsService {
         });
       }
     }
-    
+
     const filteredNodes = Array.from(allNodesMap.values());
 
     const behaviorByColumn = new Map<string, ColumnBehaviorKey>();
@@ -430,7 +413,7 @@ export class BoardsService {
           );
         }
       }
-      nodes.push({ ...node, isSnoozed } as any);
+      nodes.push({ ...node, isSnoozed });
     }
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
@@ -439,7 +422,7 @@ export class BoardsService {
       { backlog: number; inProgress: number; blocked: number; done: number }
     >();
     if (nodes.length > 0) {
-      const nodeIds = nodes.map((n) => n.id);
+      const nodeIds = nodes.map((n) => n.id as string);
       const children = await this.prisma.node.findMany({
         where: { parentId: { in: nodeIds } },
         select: {
@@ -454,7 +437,7 @@ export class BoardsService {
           b = { backlog: 0, inProgress: 0, blocked: 0, done: 0 };
           countsByParent.set(pid, b);
         }
-        const key = c.column?.behavior?.key;
+        const key = c.column?.behavior?.key as string | undefined;
         switch (key) {
           case 'BACKLOG':
             b.backlog++;
@@ -492,18 +475,19 @@ export class BoardsService {
       const metadata = node.metadata ?? null;
       const estimatedDurationRaw =
         statusMetadata && typeof statusMetadata === 'object'
-          ? (statusMetadata as Record<string, unknown>).estimatedDurationDays
+          ? ((statusMetadata as Record<string, unknown>)
+              .estimatedDurationDays as number | undefined)
           : undefined;
       const metadataEstimateRaw =
         metadata && typeof metadata === 'object'
-          ? (metadata as Record<string, unknown>).estimatedDurationDays
+          ? ((metadata as Record<string, unknown>).estimatedDurationDays as
+              | number
+              | undefined)
           : undefined;
       const estimatedDuration = [
         estimatedDurationRaw,
         metadataEstimateRaw,
-      ].find((value) => typeof value === 'number' && Number.isFinite(value)) as
-        | number
-        | undefined;
+      ].find((value) => typeof value === 'number' && Number.isFinite(value));
       const assignments = (node.assignments ?? []) as Array<{
         role: string | null;
         user: {
@@ -553,14 +537,14 @@ export class BoardsService {
 
       const assignees = raciBuckets.R;
       const blockedReminderIntervalDays =
-        typeof (node as any).blockedReminderIntervalDays === 'number'
-          ? ((node as any).blockedReminderIntervalDays as number)
+        typeof node.blockedReminderIntervalDays === 'number'
+          ? (node.blockedReminderIntervalDays as number)
           : null;
       const blockedSinceDate =
         node.blockedSince instanceof Date ? node.blockedSince : null;
       const blockedReminderLastSentDate =
-        (node as any).blockedReminderLastSentAt instanceof Date
-          ? ((node as any).blockedReminderLastSentAt as Date)
+        node.blockedReminderLastSentAt instanceof Date
+          ? (node.blockedReminderLastSentAt as Date)
           : null;
       let blockedReminderDueInDays: number | null = null;
       if (
@@ -581,12 +565,12 @@ export class BoardsService {
       const workflow =
         workflowByNode.get(node.id) ??
         this.parseWorkflowMetadata(node.metadata ?? null);
-      
+
       // Déterminer si c'est une tâche mère partagée et si l'utilisateur peut la supprimer
-      const isSharedRoot = (node as any).isSharedRoot ?? false;
-      const isCreator = userId && (node as any).createdById === userId;
+      const isSharedRoot = node.isSharedRoot ?? false;
+      const isCreator = userId && node.createdById === userId;
       const canDelete = !isSharedRoot || isCreator;
-      
+
       bucket.push({
         id: node.id,
         title: node.title,
@@ -634,7 +618,7 @@ export class BoardsService {
         lastKnownColumnId: workflow.lastKnownColumnId,
         lastKnownColumnBehavior: workflow.lastKnownBehavior,
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
-        isSnoozed: (node as any).isSnoozed ?? false,
+        isSnoozed: node.isSnoozed ?? false,
         isSharedRoot,
         canDelete,
       } as any);

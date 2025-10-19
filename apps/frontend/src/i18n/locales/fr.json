@@ -10,7 +10,9 @@
     },
     "actions": {
       "signOut": "Déconnexion",
-      "settings": "Paramétrage"
+      "settings": "Paramétrage",
+      "refresh": "Actualiser",
+      "close": "Fermer"
     }
       },
       "notifications": {
@@ -948,6 +950,12 @@
         }
       }
     },
+    "activity": {
+      "badge": {
+        "tooltip": "{count, plural, one {{count} activité aujourd'hui} other {{count} activités aujourd'hui}}",
+        "aria": "Afficher l'historique des activités, {count, plural, one {{count} activité aujourd'hui} other {{count} activités aujourd'hui}}"
+      }
+    },
     "helpMode": {
       "tooltip": {
         "enableTitle": "Activer l'aide contextuelle",
@@ -1045,6 +1053,46 @@
   "boardUnavailable": "Kanban actif indisponible pour cette action.",
   "boardRefreshFailed": "Actualisation du kanban impossible",
       "unexpectedError": "Erreur inattendue"
+    }
+  },
+  "activity": {
+    "title": "Activité récente",
+    "todayCount": "{count} activités aujourd'hui",
+    "loading": "Chargement des activités…",
+    "empty": "Aucune activité récente",
+    "timeAgo": {
+      "justNow": "À l'instant",
+      "minutesAgo": "Il y a {count} min",
+      "hoursAgo": "Il y a {count}h",
+      "daysAgo": "Il y a {count}j",
+      "weeksAgo": "Il y a {count} sem",
+      "monthsAgo": "Il y a {count} mois"
+    },
+    "types": {
+      "NODE_CREATED": "{user} a créé la tâche #{nodeShortId} dans {columnName}",
+      "NODE_MOVED": "{user} a déplacé la tâche #{nodeShortId} : {fromColumn} → {toColumn}",
+      "MOVED_TO_BOARD": "{user} a déplacé la tâche #{nodeShortId} vers un autre kanban",
+      "NODE_DELETED": "{user} a supprimé la tâche #{nodeShortId}",
+      "NODE_ARCHIVED": "{user} a archivé la tâche #{nodeShortId}",
+      "NODE_RESTORED": "{user} a restauré la tâche #{nodeShortId}",
+      "NODE_SNOOZED": "{user} a reporté la tâche #{nodeShortId}",
+      "NODE_UNSNOOZED": "{user} a réactivé la tâche #{nodeShortId}",
+      "TITLE_UPDATED": "{user} a modifié le titre de la tâche #{nodeShortId}",
+      "DESCRIPTION_UPDATED": "{user} a modifié la description de la tâche #{nodeShortId}",
+      "DUE_DATE_UPDATED": "{user} a modifié l'échéance de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "PRIORITY_UPDATED": "{user} a modifié la priorité de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "EFFORT_UPDATED": "{user} a modifié l'effort de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "TAGS_UPDATED": "{user} a modifié les tags de la tâche #{nodeShortId}",
+      "PROGRESS_UPDATED": "{user} a mis à jour le progrès de la tâche #{nodeShortId} : {oldValue}% → {newValue}%",
+      "BLOCKED_STATUS_CHANGED": "{user} a modifié le statut de blocage de la tâche #{nodeShortId}",
+      "ASSIGNEES_UPDATED": "{user} a modifié les assignés de la tâche #{nodeShortId}",
+      "RACI_UPDATED": "{user} a modifié les rôles RACI de la tâche #{nodeShortId}",
+      "INVITATION_SENT": "{user} a envoyé une invitation à {email} pour la tâche #{nodeShortId}",
+      "INVITATION_ACCEPTED": "{user} a accepté l'invitation pour la tâche #{nodeShortId}",
+      "INVITATION_DECLINED": "{user} a refusé l'invitation pour la tâche #{nodeShortId}",
+      "COLLABORATOR_ADDED": "{user} a été ajouté comme collaborateur sur la tâche #{nodeShortId}",
+      "COLLABORATOR_REMOVED": "{user} a été retiré comme collaborateur de la tâche #{nodeShortId}",
+      "COMMENT_ADDED": "{user} a ajouté un commentaire sur la tâche #{nodeShortId}"
     }
   }
 }

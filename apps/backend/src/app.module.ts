@@ -13,6 +13,7 @@ import { UserSettingsModule } from './modules/user-settings/user-settings.module
 import { DashboardSnapshotsModule } from './modules/dashboard-snapshots/dashboard-snapshots.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { WorkflowAutomationModule } from './modules/workflow-automation/workflow-automation.module';
+import { ActivityModule } from './modules/activity/activity.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { WorkflowAutomationModule } from './modules/workflow-automation/workflow
     DashboardsModule,
     MetricsModule,
     WorkflowAutomationModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

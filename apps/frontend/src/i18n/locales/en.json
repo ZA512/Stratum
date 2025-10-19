@@ -10,7 +10,9 @@
     },
     "actions": {
       "signOut": "Sign out",
-      "settings": "Settings"
+      "settings": "Settings",
+      "refresh": "Refresh",
+      "close": "Close"
     }
   },
   "home": {
@@ -950,6 +952,12 @@
         }
       }
     },
+    "activity": {
+      "badge": {
+        "tooltip": "{count, plural, one {{count} activity today} other {{count} activities today}}",
+        "aria": "Show activity history, {count, plural, one {{count} activity today} other {{count} activities today}}"
+      }
+    },
     "helpMode": {
       "tooltip": {
         "enableTitle": "Enable contextual help",
@@ -1047,6 +1055,46 @@
   "boardUnavailable": "Active board unavailable for this action.",
   "boardRefreshFailed": "Could not refresh the board.",
       "unexpectedError": "Unexpected error"
+    }
+  },
+  "activity": {
+    "title": "Recent activity",
+    "todayCount": "{count} activities today",
+    "loading": "Loading activities…",
+    "empty": "No recent activity",
+    "timeAgo": {
+      "justNow": "Just now",
+      "minutesAgo": "{count} min ago",
+      "hoursAgo": "{count}h ago",
+      "daysAgo": "{count}d ago",
+      "weeksAgo": "{count}w ago",
+      "monthsAgo": "{count}mo ago"
+    },
+    "types": {
+      "NODE_CREATED": "{user} created task #{nodeShortId} in {columnName}",
+      "NODE_MOVED": "{user} moved task #{nodeShortId} from {fromColumn} to {toColumn}",
+      "MOVED_TO_BOARD": "{user} moved task #{nodeShortId} to another board",
+      "NODE_DELETED": "{user} deleted task #{nodeShortId}",
+      "NODE_ARCHIVED": "{user} archived task #{nodeShortId}",
+      "NODE_RESTORED": "{user} restored task #{nodeShortId}",
+      "NODE_SNOOZED": "{user} snoozed task #{nodeShortId}",
+      "NODE_UNSNOOZED": "{user} unsnoozed task #{nodeShortId}",
+      "TITLE_UPDATED": "{user} updated the title of task #{nodeShortId}",
+      "DESCRIPTION_UPDATED": "{user} updated the description of task #{nodeShortId}",
+      "DUE_DATE_UPDATED": "{user} updated the due date of task #{nodeShortId}",
+      "PRIORITY_UPDATED": "{user} updated the priority of task #{nodeShortId}",
+      "EFFORT_UPDATED": "{user} updated the effort of task #{nodeShortId}",
+      "TAGS_UPDATED": "{user} updated the tags of task #{nodeShortId}",
+      "PROGRESS_UPDATED": "{user} updated the progress of task #{nodeShortId}",
+      "BLOCKED_STATUS_CHANGED": "{user} changed the blocked status of task #{nodeShortId}",
+      "ASSIGNEES_UPDATED": "{user} updated the assignees of task #{nodeShortId}",
+      "RACI_UPDATED": "{user} updated the RACI roles of task #{nodeShortId}",
+      "INVITATION_SENT": "{user} sent an invitation to {email} for task #{nodeShortId}",
+      "INVITATION_ACCEPTED": "{user} accepted the invitation for task #{nodeShortId}",
+      "INVITATION_DECLINED": "{user} declined the invitation for task #{nodeShortId}",
+      "COLLABORATOR_ADDED": "{user} was added as a collaborator on task #{nodeShortId}",
+      "COLLABORATOR_REMOVED": "{user} was removed as a collaborator from task #{nodeShortId}",
+      "COMMENT_ADDED": "{user} added a comment on task #{nodeShortId}"
     }
   }
 }

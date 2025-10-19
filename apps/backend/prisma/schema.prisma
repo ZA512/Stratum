@@ -42,6 +42,34 @@ enum Effort {
   XXL
 }
 
+enum ActivityType {
+  NODE_CREATED
+  NODE_UPDATED
+  NODE_MOVED
+  NODE_DELETED
+  NODE_ARCHIVED
+  NODE_RESTORED
+  NODE_SNOOZED
+  NODE_UNSNOOZED
+  COLLABORATOR_ADDED
+  COLLABORATOR_REMOVED
+  INVITATION_SENT
+  INVITATION_ACCEPTED
+  INVITATION_DECLINED
+  COMMENT_ADDED
+  DESCRIPTION_UPDATED
+  TITLE_UPDATED
+  DUE_DATE_UPDATED
+  PRIORITY_UPDATED
+  EFFORT_UPDATED
+  TAGS_UPDATED
+  ASSIGNEES_UPDATED
+  MOVED_TO_BOARD
+  PROGRESS_UPDATED
+  BLOCKED_STATUS_CHANGED
+  RACI_UPDATED
+}
+
 model User {
   id              String        @id @default(cuid())
   email           String        @unique
@@ -64,6 +92,7 @@ model User {
   nodeShareInvitationsSent NodeShareInvitation[] @relation("NodeShareInvitationsSent")
   nodeShareInvitationsReceived NodeShareInvitation[] @relation("NodeShareInvitationsReceived")
   sharedNodePlacements SharedNodePlacement[]
+  activityLogs    ActivityLog[]
 }
 
 model Team {
@@ -141,6 +170,7 @@ model Node {
   comments        Comment[]
   shareInvitations NodeShareInvitation[]
   sharedPlacements SharedNodePlacement[]
+  activityLogs    ActivityLog[]
 }
 
 model Board {
@@ -389,4 +419,20 @@ model SharedNodePlacement {
   @@index([userId])
   @@index([nodeId])
   @@index([columnId])
+}
+
+model ActivityLog {
+  id         String       @id @default(cuid())
+  nodeId     String
+  userId     String
+  type       ActivityType
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+
+  node       Node         @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId, createdAt])
+  @@index([userId])
+  @@index([type])
 }

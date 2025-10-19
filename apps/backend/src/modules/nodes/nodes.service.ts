@@ -11,7 +11,9 @@ import {
   MembershipStatus,
   Node as NodeModel,
   Prisma,
+  ActivityType,
 } from '@prisma/client';
+import { ActivityService } from '../activity/activity.service';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -363,6 +365,7 @@ export class NodesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly activityService: ActivityService,
   ) {
     this.mailLogMaxBytes = this.resolveMailLogMaxBytes();
     this.mailLogMaxFiles = this.resolveMailLogMaxFiles();
@@ -454,6 +457,17 @@ export class NodesService {
 
       return created;
     });
+
+    // Logger l'activité
+    await this.activityService.logActivity(
+      node.id,
+      userId,
+      ActivityType.NODE_CREATED,
+      {
+        columnId: column.id,
+        columnName: column.name,
+      },
+    );
 
     return this.mapNode(node);
   }
@@ -750,6 +764,7 @@ export class NodesService {
         throw new NotFoundException('Colonne cible introuvable');
 
       const sameColumn = child.columnId === targetColumn.id;
+      const oldColumn = columns.find((c) => c.id === child.columnId);
       // WIP enforcement: si on change de colonne et que la cible a une limite
       if (!sameColumn && targetColumn.wipLimit !== null) {
         const currentCount = await tx.node.count({
@@ -839,6 +854,22 @@ export class NodesService {
         });
       }
       await this.recomputeParentProgress(tx, parent.id);
+
+      // Logger l'activité si changement de colonne
+      if (!sameColumn && oldColumn) {
+        await this.activityService.logActivity(
+          child.id,
+          userId,
+          ActivityType.NODE_MOVED,
+          {
+            fromColumnId: oldColumn.id,
+            toColumnId: targetColumn.id,
+            fromColumnName: oldColumn.name,
+            toColumnName: targetColumn.name,
+          },
+        );
+      }
+
       return this.getNodeDetailUsing(tx, parent.id);
     });
   }
@@ -1079,6 +1110,17 @@ export class NodesService {
           /* parent possiblement supprimé */
         }
       }
+
+      // Log du déplacement vers un nouveau board
+      await this.activityService.logActivity(
+        node.id,
+        userId,
+        ActivityType.MOVED_TO_BOARD,
+        {
+          targetBoardId: board.node.id,
+          targetColumnId: targetColumn.id,
+        },
+      );
 
       return this.mapNode(updated);
     });
@@ -1844,6 +1886,168 @@ export class NodesService {
           where: { id: nodeId },
           data,
         });
+
+    // Logs d'activité pour tous les changements de champs
+    const activityPromises: Promise<void>[] = [];
+
+    if (dto.title !== undefined && data.title && node.title !== data.title) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.TITLE_UPDATED,
+          { oldValue: node.title, newValue: data.title },
+        ),
+      );
+    }
+
+    if (dto.description !== undefined && node.description !== dto.description) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.DESCRIPTION_UPDATED,
+          {
+            oldValue: node.description,
+            newValue: dto.description,
+          },
+        ),
+      );
+    }
+
+    if (dto.dueAt !== undefined) {
+      const oldDue = node.dueAt?.toISOString() ?? null;
+      const newDue = dto.dueAt === null ? null : new Date(dto.dueAt).toISOString();
+      if (oldDue !== newDue) {
+        activityPromises.push(
+          this.activityService.logActivity(
+            nodeId,
+            userId,
+            ActivityType.DUE_DATE_UPDATED,
+            { oldValue: oldDue, newValue: newDue },
+          ),
+        );
+      }
+    }
+
+    if (dto.priority !== undefined && node.priority !== dto.priority) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.PRIORITY_UPDATED,
+          { oldValue: node.priority, newValue: dto.priority },
+        ),
+      );
+    }
+
+    if (dto.effort !== undefined && node.effort !== dto.effort) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.EFFORT_UPDATED,
+          { oldValue: node.effort, newValue: dto.effort },
+        ),
+      );
+    }
+
+    if (dto.tags !== undefined && JSON.stringify(node.tags) !== JSON.stringify(dto.tags)) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.TAGS_UPDATED,
+          { oldValue: node.tags, newValue: dto.tags },
+        ),
+      );
+    }
+
+    if (dto.progress !== undefined && node.progress !== dto.progress) {
+      activityPromises.push(
+        this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.PROGRESS_UPDATED,
+          { oldValue: node.progress, newValue: dto.progress },
+        ),
+      );
+    }
+
+    if (dto.blockedReason !== undefined || dto.isBlockResolved !== undefined) {
+      const wasBlocked = node.blockedReason !== null;
+      const nowBlocked =
+        dto.blockedReason !== undefined
+          ? dto.blockedReason !== null
+          : wasBlocked;
+      const resolved = dto.isBlockResolved ?? false;
+
+      if (wasBlocked !== nowBlocked || resolved) {
+        activityPromises.push(
+          this.activityService.logActivity(
+            nodeId,
+            userId,
+            ActivityType.BLOCKED_STATUS_CHANGED,
+            {
+              wasBlocked,
+              nowBlocked,
+              resolved,
+              reason: dto.blockedReason ?? node.blockedReason,
+            },
+          ),
+        );
+      }
+    }
+
+    if (dto.archivedAt !== undefined) {
+      const wasArchived = node.archivedAt !== null;
+      const nowArchived = dto.archivedAt !== null;
+
+      if (wasArchived !== nowArchived) {
+        activityPromises.push(
+          this.activityService.logActivity(
+            nodeId,
+            userId,
+            nowArchived
+              ? ActivityType.NODE_ARCHIVED
+              : ActivityType.NODE_RESTORED,
+            nowArchived ? { archivedAt: dto.archivedAt } : undefined,
+          ),
+        );
+      }
+    }
+
+    if (shouldUpdateAssignments) {
+      const oldRaci = {
+        R: extractedMetadata.raci.responsibleIds,
+        A: extractedMetadata.raci.accountableIds,
+        C: extractedMetadata.raci.consultedIds,
+        I: extractedMetadata.raci.informedIds,
+      };
+
+      if (
+        JSON.stringify(oldRaci.R) !== JSON.stringify(desiredRaci.R) ||
+        JSON.stringify(oldRaci.A) !== JSON.stringify(desiredRaci.A) ||
+        JSON.stringify(oldRaci.C) !== JSON.stringify(desiredRaci.C) ||
+        JSON.stringify(oldRaci.I) !== JSON.stringify(desiredRaci.I)
+      ) {
+        activityPromises.push(
+          this.activityService.logActivity(
+            nodeId,
+            userId,
+            ActivityType.RACI_UPDATED,
+            {
+              oldRaci,
+              newRaci: desiredRaci,
+            },
+          ),
+        );
+      }
+    }
+
+    // Exécuter tous les logs en parallèle
+    await Promise.all(activityPromises);
+
     return this.mapNode(updated);
   }
 
@@ -1864,19 +2068,18 @@ export class NodesService {
         where: { id: node.id },
       });
       if (!fullNode) throw new NotFoundException();
-      const summary = await this.buildNodeShareSummary(
-        fullNode as NodeModel,
-        userId,
-      );
-      
+      const summary = await this.buildNodeShareSummary(fullNode, userId);
+
       // Une tâche partagée ne peut JAMAIS être supprimée (même par le créateur)
       // car personne n'est propriétaire. Pour s'en débarrasser, il faut l'archiver.
-      const hasAnyCollaborator = summary.collaborators.some((collab) => collab.userId);
+      const hasAnyCollaborator = summary.collaborators.some(
+        (collab) => collab.userId,
+      );
       const hasAnyInvitation = summary.invitations.length > 0;
-      
+
       if (hasAnyCollaborator || hasAnyInvitation) {
         throw new ConflictException(
-          'Impossible de supprimer une tâche partagée. Utilisez l\'archivage pour la retirer de votre vue.',
+          "Impossible de supprimer une tâche partagée. Utilisez l'archivage pour la retirer de votre vue.",
         );
       }
     }
@@ -1902,6 +2105,8 @@ export class NodesService {
         }
       }
     });
+
+    // Note: pas de log ici car les logs sont supprimés en cascade avec la tâche
   }
 
   async restoreNode(nodeId: string, userId: string): Promise<NodeDto> {
@@ -2051,6 +2256,17 @@ export class NodesService {
       });
 
       await this.recomputeParentProgress(tx, parent.id);
+
+      // Logger l'activité
+      await this.activityService.logActivity(
+        nodeId,
+        userId,
+        ActivityType.NODE_RESTORED,
+        {
+          columnId: targetColumn.id,
+          columnName: targetColumn.name,
+        },
+      );
 
       return this.mapNode(updated as unknown as NodeModel);
     });
@@ -3012,8 +3228,6 @@ export class NodesService {
       select: { id: true },
     });
 
-    const nowIso = new Date().toISOString();
-
     if (existingUser) {
       if (existingUser.id === userId) {
         throw new ConflictException(
@@ -3064,6 +3278,14 @@ export class NodesService {
           expiresAt,
         },
       });
+
+      // Log de l'invitation envoyée
+      await this.activityService.logActivity(
+        node.id,
+        userId,
+        ActivityType.INVITATION_SENT,
+        { email, expiresAt: expiresAt.toISOString() },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -3087,7 +3309,7 @@ export class NodesService {
       select: { email: true },
     });
     if (!user) {
-      throw new NotFoundException("Utilisateur introuvable");
+      throw new NotFoundException('Utilisateur introuvable');
     }
 
     const normalizedEmail = user.email.trim().toLowerCase();
@@ -3224,7 +3446,7 @@ export class NodesService {
       });
 
       if (!invitation) {
-        throw new NotFoundException("Invitation introuvable");
+        throw new NotFoundException('Invitation introuvable');
       }
 
       const user = await tx.user.findUnique({
@@ -3232,7 +3454,7 @@ export class NodesService {
         select: { id: true, email: true },
       });
       if (!user) {
-        throw new NotFoundException("Utilisateur introuvable");
+        throw new NotFoundException('Utilisateur introuvable');
       }
 
       const normalizedEmail = user.email.trim().toLowerCase();
@@ -3246,7 +3468,10 @@ export class NodesService {
         );
       }
 
-      if (invitation.status === 'ACCEPTED' || invitation.status === 'DECLINED') {
+      if (
+        invitation.status === 'ACCEPTED' ||
+        invitation.status === 'DECLINED'
+      ) {
         throw new ConflictException('Invitation déjà traitée');
       }
 
@@ -3259,12 +3484,14 @@ export class NodesService {
             inviteeUserId: invitation.inviteeUserId ?? userId,
           },
         });
-        throw new BadRequestException("Invitation expirée ou invalide");
+        throw new BadRequestException('Invitation expirée ou invalide');
       }
 
       const previousStatus = invitation.status;
 
-      const node = await tx.node.findUnique({ where: { id: invitation.nodeId } });
+      const node = await tx.node.findUnique({
+        where: { id: invitation.nodeId },
+      });
 
       if (targetStatus === 'ACCEPTED') {
         if (!node) {
@@ -3300,7 +3527,7 @@ export class NodesService {
           });
         }
 
-  const metadata = this.extractMetadata(node);
+        const metadata = this.extractMetadata(node);
         const alreadyCollaborator = metadata.share.collaborators.some(
           (collab) => collab.userId === userId,
         );
@@ -3322,11 +3549,27 @@ export class NodesService {
           data: { metadata: metadata.raw as Prisma.InputJsonValue },
         });
 
+        // Log de l'ajout du collaborateur après acceptation de l'invitation
+        await this.activityService.logActivity(
+          node.id,
+          userId,
+          ActivityType.COLLABORATOR_ADDED,
+          { addedById: invitation.inviterId },
+        );
+
+        // Log de l'acceptation de l'invitation
+        await this.activityService.logActivity(
+          node.id,
+          userId,
+          ActivityType.INVITATION_ACCEPTED,
+          { inviterId: invitation.inviterId },
+        );
+
         // Créer un placement personnel pour la tâche partagée dans le board personnel de l'utilisateur
         const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
         if (userPersonalBoard && userPersonalBoard.columns.length > 0) {
           const firstColumn = userPersonalBoard.columns[0];
-          
+
           // Vérifier si un placement existe déjà
           const existingPlacement = await tx.sharedNodePlacement.findUnique({
             where: {
@@ -3357,6 +3600,20 @@ export class NodesService {
         }
       }
 
+      // Pour la réponse, retourner le boardId du board personnel de l'utilisateur (Bob)
+      // plutôt que celui de la tâche originale (Alice), car Bob doit être redirigé vers son propre board
+      let responseBoardId: string | null = null;
+      let responseColumnId: string | null = null;
+      if (targetStatus === 'ACCEPTED') {
+        const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
+        if (userPersonalBoard) {
+          responseBoardId = userPersonalBoard.id;
+          if (userPersonalBoard.columns.length > 0) {
+            responseColumnId = userPersonalBoard.columns[0].id;
+          }
+        }
+      }
+
       const targetBoardId =
         invitation.node.column?.boardId ?? invitation.node.board?.id ?? null;
       const targetColumnId = invitation.node.column?.id ?? null;
@@ -3371,6 +3628,16 @@ export class NodesService {
         },
       });
 
+      // Log du refus d'invitation si déclinée
+      if (targetStatus === 'DECLINED') {
+        await this.activityService.logActivity(
+          invitation.nodeId,
+          userId,
+          ActivityType.INVITATION_DECLINED,
+          { inviterId: invitation.inviterId },
+        );
+      }
+
       return {
         id: updated.id,
         nodeId: updated.nodeId,
@@ -3379,8 +3646,9 @@ export class NodesService {
         previousStatus,
         status: updated.status,
         respondedAt: updated.respondedAt?.toISOString() ?? now.toISOString(),
-        ...(targetBoardId ? { boardId: targetBoardId } : {}),
-        ...(targetColumnId ? { columnId: targetColumnId } : {}),
+        // Retourner le board personnel de l'utilisateur pour ACCEPTED, sinon le board de la tâche
+        ...(responseBoardId ? { boardId: responseBoardId } : targetBoardId ? { boardId: targetBoardId } : {}),
+        ...(responseColumnId ? { columnId: responseColumnId } : targetColumnId ? { columnId: targetColumnId } : {}),
         ...(columnBehaviorKey ? { columnBehaviorKey } : {}),
       };
     });
@@ -3418,6 +3686,14 @@ export class NodesService {
         userId: targetUserId,
       },
     });
+
+    // Log de la suppression du collaborateur
+    await this.activityService.logActivity(
+      node.id,
+      userId,
+      ActivityType.COLLABORATOR_REMOVED,
+      { removedUserId: targetUserId },
+    );
 
     const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
     return this.buildNodeShareSummary(nextNode, userId);
@@ -3478,6 +3754,21 @@ export class NodesService {
       finalPosition = maxPosition ? maxPosition.position + 1000 : 0;
     }
 
+    // Récupérer l'ancien placement pour détecter un changement de colonne
+    const oldPlacement = await this.prisma.sharedNodePlacement.findUnique({
+      where: {
+        nodeId_userId: {
+          nodeId,
+          userId,
+        },
+      },
+      include: {
+        column: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
     // Upsert du placement
     await this.prisma.sharedNodePlacement.upsert({
       where: {
@@ -3497,6 +3788,19 @@ export class NodesService {
         position: finalPosition,
       },
     });
+
+    // Log du déplacement si la colonne a changé
+    if (oldPlacement && oldPlacement.columnId !== columnId) {
+      await this.activityService.logActivity(
+        nodeId,
+        userId,
+        ActivityType.NODE_MOVED,
+        {
+          fromColumn: oldPlacement.column.name,
+          toColumn: column.name,
+        },
+      );
+    }
   }
 
   async listNodeComments(
@@ -3641,6 +3945,14 @@ export class NodesService {
         } | null;
       },
     ]);
+
+    // Logger l'activité
+    await this.activityService.logActivity(
+      nodeId,
+      userId,
+      ActivityType.COMMENT_ADDED,
+    );
+
     return mapped[0];
   }
 
@@ -3670,7 +3982,7 @@ export class NodesService {
       name: b.node.title,
     }));
   }
-  async getBreadcrumb(nodeId: string): Promise<NodeBreadcrumbDto> {
+  async getBreadcrumb(nodeId: string, userId?: string): Promise<NodeBreadcrumbDto> {
     const current = await this.prisma.node.findUnique({
       where: { id: nodeId },
       select: {
@@ -3719,17 +4031,46 @@ export class NodesService {
       select: {
         nodeId: true,
         id: true,
+        ownerUserId: true,
+        isPersonal: true,
       },
     });
 
     const boardMap = new Map(boards.map((board) => [board.nodeId, board.id]));
+    
+    // Si un userId est fourni, trouver le board personnel de l'utilisateur
+    let userPersonalBoardId: string | null = null;
+    if (userId) {
+      const userPersonalBoard = await this.prisma.board.findFirst({
+        where: {
+          isPersonal: true,
+          ownerUserId: userId,
+        },
+        select: { id: true },
+      });
+      userPersonalBoardId = userPersonalBoard?.id ?? null;
+    }
 
-    const items: NodeBreadcrumbItemDto[] = chain.reverse().map((node) => ({
-      id: node.id,
-      title: node.title,
-      depth: node.depth,
-      boardId: boardMap.get(node.id) ?? null,
-    }));
+    const items: NodeBreadcrumbItemDto[] = chain.reverse().map((node) => {
+      let boardId = boardMap.get(node.id) ?? null;
+      
+      // Si un boardId existe et qu'il n'appartient pas à l'utilisateur,
+      // utiliser le board personnel de l'utilisateur à la place
+      if (boardId && userId && userPersonalBoardId) {
+        const board = boards.find((b) => b.nodeId === node.id);
+        if (board && board.isPersonal && board.ownerUserId !== userId) {
+          // C'est un board personnel d'un autre utilisateur → rediriger vers le board personnel de l'utilisateur
+          boardId = userPersonalBoardId;
+        }
+      }
+      
+      return {
+        id: node.id,
+        title: node.title,
+        depth: node.depth,
+        boardId,
+      };
+    });
 
     return {
       items,
@@ -4793,6 +5134,7 @@ export class NodesService {
     board: { id: string };
     columns: Array<{
       id: string;
+      name: string;
       behavior: { key: ColumnBehaviorKey };
       wipLimit: number | null;
       settings: Record<string, any> | null;
@@ -4826,6 +5168,7 @@ export class NodesService {
       board,
       columns: board.columns.map((c) => ({
         id: c.id,
+        name: c.name,
         behavior: { key: c.behavior.key },
         wipLimit: c.wipLimit,
         settings: this.normalizeColumnSettings((c as any).settings ?? null),

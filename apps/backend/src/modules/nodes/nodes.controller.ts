@@ -80,8 +80,13 @@ export class NodesController {
   })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeBreadcrumbDto })
-  getBreadcrumb(@Param('nodeId') nodeId: string): Promise<NodeBreadcrumbDto> {
-    return this.nodesService.getBreadcrumb(nodeId);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getBreadcrumb(
+    @Param('nodeId') nodeId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<NodeBreadcrumbDto> {
+    return this.nodesService.getBreadcrumb(nodeId, user.id);
   }
 
   @Get(':nodeId/children')
@@ -223,10 +228,7 @@ export class NodesController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('invitationId') invitationId: string,
   ): Promise<NodeShareInvitationActionResultDto> {
-    return this.nodesService.declineNodeShareInvitation(
-      invitationId,
-      user.id,
-    );
+    return this.nodesService.declineNodeShareInvitation(invitationId, user.id);
   }
 
   @Post(':nodeId/comments')
@@ -407,7 +409,7 @@ export class NodesController {
   @HttpCode(204)
   @ApiOperation({
     summary:
-      'Déplace le placement personnel d\'une tâche partagée dans le kanban de l\'utilisateur',
+      "Déplace le placement personnel d'une tâche partagée dans le kanban de l'utilisateur",
   })
   @ApiParam({ name: 'nodeId', example: 'node_shared' })
   @ApiBody({

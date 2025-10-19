@@ -9,6 +9,8 @@ import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useTranslation } from '@/i18n';
 import { useHelpMode } from '@/hooks/useHelpMode';
+import { useBoardActivityStats } from '@/features/activity/useActivityLogs';
+import { ActivityPanel } from '@/features/activity/ActivityPanel';
 import {
   createBoardColumn,
   updateBoardColumn,
@@ -252,6 +254,12 @@ export function TeamBoardPage(){
     enabled: true,
     boardId: activeBoardId,
   });
+
+  // 📊 Statistiques d'activité pour le badge
+  const { data: activityStats } = useBoardActivityStats(activeBoardId ?? undefined, accessToken ?? undefined);
+
+  // 📜 État du panneau d'activité
+  const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(false);
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -1356,7 +1364,35 @@ export function TeamBoardPage(){
           <div className="flex items-center gap-3">
             <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Badge d'activité avec compteur */}
+            {activityStats && activityStats.todayCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsActivityPanelOpen(true)}
+                className="relative flex items-center gap-2 rounded-full border border-white/15 bg-surface/70 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground group"
+                title={tBoard('activity.badge.tooltip', { count: activityStats.todayCount })}
+                aria-label={tBoard('activity.badge.aria', { count: activityStats.todayCount })}
+              >
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-background">
+                  {activityStats.todayCount}
+                </span>
+              </button>
+            )}
             <Link
               href="/settings"
               className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
@@ -1569,7 +1605,7 @@ export function TeamBoardPage(){
                     className="block"
                   >
                     <label className="text-xs text-muted">{tBoard('columns.form.behavior')}
-                      <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+                      <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent text-foreground">
                         <option value="BACKLOG">{tBoard('behaviors.BACKLOG')}</option>
                         <option value="IN_PROGRESS">{tBoard('behaviors.IN_PROGRESS')}</option>
                         <option value="BLOCKED">{tBoard('behaviors.BLOCKED')}</option>
@@ -1827,6 +1863,19 @@ export function TeamBoardPage(){
               const message = err instanceof Error && err.message ? err.message : tBoard('alerts.boardRefreshFailed');
               toastError(message);
             }
+          }}
+        />
+      )}
+
+      {/* Panneau d'activité */}
+      {activeBoardId && accessToken && (
+        <ActivityPanel
+          boardId={activeBoardId}
+          accessToken={accessToken}
+          isOpen={isActivityPanelOpen}
+          onClose={() => setIsActivityPanelOpen(false)}
+          onNavigateToTask={(nodeId) => {
+            open(nodeId);
           }}
         />
       )}

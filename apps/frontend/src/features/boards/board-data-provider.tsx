@@ -134,10 +134,29 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
         setStatus("ready");
       }
     } catch (err) {
-      setError((err as Error).message);
+      const errorMessage = (err as Error).message;
+      
+      // Si erreur 403 Forbidden (board personnel inaccessible), rediriger vers le root board
+      if (errorMessage.includes('Forbidden') || errorMessage.includes('403') || errorMessage.includes('personnel inaccessible')) {
+        console.warn('[BoardDataProvider] Access forbidden to board, redirecting to root board:', boardId);
+        // Rediriger vers le root board du team
+        if (teamId) {
+          try {
+            const rootBoard = await fetchRootBoard(teamId, accessToken || "");
+            if (rootBoard?.id && rootBoard.id !== boardId) {
+              router.replace(`/boards/${teamId}/${rootBoard.id}`);
+              return;
+            }
+          } catch (rootErr) {
+            console.error('[BoardDataProvider] Failed to fetch root board:', rootErr);
+          }
+        }
+      }
+      
+      setError(errorMessage);
       if (!cached) setStatus("error");
     }
-  }, [accessToken]);
+  }, [accessToken, router, teamId]);
 
   // Load when activeBoardId changes
   useEffect(() => {

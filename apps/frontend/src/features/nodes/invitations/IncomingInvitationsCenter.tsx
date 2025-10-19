@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useTranslation } from '@/i18n';
 import { useToast } from '@/components/toast/ToastProvider';
@@ -21,7 +22,8 @@ export function IncomingInvitationsCenter() {
   const { accessToken, logout } = useAuth();
   const { t, locale } = useTranslation('board');
   const { success, error: toastError } = useToast();
-  const { refreshActiveBoard } = useBoardData();
+  const { refreshActiveBoard, teamId } = useBoardData();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [invitations, setInvitations] = useState<NodeShareIncomingInvitation[]>([]);
@@ -101,8 +103,16 @@ export function IncomingInvitationsCenter() {
       )));
       if (action === 'accept') {
         success(t('invitationCenter.toast.accepted', { title: result.nodeTitle }));
-        // Rafraîchir le board immédiatement pour afficher la tâche partagée avec son placement personnel
-        await refreshActiveBoard();
+        
+        // Rediriger vers le board personnel de l'utilisateur (pas celui de la tâche partagée)
+        if (result.boardId && teamId) {
+          // Rafraîchir immédiatement pour voir la tâche partagée
+          await refreshActiveBoard();
+          router.push(`/boards/${teamId}/${result.boardId}`);
+        } else {
+          // Fallback: rafraîchir le board actuel
+          await refreshActiveBoard();
+        }
       } else {
         success(t('invitationCenter.toast.declined', { title: result.nodeTitle }));
       }
@@ -117,7 +127,7 @@ export function IncomingInvitationsCenter() {
       setActionState(null);
       void loadInvitations();
     }
-  }, [accessToken, loadInvitations, logout, refreshActiveBoard, success, t, toastError]);
+  }, [accessToken, loadInvitations, logout, refreshActiveBoard, router, success, t, teamId, toastError]);
 
   if (!accessToken) return null;
 

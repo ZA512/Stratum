@@ -3,7 +3,6 @@
   Controller,
   Delete,
   Get,
-  Header,
   Headers,
   HttpCode,
   HttpStatus,
@@ -59,9 +58,16 @@ export class BoardsController {
   }
 
   @Get(':boardId/detail')
-  @ApiOperation({ summary: 'Retrieve a board with its columns and nodes (optimisé avec ETag pour auto-refresh)' })
+  @ApiOperation({
+    summary:
+      'Retrieve a board with its columns and nodes (optimisé avec ETag pour auto-refresh)',
+  })
   @ApiParam({ name: 'boardId', example: 'board_123' })
-  @ApiHeader({ name: 'If-None-Match', required: false, description: 'ETag de la dernière version connue' })
+  @ApiHeader({
+    name: 'If-None-Match',
+    required: false,
+    description: 'ETag de la dernière version connue',
+  })
   @ApiOkResponse({ type: BoardWithNodesDto })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -72,17 +78,17 @@ export class BoardsController {
     @Res() res: Response,
   ): Promise<void> {
     const data = await this.boardsService.getBoardWithNodes(boardId, user.id);
-    
+
     // Générer un ETag basé sur le contenu
     const dataString = JSON.stringify(data);
     const etag = `"${crypto.createHash('md5').update(dataString).digest('hex')}"`;
-    
+
     // Si le client a déjà cette version, retourner 304 Not Modified
     if (ifNoneMatch === etag) {
       res.status(HttpStatus.NOT_MODIFIED).end();
       return;
     }
-    
+
     // Sinon, retourner les données avec le nouvel ETag
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache'); // Force validation avec ETag

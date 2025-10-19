@@ -17,9 +17,13 @@ export type NodeShareInvitationActionResult = {
   id: string;
   nodeId: string;
   nodeTitle: string;
+  teamId: string;
   previousStatus: "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
   status: "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
   respondedAt: string;
+  boardId?: string;
+  columnId?: string;
+  columnBehaviorKey?: string;
 };
 
 async function parseError(response: Response): Promise<Error> {
