@@ -133,6 +133,15 @@ type MailPayload = {
   metadata?: Record<string, any> | null;
 };
 
+type ScheduleDependencyEntry = {
+  id: string;
+  fromId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
+  mode: 'ASAP' | 'FREE';
+  hardConstraint: boolean;
+};
+
 type ExtractedMetadata = {
   raw: Record<string, any>;
   raci: {
@@ -148,6 +157,9 @@ type ExtractedMetadata = {
     plannedStartDate: string | null;
     plannedEndDate: string | null;
     actualEndDate: string | null;
+    scheduleMode: 'manual' | 'asap' | null;
+    hardConstraint: boolean;
+    dependencies: ScheduleDependencyEntry[];
   };
   financials: {
     billingStatus: 'TO_BILL' | 'BILLED' | 'PAID' | null;
@@ -1784,6 +1796,68 @@ export class NodesService {
       timeTrackingChanged = true;
     }
 
+    if (dto.scheduleMode !== undefined) {
+      let mode: 'manual' | 'asap' | null;
+      if (dto.scheduleMode === null) mode = null;
+      else if (dto.scheduleMode === 'manual' || dto.scheduleMode === 'asap')
+        mode = dto.scheduleMode;
+      else throw new BadRequestException('Mode de planification invalide');
+      nextTimeTracking.scheduleMode = mode;
+      timeTrackingChanged = true;
+    }
+
+    if (dto.hardConstraint !== undefined) {
+      nextTimeTracking.hardConstraint = Boolean(dto.hardConstraint);
+      timeTrackingChanged = true;
+    }
+
+    if (dto.scheduleDependencies !== undefined) {
+      if (dto.scheduleDependencies === null) {
+        nextTimeTracking.dependencies = [];
+        timeTrackingChanged = true;
+      } else if (!Array.isArray(dto.scheduleDependencies)) {
+        throw new BadRequestException('Format de dépendances invalide');
+      } else {
+        const allowedTypes = new Set(['FS', 'SS', 'FF', 'SF']);
+        const sanitized: ScheduleDependencyEntry[] = [];
+        dto.scheduleDependencies.forEach((entry, index) => {
+          if (!entry || typeof entry !== 'object') {
+            throw new BadRequestException('Dépendance Gantt invalide');
+          }
+          const fromId =
+            typeof entry.fromId === 'string' ? entry.fromId.trim() : '';
+          if (!fromId) {
+            throw new BadRequestException(
+              'Dépendance Gantt sans tâche prédécesseur',
+            );
+          }
+          const typeRaw =
+            typeof entry.type === 'string' ? entry.type.toUpperCase() : '';
+          if (!allowedTypes.has(typeRaw)) {
+            throw new BadRequestException('Type de dépendance Gantt invalide');
+          }
+          const lagNumber = Number(entry.lag ?? 0);
+          const lag = Number.isFinite(lagNumber) ? Math.round(lagNumber) : 0;
+          const mode = entry.mode === 'FREE' ? 'FREE' : 'ASAP';
+          const depHardConstraint = Boolean(entry.hardConstraint);
+          const id =
+            typeof entry.id === 'string' && entry.id.trim().length > 0
+              ? entry.id.trim()
+              : `${fromId}->${node.id}:${index}`;
+          sanitized.push({
+            id,
+            fromId,
+            type: typeRaw as ScheduleDependencyEntry['type'],
+            lag,
+            mode,
+            hardConstraint: depHardConstraint,
+          });
+        });
+        nextTimeTracking.dependencies = sanitized;
+        timeTrackingChanged = true;
+      }
+    }
+
     if (dto.billingStatus !== undefined) {
       if (
         dto.billingStatus !== null &&
@@ -1917,7 +1991,8 @@ export class NodesService {
 
     if (dto.dueAt !== undefined) {
       const oldDue = node.dueAt?.toISOString() ?? null;
-      const newDue = dto.dueAt === null ? null : new Date(dto.dueAt).toISOString();
+      const newDue =
+        dto.dueAt === null ? null : new Date(dto.dueAt).toISOString();
       if (oldDue !== newDue) {
         activityPromises.push(
           this.activityService.logActivity(
@@ -1952,7 +2027,10 @@ export class NodesService {
       );
     }
 
-    if (dto.tags !== undefined && JSON.stringify(node.tags) !== JSON.stringify(dto.tags)) {
+    if (
+      dto.tags !== undefined &&
+      JSON.stringify(node.tags) !== JSON.stringify(dto.tags)
+    ) {
       activityPromises.push(
         this.activityService.logActivity(
           nodeId,
@@ -3647,8 +3725,16 @@ export class NodesService {
         status: updated.status,
         respondedAt: updated.respondedAt?.toISOString() ?? now.toISOString(),
         // Retourner le board personnel de l'utilisateur pour ACCEPTED, sinon le board de la tâche
-        ...(responseBoardId ? { boardId: responseBoardId } : targetBoardId ? { boardId: targetBoardId } : {}),
-        ...(responseColumnId ? { columnId: responseColumnId } : targetColumnId ? { columnId: targetColumnId } : {}),
+        ...(responseBoardId
+          ? { boardId: responseBoardId }
+          : targetBoardId
+            ? { boardId: targetBoardId }
+            : {}),
+        ...(responseColumnId
+          ? { columnId: responseColumnId }
+          : targetColumnId
+            ? { columnId: targetColumnId }
+            : {}),
         ...(columnBehaviorKey ? { columnBehaviorKey } : {}),
       };
     });
@@ -3982,7 +4068,10 @@ export class NodesService {
       name: b.node.title,
     }));
   }
-  async getBreadcrumb(nodeId: string, userId?: string): Promise<NodeBreadcrumbDto> {
+  async getBreadcrumb(
+    nodeId: string,
+    userId?: string,
+  ): Promise<NodeBreadcrumbDto> {
     const current = await this.prisma.node.findUnique({
       where: { id: nodeId },
       select: {
@@ -4037,7 +4126,7 @@ export class NodesService {
     });
 
     const boardMap = new Map(boards.map((board) => [board.nodeId, board.id]));
-    
+
     // Si un userId est fourni, trouver le board personnel de l'utilisateur
     let userPersonalBoardId: string | null = null;
     if (userId) {
@@ -4053,7 +4142,7 @@ export class NodesService {
 
     const items: NodeBreadcrumbItemDto[] = chain.reverse().map((node) => {
       let boardId = boardMap.get(node.id) ?? null;
-      
+
       // Si un boardId existe et qu'il n'appartient pas à l'utilisateur,
       // utiliser le board personnel de l'utilisateur à la place
       if (boardId && userId && userPersonalBoardId) {
@@ -4063,7 +4152,7 @@ export class NodesService {
           boardId = userPersonalBoardId;
         }
       }
-      
+
       return {
         id: node.id,
         title: node.title,
@@ -4335,7 +4424,13 @@ export class NodesService {
       effort: (node as any).effort ?? null,
       tags: (node as any).tags ?? [],
       raci: metadata.raci,
-      timeTracking: metadata.timeTracking,
+      timeTracking: {
+        ...metadata.timeTracking,
+        dependencies: metadata.timeTracking.dependencies.map((dep) => ({
+          ...dep,
+          toId: node.id,
+        })),
+      },
       financials: metadata.financials,
     };
   }
@@ -4612,6 +4707,66 @@ export class NodesService {
         timeRaw.actualEndAt ??
         null,
     );
+    const scheduleModeRaw =
+      typeof timeRaw.scheduleMode === 'string'
+        ? timeRaw.scheduleMode.toLowerCase()
+        : null;
+    const scheduleMode =
+      scheduleModeRaw === 'manual'
+        ? 'manual'
+        : scheduleModeRaw === 'asap'
+          ? 'asap'
+          : null;
+    if (scheduleMode) timeRaw.scheduleMode = scheduleMode;
+    else delete timeRaw.scheduleMode;
+    const hardConstraint = Boolean(timeRaw.hardConstraint);
+    timeRaw.hardConstraint = hardConstraint;
+    const dependencies: ScheduleDependencyEntry[] = [];
+    const normalizedDependencies: Record<string, any>[] = [];
+    const rawDependencies = Array.isArray(timeRaw.dependencies)
+      ? (timeRaw.dependencies as Record<string, any>[])
+      : [];
+    const allowedTypes = new Set(['FS', 'SS', 'FF', 'SF']);
+    for (let index = 0; index < rawDependencies.length; index += 1) {
+      const entry = rawDependencies[index];
+      if (!entry || typeof entry !== 'object') continue;
+      const fromId =
+        typeof entry.fromId === 'string' ? entry.fromId.trim() : '';
+      if (!fromId) continue;
+      const typeRaw =
+        typeof entry.type === 'string' ? entry.type.toUpperCase() : 'FS';
+      if (!allowedTypes.has(typeRaw)) continue;
+      const idRaw =
+        typeof entry.id === 'string' && entry.id.trim().length > 0
+          ? entry.id.trim()
+          : `${fromId}->${node.id}:${index}`;
+      const lagNumber = Number(entry.lag);
+      const lag = Number.isFinite(lagNumber) ? Math.round(lagNumber) : 0;
+      const modeRaw =
+        typeof entry.mode === 'string' && entry.mode.toUpperCase() === 'FREE'
+          ? 'FREE'
+          : 'ASAP';
+      const dependencyHardConstraint = Boolean(entry.hardConstraint);
+      dependencies.push({
+        id: idRaw,
+        fromId,
+        type: typeRaw as ScheduleDependencyEntry['type'],
+        lag,
+        mode: modeRaw,
+        hardConstraint: dependencyHardConstraint,
+      });
+      normalizedDependencies.push({
+        id: idRaw,
+        fromId,
+        type: typeRaw,
+        lag,
+        mode: modeRaw,
+        hardConstraint: dependencyHardConstraint,
+      });
+    }
+    if (normalizedDependencies.length > 0)
+      timeRaw.dependencies = normalizedDependencies;
+    else delete timeRaw.dependencies;
 
     const billingRaw =
       typeof financialRaw.billingStatus === 'string'
@@ -4725,6 +4880,9 @@ export class NodesService {
         plannedStartDate,
         plannedEndDate,
         actualEndDate,
+        scheduleMode,
+        hardConstraint,
+        dependencies,
       },
       financials: {
         billingStatus,
