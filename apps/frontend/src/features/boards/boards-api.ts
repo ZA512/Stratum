@@ -11,6 +11,10 @@ export type BoardNode = {
   position: number;
   parentId: string | null;
   dueAt: string | null;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  scheduleMode?: 'manual' | 'asap' | null;
+  hardConstraint?: boolean;
   description?: string | null;
   // Enrichissements renvoyés par /boards/:id/detail
   effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
