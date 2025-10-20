@@ -89,6 +89,9 @@ export type NodeDetail = {
     plannedStartDate: string | null;
     plannedEndDate: string | null;
     actualEndDate: string | null;
+    scheduleMode: 'manual'|'asap'|null;
+    hardConstraint: boolean;
+    dependencies: NodeScheduleDependency[];
   };
   financials?: {
     billingStatus: 'TO_BILL'|'BILLED'|'PAID' | null;
@@ -118,4 +121,14 @@ export type NodeDetail = {
     }>;
   };
   comments: NodeComment[];
+};
+
+export type NodeScheduleDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: 'FS'|'SS'|'FF'|'SF';
+  lag: number;
+  mode: 'ASAP'|'FREE';
+  hardConstraint: boolean;
 };

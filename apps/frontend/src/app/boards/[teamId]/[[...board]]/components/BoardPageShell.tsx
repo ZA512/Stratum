@@ -511,6 +511,9 @@ export function TeamBoardPage(){
     filterHasChildren;
 
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
+  const boardId = board?.id ?? null;
+  const dependenciesSource = board?.dependencies;
+  const boardDependencies = useMemo(() => (dependenciesSource ? [...dependenciesSource] : []), [dependenciesSource]);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
     if(!rawColumns) return rawColumns;
     if(!hideDone) return rawColumns;

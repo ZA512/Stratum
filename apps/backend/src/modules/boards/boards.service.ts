@@ -8,7 +8,10 @@ import { ColumnBehaviorKey, MembershipStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BoardColumnDto } from './dto/board-column.dto';
 import { BoardDto } from './dto/board.dto';
-import { BoardWithNodesDto } from './dto/board-with-nodes.dto';
+import {
+  BoardGanttDependencyDto,
+  BoardWithNodesDto,
+} from './dto/board-with-nodes.dto';
 import { BoardNodeDto } from './dto/board-node.dto';
 import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
@@ -106,7 +109,8 @@ export class BoardsService {
     };
   }
 
-  async getBoard(boardId: string, userId?: string): Promise<BoardDto> {
+  async getBoard(boardId: string, _userId?: string): Promise<BoardDto> {
+    void _userId;
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
@@ -414,6 +418,7 @@ export class BoardsService {
     const snoozedCounts = new Map<string, number>();
     const nodes = [] as typeof filteredNodes;
     const nowMs = Date.now();
+    const ganttDependencies: BoardGanttDependencyDto[] = [];
 
     for (const node of filteredNodes) {
       const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
@@ -497,6 +502,66 @@ export class BoardsService {
       const bucket = nodesByColumn.get(node.columnId)!;
       const statusMetadata = node.statusMetadata ?? null;
       const metadata = node.metadata ?? null;
+      const timeTracking =
+        metadata &&
+        typeof metadata === 'object' &&
+        !Array.isArray(metadata) &&
+        metadata.timeTracking &&
+        typeof metadata.timeTracking === 'object'
+          ? (metadata.timeTracking as Record<string, any>)
+          : {};
+      const plannedStartDate =
+        typeof timeTracking.plannedStartDate === 'string' &&
+        timeTracking.plannedStartDate.trim().length > 0
+          ? timeTracking.plannedStartDate.trim()
+          : null;
+      const plannedEndDate =
+        typeof timeTracking.plannedEndDate === 'string' &&
+        timeTracking.plannedEndDate.trim().length > 0
+          ? timeTracking.plannedEndDate.trim()
+          : null;
+      const scheduleModeRaw =
+        typeof timeTracking.scheduleMode === 'string'
+          ? timeTracking.scheduleMode.toLowerCase()
+          : null;
+      const scheduleMode =
+        scheduleModeRaw === 'asap'
+          ? 'asap'
+          : scheduleModeRaw === 'manual'
+            ? 'manual'
+            : null;
+      const hardConstraint = Boolean(timeTracking.hardConstraint);
+      if (Array.isArray(timeTracking.dependencies)) {
+        const allowedTypes = new Set(['FS', 'SS', 'FF', 'SF']);
+        (timeTracking.dependencies as Record<string, any>[]).forEach(
+          (dep, index) => {
+            if (!dep || typeof dep !== 'object') return;
+            const fromId =
+              typeof dep.fromId === 'string' ? dep.fromId.trim() : '';
+            if (!fromId) return;
+            const typeRaw =
+              typeof dep.type === 'string' ? dep.type.toUpperCase() : '';
+            if (!allowedTypes.has(typeRaw)) return;
+            const id =
+              typeof dep.id === 'string' && dep.id.trim().length > 0
+                ? dep.id.trim()
+                : `${fromId}->${node.id}:${index}`;
+            const lagNumber = Number(dep.lag ?? 0);
+            const lag = Number.isFinite(lagNumber) ? Math.round(lagNumber) : 0;
+            const mode = dep.mode === 'FREE' ? 'FREE' : 'ASAP';
+            const depHardConstraint = Boolean(dep.hardConstraint);
+            ganttDependencies.push({
+              id,
+              fromId,
+              toId: node.id,
+              type: typeRaw as BoardGanttDependencyDto['type'],
+              lag,
+              mode,
+              hardConstraint: depHardConstraint,
+            });
+          },
+        );
+      }
       const estimatedDurationRaw =
         statusMetadata && typeof statusMetadata === 'object'
           ? ((statusMetadata as Record<string, unknown>)
@@ -647,6 +712,10 @@ export class BoardsService {
         isSnoozed: node.isSnoozed ?? false,
         isSharedRoot,
         canDelete,
+        plannedStartDate,
+        plannedEndDate,
+        scheduleMode,
+        hardConstraint,
       } as any);
     }
 
@@ -700,6 +769,7 @@ export class BoardsService {
         },
         nodes: nodesByColumn.get(column.id) ?? [],
       })),
+      dependencies: ganttDependencies,
     } as BoardWithNodesDto;
     return result;
   }

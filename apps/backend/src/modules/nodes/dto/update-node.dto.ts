@@ -1,4 +1,46 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+class NodeScheduleDependencyInputDto {
+  @ApiPropertyOptional({
+    example: 'dep_abcd',
+    nullable: true,
+    description: 'Identifiant stable du lien (généré côté client si absent)',
+  })
+  id?: string | null;
+
+  @ApiProperty({
+    example: 'task_A',
+    description: 'Identifiant de la tâche prédécesseur',
+  })
+  fromId!: string;
+
+  @ApiProperty({
+    example: 'FS',
+    enum: ['FS', 'SS', 'FF', 'SF'],
+    description: 'Type de contrainte entre les tâches',
+  })
+  type!: 'FS' | 'SS' | 'FF' | 'SF';
+
+  @ApiPropertyOptional({
+    example: 0,
+    nullable: true,
+    description: 'Décalage en jours',
+  })
+  lag?: number | null;
+
+  @ApiPropertyOptional({
+    example: 'ASAP',
+    enum: ['ASAP', 'FREE'],
+    description: 'Mode de calcul du lien (ASAP par défaut)',
+  })
+  mode?: 'ASAP' | 'FREE';
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Lien verrouillé (empêche le recalcul)',
+  })
+  hardConstraint?: boolean;
+}
 
 export class UpdateNodeDto {
   @ApiPropertyOptional({ example: 'Nouveau titre', maxLength: 200 })
@@ -141,6 +183,27 @@ export class UpdateNodeDto {
     description: 'Date de fin réelle (YYYY-MM-DD)',
   })
   actualEndDate?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'asap',
+    enum: ['manual', 'asap'],
+    nullable: true,
+    description: 'Mode de planification du Gantt (manuel ou ASAP)',
+  })
+  scheduleMode?: 'manual' | 'asap' | null;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Verrouille le recalcul automatique de la tâche',
+  })
+  hardConstraint?: boolean;
+
+  @ApiPropertyOptional({
+    type: () => [NodeScheduleDependencyInputDto],
+    nullable: true,
+    description: 'Contraintes de dépendances de la tâche dans la vue Gantt',
+  })
+  scheduleDependencies?: NodeScheduleDependencyInputDto[] | null;
 
   @ApiPropertyOptional({
     example: 'TO_BILL',

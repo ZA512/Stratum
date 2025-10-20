@@ -73,12 +73,23 @@ export type BoardColumn = {
   badges?: { archived: number; snoozed: number };
 };
 
+export type BoardGanttDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
+  mode: 'ASAP' | 'FREE';
+  hardConstraint: boolean;
+};
+
 export type Board = {
   id: string;
   nodeId: string;
   name: string;
   columns: BoardColumn[];
   isShared: boolean; // True si le board contient des tâches partagées avec d'autres utilisateurs
+  dependencies: BoardGanttDependency[];
 };
 
 export type NodeBreadcrumbItem = {
