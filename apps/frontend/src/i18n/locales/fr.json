@@ -1044,6 +1044,45 @@
       "unsnooze": "Réveiller",
       "unsnoozing": "Réveiller…"
     },
+    "viewToggle": {
+      "kanban": "Kanban",
+      "kanbanHint": "Revenir à la vue Kanban quotidienne",
+      "gantt": "Timeline",
+      "ganttHint": "Ouvrir la timeline légère"
+    },
+    "gantt": {
+      "subtitle": "Pilotez la chronologie du board",
+      "columns": "Colonnes",
+      "loading": "Mise à jour de la timeline…",
+      "zoom": {
+        "day": "Jour",
+        "week": "Semaine",
+        "month": "Mois"
+      },
+      "toolbar": {
+        "today": "Aujourd’hui",
+        "undo": "Annuler",
+        "redo": "Rétablir"
+      },
+      "taskRange": "{start} → {end}",
+      "prompts": {
+        "newTask": "Titre de la nouvelle tâche"
+      },
+      "links": {
+        "modeAsap": "ASAP",
+        "modeFree": "Informatif",
+        "toggleMode": "Basculer ASAP / Libre",
+        "lag": "Décalage (jours)",
+        "hardConstraint": "Bloquer l’auto-alignement",
+        "align": "Aligner ASAP",
+        "cycleWarning": "Cycle détecté dans les dépendances. Résolvez-le avant l’alignement.",
+        "noChange": "Déjà aligné – aucune mise à jour nécessaire."
+      },
+      "notifications": {
+        "scheduleUpdated": "Timeline mise à jour",
+        "taskCreated": "Tâche créée sur la timeline"
+      }
+    },
     "alerts": {
       "sessionExpired": "Session expirée – redirection…",
       "sessionInvalid": "Session invalide — veuillez vous reconnecter.",

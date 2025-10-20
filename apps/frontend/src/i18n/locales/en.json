@@ -1046,6 +1046,45 @@
       "unsnooze": "Unsnooze",
       "unsnoozing": "Unsnoozing…"
     },
+    "viewToggle": {
+      "kanban": "Kanban",
+      "kanbanHint": "Switch back to the Kanban workflow view",
+      "gantt": "Timeline",
+      "ganttHint": "Open the lightweight Gantt timeline"
+    },
+    "gantt": {
+      "subtitle": "Plan the timeline for this board",
+      "columns": "Columns",
+      "loading": "Updating timeline…",
+      "zoom": {
+        "day": "Day",
+        "week": "Week",
+        "month": "Month"
+      },
+      "toolbar": {
+        "today": "Today",
+        "undo": "Undo",
+        "redo": "Redo"
+      },
+      "taskRange": "{start} → {end}",
+      "prompts": {
+        "newTask": "Title of the new task"
+      },
+      "links": {
+        "modeAsap": "ASAP",
+        "modeFree": "Informative",
+        "toggleMode": "Toggle ASAP / Free",
+        "lag": "Lag (days)",
+        "hardConstraint": "Prevent auto-alignment",
+        "align": "Align ASAP",
+        "cycleWarning": "Dependency cycle detected. Resolve it before aligning.",
+        "noChange": "Already aligned – no update required."
+      },
+      "notifications": {
+        "scheduleUpdated": "Timeline updated",
+        "taskCreated": "Task created on the timeline"
+      }
+    },
     "alerts": {
       "sessionExpired": "Session expired – redirecting…",
       "sessionInvalid": "Session invalid — please sign in again.",
