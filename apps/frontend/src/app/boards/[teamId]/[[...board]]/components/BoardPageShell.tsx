@@ -402,7 +402,7 @@ export function TeamBoardPage(){
         shouldPoll,
       });
     }
-  }, [board?.isShared, shouldPoll, activeBoardId]);
+  }, [board, shouldPoll, activeBoardId]);
   
   useAutoRefreshBoard({
     intervalMs: 15000, // 15 secondes
@@ -511,9 +511,6 @@ export function TeamBoardPage(){
     filterHasChildren;
 
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
-  const boardId = board?.id ?? null;
-  const dependenciesSource = board?.dependencies;
-  const boardDependencies = useMemo(() => (dependenciesSource ? [...dependenciesSource] : []), [dependenciesSource]);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
     if(!rawColumns) return rawColumns;
     if(!hideDone) return rawColumns;
@@ -967,11 +964,11 @@ export function TeamBoardPage(){
   const resetColumnForm = () => { setColumnName(''); setColumnBehavior('BACKLOG'); setColumnWip(''); setColumnError(null); };
 
   // --- Utilitaire de gestion d'appels API avec toasts centralisés ---
-  async function handleApi<T>(op:()=>Promise<T>, opts?: { success?: string; warnWip?: string; }) {
+  const handleApi = useCallback(async <T,>(op: () => Promise<T>, opts?: { success?: string; warnWip?: string; }) => {
     try {
       const result = await op();
       if (opts?.success) success(opts.success);
-      return result;
+      return result as T;
     } catch (e) {
       const err = e as Error & { status?: number; message?: string };
       const msg = (err?.message || '').toLowerCase();
@@ -989,7 +986,7 @@ export function TeamBoardPage(){
       }
       throw err;
     }
-  }
+  }, [logout, success, toastError, tBoard]);
 
   const handleSubmitColumn = async (e:FormEvent) => {
     e.preventDefault();
