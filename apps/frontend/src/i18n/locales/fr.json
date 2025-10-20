@@ -1044,6 +1044,64 @@
       "unsnooze": "Réveiller",
       "unsnoozing": "Réveiller…"
     },
+    "viewToggle": {
+      "kanban": "Kanban",
+      "kanbanHint": "Revenir à la vue Kanban quotidienne",
+      "gantt": "Timeline",
+      "ganttHint": "Ouvrir la timeline légère"
+    },
+    "gantt": {
+      "subtitle": "Pilotez la chronologie du board",
+      "columns": "Colonnes",
+      "loading": "Mise à jour de la timeline…",
+      "zoom": {
+        "day": "Jour",
+        "week": "Semaine",
+        "month": "Mois"
+      },
+      "toolbar": {
+        "today": "Aujourd’hui",
+        "undo": "Annuler",
+        "redo": "Rétablir"
+      },
+      "taskRange": "{start} → {end}",
+      "taskDuration": "{count, plural, one {# jour} other {# jours}}",
+      "handles": {
+        "start": "Créer un lien depuis le début (Alt pour info)",
+        "end": "Créer un lien depuis la fin (Alt pour info)"
+      },
+      "timeline": {
+        "title": "Chronologie"
+      },
+      "prompts": {
+        "newTask": "Titre de la nouvelle tâche"
+      },
+      "taskMenu": {
+        "open": "Ouvrir la tâche",
+        "align": "Aligner avec les prédécesseurs",
+        "openChild": "Ouvrir le kanban enfant"
+      },
+      "links": {
+        "modeAsap": "ASAP",
+        "modeFree": "Informatif",
+        "toggleMode": "Basculer ASAP / Libre",
+        "lag": "Décalage (jours)",
+        "hardConstraint": "Bloquer l’auto-alignement",
+        "align": "Aligner ASAP",
+        "cycleWarning": "Cycle détecté dans les dépendances. Résolvez-le avant l’alignement.",
+        "noChange": "Déjà aligné – aucune mise à jour nécessaire."
+      },
+      "lanes": {
+        "summary": "Lignes visibles : {count} · besoin auto {required}"
+      },
+      "hints": {
+        "altDrag": "Maintenez Alt en tirant une poignée pour créer un lien libre"
+      },
+      "notifications": {
+        "scheduleUpdated": "Timeline mise à jour",
+        "taskCreated": "Tâche créée sur la timeline"
+      }
+    },
     "alerts": {
       "sessionExpired": "Session expirée – redirection…",
       "sessionInvalid": "Session invalide — veuillez vous reconnecter.",

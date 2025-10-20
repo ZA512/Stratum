@@ -39,6 +39,7 @@ import {
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
+import { BoardGanttView } from './BoardGanttView';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
@@ -51,6 +52,34 @@ type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
 const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
 type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+
+type GanttLinkType = 'FS' | 'SS' | 'FF' | 'SF';
+type GanttLinkMode = 'ASAP' | 'FREE';
+
+export type GanttDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: GanttLinkType;
+  lag: number;
+  mode: GanttLinkMode;
+  hardConstraint: boolean;
+};
+
+export type ScheduleChange = {
+  id: string;
+  start?: Date | null;
+  end?: Date | null;
+  dueAt?: Date | null;
+};
+
+const generateDependencyId = () => {
+  if (typeof globalThis !== 'undefined' && 'crypto' in globalThis && typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 10);
+};
+
 
 const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showShortId: true,
@@ -356,7 +385,7 @@ export function TeamBoardPage(){
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
-  const { expertMode, setExpertMode } = useBoardUiSettings();
+  const { expertMode, setExpertMode, boardView, setBoardView } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
 
   // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
@@ -470,6 +499,8 @@ export function TeamBoardPage(){
   const [archivedNodes, setArchivedNodes] = useState<ArchivedBoardNode[]>([]);
   // Mode d'affichage par colonne: null = normal, 'snoozed' = voir snoozées, 'archived' = voir archivées
   const [columnViewMode, setColumnViewMode] = useState<Record<string, 'snoozed' | 'archived' | null>>({});
+  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
+  const [scheduleSavingIds, setScheduleSavingIds] = useState<string[]>([]);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   const advancedFiltersActive =
     selectedAssignees.length > 0 ||
@@ -479,6 +510,9 @@ export function TeamBoardPage(){
     filterHasChildren;
 
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
+  const boardId = board?.id ?? null;
+  const dependenciesSource = board?.dependencies;
+  const boardDependencies = useMemo(() => (dependenciesSource ? [...dependenciesSource] : []), [dependenciesSource]);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
     if(!rawColumns) return rawColumns;
     if(!hideDone) return rawColumns;
@@ -731,6 +765,47 @@ export function TeamBoardPage(){
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [filtersExpanded]);
 
+  useEffect(() => {
+    if (!boardId) {
+      setGanttDependencies([]);
+      return;
+    }
+    const normalized = boardDependencies.map((dep) => ({
+      id: dep.id,
+      fromId: dep.fromId,
+      toId: dep.toId,
+      type: dep.type,
+      lag: typeof dep.lag === 'number' && Number.isFinite(dep.lag) ? dep.lag : 0,
+      mode: dep.mode === 'FREE' ? 'FREE' : 'ASAP',
+      hardConstraint: Boolean(dep.hardConstraint),
+    }));
+    setGanttDependencies((prev) => {
+      if (prev.length === normalized.length) {
+        let identical = true;
+        for (let i = 0; i < prev.length; i += 1) {
+          const current = prev[i];
+          const next = normalized[i];
+          if (
+            current.id !== next.id ||
+            current.fromId !== next.fromId ||
+            current.toId !== next.toId ||
+            current.type !== next.type ||
+            current.lag !== next.lag ||
+            current.mode !== next.mode ||
+            current.hardConstraint !== next.hardConstraint
+          ) {
+            identical = false;
+            break;
+          }
+        }
+        if (identical) {
+          return prev;
+        }
+      }
+      return normalized;
+    });
+  }, [boardId, boardDependencies]);
+
   const displayedColumns: BoardColumnWithNodes[] | undefined = useMemo(() => {
     if (!effectiveColumns) return effectiveColumns;
 
@@ -850,6 +925,31 @@ export function TeamBoardPage(){
       return { ...column, nodes: filtered };
     });
   }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate, priorityLabelMap]);
+
+  const scheduleSavingSet = useMemo(() => new Set(scheduleSavingIds), [scheduleSavingIds]);
+
+  const visibleTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!displayedColumns) return ids;
+    for (const column of displayedColumns) {
+      if (!column?.nodes) continue;
+      for (const node of column.nodes) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  }, [displayedColumns]);
+
+  const activeGanttDependencies = useMemo(() => {
+    if (!visibleTaskIds.size) return [] as GanttDependency[];
+    return ganttDependencies.filter((dep) => visibleTaskIds.has(dep.fromId) && visibleTaskIds.has(dep.toId));
+  }, [ganttDependencies, visibleTaskIds]);
+
+  const backlogColumnId = useMemo(() => {
+    if (!board?.columns?.length) return null;
+    const backlog = board.columns.find((col) => col.behaviorKey === 'BACKLOG');
+    return backlog?.id ?? board.columns[0]?.id ?? null;
+  }, [board?.columns]);
 
   const resetColumnForm = () => { setColumnName(''); setColumnBehavior('BACKLOG'); setColumnWip(''); setColumnError(null); };
 
@@ -1158,6 +1258,215 @@ export function TeamBoardPage(){
     setArchivedNodes([]);
     archivedColumnIdRef.current = null;
   };
+
+  const toPlannedIsoDate = (input: Date | null | undefined) => {
+    if (!input) return null;
+    const normalized = new Date(input);
+    normalized.setHours(12, 0, 0, 0);
+    return normalized.toISOString().slice(0, 10);
+  };
+
+  const registerSavingIds = useCallback((ids: string[]) => {
+    setScheduleSavingIds((prev) => {
+      const set = new Set(prev);
+      ids.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+  }, []);
+
+  const releaseSavingIds = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setScheduleSavingIds((prev) => prev.filter((id) => !ids.includes(id)));
+  }, []);
+
+  const persistDependencies = useCallback(
+    async (targetId: string, entries: GanttDependency[]) => {
+      if (!accessToken) {
+        toastError(tBoard('alerts.sessionInvalid'));
+        return;
+      }
+      const payload = entries.map((dep) => ({
+        id: dep.id,
+        fromId: dep.fromId,
+        type: dep.type,
+        lag: Math.round(dep.lag ?? 0),
+        mode: dep.mode,
+        hardConstraint: dep.hardConstraint,
+      }));
+      const scheduleMode = entries.length === 0
+        ? null
+        : entries.some((dep) => dep.mode === 'ASAP')
+        ? 'asap'
+        : 'manual';
+      try {
+        await handleApi(
+          () =>
+            updateNode(
+              targetId,
+              {
+                scheduleDependencies: payload,
+                scheduleMode,
+              },
+              accessToken,
+            ),
+          { success: undefined },
+        );
+      } catch {
+        // toast already handled by handleApi
+      }
+      await refreshActiveBoard();
+    },
+    [accessToken, handleApi, refreshActiveBoard, tBoard, toastError],
+  );
+
+  const handleCommitScheduleChanges = useCallback(async (changes: ScheduleChange[]) => {
+    if (!changes.length) return;
+    if (!accessToken) {
+      toastError(tBoard('alerts.sessionInvalid'));
+      return;
+    }
+    registerSavingIds(changes.map((change) => change.id));
+    try {
+      for (const change of changes) {
+        const payload: Parameters<typeof updateNode>[1] = {};
+        if ('start' in change) {
+          payload.plannedStartDate = toPlannedIsoDate(change.start ?? null);
+        }
+        if ('end' in change) {
+          payload.plannedEndDate = toPlannedIsoDate(change.end ?? null);
+        }
+        if ('dueAt' in change) {
+          payload.dueAt = change.dueAt ? change.dueAt.toISOString() : null;
+        }
+        if (Object.keys(payload).length === 0) {
+          continue;
+        }
+        await handleApi(() => updateNode(change.id, payload, accessToken));
+      }
+      await refreshActiveBoard();
+      success(tBoard('gantt.notifications.scheduleUpdated'));
+    } catch {
+      // handled by handleApi
+    } finally {
+      releaseSavingIds(changes.map((change) => change.id));
+    }
+  }, [accessToken, handleApi, refreshActiveBoard, registerSavingIds, releaseSavingIds, success, tBoard, toastError]);
+
+  const handleCreateScheduledCard = useCallback(async (input: {
+    columnId: string;
+    title: string;
+    start?: Date | null;
+    end?: Date | null;
+  }) => {
+    if (!accessToken || !board) {
+      toastError(tBoard('alerts.sessionInvalid'));
+      return;
+    }
+    try {
+      const created = await handleApi(
+        () =>
+          createNode(
+            {
+              title: input.title,
+              columnId: input.columnId,
+              dueAt: input.end ? input.end.toISOString() : undefined,
+            },
+            accessToken,
+          ),
+        { success: undefined },
+      );
+      if (!created) {
+        return;
+      }
+      const schedulePayload: Parameters<typeof updateNode>[1] = {};
+      if (input.start) schedulePayload.plannedStartDate = toPlannedIsoDate(input.start);
+      if (input.end) schedulePayload.plannedEndDate = toPlannedIsoDate(input.end);
+      if (Object.keys(schedulePayload).length > 0) {
+        await handleApi(() => updateNode(created.id, schedulePayload, accessToken));
+      }
+      await refreshActiveBoard();
+      success(tBoard('gantt.notifications.taskCreated'));
+    } catch {
+      // toast already managed
+    }
+  }, [accessToken, board, handleApi, refreshActiveBoard, success, tBoard, toastError]);
+
+  const handleCreateDependency = useCallback(
+    (input: {
+      fromId: string;
+      toId: string;
+      type: GanttLinkType;
+      lag?: number;
+      mode?: GanttLinkMode;
+      hardConstraint?: boolean;
+    }) => {
+      setGanttDependencies((prev) => {
+        const exists = prev.some(
+          (dep) => dep.fromId === input.fromId && dep.toId === input.toId && dep.type === input.type,
+        );
+        if (exists) return prev;
+        const next: GanttDependency = {
+          id: generateDependencyId(),
+          fromId: input.fromId,
+          toId: input.toId,
+          type: input.type,
+          lag: Math.round(input.lag ?? 0),
+          mode: input.mode ?? 'ASAP',
+          hardConstraint: Boolean(input.hardConstraint),
+        };
+        const updated = [...prev, next];
+        void persistDependencies(
+          next.toId,
+          updated.filter((dep) => dep.toId === next.toId),
+        );
+        return updated;
+      });
+    },
+    [persistDependencies],
+  );
+
+  const handleUpdateDependency = useCallback(
+    (id: string, patch: Partial<GanttDependency>) => {
+      setGanttDependencies((prev) => {
+        const index = prev.findIndex((dep) => dep.id === id);
+        if (index === -1) return prev;
+        const target = prev[index];
+        const updatedDependency: GanttDependency = {
+          ...target,
+          ...patch,
+          id: target.id,
+          lag: Math.round(patch.lag ?? target.lag),
+          mode: (patch.mode ?? target.mode) as GanttLinkMode,
+          type: (patch.type ?? target.type) as GanttLinkType,
+          hardConstraint: patch.hardConstraint ?? target.hardConstraint,
+        };
+        const next = [...prev];
+        next[index] = updatedDependency;
+        void persistDependencies(
+          updatedDependency.toId,
+          next.filter((dep) => dep.toId === updatedDependency.toId),
+        );
+        return next;
+      });
+    },
+    [persistDependencies],
+  );
+
+  const handleDeleteDependency = useCallback(
+    (id: string) => {
+      setGanttDependencies((prev) => {
+        const target = prev.find((dep) => dep.id === id);
+        if (!target) return prev;
+        const next = prev.filter((dep) => dep.id !== id);
+        void persistDependencies(
+          target.toId,
+          next.filter((dep) => dep.toId === target.toId),
+        );
+        return next;
+      });
+    },
+    [persistDependencies],
+  );
 
   const handleCreateCard = async (columnId:string, title:string) => {
     if(!accessToken || !board) throw new Error(tBoard('alerts.sessionInvalid'));
@@ -1787,7 +2096,7 @@ export function TeamBoardPage(){
         {loading && <BoardSkeleton />}
         {!loading && board && (
           <section className="space-y-4 w-full">
-            <div className="flex items-baseline justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                   <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
                 <HelpTooltip
@@ -1834,83 +2143,134 @@ export function TeamBoardPage(){
                   </div>
                 </button>
               </div>
-              <span className="text-xs uppercase tracking-wide text-muted">
-                  {detailLoading
-                    ? tBoard('columns.header.status.refreshing')
-                    : board.columns.length === 0
-                      ? tBoard('columns.header.status.empty')
-                      : board.columns.length === 1
-                        ? tBoard('columns.header.status.single')
-                        : tBoard('columns.header.status.multiple', { count: board.columns.length })}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setBoardView('kanban')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'kanban'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'kanban'}
+                    title={tBoard('viewToggle.kanbanHint')}
+                  >
+                    {tBoard('viewToggle.kanban')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBoardView('gantt')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'gantt'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'gantt'}
+                    title={tBoard('viewToggle.ganttHint')}
+                  >
+                    {tBoard('viewToggle.gantt')}
+                  </button>
+                </div>
+                <span className="text-xs uppercase tracking-wide text-muted">
+                    {detailLoading
+                      ? tBoard('columns.header.status.refreshing')
+                      : board.columns.length === 0
+                        ? tBoard('columns.header.status.empty')
+                        : board.columns.length === 1
+                          ? tBoard('columns.header.status.single')
+                          : tBoard('columns.header.status.multiple', { count: board.columns.length })}
+                </span>
+              </div>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
-              <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-                <ColumnList
+              boardView === 'kanban' ? (
+                <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                  <ColumnList
+                    columns={displayedColumns}
+                    childBoards={childBoards}
+                    editingColumnId={editingColumnId}
+                    editingValues={{
+                      name: editingName,
+                      wip: editingWip,
+                      backlogReviewAfter: editingBacklogReviewAfter,
+                      backlogReviewEvery: editingBacklogReviewEvery,
+                      backlogArchiveAfter: editingBacklogArchiveAfter,
+                      doneArchiveAfter: editingDoneArchiveAfter,
+                      submitting: editingSubmitting,
+                      error: editingError,
+                    }}
+                    loadingCards={detailLoading}
+                    displayOptions={displayOptions}
+                    onRequestEdit={handleOpenColumnEditorById}
+                    onCancelEdit={handleCancelEditColumn}
+                    onSubmitEdit={handleUpdateColumn}
+                    onFieldChange={(field,val)=>{
+                      switch(field){
+                        case 'name':
+                          setEditingName(val);
+                          break;
+                        case 'wip':
+                          setEditingWip(val);
+                          break;
+                        case 'backlogReviewAfter':
+                          setEditingBacklogReviewAfter(val);
+                          break;
+                        case 'backlogReviewEvery':
+                          setEditingBacklogReviewEvery(val);
+                          break;
+                        case 'backlogArchiveAfter':
+                          setEditingBacklogArchiveAfter(val);
+                          break;
+                        case 'doneArchiveAfter':
+                          setEditingDoneArchiveAfter(val);
+                          break;
+                        default:
+                          break;
+                      }
+                    }}
+                    onMoveColumn={handleMoveColumn}
+                    onDeleteColumn={handleDeleteColumn}
+                    onCreateCard={handleCreateCard}
+                    onOpenCard={handleOpenCard}
+                    onOpenChildBoard={openChildBoard}
+                    onRenameCard={handleRenameCard}
+                    onRequestMoveCard={handleRequestMoveCard}
+                    onRequestDeleteCard={handleRequestDeleteCard}
+                    onShowArchived={handleShowArchived}
+                    onShowSnoozed={handleShowSnoozed}
+                    columnViewMode={columnViewMode}
+                    archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
+                    helpMode={helpMode}
+                  />
+                  <DragOverlay dropAnimation={null}>
+                    {draggingCard && (
+                      <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">
+                        <p className="text-sm font-medium">{draggingCard.title}</p>
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              ) : (
+                <BoardGanttView
+                  key={`gantt-${board.id}`}
+                  boardId={board.id}
+                  boardName={board.name}
                   columns={displayedColumns}
+                  defaultColumnId={backlogColumnId}
                   childBoards={childBoards}
-                  editingColumnId={editingColumnId}
-                  editingValues={{
-                    name: editingName,
-                    wip: editingWip,
-                    backlogReviewAfter: editingBacklogReviewAfter,
-                    backlogReviewEvery: editingBacklogReviewEvery,
-                    backlogArchiveAfter: editingBacklogArchiveAfter,
-                    doneArchiveAfter: editingDoneArchiveAfter,
-                    submitting: editingSubmitting,
-                    error: editingError,
-                  }}
-                  loadingCards={detailLoading}
-                  displayOptions={displayOptions}
-                  onRequestEdit={handleOpenColumnEditorById}
-                  onCancelEdit={handleCancelEditColumn}
-                  onSubmitEdit={handleUpdateColumn}
-                  onFieldChange={(field,val)=>{
-                    switch(field){
-                      case 'name':
-                        setEditingName(val);
-                        break;
-                      case 'wip':
-                        setEditingWip(val);
-                        break;
-                      case 'backlogReviewAfter':
-                        setEditingBacklogReviewAfter(val);
-                        break;
-                      case 'backlogReviewEvery':
-                        setEditingBacklogReviewEvery(val);
-                        break;
-                      case 'backlogArchiveAfter':
-                        setEditingBacklogArchiveAfter(val);
-                        break;
-                      case 'doneArchiveAfter':
-                        setEditingDoneArchiveAfter(val);
-                        break;
-                      default:
-                        break;
-                    }
-                  }}
-                  onMoveColumn={handleMoveColumn}
-                  onDeleteColumn={handleDeleteColumn}
-                  onCreateCard={handleCreateCard}
-                  onOpenCard={handleOpenCard}
+                  dependencies={activeGanttDependencies}
+                  scheduleSavingIds={scheduleSavingSet}
+                  onCreateDependency={handleCreateDependency}
+                  onUpdateDependency={handleUpdateDependency}
+                  onDeleteDependency={handleDeleteDependency}
+                  onCommitScheduleChanges={handleCommitScheduleChanges}
+                  onCreateTask={handleCreateScheduledCard}
+                  onOpenTask={handleOpenCard}
                   onOpenChildBoard={openChildBoard}
-                  onRenameCard={handleRenameCard}
-                  onRequestMoveCard={handleRequestMoveCard}
-                  onRequestDeleteCard={handleRequestDeleteCard}
-                  onShowArchived={handleShowArchived}
-                  onShowSnoozed={handleShowSnoozed}
-                  columnViewMode={columnViewMode}
-                  archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
-                  helpMode={helpMode}
+                  loading={detailLoading}
                 />
-                <DragOverlay dropAnimation={null}>
-                  {draggingCard && (
-                    <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">
-                      <p className="text-sm font-medium">{draggingCard.title}</p>
-                    </div>
-                  )}
-                </DragOverlay>
-              </DndContext>
+              )
             ) : (
               <div className="rounded-2xl border border-dashed border-white/15 bg-card/60 p-8 text-center">
                 <p className="text-sm text-muted">{tBoard('columns.emptyBoard')}</p>
