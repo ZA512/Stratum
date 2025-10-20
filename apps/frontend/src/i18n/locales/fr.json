@@ -1053,6 +1053,7 @@
     "gantt": {
       "subtitle": "Pilotez la chronologie du board",
       "columns": "Colonnes",
+      "lanes": "Lignes",
       "loading": "Mise à jour de la timeline…",
       "zoom": {
         "day": "Jour",
@@ -1062,9 +1063,20 @@
       "toolbar": {
         "today": "Aujourd’hui",
         "undo": "Annuler",
-        "redo": "Rétablir"
+        "redo": "Rétablir",
+        "lanesLabel": "Lignes",
+        "lanesDecrease": "Réduire le nombre de lignes",
+        "lanesIncrease": "Ajouter une ligne",
+        "zoomIn": "Zoom avant",
+        "zoomOut": "Zoom arrière",
+        "resetZoom": "Réinitialiser le zoom"
       },
       "taskRange": "{start} → {end}",
+      "tooltip": {
+        "columnLane": "{column} · Ligne {lane}",
+        "unknownColumn": "Colonne non attribuée"
+      },
+      "laneLabel": "Ligne {index}",
       "prompts": {
         "newTask": "Titre de la nouvelle tâche"
       },
@@ -1075,6 +1087,8 @@
         "lag": "Décalage (jours)",
         "hardConstraint": "Bloquer l’auto-alignement",
         "align": "Aligner ASAP",
+        "startFromTask": "Créer une dépendance depuis la tâche",
+        "handleHint": "Glissez pour créer une dépendance",
         "cycleWarning": "Cycle détecté dans les dépendances. Résolvez-le avant l’alignement.",
         "noChange": "Déjà aligné – aucune mise à jour nécessaire."
       },

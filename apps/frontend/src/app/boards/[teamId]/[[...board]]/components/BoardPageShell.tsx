@@ -80,7 +80,13 @@ const generateDependencyId = () => {
   return Math.random().toString(36).slice(2, 10);
 };
 
-const GANTT_LINKS_STORAGE_KEY = (boardId: string) => `stratum:board:${boardId}:gantt-links`;
+const serializeDependencies = (deps: GanttDependency[]) =>
+  deps
+    .map((dep) =>
+      [dep.id, dep.fromId, dep.toId, dep.type, dep.lag, dep.mode, dep.hardConstraint ? '1' : '0'].join('|'),
+    )
+    .sort()
+    .join('||');
 
 const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showShortId: true,
@@ -768,53 +774,28 @@ export function TeamBoardPage(){
       setGanttDependencies([]);
       return;
     }
-    if (typeof window === 'undefined') return;
-    const key = GANTT_LINKS_STORAGE_KEY(board.id);
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) {
-        setGanttDependencies([]);
-        return;
+    const remote: GanttDependency[] = (board.dependencies ?? []).map((entry) => {
+      const normalizedType: GanttLinkType = (['FS', 'SS', 'FF', 'SF'] as GanttLinkType[]).includes(entry.type as GanttLinkType)
+        ? (entry.type as GanttLinkType)
+        : 'FS';
+      const normalizedMode: GanttLinkMode = entry.mode === 'FREE' ? 'FREE' : 'ASAP';
+      return {
+        id: entry.id,
+        fromId: entry.fromId,
+        toId: entry.toId,
+        type: normalizedType,
+        lag: entry.lag,
+        mode: normalizedMode,
+        hardConstraint: Boolean(entry.hardConstraint),
+      };
+    });
+    setGanttDependencies((prev) => {
+      if (serializeDependencies(prev) === serializeDependencies(remote)) {
+        return prev;
       }
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const valid: GanttDependency[] = parsed
-          .filter((entry) =>
-            entry && typeof entry === 'object' &&
-            typeof entry.id === 'string' &&
-            typeof entry.fromId === 'string' &&
-            typeof entry.toId === 'string' &&
-            typeof entry.type === 'string' &&
-            typeof entry.lag === 'number' &&
-            typeof entry.mode === 'string')
-          .map((entry) => ({
-            id: entry.id,
-            fromId: entry.fromId,
-            toId: entry.toId,
-            type: (['FS','SS','FF','SF'].includes(entry.type) ? entry.type : 'FS') as GanttLinkType,
-            lag: entry.lag,
-            mode: entry.mode === 'FREE' ? 'FREE' : 'ASAP',
-            hardConstraint: Boolean(entry.hardConstraint),
-          }));
-        setGanttDependencies(valid);
-      } else {
-        setGanttDependencies([]);
-      }
-    } catch {
-      setGanttDependencies([]);
-    }
-  }, [board?.id]);
-
-  useEffect(() => {
-    if (!board?.id) return;
-    if (typeof window === 'undefined') return;
-    try {
-      const key = GANTT_LINKS_STORAGE_KEY(board.id);
-      window.localStorage.setItem(key, JSON.stringify(ganttDependencies));
-    } catch {
-      // ignore persistence errors
-    }
-  }, [board?.id, ganttDependencies]);
+      return remote;
+    });
+  }, [board?.id, board?.dependencies]);
 
   const displayedColumns: BoardColumnWithNodes[] | undefined = useMemo(() => {
     if (!effectiveColumns) return effectiveColumns;
@@ -1289,6 +1270,41 @@ export function TeamBoardPage(){
     setScheduleSavingIds((prev) => prev.filter((id) => !ids.includes(id)));
   }, []);
 
+  const persistNodeDependencies = useCallback(async (
+    targetId: string,
+    nodeDependencies: GanttDependency[],
+    previousState: GanttDependency[],
+  ) => {
+    if (!accessToken) {
+      toastError(tBoard('alerts.sessionInvalid'));
+      setGanttDependencies(previousState);
+      return;
+    }
+
+    registerSavingIds([targetId]);
+    try {
+      const scheduleDependencies = nodeDependencies.map((dep) => ({
+        id: dep.id,
+        fromId: dep.fromId,
+        type: dep.type,
+        lag: dep.lag,
+        mode: dep.mode,
+        hardConstraint: dep.hardConstraint,
+      }));
+      const scheduleMode = nodeDependencies.some((dep) => dep.mode === 'ASAP') ? 'asap' : 'manual';
+      const payload: Parameters<typeof updateNode>[1] = {
+        scheduleDependencies,
+        scheduleMode,
+      };
+      await handleApi(() => updateNode(targetId, payload, accessToken));
+      await refreshActiveBoard();
+    } catch {
+      setGanttDependencies(previousState);
+    } finally {
+      releaseSavingIds([targetId]);
+    }
+  }, [accessToken, handleApi, refreshActiveBoard, registerSavingIds, releaseSavingIds, tBoard, toastError]);
+
   const handleCommitScheduleChanges = useCallback(async (changes: ScheduleChange[]) => {
     if (!changes.length) return;
     if (!accessToken) {
@@ -1361,6 +1377,19 @@ export function TeamBoardPage(){
     }
   }, [accessToken, board, handleApi, refreshActiveBoard, success, tBoard, toastError]);
 
+  type PendingDependencyPersist = {
+    targetId: string;
+    next: GanttDependency[];
+    prev: GanttDependency[];
+  };
+
+  const scheduleDependencyPersist = useCallback((pending: PendingDependencyPersist | null) => {
+    if (!pending) return;
+    setTimeout(() => {
+      void persistNodeDependencies(pending.targetId, pending.next, pending.prev);
+    }, 0);
+  }, [persistNodeDependencies]);
+
   const handleCreateDependency = useCallback((input: {
     fromId: string;
     toId: string;
@@ -1369,10 +1398,11 @@ export function TeamBoardPage(){
     mode?: GanttLinkMode;
     hardConstraint?: boolean;
   }) => {
+    let pending: PendingDependencyPersist | null = null;
     setGanttDependencies((prev) => {
       const exists = prev.some((dep) => dep.fromId === input.fromId && dep.toId === input.toId && dep.type === input.type);
       if (exists) return prev;
-      const next: GanttDependency = {
+      const nextDependency: GanttDependency = {
         id: generateDependencyId(),
         fromId: input.fromId,
         toId: input.toId,
@@ -1381,19 +1411,59 @@ export function TeamBoardPage(){
         mode: input.mode ?? 'ASAP',
         hardConstraint: Boolean(input.hardConstraint),
       };
-      return [...prev, next];
+      const next = [...prev, nextDependency];
+      pending = {
+        targetId: input.toId,
+        next: next.filter((dep) => dep.toId === input.toId),
+        prev,
+      };
+      return next;
     });
-  }, []);
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
 
   const handleUpdateDependency = useCallback((id: string, patch: Partial<GanttDependency>) => {
-    setGanttDependencies((prev) =>
-      prev.map((dep) => (dep.id === id ? { ...dep, ...patch, id: dep.id } : dep)),
-    );
-  }, []);
+    let pending: PendingDependencyPersist | null = null;
+    setGanttDependencies((prev) => {
+      const index = prev.findIndex((dep) => dep.id === id);
+      if (index === -1) return prev;
+      const current = prev[index];
+      const updated = { ...current, ...patch, id } as GanttDependency;
+      if (
+        current.type === updated.type &&
+        current.lag === updated.lag &&
+        current.mode === updated.mode &&
+        current.hardConstraint === updated.hardConstraint
+      ) {
+        return prev;
+      }
+      const next = [...prev];
+      next[index] = updated;
+      pending = {
+        targetId: updated.toId,
+        next: next.filter((dep) => dep.toId === updated.toId),
+        prev,
+      };
+      return next;
+    });
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
 
   const handleDeleteDependency = useCallback((id: string) => {
-    setGanttDependencies((prev) => prev.filter((dep) => dep.id !== id));
-  }, []);
+    let pending: PendingDependencyPersist | null = null;
+    setGanttDependencies((prev) => {
+      const target = prev.find((dep) => dep.id === id);
+      if (!target) return prev;
+      const next = prev.filter((dep) => dep.id !== id);
+      pending = {
+        targetId: target.toId,
+        next: next.filter((dep) => dep.toId === target.toId),
+        prev,
+      };
+      return next;
+    });
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
 
   const handleCreateCard = async (columnId:string, title:string) => {
     if(!accessToken || !board) throw new Error(tBoard('alerts.sessionInvalid'));

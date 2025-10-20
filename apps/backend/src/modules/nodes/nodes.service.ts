@@ -5341,29 +5341,33 @@ export class NodesService {
     id: string;
     columns: Array<{ id: string; name: string; position: number }>;
   } | null> {
-    // Trouver le board personnel de l'utilisateur
-    const membership = await tx.membership.findFirst({
+    // Un utilisateur peut appartenir à plusieurs teams personnelles (ex: il collabore sur le board d'un collègue).
+    // On ne retourne que le board réellement contrôlé par l'utilisateur.
+    const memberships = await tx.membership.findMany({
       where: {
         userId,
-        status: 'ACTIVE',
-        team: {
-          isPersonal: true,
-        },
+        status: MembershipStatus.ACTIVE,
+        team: { isPersonal: true },
       },
       include: {
         team: {
           include: {
+            memberships: {
+              where: { status: MembershipStatus.ACTIVE },
+              select: { userId: true },
+            },
             nodes: {
-              where: {
-                parentId: null,
-              },
+              where: { parentId: null },
+              orderBy: { createdAt: 'asc' },
               include: {
                 board: {
-                  include: {
+                  select: {
+                    id: true,
+                    ownerUserId: true,
+                    isPersonal: true,
                     columns: {
-                      orderBy: {
-                        position: 'asc',
-                      },
+                      select: { id: true, name: true, position: true },
+                      orderBy: { position: 'asc' },
                     },
                   },
                 },
@@ -5372,21 +5376,40 @@ export class NodesService {
           },
         },
       },
+      orderBy: { createdAt: 'asc' },
     });
 
-    if (!membership?.team?.nodes?.[0]?.board) {
-      return null;
+    for (const membership of memberships) {
+      const otherMembers = (membership.team.memberships ?? []).filter(
+        (entry) => entry.userId !== userId,
+      );
+
+      for (const node of membership.team.nodes ?? []) {
+        const board = node.board;
+        if (!board || !board.isPersonal) {
+          continue;
+        }
+        if (board.ownerUserId && board.ownerUserId !== userId) {
+          // Board personnel appartenant à un autre utilisateur
+          continue;
+        }
+        if (!board.ownerUserId && otherMembers.length > 0) {
+          // Board sans propriétaire mais déjà partagé → ne pas usurper
+          continue;
+        }
+
+        return {
+          id: board.id,
+          columns: board.columns.map((column) => ({
+            id: column.id,
+            name: column.name,
+            position: column.position,
+          })),
+        };
+      }
     }
 
-    const board = membership.team.nodes[0].board;
-    return {
-      id: board.id,
-      columns: board.columns.map((c) => ({
-        id: c.id,
-        name: c.name,
-        position: c.position,
-      })),
-    };
+    return null;
   }
 
   async ensureBoardOnly(

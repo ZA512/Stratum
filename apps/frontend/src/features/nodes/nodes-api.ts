@@ -40,6 +40,16 @@ export type UpdateNodeInput = {
   backlogHiddenUntil?: string | null;
   backlogReviewRestart?: boolean;
   archivedAt?: string | null;
+  scheduleMode?: 'manual' | 'asap' | null;
+  hardConstraint?: boolean;
+  scheduleDependencies?: Array<{
+    id?: string;
+    fromId: string;
+    type: 'FS' | 'SS' | 'FF' | 'SF';
+    lag?: number;
+    mode?: 'ASAP' | 'FREE';
+    hardConstraint?: boolean;
+  }> | null;
 };
 
 export async function createNode(input: CreateNodeInput, accessToken: string): Promise<BoardNode> {

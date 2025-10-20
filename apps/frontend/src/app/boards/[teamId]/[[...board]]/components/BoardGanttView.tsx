@@ -11,7 +11,7 @@ import { useTranslation } from "@/i18n";
 import type { BoardColumnWithNodes } from "./types";
 import type { GanttDependency, ScheduleChange } from "./BoardPageShell";
 import type { BoardNode, NodeChildBoard } from "@/features/boards/boards-api";
-import { BEHAVIOR_COLOR_CLASSES } from "./constants";
+import { BEHAVIOR_ACCENT_CLASSES, BEHAVIOR_BAR_BG_CLASSES } from "./constants";
 import {
   Zap,
   Circle,
@@ -25,11 +25,18 @@ import {
   Layers,
   Lock,
   Unlock,
+  ZoomIn,
+  ZoomOut,
+  RefreshCw,
 } from "lucide-react";
 
 const MS_PER_DAY = 86_400_000;
 const LANE_HEIGHT = 60;
+const LANE_GUTTER_WIDTH = 72;
 const MIN_BAR_WIDTH = 12;
+const MIN_ZOOM_SCALE = 0.6;
+const MAX_ZOOM_SCALE = 2;
+const ZOOM_STEP = 0.2;
 
 type ZoomLevel = "day" | "week" | "month";
 
@@ -46,6 +53,7 @@ type InternalTask = {
   columnName: string;
   columnBehavior: BoardColumnWithNodes["behaviorKey"];
   colorClass: string;
+  accentClass: string;
   start: Date;
   end: Date;
   dueAt: Date | null;
@@ -177,7 +185,8 @@ function buildTask(
   column: BoardColumnWithNodes,
   childBoards: Record<string, NodeChildBoard>,
 ): InternalTask {
-  const colorClass = BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || "bg-slate-500";
+  const colorClass = BEHAVIOR_BAR_BG_CLASSES[column.behaviorKey] || "bg-slate-500/25";
+  const accentClass = BEHAVIOR_ACCENT_CLASSES[column.behaviorKey] || "bg-slate-400";
   const plannedStart = parseMaybeDate(node.plannedStartDate ?? null);
   const plannedEnd = parseMaybeDate(node.plannedEndDate ?? null);
   const dueAt = parseMaybeDate(node.dueAt ?? null);
@@ -214,6 +223,7 @@ function buildTask(
     columnName: column.name,
     columnBehavior: column.behaviorKey,
     colorClass,
+    accentClass,
     start,
     end,
     dueAt: end,
@@ -379,8 +389,11 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
   loading = false,
 }) => {
   const { t: tBoard, locale } = useTranslation("board");
-  const [zoom, setZoom] = useState<ZoomLevel>("week");
-  const dayWidth = ZOOM_DAY_WIDTH[zoom];
+  const [zoom, setZoom] = useState<ZoomLevel>("day");
+  const [zoomScale, setZoomScale] = useState(1);
+  const dayWidth = Math.max(8, Math.round(ZOOM_DAY_WIDTH[zoom] * zoomScale));
+  const canZoomOut = zoomScale > MIN_ZOOM_SCALE + 0.01;
+  const canZoomIn = zoomScale < MAX_ZOOM_SCALE - 0.01;
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
   const [scheduleWarning, setScheduleWarning] = useState<string | null>(null);
@@ -509,39 +522,91 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     return groups;
   }, [days, monthFormatter]);
 
-  const tasksByColumn = useMemo(() => {
-    const map = new Map<string, InternalTask[]>();
+  const columnById = useMemo(() => {
+    const map = new Map<string, BoardColumnWithNodes>();
     for (const column of columns) {
-      map.set(column.id, []);
-    }
-    for (const task of taskArray) {
-      const bucket = map.get(task.columnId);
-      if (bucket) {
-        bucket.push(task);
-      }
-    }
-    for (const bucket of map.values()) {
-      bucket.sort((a, b) => a.start.getTime() - b.start.getTime());
+      map.set(column.id, column);
     }
     return map;
-  }, [columns, taskArray]);
+  }, [columns]);
 
-  const layout = useMemo(() => {
-    const map = new Map<string, LayoutBox>();
-    for (let laneIndex = 0; laneIndex < columns.length; laneIndex += 1) {
-      const column = columns[laneIndex];
-      const tasks = tasksByColumn.get(column.id) ?? [];
-      for (const task of tasks) {
-        const offsetStart = differenceInDays(task.start, range.start);
-        const duration = Math.max(1, differenceInDays(task.end, task.start) + 1);
-        const x = offsetStart * dayWidth;
-        const width = Math.max(MIN_BAR_WIDTH, duration * dayWidth);
-        const y = laneIndex * LANE_HEIGHT;
-        map.set(task.id, { x, width, y, height: LANE_HEIGHT });
+  const laneComputation = useMemo(() => {
+    if (taskArray.length === 0) {
+      return {
+        layout: new Map<string, LayoutBox>(),
+        autoLaneCount: 1,
+        laneMeta: [{ taskIds: [] }],
+      } as const;
+    }
+
+    const sorted = [...taskArray].sort((a, b) => {
+      const diffStart = a.start.getTime() - b.start.getTime();
+      if (diffStart !== 0) return diffStart;
+      const diffEnd = a.end.getTime() - b.end.getTime();
+      if (diffEnd !== 0) return diffEnd;
+      return a.id.localeCompare(b.id);
+    });
+
+    const assignment = new Map<string, number>();
+    const lanes: InternalTask[][] = [];
+
+    for (const task of sorted) {
+      let placed = false;
+      for (let laneIndex = 0; laneIndex < lanes.length; laneIndex += 1) {
+        const lane = lanes[laneIndex];
+        const lastTask = lane[lane.length - 1];
+        if (task.start.getTime() > lastTask.end.getTime()) {
+          lane.push(task);
+          assignment.set(task.id, laneIndex);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        lanes.push([task]);
+        assignment.set(task.id, lanes.length - 1);
       }
     }
-    return map;
-  }, [columns, tasksByColumn, range.start, dayWidth]);
+
+    const autoLaneCount = Math.max(1, lanes.length);
+    const layout = new Map<string, LayoutBox>();
+    const laneMeta = Array.from({ length: autoLaneCount }, (_, index) => ({
+      taskIds: lanes[index]?.map((entry) => entry.id) ?? [],
+    }));
+
+    for (const task of taskArray) {
+      const laneIndex = assignment.get(task.id) ?? 0;
+      const offsetStart = differenceInDays(task.start, range.start);
+      const duration = Math.max(1, differenceInDays(task.end, task.start) + 1);
+      const x = offsetStart * dayWidth;
+      const width = Math.max(MIN_BAR_WIDTH, duration * dayWidth);
+      const y = laneIndex * LANE_HEIGHT;
+      layout.set(task.id, { x, width, y, height: LANE_HEIGHT });
+    }
+
+    return { layout, autoLaneCount, laneMeta } as const;
+  }, [taskArray, dayWidth, range.start]);
+
+  const { layout, autoLaneCount, laneMeta } = laneComputation;
+  const [laneCount, setLaneCount] = useState<number>(autoLaneCount);
+  const previousBoardIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setLaneCount((prev) => Math.max(prev, autoLaneCount));
+  }, [autoLaneCount]);
+
+  useEffect(() => {
+    if (!boardId) return;
+    if (previousBoardIdRef.current !== boardId) {
+      previousBoardIdRef.current = boardId;
+      setLaneCount(Math.max(autoLaneCount, 1));
+    }
+  }, [boardId, autoLaneCount]);
+
+  const paddedLaneMeta = useMemo(
+    () => Array.from({ length: Math.max(laneCount, 1) }, (_, index) => laneMeta[index] ?? { taskIds: [] }),
+    [laneMeta, laneCount],
+  );
 
   const applyChanges = useCallback((changes: ScheduleChange[]) => {
     if (!changes.length) return;
@@ -594,6 +659,24 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     const offset = Math.max(0, todayIndex * dayWidth - scrollRef.current.clientWidth / 2);
     scrollRef.current.scrollTo({ left: offset, behavior: "smooth" });
   }, [dayWidth, todayIndex]);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomScale((prev) => {
+      const next = Math.max(MIN_ZOOM_SCALE, parseFloat((prev - ZOOM_STEP).toFixed(2)));
+      return next;
+    });
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomScale((prev) => {
+      const next = Math.min(MAX_ZOOM_SCALE, parseFloat((prev + ZOOM_STEP).toFixed(2)));
+      return next;
+    });
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomScale(1);
+  }, []);
 
   const handleLinkPointerMove = useCallback((event: PointerEvent) => {
     const rect = timelineRef.current?.getBoundingClientRect();
@@ -797,9 +880,10 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     [applyChanges, dependencies, tBoard],
   );
 
-  const handleLaneDoubleClick = useCallback(
-    (columnId: string) => (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!defaultColumnId && !columnId) return;
+  const handleTimelineDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const fallbackColumnId = defaultColumnId ?? columns[0]?.id ?? null;
+      if (!fallbackColumnId) return;
       const rect = timelineRef.current?.getBoundingClientRect();
       if (!rect) return;
       const dayIndex = Math.max(0, Math.floor((event.clientX - rect.left) / dayWidth));
@@ -808,13 +892,13 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
       const title = window.prompt(tBoard("gantt.prompts.newTask"));
       if (!title || !title.trim()) return;
       onCreateTask({
-        columnId: columnId || defaultColumnId!,
+        columnId: fallbackColumnId,
         title: title.trim(),
         start,
         end,
       });
     },
-    [dayWidth, range.start, defaultColumnId, onCreateTask, tBoard],
+    [columns, dayWidth, defaultColumnId, onCreateTask, range.start, tBoard],
   );
 
   const activeDependency = useMemo(() => {
@@ -944,20 +1028,53 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     const isSaving = scheduleSavingIds.has(task.id);
     const isMilestone = task.duration === 1;
     const childBoard = childBoards[task.id];
+    const isCompact = box.width <= dayWidth * 1.25;
+    const column = columnById.get(task.columnId);
+    const laneIndex = Math.floor(box.y / LANE_HEIGHT);
+    const columnLabel = column?.name ?? tBoard("gantt.tooltip.unknownColumn");
+    const tooltipLines = [
+      task.title,
+      tBoard("gantt.tooltip.columnLane", {
+        column: columnLabel,
+        lane: laneIndex + 1,
+      }),
+      tBoard("gantt.taskRange", {
+        start: dayFormatter.format(task.start),
+        end: dayFormatter.format(task.end),
+      }),
+    ];
+    if (task.progress != null) {
+      tooltipLines.push(`${task.progress}%`);
+    }
+    const tooltip = tooltipLines.join("\n");
     return (
       <div
         key={task.id}
         className="absolute"
-        style={{ left: box.x, width: box.width, top: box.y + 6 }}
+        style={{ left: box.x, width: box.width, top: box.y + 8 }}
         onMouseEnter={handleTaskMouseEnter(task.id)}
         onMouseLeave={handleTaskMouseLeave}
         data-task-id={task.id}
       >
-        <div
-          className={`group relative flex h-9 items-center overflow-hidden rounded-lg border border-white/15 px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
-          onDoubleClick={() => onOpenTask(task.id)}
-          onPointerDown={handleTaskPointerDown(task.id, "move")}
+        <button
+          type="button"
+          className="absolute -left-4 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-surface/95 text-muted shadow transition hover:border-accent hover:text-foreground z-20"
+          onPointerDown={handleStartLink(task.id)}
+          aria-label={tBoard("gantt.links.startFromTask")}
+          title={tBoard("gantt.links.handleHint")}
         >
+          <Link2 size={12} />
+        </button>
+        <div
+          className={`group relative flex h-10 items-center overflow-hidden rounded-lg border border-white/15 px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
+          onDoubleClick={(event) => {
+            event.stopPropagation();
+            onOpenTask(task.id);
+          }}
+          onPointerDown={handleTaskPointerDown(task.id, "move")}
+          title={tooltip}
+        >
+          <div className={`absolute inset-x-0 top-0 h-1 ${task.accentClass}`} />
           {task.progress != null && (
             <div
               className="absolute inset-0 bg-black/20"
@@ -966,14 +1083,15 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           )}
           <div className="relative z-10 flex w-full items-center gap-2">
             <div className="min-w-0">
-              <p className="truncate font-semibold leading-tight">{task.title}</p>
-              <p className="text-[10px] text-white/70">
-                {tBoard("gantt.taskRange", {
-                  start: dayFormatter.format(task.start),
-                  end: dayFormatter.format(task.end),
-                })}
-              </p>
+              <p className={`truncate font-semibold leading-tight ${isCompact ? "text-[11px]" : "text-sm"}`}>{task.title}</p>
             </div>
+            {task.progress != null && (
+              <span
+                className={`shrink-0 rounded-full bg-black/30 px-2 py-0.5 font-semibold text-white/80 ${isCompact ? "text-[9px]" : "text-[11px]"}`}
+              >
+                {task.progress}%
+              </span>
+            )}
             <div className="ml-auto flex items-center gap-2">
               {childBoard && onOpenChildBoard && (
                 <button
@@ -987,24 +1105,17 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
                   <Layers size={14} />
                 </button>
               )}
-              <button
-                type="button"
-                className="rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground"
-                onPointerDown={handleStartLink(task.id)}
-              >
-                <Link2 size={14} />
-              </button>
             </div>
           </div>
           <div
-            className="absolute left-0 top-0 h-full w-1 cursor-ew-resize"
+            className="absolute left-0 top-0 h-full w-2 cursor-ew-resize"
             onPointerDown={(event) => {
               event.stopPropagation();
               handleTaskPointerDown(task.id, "resize-start")(event);
             }}
           />
           <div
-            className="absolute right-0 top-0 h-full w-1 cursor-ew-resize"
+            className="absolute right-0 top-0 h-full w-2 cursor-ew-resize"
             onPointerDown={(event) => {
               event.stopPropagation();
               handleTaskPointerDown(task.id, "resize-end")(event);
@@ -1045,6 +1156,56 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-surface/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+            <button
+              type="button"
+              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              onClick={handleZoomOut}
+              disabled={!canZoomOut}
+              title={tBoard("gantt.toolbar.zoomOut")}
+            >
+              <ZoomOut size={12} />
+            </button>
+            <span className="px-1 font-semibold text-foreground">×{zoomScale.toFixed(1)}</span>
+            <button
+              type="button"
+              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              onClick={handleZoomIn}
+              disabled={!canZoomIn}
+              title={tBoard("gantt.toolbar.zoomIn")}
+            >
+              <ZoomIn size={12} />
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground"
+              onClick={handleResetZoom}
+              title={tBoard("gantt.toolbar.resetZoom")}
+            >
+              <RefreshCw size={12} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-surface/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+            <span>{tBoard("gantt.toolbar.lanesLabel")}</span>
+            <button
+              type="button"
+              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              onClick={() => setLaneCount((prev) => Math.max(autoLaneCount, prev - 1))}
+              disabled={laneCount <= autoLaneCount}
+              title={tBoard("gantt.toolbar.lanesDecrease")}
+            >
+              <Minus size={12} />
+            </button>
+            <span className="px-1 font-semibold text-foreground">{laneCount}</span>
+            <button
+              type="button"
+              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground"
+              onClick={() => setLaneCount((prev) => prev + 1)}
+              title={tBoard("gantt.toolbar.lanesIncrease")}
+            >
+              <Plus size={12} />
+            </button>
+          </div>
           <button
             type="button"
             className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 transition hover:border-accent hover:text-foreground"
@@ -1079,8 +1240,11 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
         </div>
       )}
       <div className="flex border-b border-white/10 bg-surface/60">
-        <div className="w-56 shrink-0 border-r border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
-          {tBoard("gantt.columns")}
+        <div
+          className="shrink-0 border-r border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted"
+          style={{ width: LANE_GUTTER_WIDTH }}
+        >
+          {tBoard("gantt.lanes")}
         </div>
         <div className="relative flex-1 overflow-hidden">
           <div className="sticky top-0 z-20 border-b border-white/10 bg-surface/80 backdrop-blur">
@@ -1113,20 +1277,18 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </div>
         </div>
       </div>
-      <div className="relative flex" style={{ minHeight: Math.max(columns.length * LANE_HEIGHT, 240) }}>
-        <div className="w-56 shrink-0 border-r border-white/10">
-          {columns.map((column) => (
+      <div className="relative flex" style={{ minHeight: Math.max(laneCount * LANE_HEIGHT, 240) }}>
+        <div
+          className="shrink-0 border-r border-white/10 bg-surface/40"
+          style={{ width: LANE_GUTTER_WIDTH }}
+        >
+          {paddedLaneMeta.map((lane, index) => (
             <div
-              key={column.id}
-              className="flex h-[60px] items-center justify-between px-4 text-sm"
+              key={`lane-label-${index}`}
+              className="flex h-[60px] items-center justify-between px-3 text-[10px] uppercase tracking-wide text-muted"
             >
-              <div className="min-w-0">
-                <p className="truncate font-semibold">{column.name}</p>
-                <p className="text-xs text-muted uppercase">{tBoard(`behaviors.${column.behaviorKey}` as const)}</p>
-              </div>
-              <span
-                className={`inline-flex h-2 w-2 rounded-full ${BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || "bg-slate-500"}`}
-              />
+              <span className="font-semibold text-foreground">{tBoard('gantt.laneLabel', { index: index + 1 })}</span>
+              <span className="text-[10px] text-white/60">{lane.taskIds.length}</span>
             </div>
           ))}
         </div>
@@ -1134,8 +1296,16 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           <div
             ref={timelineRef}
             className="relative"
-            style={{ width: totalDays * dayWidth, minHeight: columns.length * LANE_HEIGHT }}
+            style={{ width: totalDays * dayWidth, minHeight: Math.max(laneCount * LANE_HEIGHT, 240) }}
+            onDoubleClick={handleTimelineDoubleClick}
           >
+            {Array.from({ length: laneCount }).map((_, laneIndex) => (
+              <div
+                key={`lane-row-${laneIndex}`}
+                className="pointer-events-none absolute left-0 right-0 border-b border-white/10"
+                style={{ top: laneIndex * LANE_HEIGHT, height: LANE_HEIGHT }}
+              />
+            ))}
             {days.map((day, index) => (
               <div
                 key={`grid-${day.toISOString()}`}
@@ -1147,20 +1317,11 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               className="absolute top-0 bottom-0 w-px bg-accent/60"
               style={{ left: todayIndex * dayWidth }}
             />
-            {columns.map((column) => (
-              <div
-                key={`lane-${column.id}`}
-                className="relative border-b border-white/10"
-                style={{ height: LANE_HEIGHT }}
-                onDoubleClick={handleLaneDoubleClick(column.id)}
-              >
-                {(tasksByColumn.get(column.id) ?? []).map(renderTaskBar)}
-              </div>
-            ))}
+            {taskArray.map(renderTaskBar)}
             <svg
-              className="pointer-events-none absolute left-0 top-0"
+              className="pointer-events-none absolute left-0 top-0 z-10"
               width={totalDays * dayWidth}
-              height={columns.length * LANE_HEIGHT}
+              height={Math.max(laneCount * LANE_HEIGHT, 240)}
             >
               <defs>
                 <marker id={markerAsapId} markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">

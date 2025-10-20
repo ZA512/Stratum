@@ -1055,6 +1055,7 @@
     "gantt": {
       "subtitle": "Plan the timeline for this board",
       "columns": "Columns",
+      "lanes": "Lanes",
       "loading": "Updating timeline…",
       "zoom": {
         "day": "Day",
@@ -1064,9 +1065,20 @@
       "toolbar": {
         "today": "Today",
         "undo": "Undo",
-        "redo": "Redo"
+        "redo": "Redo",
+        "lanesLabel": "Lanes",
+        "lanesDecrease": "Decrease lane count",
+        "lanesIncrease": "Add a lane",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "resetZoom": "Reset zoom"
       },
       "taskRange": "{start} → {end}",
+      "tooltip": {
+        "columnLane": "{column} · Lane {lane}",
+        "unknownColumn": "Unassigned column"
+      },
+      "laneLabel": "Lane {index}",
       "prompts": {
         "newTask": "Title of the new task"
       },
@@ -1077,6 +1089,8 @@
         "lag": "Lag (days)",
         "hardConstraint": "Prevent auto-alignment",
         "align": "Align ASAP",
+        "startFromTask": "Start dependency from task",
+        "handleHint": "Drag from here to create a dependency",
         "cycleWarning": "Dependency cycle detected. Resolve it before aligning.",
         "noChange": "Already aligned – no update required."
       },
