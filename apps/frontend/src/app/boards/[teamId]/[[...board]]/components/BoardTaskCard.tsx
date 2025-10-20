@@ -414,6 +414,7 @@ export function BoardTaskCard({
         showDueDate={displayOptions.showDueDate}
         showProgress={displayOptions.showProgress}
         showEffort={displayOptions.showEffort}
+        isShared={node.isSharedRoot}
         helpMode={helpMode}
         helpMessages={helpMessages}
         onClick={() => onOpen(node.id)}

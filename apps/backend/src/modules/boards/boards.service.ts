@@ -386,6 +386,23 @@ export class BoardsService {
       behaviorByColumn.set(column.id, column.behavior.key);
     }
 
+    // Récupérer les IDs des nodes qui ont des partages avec d'autres utilisateurs
+    const nodeIdsWithSharing = new Set<string>();
+    if (userId && filteredNodes.length > 0) {
+      const nodeIds = filteredNodes.map((n) => n.id as string);
+      const sharingPlacements = await this.prisma.sharedNodePlacement.findMany({
+        where: {
+          nodeId: { in: nodeIds },
+          userId: { not: userId }, // Partages avec d'AUTRES utilisateurs
+        },
+        select: { nodeId: true },
+        distinct: ['nodeId'],
+      });
+      for (const placement of sharingPlacements) {
+        nodeIdsWithSharing.add(placement.nodeId);
+      }
+    }
+
     const workflowByNode = new Map<string, ParsedWorkflowSnapshot>();
     const snoozedCounts = new Map<string, number>();
     const nodes = [] as typeof filteredNodes;
@@ -566,8 +583,10 @@ export class BoardsService {
         workflowByNode.get(node.id) ??
         this.parseWorkflowMetadata(node.metadata ?? null);
 
-      // Déterminer si c'est une tâche mère partagée et si l'utilisateur peut la supprimer
-      const isSharedRoot = node.isSharedRoot ?? false;
+      // Déterminer si c'est une tâche mère partagée :
+      // 1. Si elle provient d'un SharedNodePlacement reçu (node.isSharedRoot déjà true)
+      // 2. OU si elle a des partages actifs avec d'autres utilisateurs (propriétaire qui a partagé)
+      const isSharedRoot = node.isSharedRoot ?? nodeIdsWithSharing.has(node.id);
       const isCreator = userId && node.createdById === userId;
       const canDelete = !isSharedRoot || isCreator;
 
