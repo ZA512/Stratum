@@ -331,15 +331,22 @@ export class BoardsService {
 
     // IMPORTANT: Si c'est un board personnel d'un autre utilisateur,
     // on ne charge QUE les tâches avec SharedNodePlacement
-    const isOtherPersonalBoard = board.isPersonal && userId && board.ownerUserId && board.ownerUserId !== userId;
+    const isOtherPersonalBoard =
+      board.isPersonal &&
+      userId &&
+      board.ownerUserId &&
+      board.ownerUserId !== userId;
 
     if (isOtherPersonalBoard) {
       // Sur le board personnel d'Alice, Bob ne voit QUE les tâches avec placement
-      console.log('[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements', {
-        userId,
-        boardOwnerId: board.ownerUserId,
-        sharedPlacementsCount: sharedPlacements.length,
-      });
+      console.log(
+        '[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements',
+        {
+          userId,
+          boardOwnerId: board.ownerUserId,
+          sharedPlacementsCount: sharedPlacements.length,
+        },
+      );
     } else {
       // Sur son propre board, l'utilisateur voit toutes les tâches du board
       // (sauf celles qui ont un placement personnalisé, qui seront ajoutées après)

@@ -1917,7 +1917,8 @@ export class NodesService {
 
     if (dto.dueAt !== undefined) {
       const oldDue = node.dueAt?.toISOString() ?? null;
-      const newDue = dto.dueAt === null ? null : new Date(dto.dueAt).toISOString();
+      const newDue =
+        dto.dueAt === null ? null : new Date(dto.dueAt).toISOString();
       if (oldDue !== newDue) {
         activityPromises.push(
           this.activityService.logActivity(
@@ -1952,7 +1953,10 @@ export class NodesService {
       );
     }
 
-    if (dto.tags !== undefined && JSON.stringify(node.tags) !== JSON.stringify(dto.tags)) {
+    if (
+      dto.tags !== undefined &&
+      JSON.stringify(node.tags) !== JSON.stringify(dto.tags)
+    ) {
       activityPromises.push(
         this.activityService.logActivity(
           nodeId,
@@ -3647,8 +3651,16 @@ export class NodesService {
         status: updated.status,
         respondedAt: updated.respondedAt?.toISOString() ?? now.toISOString(),
         // Retourner le board personnel de l'utilisateur pour ACCEPTED, sinon le board de la tâche
-        ...(responseBoardId ? { boardId: responseBoardId } : targetBoardId ? { boardId: targetBoardId } : {}),
-        ...(responseColumnId ? { columnId: responseColumnId } : targetColumnId ? { columnId: targetColumnId } : {}),
+        ...(responseBoardId
+          ? { boardId: responseBoardId }
+          : targetBoardId
+            ? { boardId: targetBoardId }
+            : {}),
+        ...(responseColumnId
+          ? { columnId: responseColumnId }
+          : targetColumnId
+            ? { columnId: targetColumnId }
+            : {}),
         ...(columnBehaviorKey ? { columnBehaviorKey } : {}),
       };
     });
@@ -3982,7 +3994,10 @@ export class NodesService {
       name: b.node.title,
     }));
   }
-  async getBreadcrumb(nodeId: string, userId?: string): Promise<NodeBreadcrumbDto> {
+  async getBreadcrumb(
+    nodeId: string,
+    userId?: string,
+  ): Promise<NodeBreadcrumbDto> {
     const current = await this.prisma.node.findUnique({
       where: { id: nodeId },
       select: {
@@ -4037,7 +4052,7 @@ export class NodesService {
     });
 
     const boardMap = new Map(boards.map((board) => [board.nodeId, board.id]));
-    
+
     // Si un userId est fourni, trouver le board personnel de l'utilisateur
     let userPersonalBoardId: string | null = null;
     if (userId) {
@@ -4053,7 +4068,7 @@ export class NodesService {
 
     const items: NodeBreadcrumbItemDto[] = chain.reverse().map((node) => {
       let boardId = boardMap.get(node.id) ?? null;
-      
+
       // Si un boardId existe et qu'il n'appartient pas à l'utilisateur,
       // utiliser le board personnel de l'utilisateur à la place
       if (boardId && userId && userPersonalBoardId) {
@@ -4063,7 +4078,7 @@ export class NodesService {
           boardId = userPersonalBoardId;
         }
       }
-      
+
       return {
         id: node.id,
         title: node.title,

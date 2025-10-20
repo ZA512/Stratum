@@ -247,7 +247,11 @@ export class BoardsController {
       // 1. La team est personnelle
       // 2. Le board n'a PAS ENCORE de propriétaire (ownerUserId === null)
       // 3. OU le propriétaire actuel est l'utilisateur courant (cas de réparation légitime)
-      if (t?.isPersonal && (b.ownerUserId === null || b.ownerUserId === user.id) && b.ownerUserId !== user.id) {
+      if (
+        t?.isPersonal &&
+        (b.ownerUserId === null || b.ownerUserId === user.id) &&
+        b.ownerUserId !== user.id
+      ) {
         repair.ownerUserId = user.id;
         changed = true;
       }

@@ -108,10 +108,10 @@ export class TeamsService {
     // SÉCURITÉ CRITIQUE: Vérifier si l'utilisateur a déjà SA team personnelle active
     // ⚠️ Ne JAMAIS récupérer une team partagée ici pour éviter de voler le ownership
     const existingMembership = await this.prisma.membership.findFirst({
-      where: { 
-        userId, 
+      where: {
+        userId,
         status: MembershipStatus.ACTIVE,
-        team: { isPersonal: true } // ✅ FILTRE CRITIQUE: uniquement les teams personnelles
+        team: { isPersonal: true }, // ✅ FILTRE CRITIQUE: uniquement les teams personnelles
       },
       include: {
         team: {
