@@ -1067,21 +1067,8 @@
         "redo": "Redo"
       },
       "taskRange": "{start} → {end}",
-      "taskDuration": "{count, plural, one {# day} other {# days}}",
-      "handles": {
-        "start": "Create link from start (hold Alt for info)",
-        "end": "Create link from finish (hold Alt for info)"
-      },
-      "timeline": {
-        "title": "Timeline"
-      },
       "prompts": {
         "newTask": "Title of the new task"
-      },
-      "taskMenu": {
-        "open": "Open task",
-        "align": "Align with predecessors",
-        "openChild": "Open child board"
       },
       "links": {
         "modeAsap": "ASAP",
@@ -1092,12 +1079,6 @@
         "align": "Align ASAP",
         "cycleWarning": "Dependency cycle detected. Resolve it before aligning.",
         "noChange": "Already aligned – no update required."
-      },
-      "lanes": {
-        "summary": "Visible lanes: {count} · auto needs {required}"
-      },
-      "hints": {
-        "altDrag": "Hold Alt while dragging a handle to create a free link"
       },
       "notifications": {
         "scheduleUpdated": "Timeline updated",

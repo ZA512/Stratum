@@ -1065,21 +1065,8 @@
         "redo": "Rétablir"
       },
       "taskRange": "{start} → {end}",
-      "taskDuration": "{count, plural, one {# jour} other {# jours}}",
-      "handles": {
-        "start": "Créer un lien depuis le début (Alt pour info)",
-        "end": "Créer un lien depuis la fin (Alt pour info)"
-      },
-      "timeline": {
-        "title": "Chronologie"
-      },
       "prompts": {
         "newTask": "Titre de la nouvelle tâche"
-      },
-      "taskMenu": {
-        "open": "Ouvrir la tâche",
-        "align": "Aligner avec les prédécesseurs",
-        "openChild": "Ouvrir le kanban enfant"
       },
       "links": {
         "modeAsap": "ASAP",
@@ -1090,12 +1077,6 @@
         "align": "Aligner ASAP",
         "cycleWarning": "Cycle détecté dans les dépendances. Résolvez-le avant l’alignement.",
         "noChange": "Déjà aligné – aucune mise à jour nécessaire."
-      },
-      "lanes": {
-        "summary": "Lignes visibles : {count} · besoin auto {required}"
-      },
-      "hints": {
-        "altDrag": "Maintenez Alt en tirant une poignée pour créer un lien libre"
       },
       "notifications": {
         "scheduleUpdated": "Timeline mise à jour",

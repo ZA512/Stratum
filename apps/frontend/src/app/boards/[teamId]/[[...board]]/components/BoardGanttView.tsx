@@ -21,18 +21,15 @@ import {
   Plus,
   Minus,
   Trash2,
+  Link2,
   Layers,
   Lock,
   Unlock,
-  MoreHorizontal,
-  ArrowUpRight,
 } from "lucide-react";
 
 const MS_PER_DAY = 86_400_000;
-const LANE_HEIGHT = 64;
-const MIN_BAR_WIDTH = 32;
-const MIN_DETAIL_WIDTH = 140;
-const MIN_META_WIDTH = 88;
+const LANE_HEIGHT = 60;
+const MIN_BAR_WIDTH = 12;
 
 type ZoomLevel = "day" | "week" | "month";
 
@@ -76,9 +73,6 @@ type LinkDraft = {
   fromId: string;
   x: number;
   y: number;
-  origin: "start" | "end";
-  type: GanttDependency["type"];
-  mode: GanttDependency["mode"];
 };
 
 type DragState = {
@@ -87,12 +81,6 @@ type DragState = {
   originX: number;
   start: Date;
   end: Date;
-};
-
-type TaskMenuState = {
-  id: string;
-  x: number;
-  y: number;
 };
 
 type BoardGanttViewProps = {
@@ -427,7 +415,13 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
         if (existing) {
           next.set(task.id, {
             ...existing,
-            ...task,
+            columnId: task.columnId,
+            columnName: task.columnName,
+            columnBehavior: task.columnBehavior,
+            colorClass: task.colorClass,
+            hasChildBoard: task.hasChildBoard,
+            scheduleMode: task.scheduleMode,
+            hardConstraint: task.hardConstraint,
           });
         } else {
           next.set(task.id, task);
@@ -515,99 +509,39 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     return groups;
   }, [days, monthFormatter]);
 
-  const columnOrder = useMemo(() => {
-    const map = new Map<string, number>();
-    columns.forEach((column, index) => {
-      map.set(column.id, index);
-    });
-    return map;
-  }, [columns]);
-
-  const orderedTasks = useMemo(() => {
-    const next = [...taskArray];
-    next.sort((a, b) => {
-      const startDiff = a.start.getTime() - b.start.getTime();
-      if (startDiff !== 0) return startDiff;
-      const columnDiff = (columnOrder.get(a.columnId) ?? 0) - (columnOrder.get(b.columnId) ?? 0);
-      if (columnDiff !== 0) return columnDiff;
-      const endDiff = a.end.getTime() - b.end.getTime();
-      if (endDiff !== 0) return endDiff;
-      return a.title.localeCompare(b.title);
-    });
-    return next;
-  }, [taskArray, columnOrder]);
-
-  const lanePlan = useMemo(() => {
-    const assignments = new Map<string, number>();
-    const laneEndDates: Date[] = [];
-    let required = 0;
-    for (const task of orderedTasks) {
-      let laneIndex = -1;
-      for (let index = 0; index < laneEndDates.length; index += 1) {
-        const endDate = laneEndDates[index];
-        if (differenceInDays(task.start, endDate) > 0) {
-          laneIndex = index;
-          break;
-        }
-      }
-      if (laneIndex === -1) {
-        laneIndex = laneEndDates.length;
-        laneEndDates.push(new Date(task.end));
-      } else {
-        laneEndDates[laneIndex] = new Date(task.end);
-      }
-      assignments.set(task.id, laneIndex);
-      required = Math.max(required, laneIndex + 1);
+  const tasksByColumn = useMemo(() => {
+    const map = new Map<string, InternalTask[]>();
+    for (const column of columns) {
+      map.set(column.id, []);
     }
-    return { assignments, required };
-  }, [orderedTasks]);
-
-  const [laneCapacity, setLaneCapacity] = useState<number | null>(null);
-
-  useEffect(() => {
-    setLaneCapacity((prev) => {
-      if (prev == null || prev < lanePlan.required) {
-        return lanePlan.required;
+    for (const task of taskArray) {
+      const bucket = map.get(task.columnId);
+      if (bucket) {
+        bucket.push(task);
       }
-      return prev;
-    });
-  }, [lanePlan.required]);
-
-  const laneCount = useMemo(
-    () => Math.max(lanePlan.required, laneCapacity ?? lanePlan.required),
-    [laneCapacity, lanePlan.required],
-  );
-
-  const canShrinkLanes = (laneCapacity ?? lanePlan.required) > lanePlan.required;
-
-  const increaseLaneCount = useCallback(() => {
-    setLaneCapacity((prev) => {
-      const base = prev ?? lanePlan.required;
-      return base + 1;
-    });
-  }, [lanePlan.required]);
-
-  const decreaseLaneCount = useCallback(() => {
-    setLaneCapacity((prev) => {
-      const base = prev ?? lanePlan.required;
-      const next = Math.max(lanePlan.required, base - 1);
-      return next;
-    });
-  }, [lanePlan.required]);
+    }
+    for (const bucket of map.values()) {
+      bucket.sort((a, b) => a.start.getTime() - b.start.getTime());
+    }
+    return map;
+  }, [columns, taskArray]);
 
   const layout = useMemo(() => {
     const map = new Map<string, LayoutBox>();
-    for (const task of orderedTasks) {
-      const laneIndex = lanePlan.assignments.get(task.id) ?? 0;
-      const offsetStart = differenceInDays(task.start, range.start);
-      const duration = Math.max(1, differenceInDays(task.end, task.start) + 1);
-      const x = offsetStart * dayWidth;
-      const width = Math.max(MIN_BAR_WIDTH, duration * dayWidth);
-      const y = laneIndex * LANE_HEIGHT;
-      map.set(task.id, { x, width, y, height: LANE_HEIGHT });
+    for (let laneIndex = 0; laneIndex < columns.length; laneIndex += 1) {
+      const column = columns[laneIndex];
+      const tasks = tasksByColumn.get(column.id) ?? [];
+      for (const task of tasks) {
+        const offsetStart = differenceInDays(task.start, range.start);
+        const duration = Math.max(1, differenceInDays(task.end, task.start) + 1);
+        const x = offsetStart * dayWidth;
+        const width = Math.max(MIN_BAR_WIDTH, duration * dayWidth);
+        const y = laneIndex * LANE_HEIGHT;
+        map.set(task.id, { x, width, y, height: LANE_HEIGHT });
+      }
     }
     return map;
-  }, [orderedTasks, lanePlan.assignments, range.start, dayWidth]);
+  }, [columns, tasksByColumn, range.start, dayWidth]);
 
   const applyChanges = useCallback((changes: ScheduleChange[]) => {
     if (!changes.length) return;
@@ -677,24 +611,21 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
   const handleLinkPointerUp = useCallback(() => {
     window.removeEventListener("pointermove", handleLinkPointerMove);
     linkPointerActiveRef.current = false;
-    let payload: { fromId: string; toId: string; type: GanttDependency["type"]; mode: GanttDependency["mode"] } | null = null;
     setLinkDraft((prev) => {
       if (!prev) return null;
       const targetId = hoverTaskIdRef.current;
       if (targetId && targetId !== prev.fromId) {
-        payload = {
+        onCreateDependency({
           fromId: prev.fromId,
           toId: targetId,
-          type: prev.type,
-          mode: prev.mode,
-        };
+          type: "FS",
+          lag: 0,
+          mode: "ASAP",
+        });
       }
       return null;
     });
     setHoverTaskId(null);
-    if (payload) {
-      onCreateDependency(payload);
-    }
   }, [handleLinkPointerMove, onCreateDependency]);
 
   useEffect(() => {
@@ -817,61 +748,25 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     }
   }, []);
 
-  const handleTaskContextMenu = useCallback(
-    (taskId: string) => (event: React.MouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      const rect = timelineRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setActiveTaskMenu({
-        id: taskId,
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      });
-    },
-    [],
-  );
-
-  const handleTaskMenuButton = useCallback(
-    (taskId: string) => (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleStartLink = useCallback(
+    (taskId: string) => (event: React.PointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
       event.stopPropagation();
       const rect = timelineRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setActiveTaskMenu({
-        id: taskId,
+      linkPointerActiveRef.current = true;
+      setLinkDraft({
+        fromId: taskId,
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       });
+      window.addEventListener("pointermove", handleLinkPointerMove);
+      window.addEventListener("pointerup", handleLinkPointerUp, { once: true });
     },
-    [],
-  );
-
-  const handleStartLink = useCallback(
-    (taskId: string, origin: "start" | "end") =>
-      (event: React.PointerEvent<HTMLElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = timelineRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        linkPointerActiveRef.current = true;
-        const mode = event.altKey ? "FREE" : "ASAP";
-        const defaultType = origin === "start" ? "SS" : "FS";
-        setLinkDraft({
-          fromId: taskId,
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top,
-          origin,
-          type: defaultType,
-          mode,
-        });
-        window.addEventListener("pointermove", handleLinkPointerMove);
-        window.addEventListener("pointerup", handleLinkPointerUp, { once: true });
-      },
     [handleLinkPointerMove, handleLinkPointerUp],
   );
 
   const [activeLinkMenu, setActiveLinkMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-  const [activeTaskMenu, setActiveTaskMenu] = useState<TaskMenuState | null>(null);
   useEffect(() => {
     if (!activeLinkMenu) return;
     const close = (event: PointerEvent) => {
@@ -883,25 +778,6 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
   }, [activeLinkMenu]);
-
-  useEffect(() => {
-    if (!activeTaskMenu) return;
-    const close = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest("[data-task-menu]")) return;
-      setActiveTaskMenu(null);
-    };
-    window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
-  }, [activeTaskMenu]);
-
-  useEffect(() => {
-    if (!activeTaskMenu) return;
-    if (!taskMap.has(activeTaskMenu.id)) {
-      setActiveTaskMenu(null);
-    }
-  }, [activeTaskMenu, taskMap]);
 
   const handleAlignDependency = useCallback(() => {
       const result = runAsapScheduling(taskMapRef.current, dependencies);
@@ -921,9 +797,9 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     [applyChanges, dependencies, tBoard],
   );
 
-  const handleTimelineDoubleClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!defaultColumnId) return;
+  const handleLaneDoubleClick = useCallback(
+    (columnId: string) => (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!defaultColumnId && !columnId) return;
       const rect = timelineRef.current?.getBoundingClientRect();
       if (!rect) return;
       const dayIndex = Math.max(0, Math.floor((event.clientX - rect.left) / dayWidth));
@@ -932,7 +808,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
       const title = window.prompt(tBoard("gantt.prompts.newTask"));
       if (!title || !title.trim()) return;
       onCreateTask({
-        columnId: defaultColumnId,
+        columnId: columnId || defaultColumnId!,
         title: title.trim(),
         start,
         end,
@@ -945,11 +821,6 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     if (!activeLinkMenu) return null;
     return dependencies.find((dep) => dep.id === activeLinkMenu.id) ?? null;
   }, [activeLinkMenu, dependencies]);
-
-  const activeTask = useMemo(() => {
-    if (!activeTaskMenu) return null;
-    return taskMap.get(activeTaskMenu.id) ?? null;
-  }, [activeTaskMenu, taskMap]);
 
   const markerAsapId = useMemo(() => `${boardId}-asap-marker`, [boardId]);
   const markerFreeId = useMemo(() => `${boardId}-free-marker`, [boardId]);
@@ -1067,133 +938,47 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     );
   };
 
-  const renderTaskMenu = () => {
-    if (!activeTaskMenu || !activeTask) return null;
-    const childBoard = childBoards[activeTask.id];
-    return (
-      <div
-        className="absolute z-50 w-64 rounded-xl border border-white/10 bg-surface/95 p-3 text-xs shadow-2xl"
-        style={{ left: activeTaskMenu.x, top: activeTaskMenu.y }}
-        data-task-menu
-      >
-        <div className="mb-3 space-y-1">
-          <p className="truncate text-sm font-semibold text-foreground">{activeTask.title}</p>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted">
-            <span
-              className={`h-2 w-2 rounded-full ${BEHAVIOR_COLOR_CLASSES[activeTask.columnBehavior] || "bg-slate-500"}`}
-            />
-            <span className="truncate">{activeTask.columnName}</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted">
-            <CalendarClock size={12} />
-            <span>
-              {tBoard("gantt.taskRange", {
-                start: dayFormatter.format(activeTask.start),
-                end: dayFormatter.format(activeTask.end),
-              })}
-            </span>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-foreground transition hover:border-accent hover:text-foreground"
-            onClick={() => {
-              setActiveTaskMenu(null);
-              onOpenTask(activeTask.id);
-            }}
-          >
-            <span>{tBoard("gantt.taskMenu.open")}</span>
-            <ArrowUpRight size={14} className="text-muted" />
-          </button>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 font-semibold text-accent transition hover:border-accent hover:bg-accent/20"
-            onClick={() => {
-              setActiveTaskMenu(null);
-              handleAlignDependency();
-            }}
-          >
-            <span>{tBoard("gantt.taskMenu.align")}</span>
-            <Zap size={14} />
-          </button>
-          {childBoard && onOpenChildBoard && (
-            <button
-              type="button"
-              className="flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-foreground transition hover:border-accent hover:text-foreground"
-              onClick={() => {
-                setActiveTaskMenu(null);
-                onOpenChildBoard(childBoard.boardId);
-              }}
-            >
-              <span>{tBoard("gantt.taskMenu.openChild")}</span>
-              <Layers size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   const renderTaskBar = (task: InternalTask) => {
     const box = layout.get(task.id);
     if (!box) return null;
     const isSaving = scheduleSavingIds.has(task.id);
     const isMilestone = task.duration === 1;
     const childBoard = childBoards[task.id];
-    const showMeta = box.width >= MIN_META_WIDTH;
-    const showDetails = box.width >= MIN_DETAIL_WIDTH;
-    const isDraftTarget = Boolean(linkDraft && linkDraft.fromId !== task.id && hoverTaskId === task.id);
-    const rangeText = tBoard("gantt.taskRange", {
-      start: dayFormatter.format(task.start),
-      end: dayFormatter.format(task.end),
-    });
     return (
       <div
         key={task.id}
         className="absolute"
-        style={{ left: box.x, width: box.width, top: box.y + 10 }}
+        style={{ left: box.x, width: box.width, top: box.y + 6 }}
         onMouseEnter={handleTaskMouseEnter(task.id)}
         onMouseLeave={handleTaskMouseLeave}
-        onContextMenu={handleTaskContextMenu(task.id)}
         data-task-id={task.id}
       >
         <div
-          className={`group relative flex h-10 cursor-grab items-center overflow-hidden rounded-xl border border-white/15 px-3 text-xs text-white shadow-lg transition ${
-            task.colorClass
-          } ${isDraftTarget ? "ring-2 ring-accent/60" : "ring-1 ring-white/20"}`}
+          className={`group relative flex h-9 items-center overflow-hidden rounded-lg border border-white/15 px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
           onDoubleClick={() => onOpenTask(task.id)}
           onPointerDown={handleTaskPointerDown(task.id, "move")}
         >
           {task.progress != null && (
             <div
-              className="pointer-events-none absolute inset-0 bg-black/20"
+              className="absolute inset-0 bg-black/20"
               style={{ width: `${Math.max(0, Math.min(100, task.progress))}%` }}
             />
           )}
           <div className="relative z-10 flex w-full items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <p className={`truncate font-semibold leading-tight ${showMeta ? "text-sm" : "text-[11px]"}`}>{task.title}</p>
-              {showDetails ? (
-                <p className="text-[10px] text-white/80">{rangeText}</p>
-              ) : (
-                <p className="text-[10px] text-white/80">{tBoard("gantt.taskDuration", { count: task.duration })}</p>
-              )}
+            <div className="min-w-0">
+              <p className="truncate font-semibold leading-tight">{task.title}</p>
+              <p className="text-[10px] text-white/70">
+                {tBoard("gantt.taskRange", {
+                  start: dayFormatter.format(task.start),
+                  end: dayFormatter.format(task.end),
+                })}
+              </p>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              {showMeta && (
-                <span className="hidden items-center gap-1 rounded-full border border-white/20 bg-black/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/90 sm:flex">
-                  <span
-                    className={`h-2 w-2 rounded-full ${BEHAVIOR_COLOR_CLASSES[task.columnBehavior] || "bg-slate-500"}`}
-                    aria-hidden
-                  />
-                  <span className="truncate">{task.columnName}</span>
-                </span>
-              )}
-              {childBoard && onOpenChildBoard && showMeta && (
+              {childBoard && onOpenChildBoard && (
                 <button
                   type="button"
-                  className="rounded-full border border-white/15 p-1 text-white/80 transition hover:border-accent hover:text-foreground"
+                  className="rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenChildBoard(childBoard.boardId);
@@ -1204,45 +989,29 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               )}
               <button
                 type="button"
-                className="rounded-full border border-white/15 p-1 text-white/80 transition hover:border-accent hover:text-foreground"
-                onClick={handleTaskMenuButton(task.id)}
+                className="rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground"
+                onPointerDown={handleStartLink(task.id)}
               >
-                <MoreHorizontal size={14} />
+                <Link2 size={14} />
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            className="absolute left-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-white/50 bg-white/50 text-transparent transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            onPointerDown={handleStartLink(task.id, "start")}
-            title={tBoard("gantt.handles.start")}
-          >
-            <span className="sr-only">{tBoard("gantt.handles.start")}</span>
-          </button>
-          <button
-            type="button"
-            className="absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-white/50 bg-white/50 text-transparent transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            onPointerDown={handleStartLink(task.id, "end")}
-            title={tBoard("gantt.handles.end")}
-          >
-            <span className="sr-only">{tBoard("gantt.handles.end")}</span>
-          </button>
           <div
-            className="absolute left-0 top-0 h-full w-2 cursor-ew-resize"
+            className="absolute left-0 top-0 h-full w-1 cursor-ew-resize"
             onPointerDown={(event) => {
               event.stopPropagation();
               handleTaskPointerDown(task.id, "resize-start")(event);
             }}
           />
           <div
-            className="absolute right-0 top-0 h-full w-2 cursor-ew-resize"
+            className="absolute right-0 top-0 h-full w-1 cursor-ew-resize"
             onPointerDown={(event) => {
               event.stopPropagation();
               handleTaskPointerDown(task.id, "resize-end")(event);
             }}
           />
           {isMilestone && (
-            <div className="pointer-events-none absolute inset-y-2 right-3 w-2 rotate-45 rounded-sm bg-white/70" />
+            <div className="absolute inset-y-2 right-3 w-2 rotate-45 rounded-sm bg-white/60" />
           )}
           {isSaving && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -1309,26 +1078,9 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           {scheduleWarning}
         </div>
       )}
-      {columns.length > 0 && (
-        <div className="border-b border-white/5 px-4 py-2 text-[11px] text-muted">
-          <div className="flex flex-wrap items-center gap-3">
-            {columns.map((column) => (
-              <span
-                key={column.id}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-surface/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted"
-              >
-                <span
-                  className={`h-2 w-2 rounded-full ${BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || "bg-slate-500"}`}
-                />
-                <span className="text-foreground">{column.name}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="flex border-b border-white/10 bg-surface/60">
-        <div className="w-24 shrink-0 border-r border-white/10 px-3 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
-          {tBoard("gantt.timeline.title")}
+        <div className="w-56 shrink-0 border-r border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
+          {tBoard("gantt.columns")}
         </div>
         <div className="relative flex-1 overflow-hidden">
           <div className="sticky top-0 z-20 border-b border-white/10 bg-surface/80 backdrop-blur">
@@ -1361,15 +1113,20 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </div>
         </div>
       </div>
-      <div className="relative flex" style={{ minHeight: Math.max(laneCount * LANE_HEIGHT, 280) }}>
-        <div className="w-24 shrink-0 border-r border-white/10 bg-surface/60">
-          {Array.from({ length: laneCount }).map((_, index) => (
+      <div className="relative flex" style={{ minHeight: Math.max(columns.length * LANE_HEIGHT, 240) }}>
+        <div className="w-56 shrink-0 border-r border-white/10">
+          {columns.map((column) => (
             <div
-              key={`lane-index-${index}`}
-              className="flex items-center justify-center border-b border-white/10 text-xs text-muted"
-              style={{ height: LANE_HEIGHT }}
+              key={column.id}
+              className="flex h-[60px] items-center justify-between px-4 text-sm"
             >
-              {index + 1}
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{column.name}</p>
+                <p className="text-xs text-muted uppercase">{tBoard(`behaviors.${column.behaviorKey}` as const)}</p>
+              </div>
+              <span
+                className={`inline-flex h-2 w-2 rounded-full ${BEHAVIOR_COLOR_CLASSES[column.behaviorKey] || "bg-slate-500"}`}
+              />
             </div>
           ))}
         </div>
@@ -1377,32 +1134,33 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           <div
             ref={timelineRef}
             className="relative"
-            style={{ width: totalDays * dayWidth, minHeight: laneCount * LANE_HEIGHT }}
-            onDoubleClick={handleTimelineDoubleClick}
+            style={{ width: totalDays * dayWidth, minHeight: columns.length * LANE_HEIGHT }}
           >
             {days.map((day, index) => (
               <div
                 key={`grid-${day.toISOString()}`}
-                className={`pointer-events-none absolute top-0 bottom-0 border-r border-white/5 ${isWeekend(day) ? "bg-white/5" : ""}`}
+                className={`absolute top-0 bottom-0 border-r border-white/5 ${isWeekend(day) ? "bg-white/5" : ""}`}
                 style={{ left: index * dayWidth, width: dayWidth }}
               />
             ))}
-            {Array.from({ length: laneCount }).map((_, laneIndex) => (
-              <div
-                key={`lane-divider-${laneIndex}`}
-                className="pointer-events-none absolute left-0 right-0 border-b border-white/10"
-                style={{ top: (laneIndex + 1) * LANE_HEIGHT }}
-              />
-            ))}
             <div
-              className="pointer-events-none absolute top-0 bottom-0 w-px bg-accent/60"
+              className="absolute top-0 bottom-0 w-px bg-accent/60"
               style={{ left: todayIndex * dayWidth }}
             />
-            {orderedTasks.map(renderTaskBar)}
+            {columns.map((column) => (
+              <div
+                key={`lane-${column.id}`}
+                className="relative border-b border-white/10"
+                style={{ height: LANE_HEIGHT }}
+                onDoubleClick={handleLaneDoubleClick(column.id)}
+              >
+                {(tasksByColumn.get(column.id) ?? []).map(renderTaskBar)}
+              </div>
+            ))}
             <svg
               className="pointer-events-none absolute left-0 top-0"
               width={totalDays * dayWidth}
-              height={laneCount * LANE_HEIGHT}
+              height={columns.length * LANE_HEIGHT}
             >
               <defs>
                 <marker id={markerAsapId} markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
@@ -1434,21 +1192,15 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
                       markerEnd={`url(#${dep.mode === "ASAP" ? markerAsapId : markerFreeId})`}
                     />
                     <foreignObject
-                      x={Math.min(sourceX, targetX) + Math.abs(targetX - sourceX) / 2 - 28}
+                      x={Math.min(sourceX, targetX) + Math.abs(targetX - sourceX) / 2 - 24}
                       y={(sourceY + targetY) / 2 - 12}
-                      width={56}
+                      width={48}
                       height={24}
                     >
                       <button
                         type="button"
                         className="flex w-full items-center justify-center gap-1 rounded-full border border-white/10 bg-surface/80 px-1.5 py-1 text-[10px] font-semibold text-foreground hover:border-accent"
-                        onClick={() =>
-                          setActiveLinkMenu({
-                            id: dep.id,
-                            x: Math.min(sourceX, targetX) + Math.abs(targetX - sourceX) / 2 - 28,
-                            y: (sourceY + targetY) / 2,
-                          })
-                        }
+                        onClick={() => setActiveLinkMenu({ id: dep.id, x: Math.min(sourceX, targetX) + Math.abs(targetX - sourceX) / 2 - 24, y: (sourceY + targetY) / 2 })}
                         data-link-label
                       >
                         <span>{dep.type}</span>
@@ -1458,24 +1210,26 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
                   </g>
                 );
               })}
-              {linkDraft && (() => {
-                const source = layout.get(linkDraft.fromId);
-                if (!source) return null;
-                const startX = linkDraft.origin === "start" ? source.x : source.x + source.width;
-                const startY = source.y + LANE_HEIGHT / 2;
-                const midX = startX + (linkDraft.x - startX) / 2;
-                const path = `M${startX} ${startY} C ${midX} ${startY}, ${midX} ${linkDraft.y}, ${linkDraft.x} ${linkDraft.y}`;
-                return (
-                  <path
-                    key="draft"
-                    d={path}
-                    fill="none"
-                    stroke="#38bdf8"
-                    strokeWidth={1}
-                    strokeDasharray="4 4"
-                  />
-                );
-              })()}
+              {linkDraft && (
+                (() => {
+                  const source = layout.get(linkDraft.fromId);
+                  if (!source) return null;
+                  const startX = source.x + source.width;
+                  const startY = source.y + LANE_HEIGHT / 2;
+                  const midX = startX + (linkDraft.x - startX) / 2;
+                  const path = `M${startX} ${startY} C ${midX} ${startY}, ${midX} ${linkDraft.y}, ${linkDraft.x} ${linkDraft.y}`;
+                  return (
+                    <path
+                      key="draft"
+                      d={path}
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth={1}
+                      strokeDasharray="4 4"
+                    />
+                  );
+                })()
+              )}
             </svg>
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-surface/60 text-sm text-muted">
@@ -1483,31 +1237,6 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               </div>
             )}
             {renderDependencyMenu()}
-            {renderTaskMenu()}
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-xs text-muted">
-        <div>{tBoard("gantt.lanes.summary", { count: laneCount, required: lanePlan.required })}</div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[10px] text-muted">{tBoard("gantt.hints.altDrag")}</span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={decreaseLaneCount}
-              disabled={!canShrinkLanes}
-            >
-              <Minus size={14} />
-            </button>
-            <span className="text-sm font-semibold text-foreground">{laneCount}</span>
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
-              onClick={increaseLaneCount}
-            >
-              <Plus size={14} />
-            </button>
           </div>
         </div>
       </div>
