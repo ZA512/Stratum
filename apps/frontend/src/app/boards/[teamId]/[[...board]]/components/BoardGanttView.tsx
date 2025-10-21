@@ -1058,13 +1058,12 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
       >
         <button
           type="button"
-          className="absolute -left-4 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-surface/95 text-muted shadow transition hover:border-accent hover:text-foreground z-20"
+          className="absolute -right-2 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-surface/95 shadow transition hover:border-accent hover:bg-accent/20 z-20"
           onPointerDown={handleStartLink(task.id)}
           aria-label={tBoard("gantt.links.startFromTask")}
           title={tBoard("gantt.links.handleHint")}
-        >
-          <Link2 size={12} />
-        </button>
+          onClick={(e) => e.stopPropagation()}
+        />
         <div
           className={`group relative flex h-10 items-center overflow-hidden rounded-lg border border-white/15 px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
           onDoubleClick={(event) => {
@@ -1092,17 +1091,17 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
                 {task.progress}%
               </span>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1.5">
               {childBoard && onOpenChildBoard && (
                 <button
                   type="button"
-                  className="rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground"
+                  className="opacity-0 group-hover:opacity-100 rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground transition"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenChildBoard(childBoard.boardId);
                   }}
                 >
-                  <Layers size={14} />
+                  <Layers size={12} />
                 </button>
               )}
             </div>
@@ -1121,9 +1120,6 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               handleTaskPointerDown(task.id, "resize-end")(event);
             }}
           />
-          {isMilestone && (
-            <div className="absolute inset-y-2 right-3 w-2 rotate-45 rounded-sm bg-white/60" />
-          )}
           {isSaving && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           )}

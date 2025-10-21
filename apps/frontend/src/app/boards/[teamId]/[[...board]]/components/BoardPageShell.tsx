@@ -1273,11 +1273,9 @@ export function TeamBoardPage(){
   const persistNodeDependencies = useCallback(async (
     targetId: string,
     nodeDependencies: GanttDependency[],
-    previousState: GanttDependency[],
   ) => {
     if (!accessToken) {
       toastError(tBoard('alerts.sessionInvalid'));
-      setGanttDependencies(previousState);
       return;
     }
 
@@ -1299,7 +1297,7 @@ export function TeamBoardPage(){
       await handleApi(() => updateNode(targetId, payload, accessToken));
       await refreshActiveBoard();
     } catch {
-      setGanttDependencies(previousState);
+      // handled by handleApi
     } finally {
       releaseSavingIds([targetId]);
     }
@@ -1380,13 +1378,12 @@ export function TeamBoardPage(){
   type PendingDependencyPersist = {
     targetId: string;
     next: GanttDependency[];
-    prev: GanttDependency[];
   };
 
   const scheduleDependencyPersist = useCallback((pending: PendingDependencyPersist | null) => {
     if (!pending) return;
     setTimeout(() => {
-      void persistNodeDependencies(pending.targetId, pending.next, pending.prev);
+      void persistNodeDependencies(pending.targetId, pending.next);
     }, 0);
   }, [persistNodeDependencies]);
 
@@ -1415,7 +1412,6 @@ export function TeamBoardPage(){
       pending = {
         targetId: input.toId,
         next: next.filter((dep) => dep.toId === input.toId),
-        prev,
       };
       return next;
     });
@@ -1442,7 +1438,6 @@ export function TeamBoardPage(){
       pending = {
         targetId: updated.toId,
         next: next.filter((dep) => dep.toId === updated.toId),
-        prev,
       };
       return next;
     });
@@ -1458,7 +1453,6 @@ export function TeamBoardPage(){
       pending = {
         targetId: target.toId,
         next: next.filter((dep) => dep.toId === target.toId),
-        prev,
       };
       return next;
     });
