@@ -185,9 +185,9 @@ describeIfDatabase('App API (e2e)', () => {
     ).toBeTruthy();
   });
 
-  it('GET /api/v1/boards/team/:teamId returns the root board', async () => {
+  it('GET /api/v1/boards/me returns the personal board', async () => {
     const response = await request(app.getHttpServer())
-      .get('/api/v1/boards/team/' + DEMO_IDS.team)
+      .get('/api/v1/boards/me')
       .set('Authorization', 'Bearer ' + accessToken)
       .expect(200);
 

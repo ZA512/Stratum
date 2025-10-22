@@ -249,10 +249,6 @@ export class TeamsService {
           },
         });
         // Comportements + colonnes par défaut
-        const behaviors = await tx.columnBehavior.findMany({
-          where: { teamId: team.id },
-        });
-        const have = new Set(behaviors.map((b) => b.key));
         const defaults: {
           key: ColumnBehaviorKey;
           label: string;
@@ -271,22 +267,26 @@ export class TeamsService {
           { key: ColumnBehaviorKey.BLOCKED, label: 'Bloque', color: '#f97316' },
           { key: ColumnBehaviorKey.DONE, label: 'Termine', color: '#16a34a' },
         ];
+
+        const existingBehaviors = await tx.columnBehavior.findMany({
+          where: {
+            key: { in: defaults.map((def) => def.key) },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        const map = new Map(existingBehaviors.map((b) => [b.key, b.id]));
         for (const def of defaults) {
-          if (!have.has(def.key)) {
-            await tx.columnBehavior.create({
+          if (!map.has(def.key)) {
+            const created = await tx.columnBehavior.create({
               data: {
-                teamId: team.id,
                 key: def.key,
                 label: def.label,
                 color: def.color,
               },
             });
+            map.set(def.key, created.id);
           }
         }
-        const createdBehaviors = await tx.columnBehavior.findMany({
-          where: { teamId: team.id },
-        });
-        const map = new Map(createdBehaviors.map((b) => [b.key, b.id]));
         const cols: {
           key: ColumnBehaviorKey;
           name: string;

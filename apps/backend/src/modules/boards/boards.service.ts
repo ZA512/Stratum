@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ColumnBehaviorKey, MembershipStatus, Prisma } from '@prisma/client';
+import { ColumnBehaviorKey, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BoardColumnDto } from './dto/board-column.dto';
 import { BoardDto } from './dto/board.dto';
@@ -92,20 +92,17 @@ export class BoardsService {
     boardId: string;
     ownerUserId: string | null;
     isPersonal: boolean;
-    teamId: string | null;
   }> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
-      include: { node: { select: { teamId: true } } },
     });
     if (!board) {
       throw new NotFoundException('Board introuvable');
     }
     return {
       boardId: board.id,
-      ownerUserId: (board as any).ownerUserId ?? null,
-      isPersonal: (board as any).isPersonal ?? false,
-      teamId: board.node?.teamId ?? null,
+      ownerUserId: board.ownerUserId ?? null,
+      isPersonal: board.isPersonal ?? false,
     };
   }
 
@@ -133,53 +130,6 @@ export class BoardsService {
 
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
-
-    const b: any = board;
-    return {
-      id: b.id,
-      nodeId: b.nodeId,
-      name: b.node.title,
-      columns: b.columns.map((column: any) => ({
-        id: column.id,
-        name: column.name,
-        behaviorKey: column.behavior.key,
-        position: column.position,
-        wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings(column.settings ?? null),
-      })),
-      ownerUserId: b.ownerUserId ?? null,
-      isPersonal: b.isPersonal ?? false,
-    };
-  }
-
-  async getRootBoardForTeam(teamId: string): Promise<BoardDto> {
-    const board = await this.prisma.board.findFirst({
-      where: {
-        node: {
-          teamId,
-          parentId: null,
-        },
-      },
-      include: {
-        node: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        columns: {
-          include: { behavior: true },
-          orderBy: { position: 'asc' },
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-
-    if (!board) {
-      throw new NotFoundException('Board introuvable pour cette equipe');
-    }
 
     const b: any = board;
     return {
@@ -782,7 +732,7 @@ export class BoardsService {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
-        node: { select: { id: true, teamId: true } },
+        node: { select: { id: true } },
         columns: { include: { behavior: true }, orderBy: { position: 'asc' } },
       },
     });
@@ -791,7 +741,13 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const column = board.columns.find((entry) => entry.id === columnId);
     if (!column) {
@@ -864,9 +820,6 @@ export class BoardsService {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
-        node: {
-          select: { teamId: true },
-        },
         columns: {
           select: { position: true },
           orderBy: { position: 'desc' },
@@ -878,12 +831,15 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
-
-    const behavior = await this.getOrCreateBehavior(
-      board.node.teamId,
-      requestedBehaviorKey,
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
     );
+
+    const behavior = await this.getOrCreateBehavior(requestedBehaviorKey);
 
     let wipLimit: number | null = null;
     if (dto.wipLimit !== undefined && dto.wipLimit !== null) {
@@ -959,7 +915,6 @@ export class BoardsService {
       include: {
         board: {
           include: {
-            node: { select: { teamId: true } },
             columns: {
               select: { id: true, position: true },
               orderBy: { position: 'asc' },
@@ -974,7 +929,13 @@ export class BoardsService {
       throw new NotFoundException('Colonne introuvable');
     }
 
-    await this.ensureUserCanWrite(column.board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: column.board.ownerUserId ?? null,
+        isPersonal: column.board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const currentSettings = this.normalizeColumnSettings(
       (column as any).settings ?? null,
@@ -1208,7 +1169,7 @@ export class BoardsService {
     const column = await this.prisma.column.findFirst({
       where: { id: columnId, boardId },
       include: {
-        board: { include: { node: { select: { teamId: true } } } },
+        board: true,
         _count: { select: { nodes: true } },
       },
     });
@@ -1217,7 +1178,13 @@ export class BoardsService {
       throw new NotFoundException('Colonne introuvable');
     }
 
-    await this.ensureUserCanWrite(column.board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: column.board.ownerUserId ?? null,
+        isPersonal: column.board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     if (column._count.nodes > 0) {
       throw new BadRequestException(
@@ -1246,23 +1213,24 @@ export class BoardsService {
     });
   }
 
-  private async ensureUserCanWrite(teamId: string, userId: string) {
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        teamId,
-        userId,
-        status: MembershipStatus.ACTIVE,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('Vous ne pouvez pas modifier ce board');
+  private ensureUserCanWriteBoard(
+    board: {
+      ownerUserId: string | null;
+      isPersonal: boolean;
+    },
+    userId: string,
+  ) {
+    if (board.ownerUserId === userId) {
+      return;
     }
+
+    throw new ForbiddenException('Vous ne pouvez pas modifier ce board');
   }
 
-  private async getOrCreateBehavior(teamId: string, key: ColumnBehaviorKey) {
+  private async getOrCreateBehavior(key: ColumnBehaviorKey) {
     const existing = await this.prisma.columnBehavior.findFirst({
-      where: { teamId, key },
+      where: { key },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (existing) {
@@ -1276,7 +1244,6 @@ export class BoardsService {
 
     return this.prisma.columnBehavior.create({
       data: {
-        teamId,
         key,
         label: defaults.label,
         color: defaults.color,
@@ -1508,7 +1475,13 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const node = await this.prisma.node.findUnique({
       where: { id: nodeId },

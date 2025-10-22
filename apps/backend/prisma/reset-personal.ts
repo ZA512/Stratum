@@ -53,22 +53,31 @@ async function main() {
         data: { nodeId: rootNode.id },
       });
       // Créer comportements et colonnes standards
-      const behaviors = [
+      const defaults = [
         { key: 'BACKLOG', label: 'Backlog', color: '#6b7280' },
         { key: 'IN_PROGRESS', label: 'En cours', color: '#2563eb' },
         { key: 'BLOCKED', label: 'Bloque', color: '#f97316' },
         { key: 'DONE', label: 'Termine', color: '#16a34a' },
       ];
-      const createdBehaviors = [] as string[];
-      for (const beh of behaviors) {
-        const cb = await prisma.columnBehavior.create({
-          data: { teamId: personalTeam.id, key: beh.key as any, label: beh.label, color: beh.color },
-        });
-        createdBehaviors.push(cb.id);
-      }
       const behaviorMap = new Map<string, string>();
-      const fetchedBehaviors = await prisma.columnBehavior.findMany({ where: { teamId: personalTeam.id } });
-      for (const fb of fetchedBehaviors) behaviorMap.set(fb.key, fb.id);
+      const fetchedBehaviors = await prisma.columnBehavior.findMany({
+        where: { key: { in: defaults.map((def) => def.key as any) } },
+        orderBy: { createdAt: 'asc' },
+      });
+      for (const fb of fetchedBehaviors) {
+        behaviorMap.set(fb.key, fb.id);
+      }
+      for (const def of defaults) {
+        if (behaviorMap.has(def.key)) continue;
+        const created = await prisma.columnBehavior.create({
+          data: {
+            key: def.key as any,
+            label: def.label,
+            color: def.color,
+          },
+        });
+        behaviorMap.set(def.key, created.id);
+      }
       const columns = [
         { key: 'BACKLOG', name: 'Backlog', position: 0, wipLimit: null },
         { key: 'IN_PROGRESS', name: 'En cours', position: 1, wipLimit: 5 },
