@@ -185,7 +185,10 @@ export class TeamsService {
           needsRepair = true;
         }
 
-        if (boardRecord.ownerUserId === null && otherActiveMembers.length === 0) {
+        if (
+          boardRecord.ownerUserId === null &&
+          otherActiveMembers.length === 0
+        ) {
           repairData.ownerUserId = userId;
           needsRepair = true;
         }
