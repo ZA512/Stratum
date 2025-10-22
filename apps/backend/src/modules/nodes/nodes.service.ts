@@ -4179,13 +4179,9 @@ export class NodesService {
     });
   }
 
-  private async ensureDefaultColumnBehaviors(
-    tx: Prisma.TransactionClient,
-    teamId: string,
-  ) {
+  private async ensureDefaultColumnBehaviors(tx: Prisma.TransactionClient) {
     const behaviors = await tx.columnBehavior.findMany({
       where: {
-        teamId,
         key: {
           in: [
             ColumnBehaviorKey.BACKLOG,
@@ -4195,6 +4191,7 @@ export class NodesService {
           ],
         },
       },
+      orderBy: { createdAt: 'asc' },
     });
 
     const map = new Map(behaviors.map((b) => [b.key, b]));
@@ -4214,7 +4211,6 @@ export class NodesService {
       if (!map.has(def.key)) {
         const created = await tx.columnBehavior.create({
           data: {
-            teamId,
             key: def.key,
             label: def.label,
             color: def.color,
@@ -5287,7 +5283,7 @@ export class NodesService {
 
   private async ensureBoardWithColumns(
     tx: Prisma.TransactionClient,
-    parent: { id: string; teamId: string },
+    parent: { id: string },
   ): Promise<{
     board: { id: string };
     columns: Array<{
@@ -5306,10 +5302,7 @@ export class NodesService {
     });
     if (!board) {
       const created = await tx.board.create({ data: { nodeId: parent.id } });
-      const behaviors = await this.ensureDefaultColumnBehaviors(
-        tx,
-        parent.teamId,
-      );
+      const behaviors = await this.ensureDefaultColumnBehaviors(tx);
       await this.createDefaultColumns(tx, created.id, behaviors);
       board = await tx.board.findUnique({
         where: { nodeId: parent.id },
@@ -5428,10 +5421,7 @@ export class NodesService {
       let board = await tx.board.findUnique({ where: { nodeId: node.id } });
       if (!board) {
         board = await tx.board.create({ data: { nodeId: node.id } });
-        const behaviors = await this.ensureDefaultColumnBehaviors(
-          tx,
-          node.teamId,
-        );
+        const behaviors = await this.ensureDefaultColumnBehaviors(tx);
         await this.createDefaultColumns(tx, board.id, behaviors);
       }
       return board.id;

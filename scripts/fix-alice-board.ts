@@ -60,22 +60,33 @@ async function main() {
     });
     
     // Créer comportements
-    const behaviors = [
+    const behaviorMap = new Map<string, string>();
+    const defaults = [
       { key: 'BACKLOG', label: 'Backlog', color: '#6b7280' },
       { key: 'IN_PROGRESS', label: 'En cours', color: '#2563eb' },
       { key: 'BLOCKED', label: 'Bloque', color: '#f97316' },
       { key: 'DONE', label: 'Termine', color: '#16a34a' },
     ];
-    
-    for (const beh of behaviors) {
-      await prisma.columnBehavior.create({
-        data: { teamId: team.id, key: beh.key as any, label: beh.label, color: beh.color },
-      });
+
+    const fetchedBehaviors = await prisma.columnBehavior.findMany({
+      where: { key: { in: defaults.map((def) => def.key as any) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const fb of fetchedBehaviors) {
+      behaviorMap.set(fb.key, fb.id);
     }
-    
-    const behaviorMap = new Map<string, string>();
-    const fetchedBehaviors = await prisma.columnBehavior.findMany({ where: { teamId: team.id } });
-    for (const fb of fetchedBehaviors) behaviorMap.set(fb.key, fb.id);
+
+    for (const def of defaults) {
+      if (behaviorMap.has(def.key)) continue;
+      const created = await prisma.columnBehavior.create({
+        data: {
+          key: def.key as any,
+          label: def.label,
+          color: def.color,
+        },
+      });
+      behaviorMap.set(def.key, created.id);
+    }
     
     const columns = [
       { key: 'BACKLOG', name: 'Backlog', position: 0, wipLimit: null },

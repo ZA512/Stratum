@@ -174,8 +174,11 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
   return (await response.json()) as Board;
 }
 
-export async function fetchRootBoard(teamId: string, accessToken: string): Promise<Board> {
-  const response = await fetch(`${API_BASE_URL}/boards/team/${teamId}`, createOptions(accessToken));
+export async function fetchRootBoard(
+  ...args: [accessToken: string] | [teamId: string, accessToken: string]
+): Promise<Board> {
+  const accessToken = args.length === 1 ? args[0] : args[1];
+  const response = await fetch(`${API_BASE_URL}/boards/me`, createOptions(accessToken));
 
   if (!response.ok) {
     await throwApiError(response, "Impossible de charger le board");

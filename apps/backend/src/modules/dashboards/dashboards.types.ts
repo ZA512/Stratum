@@ -6,7 +6,6 @@ export type DashboardMode = 'SELF' | 'AGGREGATED' | 'COMPARISON';
 
 export interface DashboardRequest {
   userId: string;
-  teamId: string;
   boardId: string;
   dashboard: DashboardKind;
   mode: DashboardMode;
@@ -16,10 +15,10 @@ export interface BoardContext {
   id: string;
   nodeId: string;
   title: string;
-  teamId: string;
   path: string;
   depth: number;
   parentId: string | null;
+  ownerUserId: string;
 }
 
 export interface DashboardHierarchy {
@@ -50,7 +49,6 @@ export interface DashboardTask {
   statusMetadata: Prisma.JsonValue | null;
   path: string;
   depth: number;
-  teamId: string;
   createdAt: Date;
   updatedAt: Date;
   archivedAt: Date | null;

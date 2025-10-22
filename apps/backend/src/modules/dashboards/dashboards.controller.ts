@@ -44,12 +44,6 @@ export class DashboardsController {
     description: 'Dashboard kind (execution | progress | risk)',
   })
   @ApiQuery({
-    name: 'teamId',
-    required: true,
-    description: 'Team identifier owning the board',
-    example: 'team_stratum',
-  })
-  @ApiQuery({
     name: 'boardId',
     required: true,
     description: 'Board identifier to compute widgets for',
@@ -66,13 +60,9 @@ export class DashboardsController {
   async getDashboard(
     @CurrentUser() user: AuthenticatedUser,
     @Param('dashboardId') dashboardId: string,
-    @Query('teamId') teamId?: string,
     @Query('boardId') boardId?: string,
     @Query('mode') mode?: string,
   ): Promise<DashboardResponse> {
-    if (!teamId) {
-      throw new BadRequestException('teamId requis');
-    }
     if (!boardId) {
       throw new BadRequestException('boardId requis');
     }
@@ -82,7 +72,6 @@ export class DashboardsController {
 
     return this.dashboards.getDashboard({
       userId: user.id,
-      teamId,
       boardId,
       dashboard: resolvedDashboard,
       mode: resolvedMode,

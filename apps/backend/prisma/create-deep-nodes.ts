@@ -25,7 +25,7 @@ async function createDeepHierarchy() {
 
     // Récupérer les behaviors existants
     const behaviors = await prisma.columnBehavior.findMany({
-      where: { teamId: DEMO_IDS.team },
+      where: { id: { in: Object.values(DEMO_IDS.behaviors) } },
     });
 
     // Créer des colonnes pour le sous-board
