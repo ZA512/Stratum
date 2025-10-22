@@ -96,19 +96,18 @@ model User {
 }
 
 model Team {
-  id               String            @id @default(cuid())
-  name             String
-  slug             String?           @unique
-  description      String?
-  settings         Json?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  memberships      Membership[]
-  nodes            Node[]
-  columnBehaviors  ColumnBehavior[]
-  automationRules  AutomationRule[]
-  invitations      Invitation[]
-  isPersonal       Boolean           @default(false)
+  id              String           @id @default(cuid())
+  name            String
+  slug            String?          @unique
+  description     String?
+  settings        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  memberships     Membership[]
+  nodes           Node[]
+  automationRules AutomationRule[]
+  invitations     Invitation[]
+  isPersonal      Boolean          @default(false)
 }
 
 model Membership {
@@ -208,17 +207,15 @@ model Column {
 }
 
 model ColumnBehavior {
-  id          String             @id @default(cuid())
-  teamId      String
-  key         ColumnBehaviorKey
-  label       String
-  metadata    Json?
-  color       String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id        String            @id @default(cuid())
+  key       ColumnBehaviorKey
+  label     String
+  metadata  Json?
+  color     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
-  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  columns     Column[]
+  columns   Column[]
 }
 
 model NodeAssignment {

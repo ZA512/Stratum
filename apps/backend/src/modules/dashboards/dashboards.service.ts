@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MembershipStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserSettingsService } from '../user-settings/user-settings.service';
 import { DASHBOARD_WIDGET_REGISTRY } from './dashboards.tokens';
@@ -37,8 +37,7 @@ export class DashboardsService {
   async getDashboard(request: DashboardRequest): Promise<DashboardResponse> {
     const totalStart = process.hrtime.bigint();
 
-    await this.ensureUserMembership(request.teamId, request.userId);
-    const board = await this.loadBoardContext(request.boardId, request.teamId);
+    const board = await this.loadBoardContext(request.boardId, request.userId);
     const hierarchy = await this.resolveHierarchy(board);
     const userSettings = await this.userSettings.getOrDefault(request.userId);
     const definitions = this.registry.filter(
@@ -50,9 +49,7 @@ export class DashboardsService {
     const dependencies = this.collectDependencies(definitions);
     const boardIds = this.resolveBoardIdsForMode(request.mode, hierarchy);
 
-    const tasks = dependencies.needsTasks
-      ? await this.loadTasks(boardIds, board.teamId)
-      : [];
+    const tasks = dependencies.needsTasks ? await this.loadTasks(boardIds) : [];
     const snapshots = dependencies.needsSnapshots
       ? await this.loadSnapshots(boardIds)
       : [];
@@ -229,7 +226,7 @@ export class DashboardsService {
 
   private async loadBoardContext(
     boardId: string,
-    teamId: string,
+    userId: string,
   ): Promise<BoardContext> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
@@ -238,7 +235,6 @@ export class DashboardsService {
           select: {
             id: true,
             title: true,
-            teamId: true,
             path: true,
             depth: true,
             parentId: true,
@@ -251,7 +247,11 @@ export class DashboardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    if (board.node.teamId !== teamId) {
+    if (!board.ownerUserId) {
+      throw new ForbiddenException('Board sans propriétaire');
+    }
+
+    if (board.ownerUserId !== userId) {
       throw new ForbiddenException('Accès au board non autorisé');
     }
 
@@ -259,10 +259,10 @@ export class DashboardsService {
       id: board.id,
       nodeId: board.node.id,
       title: board.node.title,
-      teamId: board.node.teamId,
       path: board.node.path,
       depth: board.node.depth,
       parentId: board.node.parentId,
+      ownerUserId: board.ownerUserId,
     };
   }
 
@@ -271,8 +271,8 @@ export class DashboardsService {
   ): Promise<DashboardHierarchy> {
     const descendants = await this.prisma.board.findMany({
       where: {
+        ownerUserId: board.ownerUserId,
         node: {
-          teamId: board.teamId,
           path: {
             startsWith: `${board.path}/`,
           },
@@ -283,7 +283,6 @@ export class DashboardsService {
           select: {
             id: true,
             title: true,
-            teamId: true,
             path: true,
             depth: true,
             parentId: true,
@@ -306,9 +305,6 @@ export class DashboardsService {
       if (!node) {
         continue;
       }
-      if (node.teamId !== board.teamId) {
-        continue;
-      }
       if (!node.path.startsWith(descendantPrefix)) {
         continue;
       }
@@ -320,10 +316,10 @@ export class DashboardsService {
         id: descendant.id,
         nodeId: node.id,
         title: node.title,
-        teamId: node.teamId,
         path: node.path,
         depth: node.depth,
         parentId: node.parentId,
+        ownerUserId: board.ownerUserId,
       });
       seen.add(descendant.id);
     }
@@ -379,17 +375,13 @@ export class DashboardsService {
     }
   }
 
-  private async loadTasks(
-    boardIds: string[],
-    teamId: string,
-  ): Promise<DashboardTask[]> {
+  private async loadTasks(boardIds: string[]): Promise<DashboardTask[]> {
     if (!boardIds.length) {
       return [];
     }
 
     const where: Prisma.NodeWhereInput = {
       archivedAt: null,
-      teamId,
       column: { boardId: { in: boardIds } },
     };
 
@@ -419,7 +411,6 @@ export class DashboardsService {
       statusMetadata: true,
       path: true,
       depth: true,
-      teamId: true,
       createdAt: true,
       updatedAt: true,
       archivedAt: true,
@@ -469,7 +460,6 @@ export class DashboardsService {
           statusMetadata: node.statusMetadata,
           path: node.path,
           depth: node.depth,
-          teamId: node.teamId,
           createdAt: node.createdAt,
           updatedAt: node.updatedAt,
           archivedAt: node.archivedAt,
@@ -576,24 +566,6 @@ export class DashboardsService {
     }
 
     return clone as Prisma.JsonValue;
-  }
-
-  private async ensureUserMembership(
-    teamId: string,
-    userId: string,
-  ): Promise<void> {
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        teamId,
-        userId,
-        status: MembershipStatus.ACTIVE,
-      },
-      select: { id: true },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('Accès équipe non autorisé');
-    }
   }
 
   private evaluateRequirements(

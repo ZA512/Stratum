@@ -15,10 +15,10 @@ describe('Dashboards widget calculations', () => {
     id: 'board-1',
     nodeId: 'node-1',
     title: 'Board',
-    teamId: 'team-1',
     path: '/node-1',
     depth: 0,
     parentId: null,
+    ownerUserId: 'user-1',
   };
 
   it('expose tous les widgets phase 1 dans le registre', () => {
@@ -81,7 +81,6 @@ describe('Dashboards widget calculations', () => {
       statusMetadata: overrides.statusMetadata ?? null,
       path: overrides.path ?? '/node-1/task',
       depth: overrides.depth ?? 1,
-      teamId: overrides.teamId ?? board.teamId,
       createdAt: overrides.createdAt ?? new Date('2025-01-01T00:00:00Z'),
       updatedAt: overrides.updatedAt ?? new Date('2025-01-02T00:00:00Z'),
       archivedAt: overrides.archivedAt ?? null,
@@ -118,7 +117,6 @@ describe('Dashboards widget calculations', () => {
     return {
       request: {
         userId: 'user-1',
-        teamId: board.teamId,
         boardId: board.id,
         dashboard: options.dashboard ?? 'PROGRESS',
         mode: options.mode ?? 'SELF',

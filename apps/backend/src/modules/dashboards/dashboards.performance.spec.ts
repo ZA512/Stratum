@@ -10,11 +10,7 @@ import { DEFAULT_WIDGET_REGISTRY } from './dashboards.registry';
 
 type PrismaMock = Pick<
   PrismaService,
-  | 'board'
-  | 'boardDailySnapshot'
-  | 'column'
-  | 'membership'
-  | 'node'
+  'board' | 'boardDailySnapshot' | 'column' | 'node'
 >;
 
 describe('DashboardsService performance budgets', () => {
@@ -31,10 +27,10 @@ describe('DashboardsService performance budgets', () => {
   const now = new Date('2025-05-01T12:00:00Z');
   const rootBoard = {
     id: 'board-root',
+    ownerUserId: 'user-1',
     node: {
       id: 'node-root',
       title: 'Root',
-      teamId: 'team-1',
       path: '/root',
       depth: 0,
       parentId: null,
@@ -43,10 +39,10 @@ describe('DashboardsService performance budgets', () => {
   const children = [
     {
       id: 'board-child-a',
+      ownerUserId: 'user-1',
       node: {
         id: 'node-child-a',
         title: 'Child A',
-        teamId: 'team-1',
         path: '/root/a',
         depth: 1,
         parentId: 'node-root',
@@ -54,10 +50,10 @@ describe('DashboardsService performance budgets', () => {
     },
     {
       id: 'board-child-b',
+      ownerUserId: 'user-1',
       node: {
         id: 'node-child-b',
         title: 'Child B',
-        teamId: 'team-1',
         path: '/root/b',
         depth: 1,
         parentId: 'node-root',
@@ -149,7 +145,6 @@ describe('DashboardsService performance budgets', () => {
             : null,
         path: `${board.node.path}/task-${index}`,
         depth: board.node.depth + 1,
-        teamId: 'team-1',
         createdAt,
         updatedAt,
         archivedAt: null,
@@ -191,9 +186,6 @@ describe('DashboardsService performance budgets', () => {
           const ids: string[] = where?.boardId?.in ?? [];
           return columnDefinitions.filter((column) => ids.includes(column.boardId));
         }),
-      },
-      membership: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'membership-1' }),
       },
       node: {
         findMany: jest.fn().mockImplementation(async ({ where, cursor }) => {
@@ -241,9 +233,7 @@ describe('DashboardsService performance budgets', () => {
       dashboard: 'EXECUTION',
       mode: 'SELF',
       boardId: 'board-root',
-      teamId: 'team-1',
       userId: 'user-1',
-      locale: 'fr',
     });
     const durationMs = Number((process.hrtime.bigint() - start) / 1_000_000n);
 
@@ -257,9 +247,7 @@ describe('DashboardsService performance budgets', () => {
       dashboard: 'PROGRESS',
       mode: 'AGGREGATED',
       boardId: 'board-root',
-      teamId: 'team-1',
       userId: 'user-1',
-      locale: 'fr',
     });
     const durationMs = Number((process.hrtime.bigint() - start) / 1_000_000n);
 

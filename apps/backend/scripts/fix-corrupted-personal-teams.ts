@@ -150,37 +150,41 @@ async function main() {
         });
 
         // Créer les colonnes par défaut
-        const behaviors = await prisma.columnBehavior.findMany({
-          where: { teamId: newTeam.id },
+        const defaults = [
+          { key: 'BACKLOG' as const, label: 'Backlog', position: 0 },
+          { key: 'IN_PROGRESS' as const, label: 'En cours', position: 1 },
+          { key: 'BLOCKED' as const, label: 'Bloqué', position: 2 },
+          { key: 'DONE' as const, label: 'Terminé', position: 3 },
+        ];
+
+        const existingBehaviors = await prisma.columnBehavior.findMany({
+          where: { key: { in: defaults.map((def) => def.key) } },
+          orderBy: { createdAt: 'asc' },
         });
+        const behaviorMap = new Map(existingBehaviors.map((b) => [b.key, b.id]));
 
-        if (behaviors.length === 0) {
-          // Créer les behaviors si pas encore créés pour cette team
-          const behaviorData = [
-            { key: 'BACKLOG' as const, label: 'Backlog', position: 0 },
-            { key: 'IN_PROGRESS' as const, label: 'En cours', position: 1 },
-            { key: 'BLOCKED' as const, label: 'Bloqué', position: 2 },
-            { key: 'DONE' as const, label: 'Terminé', position: 3 },
-          ];
+        for (const def of defaults) {
+          if (behaviorMap.has(def.key)) continue;
+          const created = await prisma.columnBehavior.create({
+            data: {
+              key: def.key,
+              label: def.label,
+            },
+          });
+          behaviorMap.set(def.key, created.id);
+        }
 
-          for (const bData of behaviorData) {
-            const behavior = await prisma.columnBehavior.create({
-              data: {
-                teamId: newTeam.id,
-                key: bData.key,
-                label: bData.label,
-              },
-            });
-
-            await prisma.column.create({
-              data: {
-                boardId: board.id,
-                behaviorId: behavior.id,
-                name: bData.label,
-                position: bData.position,
-              },
-            });
-          }
+        for (const def of defaults) {
+          const behaviorId = behaviorMap.get(def.key);
+          if (!behaviorId) continue;
+          await prisma.column.create({
+            data: {
+              boardId: board.id,
+              behaviorId,
+              name: def.label,
+              position: def.position,
+            },
+          });
         }
 
         // Supprimer l'ancienne membership de l'intrus

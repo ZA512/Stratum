@@ -2,10 +2,21 @@
 
 This document enumerates the major usages of the legacy team concept across the repository. The goal is to support the removal of teams in favor of personal workspaces owned directly by users.
 
+## Progress tracker
+
+- [x] Inventory existing team-dependent code paths (this document).
+- [x] Add a personal board bootstrap endpoint so clients no longer need to pass a team identifier.
+- [x] Remove the team-scoped board fetch endpoint in favor of the personal board flow.
+- [ ] Remove team data structures from Prisma and backfill owner-centric relationships (column behaviors are now global but other tables still reference teams).
+- [ ] Update backend services and DTOs to operate without `teamId` (board write guards now rely solely on owners; dashboards now validate board ownership but remaining services still emit `teamId`).
+- [ ] Simplify frontend routing and API clients to stop referencing teams (dashboards UI now works from the personal board without team selectors, other areas still depend on teams).
+- [ ] Migrate RACI presets away from the team abstraction.
+- [ ] Re-run automated tests and manual smoke checks after the removal.
+
 ## Database layer (`apps/backend/prisma`)
 
 - `apps/backend/prisma/schema.prisma`
-  - Models depending on teams: `Team`, `Membership`, `Node.teamId`, `ColumnBehavior.teamId`, `AutomationRule.teamId`, `Invitation.teamId`.
+  - Models depending on teams: `Team`, `Membership`, `Node.teamId`, `AutomationRule.teamId`, `Invitation.teamId`.
   - Enums such as `MembershipStatus` still used throughout the services.
 - Migrations under `apps/backend/prisma/migrations/`
   - `20250919232547_init/migration.sql` creates the `Team` table and all foreign keys on `teamId`.
@@ -16,13 +27,17 @@ This document enumerates the major usages of the legacy team concept across the 
 ## Backend application (`apps/backend/src`)
 
 - `modules/boards/boards.service.ts`
-  - Most read/write paths require a `teamId` for authorization and board lookup.
-  - Column behavior caching relies on `teamId` to provision default columns.
+  - Personal board mutations now require the authenticated user to match `Board.ownerUserId`; team memberships are no longer consulted when authorizing writes.
+  - Column behavior defaults are provisioned from global behaviors rather than team-scoped records.
+- `modules/boards/boards.controller.ts`
+  - Exposes `GET /boards/me` to bootstrap or return the personal board for the authenticated user, reducing the need to surface team identifiers to clients.
+  - Legacy `GET /boards/team/:teamId` route removed; diagnostics now repair boards without touching team memberships.
 - `modules/nodes/nodes.service.ts`
   - Permission checks (`ensureUserCanWrite`) query the `Membership` table with `teamId`.
   - Board promotion, archive, share, and notification code propagate `teamId` through DTOs and metadata.
 - `modules/dashboards/*`
-  - REST controllers expect a `teamId` query parameter and validate membership before loading analytics.
+  - REST controllers now rely on authenticated ownership of the requested board instead of a `teamId` query parameter.
+  - Service logic validates `Board.ownerUserId` and no longer filters data by `teamId`.
 - `modules/auth/auth.service.ts`
   - Registration/login bootstrap calls `TeamsService.bootstrapForUser` to guarantee a personal team and board.
   - Invitation APIs (`createInvitation`, `acceptInvitation`) persist `teamId`.
@@ -37,6 +52,7 @@ This document enumerates the major usages of the legacy team concept across the 
 - `src/app/page.tsx` fetches teams on login (`fetchTeams`, `bootstrapTeams`) to decide which board to open.
 - `src/app/settings/page.tsx` and `src/features/users/raci-teams-api.ts` manage saved RACI presets labelled as "teams".
 - Components such as `BoardTaskCard`, `BoardPageShell`, and `MoveCardDialog` include `teamId` in API calls.
+- Dashboards client (`src/features/dashboards/DashboardPageShell.tsx`) now hides team selection and fetches dashboards directly from the personal board.
 
 ## Shared packages (`packages/api`, `packages/ui`)
 
