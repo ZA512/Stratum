@@ -1,4 +1,5 @@
 // Legacy checklist types supprimés après migration
+import type { ColumnBehaviorKey } from '@/features/boards/boards-api';
 
 export type NodeChild = {
   id: string;
@@ -46,6 +47,7 @@ export type NodeDetail = {
   shortId: number;
   teamId: string;
   parentId: string | null;
+  createdAt?: string | null;
   type: 'SIMPLE' | 'COMPLEX';
   title: string;
   description: string | null;
@@ -87,6 +89,9 @@ export type NodeDetail = {
     plannedStartDate: string | null;
     plannedEndDate: string | null;
     actualEndDate: string | null;
+    scheduleMode: 'manual'|'asap'|null;
+    hardConstraint: boolean;
+    dependencies: NodeScheduleDependency[];
   };
   financials?: {
     billingStatus: 'TO_BILL'|'BILLED'|'PAID' | null;
@@ -107,6 +112,23 @@ export type NodeDetail = {
       done: number;
     };
   };
-  board?: { id: string; columns: { id: string; behaviorKey: string | null }[] };
+  board?: {
+    id: string;
+    columns: Array<{
+      id: string;
+      behaviorKey: ColumnBehaviorKey | null;
+      settings?: Record<string, unknown> | null;
+    }>;
+  };
   comments: NodeComment[];
+};
+
+export type NodeScheduleDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: 'FS'|'SS'|'FF'|'SF';
+  lag: number;
+  mode: 'ASAP'|'FREE';
+  hardConstraint: boolean;
 };

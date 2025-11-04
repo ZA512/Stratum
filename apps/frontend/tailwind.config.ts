@@ -1,4 +1,16 @@
-﻿import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss";
+
+const themeColors = {
+  background: "rgb(var(--color-background) / <alpha-value>)",
+  surface: "rgb(var(--color-surface) / <alpha-value>)",
+  card: "rgb(var(--color-card) / <alpha-value>)",
+  input: "rgb(var(--color-input) / <alpha-value>)",
+  border: "rgb(var(--color-border) / <alpha-value>)",
+  accent: "rgb(var(--color-accent) / <alpha-value>)",
+  accentStrong: "rgb(var(--color-accent-strong) / <alpha-value>)",
+  foreground: "rgb(var(--color-foreground) / <alpha-value>)",
+  muted: "rgb(var(--color-muted) / <alpha-value>)",
+};
 
 const config: Config = {
   darkMode: "class",
@@ -10,16 +22,15 @@ const config: Config = {
           DEFAULT: "#3B82F6",
           hover: "#2563EB",
         },
-        "background-light": "#F3F4F6",
-        "background-dark": "#111827",
-        "card-light": "#FFFFFF",
-        "card-dark": "#1F2937",
-        "text-light": "#1F2937",
-        "text-dark": "#F3F4F6",
-        "text-muted-light": "#6B7280",
-        "text-muted-dark": "#9CA3AF",
-        "border-light": "#E5E7EB",
-        "border-dark": "#374151",
+        ...themeColors,
+      },
+      borderColor: {
+        DEFAULT: themeColors.border,
+        border: themeColors.border,
+      },
+      ringColor: {
+        accent: themeColors.accent,
+        accentStrong: themeColors.accentStrong,
       },
     },
   },

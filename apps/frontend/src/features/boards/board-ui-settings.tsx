@@ -3,9 +3,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useBoardData } from "./board-data-provider";
 
+type BoardViewMode = "kanban" | "gantt";
+
 interface BoardUiSettingsContextValue {
   expertMode: boolean;
   setExpertMode: (value: boolean) => void;
+  boardView: BoardViewMode;
+  setBoardView: (value: BoardViewMode) => void;
 }
 
 const BoardUiSettingsContext = createContext<BoardUiSettingsContextValue | null>(null);
@@ -13,10 +17,12 @@ const BoardUiSettingsContext = createContext<BoardUiSettingsContextValue | null>
 export function BoardUiSettingsProvider({ children }: { children: React.ReactNode }) {
   const { teamId } = useBoardData();
   const [expertMode, setExpertModeState] = useState(false);
+  const [boardView, setBoardViewState] = useState<BoardViewMode>("kanban");
 
   useEffect(() => {
     if (!teamId) {
       setExpertModeState(false);
+      setBoardViewState("kanban");
       return;
     }
     const key = `stratum:team:${teamId}:expert-mode`;
@@ -31,6 +37,17 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
       }
     } catch {
       setExpertModeState(false);
+    }
+    const viewKey = `stratum:team:${teamId}:board-view`;
+    try {
+      const storedView = typeof window !== "undefined" ? window.localStorage.getItem(viewKey) : null;
+      if (storedView === "gantt") {
+        setBoardViewState("gantt");
+      } else {
+        setBoardViewState("kanban");
+      }
+    } catch {
+      setBoardViewState("kanban");
     }
   }, [teamId]);
 
@@ -50,9 +67,27 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
     [teamId],
   );
 
+  const setBoardView = useCallback(
+    (value: BoardViewMode) => {
+      setBoardViewState(value);
+      if (!teamId) return;
+      try {
+        if (typeof window !== "undefined") {
+          const key = `stratum:team:${teamId}:board-view`;
+          window.localStorage.setItem(key, value);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    },
+    [teamId],
+  );
+
   const contextValue: BoardUiSettingsContextValue = {
     expertMode,
     setExpertMode,
+    boardView,
+    setBoardView,
   };
 
   return (

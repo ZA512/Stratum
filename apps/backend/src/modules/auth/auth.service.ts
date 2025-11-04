@@ -27,7 +27,7 @@ interface TokenBundle {
 
 @Injectable()
 export class AuthService {
-  private readonly accessTokenTtl: string;
+  private readonly accessTokenTtlMs: number;
   private readonly refreshTokenTtlMs: number;
   private readonly resetTokenTtlMs: number;
   private readonly invitationTtlMs: number;
@@ -39,7 +39,9 @@ export class AuthService {
     private readonly prisma: PrismaService,
     configService: ConfigService,
   ) {
-    this.accessTokenTtl = configService.get<string>('JWT_ACCESS_TTL', '15m');
+    const rawAccessTtl: unknown = configService.get('JWT_ACCESS_TTL', '15m');
+    // stocker le TTL d'accès en millisecondes pour permettre des conversions sûres
+    this.accessTokenTtlMs = this.parseDurationMs(rawAccessTtl, 15 * 60 * 1000);
     // On autorise: nombre (ms), string numérique, ou forme humaine ("30d", "12h", "15m", "45s").
     const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 90; // 90 jours
     const rawRefreshTtl: unknown = configService.get(
@@ -131,8 +133,12 @@ export class AuthService {
     await this.cleanupRefreshTokens(user.id);
 
     const payload = { sub: user.id, email: user.email };
+    // jwt.signAsync expects expiresIn as a number (seconds) for the SignOptions overloads
+    // We keep TTLs internally as milliseconds to simplify other date math and convert
+    // to seconds here to match the JwtModule / library types. Do NOT expose secrets
+    // or token payloads in logs; use short-lived access tokens and secure refresh tokens.
     const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: this.accessTokenTtl,
+      expiresIn: Math.floor(this.accessTokenTtlMs / 1000),
     });
 
     const refreshToken = randomBytes(48).toString('hex');

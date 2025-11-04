@@ -280,17 +280,24 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
               >
                 📦 <span>Déplacer dans un autre kanban</span>
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeMenu();
-                  onRequestDelete(node);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
-              >
-                🗑️ <span>Supprimer…</span>
-              </button>
+              {node.canDelete !== false && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeMenu();
+                    onRequestDelete(node);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
+                >
+                  🗑️ <span>Supprimer…</span>
+                </button>
+              )}
+              {node.canDelete === false && (
+                <div className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-muted/50 cursor-not-allowed">
+                  🔒 <span>Tâche partagée - Suppression non autorisée</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -299,7 +306,12 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
         <div className="flex items-start justify-between gap-3">
           <div className="w-full min-w-0">
             {!editing && (
-              <p className="text-sm font-medium leading-tight break-words pr-6">{title}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium leading-tight break-words pr-6">{title}</p>
+                {node.isSharedRoot && (
+                  <span className="shrink-0 text-purple-400/60 text-xs" title="Tâche partagée - Ne peut pas être supprimée">🤝</span>
+                )}
+              </div>
             )}
             {editing && (
               <input

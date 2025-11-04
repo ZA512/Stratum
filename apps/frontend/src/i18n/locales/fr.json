@@ -10,7 +10,9 @@
     },
     "actions": {
       "signOut": "Déconnexion",
-      "settings": "Paramétrage"
+      "settings": "Paramétrage",
+      "refresh": "Actualiser",
+      "close": "Fermer"
     }
       },
       "notifications": {
@@ -93,6 +95,40 @@
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
     "back": "Retour au tableau de bord",
+    "theme": {
+      "title": "Thème visuel",
+      "description": "Choisissez l'ambiance de Stratum. La sélection est mémorisée localement sur cet appareil.",
+      "applied": "Thème mis à jour : {theme}",
+      "active": "Actif",
+      "tone": {
+        "light": "Ambiance claire",
+        "dark": "Ambiance sombre"
+      },
+      "names": {
+        "midnight": "Midnight blueprint",
+        "aurora": "Ciel d'aurore",
+        "solstice": "Sable du solstice",
+        "velvet": "Velours nocturne",
+        "cyberwave": "Cyberwave néon",
+        "materialLight": "Clarté matérielle",
+        "solarizedLight": "Lumière Solarized",
+        "materialDark": "Nuit matérielle",
+        "nordDark": "Nord arctique",
+        "draculaDark": "Dracula minuit"
+      },
+      "descriptions": {
+        "midnight": "Thème sombre actuel souligné de turquoise.",
+        "aurora": "Bleus doux de journée avec des accents nets pour se concentrer.",
+        "solstice": "Palette chaude et neutre inspirée par la papeterie artisanale.",
+        "velvet": "Tons violets nocturnes relevés d'une lavande lumineuse.",
+        "cyberwave": "Proposition cyberpunk : magenta néon sur noir profond.",
+        "materialLight": "Mode clair inspiré du Material Design avec accents teal et surfaces polies.",
+        "solarizedLight": "Palette Solarized claire mêlant base sable et bleus océaniques tout en douceur.",
+        "materialDark": "Mode sombre Material associant mauves doux et contraste maîtrisé.",
+        "nordDark": "Palette Nord aux bleus arctiques reposants pour de longues sessions.",
+        "draculaDark": "Palette Dracula avec violets néon sur ardoise profonde pour un style affirmé."
+      }
+    },
     "raciTeams": {
       "title": "Équipes RACI sauvegardées",
       "description": "Retrouvez et gérez vos matrices RACI enregistrées depuis le tiroir tâche.",
@@ -325,11 +361,34 @@
     },
     "search": {
       "label": "Recherche",
-      "placeholder": "Titre, description, #id, @utilisateur, !priorité…",
+      "placeholder": "Titre, description, #id, @utilisateur, !priorité… (3 car. min.)",
       "aria": "Recherche textuelle avec filtres rapides",
       "helper": "Minimum 3 caractères ou utilisez @, !, #.",
       "mentions": {
         "empty": "Aucun utilisateur trouvé"
+      }
+    },
+    "invitationCenter": {
+      "badge": "Invitations",
+      "badgeAria": "Centre d'invitations, {count} en attente",
+      "title": "Invitations entrantes",
+      "refresh": "Actualiser",
+      "close": "Fermer",
+      "loading": "Chargement des invitations…",
+      "empty": "Aucune invitation en attente.",
+      "error": "Impossible de charger les invitations.",
+      "invitedBy": "Invité par {name}",
+      "invitedByEmail": "Invité par {email}",
+      "receivedAt": "Reçue le {value}",
+      "expiresAt": "Expire le {value}",
+      "accept": "Accepter",
+      "accepting": "Acceptation…",
+      "decline": "Refuser",
+      "declining": "Refus…",
+      "openTeam": "Ouvrir l'équipe",
+      "toast": {
+        "accepted": "Invitation acceptée pour « {title} »",
+        "declined": "Invitation refusée pour « {title} »"
       }
     },
     "quickFilters": {
@@ -891,6 +950,12 @@
         }
       }
     },
+    "activity": {
+      "badge": {
+        "tooltip": "{count, plural, one {{count} activité aujourd'hui} other {{count} activités aujourd'hui}}",
+        "aria": "Afficher l'historique des activités, {count, plural, one {{count} activité aujourd'hui} other {{count} activités aujourd'hui}}"
+      }
+    },
     "helpMode": {
       "tooltip": {
         "enableTitle": "Activer l'aide contextuelle",
@@ -912,7 +977,13 @@
       "deleteSingle": "Supprimer la carte",
       "deletingSingle": "Suppression…",
       "deleteRecursive": "Supprimer tout (cascade)",
-      "deletingRecursive": "Suppression…"
+      "deletingRecursive": "Suppression…",
+      "shareBlockedTitle": "Suppression bloquée par le partage",
+      "shareBlockedBody": "Retirez les collaborateurs externes ou annulez les invitations en attente avant de supprimer cette tâche principale.",
+      "shareBlockedCollaborators": "{count, plural, one {{count} collaborateur externe a toujours accès.} other {{count} collaborateurs externes ont toujours accès.}}",
+      "shareBlockedInvitations": "{count, plural, one {{count} invitation en attente subsiste.} other {{count} invitations en attente subsistent.}}",
+      "shareBlockedTooltip": "Retirez les collaborateurs externes et les invitations en attente avant de supprimer.",
+      "shareLoadError": "Impossible de charger les informations de partage."
     },
     "moveDialog": {
       "title": "Déplacer « {title} » vers un autre kanban",
@@ -973,6 +1044,59 @@
       "unsnooze": "Réveiller",
       "unsnoozing": "Réveiller…"
     },
+    "viewToggle": {
+      "kanban": "Kanban",
+      "kanbanHint": "Revenir à la vue Kanban quotidienne",
+      "gantt": "Timeline",
+      "ganttHint": "Ouvrir la timeline légère"
+    },
+    "gantt": {
+      "subtitle": "Pilotez la chronologie du board",
+      "columns": "Colonnes",
+      "lanes": "Lignes",
+      "loading": "Mise à jour de la timeline…",
+      "zoom": {
+        "day": "Jour",
+        "week": "Semaine",
+        "month": "Mois"
+      },
+      "toolbar": {
+        "today": "Aujourd’hui",
+        "undo": "Annuler",
+        "redo": "Rétablir",
+        "lanesLabel": "Lignes",
+        "lanesDecrease": "Réduire le nombre de lignes",
+        "lanesIncrease": "Ajouter une ligne",
+        "zoomIn": "Zoom avant",
+        "zoomOut": "Zoom arrière",
+        "resetZoom": "Réinitialiser le zoom"
+      },
+      "taskRange": "{start} → {end}",
+      "tooltip": {
+        "columnLane": "{column} · Ligne {lane}",
+        "unknownColumn": "Colonne non attribuée"
+      },
+      "laneLabel": "Ligne {index}",
+      "prompts": {
+        "newTask": "Titre de la nouvelle tâche"
+      },
+      "links": {
+        "modeAsap": "ASAP",
+        "modeFree": "Informatif",
+        "toggleMode": "Basculer ASAP / Libre",
+        "lag": "Décalage (jours)",
+        "hardConstraint": "Bloquer l’auto-alignement",
+        "align": "Aligner ASAP",
+        "startFromTask": "Créer une dépendance depuis la tâche",
+        "handleHint": "Glissez pour créer une dépendance",
+        "cycleWarning": "Cycle détecté dans les dépendances. Résolvez-le avant l’alignement.",
+        "noChange": "Déjà aligné – aucune mise à jour nécessaire."
+      },
+      "notifications": {
+        "scheduleUpdated": "Timeline mise à jour",
+        "taskCreated": "Tâche créée sur la timeline"
+      }
+    },
     "alerts": {
       "sessionExpired": "Session expirée – redirection…",
       "sessionInvalid": "Session invalide — veuillez vous reconnecter.",
@@ -982,6 +1106,46 @@
   "boardUnavailable": "Kanban actif indisponible pour cette action.",
   "boardRefreshFailed": "Actualisation du kanban impossible",
       "unexpectedError": "Erreur inattendue"
+    }
+  },
+  "activity": {
+    "title": "Activité récente",
+    "todayCount": "{count} activités aujourd'hui",
+    "loading": "Chargement des activités…",
+    "empty": "Aucune activité récente",
+    "timeAgo": {
+      "justNow": "À l'instant",
+      "minutesAgo": "Il y a {count} min",
+      "hoursAgo": "Il y a {count}h",
+      "daysAgo": "Il y a {count}j",
+      "weeksAgo": "Il y a {count} sem",
+      "monthsAgo": "Il y a {count} mois"
+    },
+    "types": {
+      "NODE_CREATED": "{user} a créé la tâche #{nodeShortId} dans {columnName}",
+      "NODE_MOVED": "{user} a déplacé la tâche #{nodeShortId} : {fromColumn} → {toColumn}",
+      "MOVED_TO_BOARD": "{user} a déplacé la tâche #{nodeShortId} vers un autre kanban",
+      "NODE_DELETED": "{user} a supprimé la tâche #{nodeShortId}",
+      "NODE_ARCHIVED": "{user} a archivé la tâche #{nodeShortId}",
+      "NODE_RESTORED": "{user} a restauré la tâche #{nodeShortId}",
+      "NODE_SNOOZED": "{user} a reporté la tâche #{nodeShortId}",
+      "NODE_UNSNOOZED": "{user} a réactivé la tâche #{nodeShortId}",
+      "TITLE_UPDATED": "{user} a modifié le titre de la tâche #{nodeShortId}",
+      "DESCRIPTION_UPDATED": "{user} a modifié la description de la tâche #{nodeShortId}",
+      "DUE_DATE_UPDATED": "{user} a modifié l'échéance de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "PRIORITY_UPDATED": "{user} a modifié la priorité de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "EFFORT_UPDATED": "{user} a modifié l'effort de la tâche #{nodeShortId} : {oldValue} → {newValue}",
+      "TAGS_UPDATED": "{user} a modifié les tags de la tâche #{nodeShortId}",
+      "PROGRESS_UPDATED": "{user} a mis à jour le progrès de la tâche #{nodeShortId} : {oldValue}% → {newValue}%",
+      "BLOCKED_STATUS_CHANGED": "{user} a modifié le statut de blocage de la tâche #{nodeShortId}",
+      "ASSIGNEES_UPDATED": "{user} a modifié les assignés de la tâche #{nodeShortId}",
+      "RACI_UPDATED": "{user} a modifié les rôles RACI de la tâche #{nodeShortId}",
+      "INVITATION_SENT": "{user} a envoyé une invitation à {email} pour la tâche #{nodeShortId}",
+      "INVITATION_ACCEPTED": "{user} a accepté l'invitation pour la tâche #{nodeShortId}",
+      "INVITATION_DECLINED": "{user} a refusé l'invitation pour la tâche #{nodeShortId}",
+      "COLLABORATOR_ADDED": "{user} a été ajouté comme collaborateur sur la tâche #{nodeShortId}",
+      "COLLABORATOR_REMOVED": "{user} a été retiré comme collaborateur de la tâche #{nodeShortId}",
+      "COMMENT_ADDED": "{user} a ajouté un commentaire sur la tâche #{nodeShortId}"
     }
   }
 }

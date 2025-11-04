@@ -72,6 +72,8 @@ export interface TaskCardProps {
     "id" | "priority" | "menu" | "assignees" | "dueDate" | "progress" | "effort" | "fractal",
     TooltipEntry
   >>;
+  /** Indique si la tâche est partagée avec plusieurs utilisateurs */
+  isShared?: boolean;
 }
 
 // Helper palette (conserver les couleurs existantes)
@@ -130,6 +132,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   variant = "default",
   className,
   assigneeTooltip,
+  isShared = false,
   responsibleIds,
   accountableIds,
   consultedIds,
@@ -190,8 +193,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     <div
       onClick={onClick}
       className={cx(
-        "group relative rounded-lg bg-white dark:bg-gray-800 shadow-md ring-1 ring-gray-200 dark:ring-gray-700 hover:shadow-lg transition-shadow",
-        onClick && "cursor-pointer",
+        "group relative rounded-xl border border-white/10 bg-card/80 text-foreground shadow-lg transition hover:border-accent/40",
+        onClick &&
+          "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}
       role={onClick ? 'button' : undefined}
@@ -203,7 +207,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex items-center gap-2">
           {showId && (() => {
             const tooltip = pickTooltipEntry(helpMessages?.id, helpMode);
-            const content = <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">#{id}</span>;
+            const content = <span className="text-xs font-semibold text-muted">#{id}</span>;
             return tooltip ? (
               <HelpTooltip
                 helpMode={helpMode}
@@ -252,7 +256,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               type="button"
               aria-label="Actions de la tâche"
               onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
-              className="p-1 -m-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+              className="p-1 -m-1 rounded text-muted transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
             </button>
@@ -273,13 +277,28 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         })()}
       </div>
       {/* Corps */}
-      <div className={cx("px-4", compact ? "pb-2" : "pb-3")}>        
-        <h3 className={cx("font-bold text-base text-gray-800 dark:text-gray-100", compact ? "mb-0.5" : "mb-1 pr-2")}>{title}</h3>
+      <div className={cx("px-4", compact ? "pb-2" : "pb-3")}>
+        <h3 className={cx("font-bold text-base text-foreground flex items-center gap-1.5", compact ? "mb-0.5" : "mb-1 pr-2")}>
+          {isShared && (
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              height="18" 
+              viewBox="0 -960 960 960" 
+              width="18" 
+              className="shrink-0" 
+              style={{ fill: 'var(--color-muted)' }}
+              aria-label="Tâche partagée"
+            >
+              <path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/>
+            </svg>
+          )}
+          {title}
+        </h3>
         {!compact && description && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 leading-snug">{description}</p>
+          <p className="text-sm leading-snug text-muted">{description}</p>
         )}
       </div>
-      <div className="h-px bg-gray-200 dark:bg-gray-700 mx-4" />
+      <div className="mx-4 h-px bg-white/10" />
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
@@ -297,24 +316,24 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 {assignees.slice(0, 4).map(a => (
                   <div
                     key={a.id}
-                    className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-blue-200 dark:bg-blue-900"
+                    className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-blue-200 dark:bg-blue-900"
                     style={a.color ? { backgroundColor: a.color } : undefined}
                     // Supprime title natif pour éviter conflit avec tooltip multi-ligne
                     aria-label={a.displayName || a.initials}
                   >
-                    <span className="text-xs font-bold text-blue-800 dark:text-blue-200">{a.initials}</span>
+                    <span className="text-xs font-bold text-blue-900 dark:text-blue-200">{a.initials}</span>
                   </div>
                 ))}
                 {assignees.length > 4 && (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-gray-800 bg-slate-200 dark:bg-slate-700">
-                    <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">+{assignees.length - 4}</span>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-surface/70">
+                    <span className="text-[10px] font-semibold text-muted">+{assignees.length - 4}</span>
                   </div>
                 )}
                 {computedTooltip && raciOpen && (
                   <div
                     id={raciTooltipId}
                     role="tooltip"
-                    className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left rounded-md border border-white/10 bg-gray-900/95 px-3 py-2 text-[11px] leading-relaxed text-gray-100 shadow-xl whitespace-pre-line"
+                    className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left whitespace-pre-line rounded-md border border-white/10 bg-background/95 px-3 py-2 text-[11px] leading-relaxed text-foreground shadow-xl"
                   >
                     {computedTooltip}
                   </div>
@@ -376,7 +395,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             const tooltip = pickTooltipEntry(helpMessages?.progress, helpMode);
             const chip = (
               <div
-                className="flex items-center justify-center min-w-[42px] h-5 rounded-md bg-gray-200/40 dark:bg-gray-700/40 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+                className="flex h-5 min-w-[42px] items-center justify-center rounded-md border border-white/10 bg-surface/70 text-[11px] font-semibold text-foreground"
                 title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
                 aria-label="Progression"
               >
@@ -400,7 +419,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {showEffort && complexity && (() => {
             const tooltip = pickTooltipEntry(helpMessages?.effort, helpMode);
             const badge = (
-              <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400" title="Complexité">
+              <div className="flex items-center gap-1 text-muted" title="Complexité">
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>weight</span>
                 <span className="text-xs font-medium">{complexity}</span>
               </div>
@@ -428,19 +447,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onFractalPathClick?.();
                 }}
-                className="relative z-10 flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 rounded-sm px-1 -mx-1"
+                className="relative z-10 -mx-1 flex items-center gap-1 rounded-sm px-1 text-muted transition-colors hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 title="Ouvrir le kanban enfant"
               >
                 <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>
-                <span className="flex items-center gap-[1px] font-mono text-[11px]">
+                <span className="flex items-center gap-[1px] font-mono text-[11px] font-semibold">
                   {(() => {
                     const parts = fractalPath.split('.');
                     // Ordre des couleurs : Bleu (Backlog), Jaune (En cours), Rouge (Bloqué), Vert (Terminé)
-                    const colors = ['text-sky-600 dark:text-sky-400', 'text-amber-600 dark:text-amber-400', 'text-red-600 dark:text-red-400', 'text-emerald-600 dark:text-emerald-400'];
+                    const colors = ['text-sky-700 dark:text-sky-300', 'text-amber-700 dark:text-amber-300', 'text-red-700 dark:text-red-300', 'text-emerald-700 dark:text-emerald-300'];
                     return parts.map((part, i) => (
                       <React.Fragment key={i}>
-                        <span className={colors[i] || 'text-gray-500'}>{part}</span>
-                        {i < parts.length - 1 && <span className="text-slate-400">.</span>}
+                        <span className={colors[i] || 'text-muted'}>{part}</span>
+                        {i < parts.length - 1 && <span className="text-muted">.</span>}
                       </React.Fragment>
                     ));
                   })()}
@@ -463,7 +482,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           })()}
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-0 rounded-lg ring-0 group-hover:ring-2 ring-blue-500/10 transition" />
+      <div className="pointer-events-none absolute inset-0 rounded-xl ring-0 transition group-hover:ring-2 group-hover:ring-accent/30" />
     </div>
   );
 };

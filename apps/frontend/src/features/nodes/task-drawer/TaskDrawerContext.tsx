@@ -117,13 +117,13 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const cached = cacheRef.current.get(movedId);
       if (cached) {
         cacheRef.current.set(movedId, {
-          detail: { ...cached.detail, columnId: targetColumnId } as any,
+          detail: { ...cached.detail, columnId: targetColumnId },
           fetchedAt: Date.now(),
         });
       }
       if (openedNodeId === movedId) {
         // Optimistic update en direct si la fiche est ouverte
-        setDetail((prev) => (prev ? { ...prev, columnId: targetColumnId } : prev) as any);
+        setDetail((prev) => (prev ? { ...prev, columnId: targetColumnId } : prev));
         // Rafraîchir en arrière-plan pour récupérer les settings de colonne à jour
         void load(movedId, { background: true });
       }

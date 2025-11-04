@@ -4,11 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ColumnBehaviorKey, MembershipStatus, Prisma } from '@prisma/client';
+import { ColumnBehaviorKey, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BoardColumnDto } from './dto/board-column.dto';
 import { BoardDto } from './dto/board.dto';
-import { BoardWithNodesDto } from './dto/board-with-nodes.dto';
+import {
+  BoardGanttDependencyDto,
+  BoardWithNodesDto,
+} from './dto/board-with-nodes.dto';
 import { BoardNodeDto } from './dto/board-node.dto';
 import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
@@ -85,23 +88,26 @@ export class BoardsService {
    * Diagnostic interne: retourne les flags de propriété d'un board sans appliquer restrictions.
    * A n'exposer qu'en environnement dev via le controller si nécessaire.
    */
-  async diagnosticFlags(boardId: string): Promise<{ boardId: string; ownerUserId: string | null; isPersonal: boolean; teamId: string | null }> {
+  async diagnosticFlags(boardId: string): Promise<{
+    boardId: string;
+    ownerUserId: string | null;
+    isPersonal: boolean;
+  }> {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
-      include: { node: { select: { teamId: true } } },
     });
     if (!board) {
       throw new NotFoundException('Board introuvable');
     }
     return {
       boardId: board.id,
-      ownerUserId: (board as any).ownerUserId ?? null,
-      isPersonal: (board as any).isPersonal ?? false,
-      teamId: board.node?.teamId ?? null,
+      ownerUserId: board.ownerUserId ?? null,
+      isPersonal: board.isPersonal ?? false,
     };
   }
 
-  async getBoard(boardId: string, userId?: string): Promise<BoardDto> {
+  async getBoard(boardId: string, _userId?: string): Promise<BoardDto> {
+    void _userId;
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
@@ -124,71 +130,6 @@ export class BoardsService {
 
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
-
-    // Contrôle d'accès minimal boards personnels
-    if (
-      (board as any).isPersonal &&
-      userId &&
-      (board as any).ownerUserId &&
-      (board as any).ownerUserId !== userId
-    ) {
-      // Log diagnostic pour comprendre les mismatches éventuels
-      // eslint-disable-next-line no-console
-      console.warn('[boards.getBoard] Forbidden mismatch', {
-        boardId,
-        ownerUserId: (board as any).ownerUserId,
-        requestUserId: userId,
-        isPersonal: (board as any).isPersonal,
-      });
-      throw new ForbiddenException('Board personnel inaccessible');
-    }
-
-    const b: any = board;
-    return {
-      id: b.id,
-      nodeId: b.nodeId,
-      name: b.node.title,
-      columns: b.columns.map((column: any) => ({
-        id: column.id,
-        name: column.name,
-        behaviorKey: column.behavior.key,
-        position: column.position,
-        wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings(column.settings ?? null),
-      })),
-      ownerUserId: b.ownerUserId ?? null,
-      isPersonal: b.isPersonal ?? false,
-    };
-  }
-
-  async getRootBoardForTeam(teamId: string): Promise<BoardDto> {
-    const board = await this.prisma.board.findFirst({
-      where: {
-        node: {
-          teamId,
-          parentId: null,
-        },
-      },
-      include: {
-        node: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        columns: {
-          include: { behavior: true },
-          orderBy: { position: 'asc' },
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-
-    if (!board) {
-      throw new NotFoundException('Board introuvable pour cette equipe');
-    }
 
     const b: any = board;
     return {
@@ -219,6 +160,7 @@ export class BoardsService {
           select: {
             id: true,
             title: true,
+            teamId: true,
           },
         },
         columns: {
@@ -237,74 +179,198 @@ export class BoardsService {
     // Auto-réparation: persister les settings par défaut si absents.
     await this.repairMissingColumnSettings(board.columns);
 
-    // Contrôle d'accès board personnel
-    if (
-      (board as any).isPersonal &&
-      userId &&
-      (board as any).ownerUserId &&
-      (board as any).ownerUserId !== userId
-    ) {
-      // eslint-disable-next-line no-console
-      console.warn('[boards.getBoardWithNodes] Forbidden mismatch', {
-        boardId,
-        ownerUserId: (board as any).ownerUserId,
-        requestUserId: userId,
-        isPersonal: (board as any).isPersonal,
-      });
-      throw new ForbiddenException('Board personnel inaccessible');
-    }
-
     // Préparation typée plutôt que cast any pour éviter retours unsafe
     const columnIds = board.columns.map((column) => column.id);
-    const rawNodes = columnIds.length
-      ? await this.prisma.node.findMany({
-          where: { columnId: { in: columnIds }, archivedAt: null },
-          orderBy: { position: 'asc' },
-          select: {
-            id: true,
-            title: true,
-            columnId: true,
-            position: true,
-            parentId: true,
-            dueAt: true,
-            shortId: true,
-            description: true,
-            effort: true,
-            priority: true,
-            blockedReminderIntervalDays: true,
-            blockedExpectedUnblockAt: true,
-            blockedSince: true,
-            tags: true,
-            metadata: true,
-            statusMetadata: true,
-            progress: true,
-            assignments: {
-              select: {
-                role: true,
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatarUrl: true,
+
+    // Charger les placements personnalisés de tâches partagées pour cet utilisateur
+    let sharedPlacements: Array<{
+      nodeId: string;
+      columnId: string;
+      position: number;
+      node: any;
+    }> = [];
+
+    if (userId) {
+      sharedPlacements = await this.prisma.sharedNodePlacement.findMany({
+        where: {
+          userId,
+          columnId: { in: columnIds },
+        },
+        include: {
+          node: {
+            select: {
+              id: true,
+              title: true,
+              columnId: true,
+              position: true,
+              parentId: true,
+              dueAt: true,
+              shortId: true,
+              description: true,
+              effort: true,
+              priority: true,
+              blockedReminderIntervalDays: true,
+              blockedExpectedUnblockAt: true,
+              blockedSince: true,
+              tags: true,
+              metadata: true,
+              statusMetadata: true,
+              progress: true,
+              teamId: true,
+              archivedAt: true,
+              createdById: true,
+              assignments: {
+                select: {
+                  role: true,
+                  user: {
+                    select: {
+                      id: true,
+                      displayName: true,
+                      avatarUrl: true,
+                    },
                   },
                 },
               },
             },
           },
-        })
-      : [];
+        },
+      });
+    }
+
+    // Charger les tâches appartenant directement au board
+    const rawNodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        columnId: { in: columnIds },
+      },
+      orderBy: { position: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        columnId: true,
+        position: true,
+        parentId: true,
+        dueAt: true,
+        shortId: true,
+        description: true,
+        effort: true,
+        priority: true,
+        blockedReminderIntervalDays: true,
+        blockedExpectedUnblockAt: true,
+        blockedSince: true,
+        tags: true,
+        metadata: true,
+        statusMetadata: true,
+        progress: true,
+        teamId: true,
+        createdById: true,
+        assignments: {
+          select: {
+            role: true,
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Fusionner les tâches du board avec les tâches partagées placées
+    const sharedNodeIds = new Set(sharedPlacements.map((p) => p.nodeId));
+    const allNodesMap = new Map<string, any>();
+
+    // IMPORTANT: Si c'est un board personnel d'un autre utilisateur,
+    // on ne charge QUE les tâches avec SharedNodePlacement
+    const isOtherPersonalBoard =
+      board.isPersonal &&
+      userId &&
+      board.ownerUserId &&
+      board.ownerUserId !== userId;
+
+    if (isOtherPersonalBoard) {
+      // Sur le board personnel d'Alice, Bob ne voit QUE les tâches avec placement
+      console.log(
+        '[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements',
+        {
+          userId,
+          boardOwnerId: board.ownerUserId,
+          sharedPlacementsCount: sharedPlacements.length,
+        },
+      );
+    } else {
+      // Sur son propre board, l'utilisateur voit toutes les tâches du board
+      // (sauf celles qui ont un placement personnalisé, qui seront ajoutées après)
+      for (const node of rawNodes) {
+        // Si la tâche est partagée avec l'utilisateur, on utilisera son placement personnel
+        const isShared =
+          userId && node.metadata
+            ? (() => {
+                try {
+                  const meta = node.metadata as any;
+                  const collaborators = meta?.share?.collaborators;
+                  return (
+                    Array.isArray(collaborators) &&
+                    collaborators.some((c: any) => c.userId === userId)
+                  );
+                } catch {
+                  return false;
+                }
+              })()
+            : false;
+
+        if (!isShared || !sharedNodeIds.has(node.id)) {
+          allNodesMap.set(node.id, node);
+        }
+      }
+    }
+
+    // Ajouter les tâches partagées avec leur placement personnel (en écrasant position et columnId)
+    for (const placement of sharedPlacements) {
+      if (placement.node && !placement.node.archivedAt) {
+        allNodesMap.set(placement.nodeId, {
+          ...placement.node,
+          columnId: placement.columnId, // Position personnalisée de l'utilisateur
+          position: placement.position,
+          isSharedRoot: true, // Flag pour identifier les tâches mères partagées
+        });
+      }
+    }
+
+    const filteredNodes = Array.from(allNodesMap.values());
 
     const behaviorByColumn = new Map<string, ColumnBehaviorKey>();
     for (const column of board.columns) {
       behaviorByColumn.set(column.id, column.behavior.key);
     }
 
+    // Récupérer les IDs des nodes qui ont des partages avec d'autres utilisateurs
+    const nodeIdsWithSharing = new Set<string>();
+    if (userId && filteredNodes.length > 0) {
+      const nodeIds = filteredNodes.map((n) => n.id as string);
+      const sharingPlacements = await this.prisma.sharedNodePlacement.findMany({
+        where: {
+          nodeId: { in: nodeIds },
+          userId: { not: userId }, // Partages avec d'AUTRES utilisateurs
+        },
+        select: { nodeId: true },
+        distinct: ['nodeId'],
+      });
+      for (const placement of sharingPlacements) {
+        nodeIdsWithSharing.add(placement.nodeId);
+      }
+    }
+
     const workflowByNode = new Map<string, ParsedWorkflowSnapshot>();
     const snoozedCounts = new Map<string, number>();
-    const nodes = [] as typeof rawNodes;
+    const nodes = [] as typeof filteredNodes;
     const nowMs = Date.now();
+    const ganttDependencies: BoardGanttDependencyDto[] = [];
 
-    for (const node of rawNodes) {
+    for (const node of filteredNodes) {
       const workflow = this.parseWorkflowMetadata(node.metadata ?? null);
       workflowByNode.set(node.id, workflow);
       const behavior = node.columnId
@@ -326,7 +392,7 @@ export class BoardsService {
           );
         }
       }
-      nodes.push({ ...node, isSnoozed } as any);
+      nodes.push({ ...node, isSnoozed });
     }
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
@@ -335,7 +401,7 @@ export class BoardsService {
       { backlog: number; inProgress: number; blocked: number; done: number }
     >();
     if (nodes.length > 0) {
-      const nodeIds = nodes.map((n) => n.id);
+      const nodeIds = nodes.map((n) => n.id as string);
       const children = await this.prisma.node.findMany({
         where: { parentId: { in: nodeIds } },
         select: {
@@ -350,7 +416,7 @@ export class BoardsService {
           b = { backlog: 0, inProgress: 0, blocked: 0, done: 0 };
           countsByParent.set(pid, b);
         }
-        const key = c.column?.behavior?.key;
+        const key = c.column?.behavior?.key as string | undefined;
         switch (key) {
           case 'BACKLOG':
             b.backlog++;
@@ -386,20 +452,81 @@ export class BoardsService {
       const bucket = nodesByColumn.get(node.columnId)!;
       const statusMetadata = node.statusMetadata ?? null;
       const metadata = node.metadata ?? null;
+      const timeTracking =
+        metadata &&
+        typeof metadata === 'object' &&
+        !Array.isArray(metadata) &&
+        metadata.timeTracking &&
+        typeof metadata.timeTracking === 'object'
+          ? (metadata.timeTracking as Record<string, any>)
+          : {};
+      const plannedStartDate =
+        typeof timeTracking.plannedStartDate === 'string' &&
+        timeTracking.plannedStartDate.trim().length > 0
+          ? timeTracking.plannedStartDate.trim()
+          : null;
+      const plannedEndDate =
+        typeof timeTracking.plannedEndDate === 'string' &&
+        timeTracking.plannedEndDate.trim().length > 0
+          ? timeTracking.plannedEndDate.trim()
+          : null;
+      const scheduleModeRaw =
+        typeof timeTracking.scheduleMode === 'string'
+          ? timeTracking.scheduleMode.toLowerCase()
+          : null;
+      const scheduleMode =
+        scheduleModeRaw === 'asap'
+          ? 'asap'
+          : scheduleModeRaw === 'manual'
+            ? 'manual'
+            : null;
+      const hardConstraint = Boolean(timeTracking.hardConstraint);
+      if (Array.isArray(timeTracking.dependencies)) {
+        const allowedTypes = new Set(['FS', 'SS', 'FF', 'SF']);
+        (timeTracking.dependencies as Record<string, any>[]).forEach(
+          (dep, index) => {
+            if (!dep || typeof dep !== 'object') return;
+            const fromId =
+              typeof dep.fromId === 'string' ? dep.fromId.trim() : '';
+            if (!fromId) return;
+            const typeRaw =
+              typeof dep.type === 'string' ? dep.type.toUpperCase() : '';
+            if (!allowedTypes.has(typeRaw)) return;
+            const id =
+              typeof dep.id === 'string' && dep.id.trim().length > 0
+                ? dep.id.trim()
+                : `${fromId}->${node.id}:${index}`;
+            const lagNumber = Number(dep.lag ?? 0);
+            const lag = Number.isFinite(lagNumber) ? Math.round(lagNumber) : 0;
+            const mode = dep.mode === 'FREE' ? 'FREE' : 'ASAP';
+            const depHardConstraint = Boolean(dep.hardConstraint);
+            ganttDependencies.push({
+              id,
+              fromId,
+              toId: node.id,
+              type: typeRaw as BoardGanttDependencyDto['type'],
+              lag,
+              mode,
+              hardConstraint: depHardConstraint,
+            });
+          },
+        );
+      }
       const estimatedDurationRaw =
         statusMetadata && typeof statusMetadata === 'object'
-          ? (statusMetadata as Record<string, unknown>).estimatedDurationDays
+          ? ((statusMetadata as Record<string, unknown>)
+              .estimatedDurationDays as number | undefined)
           : undefined;
       const metadataEstimateRaw =
         metadata && typeof metadata === 'object'
-          ? (metadata as Record<string, unknown>).estimatedDurationDays
+          ? ((metadata as Record<string, unknown>).estimatedDurationDays as
+              | number
+              | undefined)
           : undefined;
       const estimatedDuration = [
         estimatedDurationRaw,
         metadataEstimateRaw,
-      ].find((value) => typeof value === 'number' && Number.isFinite(value)) as
-        | number
-        | undefined;
+      ].find((value) => typeof value === 'number' && Number.isFinite(value));
       const assignments = (node.assignments ?? []) as Array<{
         role: string | null;
         user: {
@@ -449,14 +576,14 @@ export class BoardsService {
 
       const assignees = raciBuckets.R;
       const blockedReminderIntervalDays =
-        typeof (node as any).blockedReminderIntervalDays === 'number'
-          ? ((node as any).blockedReminderIntervalDays as number)
+        typeof node.blockedReminderIntervalDays === 'number'
+          ? (node.blockedReminderIntervalDays as number)
           : null;
       const blockedSinceDate =
         node.blockedSince instanceof Date ? node.blockedSince : null;
       const blockedReminderLastSentDate =
-        (node as any).blockedReminderLastSentAt instanceof Date
-          ? ((node as any).blockedReminderLastSentAt as Date)
+        node.blockedReminderLastSentAt instanceof Date
+          ? (node.blockedReminderLastSentAt as Date)
           : null;
       let blockedReminderDueInDays: number | null = null;
       if (
@@ -477,6 +604,14 @@ export class BoardsService {
       const workflow =
         workflowByNode.get(node.id) ??
         this.parseWorkflowMetadata(node.metadata ?? null);
+
+      // Déterminer si c'est une tâche mère partagée :
+      // 1. Si elle provient d'un SharedNodePlacement reçu (node.isSharedRoot déjà true)
+      // 2. OU si elle a des partages actifs avec d'autres utilisateurs (propriétaire qui a partagé)
+      const isSharedRoot = node.isSharedRoot ?? nodeIdsWithSharing.has(node.id);
+      const isCreator = userId && node.createdById === userId;
+      const canDelete = !isSharedRoot || isCreator;
+
       bucket.push({
         id: node.id,
         title: node.title,
@@ -524,7 +659,13 @@ export class BoardsService {
         lastKnownColumnId: workflow.lastKnownColumnId,
         lastKnownColumnBehavior: workflow.lastKnownBehavior,
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
-        isSnoozed: (node as any).isSnoozed ?? false,
+        isSnoozed: node.isSnoozed ?? false,
+        isSharedRoot,
+        canDelete,
+        plannedStartDate,
+        plannedEndDate,
+        scheduleMode,
+        hardConstraint,
       } as any);
     }
 
@@ -545,10 +686,24 @@ export class BoardsService {
       }
     }
 
+    // Déterminer si le board a des tâches partagées avec d'autres utilisateurs
+    // (polling n'est utile que si collaboration active)
+    let isShared = false;
+    if (userId) {
+      const sharedCount = await this.prisma.sharedNodePlacement.count({
+        where: {
+          columnId: { in: columnIds },
+          userId: { not: userId }, // Autres users que moi
+        },
+      });
+      isShared = sharedCount > 0;
+    }
+
     const result = {
       id: board.id,
       nodeId: board.nodeId,
       name: board.node.title,
+      isShared,
       columns: board.columns.map((column) => ({
         id: column.id,
         name: column.name,
@@ -564,6 +719,7 @@ export class BoardsService {
         },
         nodes: nodesByColumn.get(column.id) ?? [],
       })),
+      dependencies: ganttDependencies,
     } as BoardWithNodesDto;
     return result;
   }
@@ -576,7 +732,7 @@ export class BoardsService {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
-        node: { select: { id: true, teamId: true } },
+        node: { select: { id: true } },
         columns: { include: { behavior: true }, orderBy: { position: 'asc' } },
       },
     });
@@ -585,7 +741,13 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const column = board.columns.find((entry) => entry.id === columnId);
     if (!column) {
@@ -658,9 +820,6 @@ export class BoardsService {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
-        node: {
-          select: { teamId: true },
-        },
         columns: {
           select: { position: true },
           orderBy: { position: 'desc' },
@@ -672,12 +831,15 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
-
-    const behavior = await this.getOrCreateBehavior(
-      board.node.teamId,
-      requestedBehaviorKey,
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
     );
+
+    const behavior = await this.getOrCreateBehavior(requestedBehaviorKey);
 
     let wipLimit: number | null = null;
     if (dto.wipLimit !== undefined && dto.wipLimit !== null) {
@@ -753,7 +915,6 @@ export class BoardsService {
       include: {
         board: {
           include: {
-            node: { select: { teamId: true } },
             columns: {
               select: { id: true, position: true },
               orderBy: { position: 'asc' },
@@ -768,7 +929,13 @@ export class BoardsService {
       throw new NotFoundException('Colonne introuvable');
     }
 
-    await this.ensureUserCanWrite(column.board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: column.board.ownerUserId ?? null,
+        isPersonal: column.board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const currentSettings = this.normalizeColumnSettings(
       (column as any).settings ?? null,
@@ -1002,7 +1169,7 @@ export class BoardsService {
     const column = await this.prisma.column.findFirst({
       where: { id: columnId, boardId },
       include: {
-        board: { include: { node: { select: { teamId: true } } } },
+        board: true,
         _count: { select: { nodes: true } },
       },
     });
@@ -1011,7 +1178,13 @@ export class BoardsService {
       throw new NotFoundException('Colonne introuvable');
     }
 
-    await this.ensureUserCanWrite(column.board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: column.board.ownerUserId ?? null,
+        isPersonal: column.board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     if (column._count.nodes > 0) {
       throw new BadRequestException(
@@ -1040,23 +1213,24 @@ export class BoardsService {
     });
   }
 
-  private async ensureUserCanWrite(teamId: string, userId: string) {
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        teamId,
-        userId,
-        status: MembershipStatus.ACTIVE,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('Vous ne pouvez pas modifier ce board');
+  private ensureUserCanWriteBoard(
+    board: {
+      ownerUserId: string | null;
+      isPersonal: boolean;
+    },
+    userId: string,
+  ) {
+    if (board.ownerUserId === userId) {
+      return;
     }
+
+    throw new ForbiddenException('Vous ne pouvez pas modifier ce board');
   }
 
-  private async getOrCreateBehavior(teamId: string, key: ColumnBehaviorKey) {
+  private async getOrCreateBehavior(key: ColumnBehaviorKey) {
     const existing = await this.prisma.columnBehavior.findFirst({
-      where: { teamId, key },
+      where: { key },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (existing) {
@@ -1070,7 +1244,6 @@ export class BoardsService {
 
     return this.prisma.columnBehavior.create({
       data: {
-        teamId,
         key,
         label: defaults.label,
         color: defaults.color,
@@ -1302,7 +1475,13 @@ export class BoardsService {
       throw new NotFoundException('Board introuvable');
     }
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
+    this.ensureUserCanWriteBoard(
+      {
+        ownerUserId: board.ownerUserId ?? null,
+        isPersonal: board.isPersonal ?? false,
+      },
+      userId,
+    );
 
     const node = await this.prisma.node.findUnique({
       where: { id: nodeId },

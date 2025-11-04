@@ -1,5 +1,28 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { BoardColumnWithNodesDto } from './board-column-with-nodes.dto';
+
+export class BoardGanttDependencyDto {
+  @ApiProperty({ example: 'dep_abcd' })
+  id!: string;
+
+  @ApiProperty({ example: 'task_A' })
+  fromId!: string;
+
+  @ApiProperty({ example: 'task_B' })
+  toId!: string;
+
+  @ApiProperty({ example: 'FS', enum: ['FS', 'SS', 'FF', 'SF'] })
+  type!: 'FS' | 'SS' | 'FF' | 'SF';
+
+  @ApiProperty({ example: 0 })
+  lag!: number;
+
+  @ApiProperty({ example: 'ASAP', enum: ['ASAP', 'FREE'] })
+  mode!: 'ASAP' | 'FREE';
+
+  @ApiProperty({ example: false })
+  hardConstraint!: boolean;
+}
 
 export class BoardWithNodesDto {
   @ApiProperty({ example: 'board_123' })
@@ -13,4 +36,13 @@ export class BoardWithNodesDto {
 
   @ApiProperty({ type: BoardColumnWithNodesDto, isArray: true })
   columns!: BoardColumnWithNodesDto[];
+
+  @ApiProperty({
+    example: false,
+    description: 'True if board has shared tasks with other users',
+  })
+  isShared!: boolean;
+
+  @ApiProperty({ type: () => BoardGanttDependencyDto, isArray: true })
+  dependencies!: BoardGanttDependencyDto[];
 }

@@ -10,6 +10,8 @@ import {
   renameRaciTeam,
   type RaciTeamPreset,
 } from "@/features/users/raci-teams-api";
+import { useTheme, ThemeProvider } from "@/themes/theme-provider";
+import type { ThemeDefinition } from "@/themes";
 
 export default function SettingsPage() {
   const { t, locale, availableLocales, setLocale } = useTranslation();
@@ -20,6 +22,16 @@ export default function SettingsPage() {
   const [raciTeamsError, setRaciTeamsError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { activeThemeId, themes: availableThemes, setTheme } = useTheme();
+
+  const handleThemeSelect = useCallback(
+    (theme: ThemeDefinition) => {
+      if (theme.id === activeThemeId) return;
+      setTheme(theme.id);
+      setFeedback(t("settings.theme.applied", { theme: t(theme.nameKey) }));
+    },
+    [activeThemeId, setTheme, setFeedback, t],
+  );
 
   const sortRaciTeams = useCallback(
     (teams: RaciTeamPreset[]) =>
@@ -130,7 +142,8 @@ export default function SettingsPage() {
       });
   };
 
-  return (
+  // Fallback: si hook lève une erreur (provider absent), on encapsule dynamiquement.
+  let content: React.ReactNode = (
     <div className="min-h-screen bg-surface px-6 py-10">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <div className="flex items-center justify-between">
@@ -153,13 +166,75 @@ export default function SettingsPage() {
         ) : null}
 
         <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+          <h2 className="text-lg font-semibold text-foreground">{t("settings.theme.title")}</h2>
+          <p className="mt-2 text-sm text-muted">{t("settings.theme.description")}</p>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {availableThemes.map((theme) => {
+              const isActive = theme.id === activeThemeId;
+              const toneLabel = t(`settings.theme.tone.${theme.tone}`);
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => handleThemeSelect(theme)}
+                  className={`group relative flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                    isActive
+                      ? "border-accent/60 bg-accent/10 text-foreground shadow-lg"
+                      : "border-white/15 bg-surface/70 text-foreground hover:border-accent/40 hover:bg-surface"
+                  }`}
+                  aria-pressed={isActive}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{t(theme.nameKey)}</p>
+                      <p className="mt-1 text-xs text-muted">{t(theme.descriptionKey)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        {toneLabel}
+                      </span>
+                      {isActive ? (
+                        <span className="text-[11px] font-semibold text-accent">{t("settings.theme.active")}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <span
+                      className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
+                      style={{ backgroundColor: theme.preview.background }}
+                      aria-hidden
+                    />
+                    <span
+                      className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
+                      style={{ backgroundColor: theme.preview.surface }}
+                      aria-hidden
+                    />
+                    <span
+                      className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
+                      style={{ backgroundColor: theme.preview.card }}
+                      aria-hidden
+                    />
+                    <span
+                      className="h-12 w-12 rounded-xl border border-white/10 shadow-sm"
+                      style={{ backgroundColor: theme.preview.accent }}
+                      aria-hidden
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
           <h2 className="text-lg font-semibold text-foreground">{t("settings.languageLabel")}</h2>
           <p className="mt-2 text-sm text-muted">{t("settings.languageHelp")}</p>
 
           <div className="mt-6">
             <label className="block text-sm text-muted">
               <span className="mb-2 block font-medium text-foreground">{t("common.language.label")}</span>
-              <select
+                <select
                 className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
                 value={locale}
                 onChange={handleLanguageChange}
@@ -236,4 +311,10 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+  // Si aucune erreur jusqu'ici, le ThemeProvider est présent.
+  // Mais par précaution, si activeThemeId est falsy (improbable), on wrap.
+  if (!activeThemeId) {
+    content = <ThemeProvider>{content}</ThemeProvider>;
+  }
+  return content;
 }

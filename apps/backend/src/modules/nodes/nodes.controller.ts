@@ -36,6 +36,8 @@ import { MoveNodeBoardDto } from './dto/move-node-board.dto';
 import { ReorderChildrenDto } from './dto/reorder-children.dto';
 import {
   InviteNodeCollaboratorDto,
+  NodeShareIncomingInvitationDto,
+  NodeShareInvitationActionResultDto,
   NodeShareSummaryDto,
 } from './dto/node-share.dto';
 import { NodesService } from './nodes.service';
@@ -46,6 +48,20 @@ import { ApiBody } from '@nestjs/swagger';
 @Controller('nodes')
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
+
+  @Get('invitations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Liste les invitations de partage entrantes pour l’utilisateur connecté',
+  })
+  @ApiOkResponse({ type: NodeShareIncomingInvitationDto, isArray: true })
+  listIncomingInvitations(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<NodeShareIncomingInvitationDto[]> {
+    return this.nodesService.listIncomingNodeShareInvitations(user.id);
+  }
 
   @Get(':nodeId')
   @ApiOperation({
@@ -64,8 +80,13 @@ export class NodesController {
   })
   @ApiParam({ name: 'nodeId', example: 'node_123' })
   @ApiOkResponse({ type: NodeBreadcrumbDto })
-  getBreadcrumb(@Param('nodeId') nodeId: string): Promise<NodeBreadcrumbDto> {
-    return this.nodesService.getBreadcrumb(nodeId);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getBreadcrumb(
+    @Param('nodeId') nodeId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<NodeBreadcrumbDto> {
+    return this.nodesService.getBreadcrumb(nodeId, user.id);
   }
 
   @Get(':nodeId/children')
@@ -180,6 +201,34 @@ export class NodesController {
     @Body() dto: InviteNodeCollaboratorDto,
   ): Promise<NodeShareSummaryDto> {
     return this.nodesService.addNodeCollaborator(nodeId, dto, user.id);
+  }
+
+  @Post('invitations/:invitationId/accept')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Accepte une invitation de partage et ajoute le collaborateur',
+  })
+  @ApiParam({ name: 'invitationId', example: 'invite_123' })
+  @ApiOkResponse({ type: NodeShareInvitationActionResultDto })
+  acceptInvitation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('invitationId') invitationId: string,
+  ): Promise<NodeShareInvitationActionResultDto> {
+    return this.nodesService.acceptNodeShareInvitation(invitationId, user.id);
+  }
+
+  @Post('invitations/:invitationId/decline')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Refuse une invitation de partage' })
+  @ApiParam({ name: 'invitationId', example: 'invite_123' })
+  @ApiOkResponse({ type: NodeShareInvitationActionResultDto })
+  declineInvitation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('invitationId') invitationId: string,
+  ): Promise<NodeShareInvitationActionResultDto> {
+    return this.nodesService.declineNodeShareInvitation(invitationId, user.id);
   }
 
   @Post(':nodeId/comments')
@@ -352,6 +401,37 @@ export class NodesController {
     @Body() dto: MoveNodeBoardDto,
   ): Promise<NodeDto> {
     return this.nodesService.moveNodeToBoard(nodeId, dto, user.id);
+  }
+
+  @Patch(':nodeId/placement')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({
+    summary:
+      "Déplace le placement personnel d'une tâche partagée dans le kanban de l'utilisateur",
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_shared' })
+  @ApiBody({
+    schema: {
+      properties: {
+        columnId: { type: 'string', example: 'column_backlog' },
+        position: { type: 'number', example: 1000 },
+      },
+      required: ['columnId'],
+    },
+  })
+  async moveSharedNodePlacement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Body() dto: { columnId: string; position?: number },
+  ): Promise<void> {
+    await this.nodesService.moveSharedNodePlacement(
+      nodeId,
+      user.id,
+      dto.columnId,
+      dto.position,
+    );
   }
 
   @Post(':nodeId/children/reorder')

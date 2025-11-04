@@ -103,6 +103,14 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     try {
       setStatus(cached ? "ready" : "loading");
       const detail = await fetchBoardDetail(boardId, accessToken || "");
+      
+      // Si detail est null, cela signifie 304 Not Modified (pas de changement)
+      // On garde le cache actuel et on ne met rien à jour
+      if (detail === null) {
+        setStatus("ready");
+        return;
+      }
+      
       cachesRef.current.boards.set(boardId, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([
@@ -126,10 +134,29 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
         setStatus("ready");
       }
     } catch (err) {
-      setError((err as Error).message);
+      const errorMessage = (err as Error).message;
+      
+      // Si erreur 403 Forbidden (board personnel inaccessible), rediriger vers le root board
+      if (errorMessage.includes('Forbidden') || errorMessage.includes('403') || errorMessage.includes('personnel inaccessible')) {
+        console.warn('[BoardDataProvider] Access forbidden to board, redirecting to root board:', boardId);
+        // Rediriger vers le root board du team
+        if (teamId) {
+          try {
+            const rootBoard = await fetchRootBoard(teamId, accessToken || "");
+            if (rootBoard?.id && rootBoard.id !== boardId) {
+              router.replace(`/boards/${teamId}/${rootBoard.id}`);
+              return;
+            }
+          } catch (rootErr) {
+            console.error('[BoardDataProvider] Failed to fetch root board:', rootErr);
+          }
+        }
+      }
+      
+      setError(errorMessage);
       if (!cached) setStatus("error");
     }
-  }, [accessToken]);
+  }, [accessToken, router, teamId]);
 
   // Load when activeBoardId changes
   useEffect(() => {
@@ -141,6 +168,10 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     if (cachesRef.current.boards.has(id)) return;
     try {
       const detail = await fetchBoardDetail(id, accessToken || "");
+      
+      // Si null (304 Not Modified), on ne fait rien
+      if (detail === null) return;
+      
       cachesRef.current.boards.set(id, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([

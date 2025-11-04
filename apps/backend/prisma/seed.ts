@@ -96,7 +96,7 @@ async function upsertColumnBehaviors(prisma: PrismaClient) {
     await prisma.columnBehavior.upsert({
       where: { id: b.id },
       update: { key: b.key, label: b.label, color: b.color },
-      create: { id: b.id, teamId: DEMO_IDS.team, key: b.key, label: b.label, color: b.color }
+      create: { id: b.id, key: b.key, label: b.label, color: b.color }
     });
   }
 }
@@ -191,7 +191,9 @@ async function createDeepHierarchy(prisma: PrismaClient) {
     create: { id: 'board_breadcrumb_sub', nodeId: backlogNode.id }
   });
 
-  const behaviors = await prisma.columnBehavior.findMany({ where: { teamId: DEMO_IDS.team } });
+  const behaviors = await prisma.columnBehavior.findMany({
+    where: { id: { in: Object.values(DEMO_IDS.behaviors) } },
+  });
   const backlogBehavior = behaviors.find(b => b.key === ColumnBehaviorKey.BACKLOG);
   const progressBehavior = behaviors.find(b => b.key === ColumnBehaviorKey.IN_PROGRESS);
   if (!backlogBehavior || !progressBehavior) return;

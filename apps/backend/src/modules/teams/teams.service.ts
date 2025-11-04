@@ -105,84 +105,112 @@ export class TeamsService {
   async bootstrapForUser(
     userId: string,
   ): Promise<{ team: TeamDto; rootNodeId: string; boardId: string }> {
-    // Vérifier si l'utilisateur a déjà une team active
-    const existingMembership = await this.prisma.membership.findFirst({
-      where: { userId, status: MembershipStatus.ACTIVE },
+    // SÉCURITÉ CRITIQUE: récupérer uniquement une team personnelle appartenant réellement à l'utilisateur
+    const personalMemberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        status: MembershipStatus.ACTIVE,
+        team: { isPersonal: true },
+      },
       include: {
         team: {
           include: {
             memberships: {
               where: { status: MembershipStatus.ACTIVE },
-              select: { id: true },
+              select: { id: true, userId: true },
+            },
+            nodes: {
+              where: { parentId: null },
+              select: {
+                id: true,
+                board: {
+                  select: {
+                    id: true,
+                    ownerUserId: true,
+                    isPersonal: true,
+                  },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
             },
           },
         },
       },
       orderBy: { createdAt: 'asc' },
     });
-    if (existingMembership) {
-      // Retrouver le node racine complexe si disponible (parent null & type COMPLEX)
-      const rootComplex = await this.prisma.node.findFirst({
-        where: { teamId: existingMembership.teamId, parentId: null },
-        select: { id: true, board: { select: { id: true } } },
-        orderBy: { createdAt: 'asc' },
-      });
-      const teamDto: TeamDto = {
-        id: existingMembership.team.id,
-        name: existingMembership.team.name,
-        slug: existingMembership.team.slug,
-        membersCount: existingMembership.team.memberships.length,
-        createdAt: existingMembership.team.createdAt.toISOString(),
-      };
-      if (rootComplex?.board?.id) {
-        // Réparation opportuniste : si la team est personnelle mais le board
-        // ne reflète pas ownerUserId ou isPersonal correctement (ex: migration
-        // ancienne ou bug de création), on synchronise.
-        try {
-          const existingBoard = await this.prisma.board.findUnique({
-            where: { id: rootComplex.board.id },
-            select: { id: true, ownerUserId: true, isPersonal: true },
-          });
-          if (existingBoard) {
-            // Utiliser BoardUncheckedUpdateInput pour modifier directement les scalars (ownerUserId, isPersonal)
-            const repairData: Prisma.BoardUncheckedUpdateInput = {};
-            let needsRepair = false;
-            if (existingMembership.team.isPersonal && !existingBoard.isPersonal) {
-              repairData.isPersonal = true;
-              needsRepair = true;
-            }
-            if (
-              existingMembership.team.isPersonal &&
-              existingBoard.ownerUserId !== existingMembership.userId
-            ) {
-              repairData.ownerUserId = existingMembership.userId;
-              needsRepair = true;
-            }
-            // Cas inverse : team non-personnelle mais board marqué personnel par erreur
-            if (!existingMembership.team.isPersonal && existingBoard.isPersonal) {
-              repairData.isPersonal = false;
-              // Ne pas toucher ownerUserId (peut être utile historiquement) mais on pourrait le nuller si nécessaire.
-              needsRepair = true;
-            }
-            if (needsRepair) {
-              await this.prisma.board.update({
-                where: { id: existingBoard.id },
-                data: repairData,
-              });
-            }
-          }
-        } catch (err) {
-          // Log silencieux (on évite d'empêcher le bootstrap si la réparation échoue)
-          // eslint-disable-next-line no-console
-          console.warn('[teams.bootstrapForUser] repair skipped', err);
-        }
-        return {
-          team: teamDto,
-          rootNodeId: rootComplex.id,
-          boardId: rootComplex.board.id,
-        };
+
+    for (const membership of personalMemberships) {
+      const rootNode = membership.team.nodes.find(
+        (node) => node.board && node.board.isPersonal,
+      );
+      if (!rootNode?.board) {
+        continue;
       }
-      // Pas de node complexe racine: continuer la création minimale (rare)
+
+      const boardRecord = await this.prisma.board.findUnique({
+        where: { id: rootNode.board.id },
+        select: { id: true, ownerUserId: true, isPersonal: true },
+      });
+      if (!boardRecord?.isPersonal) {
+        continue;
+      }
+
+      if (boardRecord.ownerUserId && boardRecord.ownerUserId !== userId) {
+        // Board personnel d'un autre utilisateur: ignorer pour éviter un hijack
+        continue;
+      }
+
+      const otherActiveMembers = membership.team.memberships.filter(
+        (entry) => entry.userId !== userId,
+      );
+      if (!boardRecord.ownerUserId && otherActiveMembers.length > 0) {
+        // Board non assigné mais partagé: ne pas se l'approprier automatiquement
+        continue;
+      }
+
+      const teamDto: TeamDto = {
+        id: membership.team.id,
+        name: membership.team.name,
+        slug: membership.team.slug,
+        membersCount: membership.team.memberships.length,
+        createdAt: membership.team.createdAt.toISOString(),
+      };
+
+      try {
+        const repairData: Prisma.BoardUncheckedUpdateInput = {};
+        let needsRepair = false;
+
+        if (!boardRecord.isPersonal) {
+          repairData.isPersonal = true;
+          needsRepair = true;
+        }
+
+        if (
+          boardRecord.ownerUserId === null &&
+          otherActiveMembers.length === 0
+        ) {
+          repairData.ownerUserId = userId;
+          needsRepair = true;
+        }
+
+        if (needsRepair) {
+          await this.prisma.board.update({
+            where: { id: boardRecord.id },
+            data: repairData,
+          });
+        }
+      } catch (err) {
+        console.warn(
+          '[teams.bootstrapForUser] personal board repair skipped',
+          err,
+        );
+      }
+
+      return {
+        team: teamDto,
+        rootNodeId: rootNode.id,
+        boardId: boardRecord.id,
+      };
     }
 
     // Création idempotente d'un espace de départ
@@ -221,10 +249,6 @@ export class TeamsService {
           },
         });
         // Comportements + colonnes par défaut
-        const behaviors = await tx.columnBehavior.findMany({
-          where: { teamId: team.id },
-        });
-        const have = new Set(behaviors.map((b) => b.key));
         const defaults: {
           key: ColumnBehaviorKey;
           label: string;
@@ -243,22 +267,26 @@ export class TeamsService {
           { key: ColumnBehaviorKey.BLOCKED, label: 'Bloque', color: '#f97316' },
           { key: ColumnBehaviorKey.DONE, label: 'Termine', color: '#16a34a' },
         ];
+
+        const existingBehaviors = await tx.columnBehavior.findMany({
+          where: {
+            key: { in: defaults.map((def) => def.key) },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+        const map = new Map(existingBehaviors.map((b) => [b.key, b.id]));
         for (const def of defaults) {
-          if (!have.has(def.key)) {
-            await tx.columnBehavior.create({
+          if (!map.has(def.key)) {
+            const created = await tx.columnBehavior.create({
               data: {
-                teamId: team.id,
                 key: def.key,
                 label: def.label,
                 color: def.color,
               },
             });
+            map.set(def.key, created.id);
           }
         }
-        const createdBehaviors = await tx.columnBehavior.findMany({
-          where: { teamId: team.id },
-        });
-        const map = new Map(createdBehaviors.map((b) => [b.key, b.id]));
         const cols: {
           key: ColumnBehaviorKey;
           name: string;

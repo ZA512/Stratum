@@ -40,7 +40,6 @@ export interface FetchDashboardInput {
   dashboard: DashboardKind;
   mode: DashboardMode;
   boardId: string;
-  teamId: string;
   accessToken: string;
   locale: string;
   signal?: AbortSignal;
@@ -62,14 +61,12 @@ export async function fetchDashboard({
   dashboard,
   mode,
   boardId,
-  teamId,
   accessToken,
   locale,
   signal,
 }: FetchDashboardInput): Promise<DashboardResponse> {
   const params = new URLSearchParams({
     boardId,
-    teamId,
     mode,
   });
   if (locale) {

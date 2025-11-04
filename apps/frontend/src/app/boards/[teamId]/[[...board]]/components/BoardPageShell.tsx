@@ -2,12 +2,17 @@
 import React, { useState, FormEvent, useMemo, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
+import { useAutoRefreshBoard } from '@/features/boards/useAutoRefreshBoard';
 import { useTaskDrawer } from '@/features/nodes/task-drawer/TaskDrawerContext';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useTranslation } from '@/i18n';
 import { useHelpMode } from '@/hooks/useHelpMode';
+import { useBoardActivityStats } from '@/features/activity/useActivityLogs';
+import { ActivityPanel } from '@/features/activity/ActivityPanel';
+import { fetchIncomingInvitations, type NodeShareIncomingInvitation } from '@/features/nodes/invitations/node-share-invitations-api';
 import {
   createBoardColumn,
   updateBoardColumn,
@@ -22,14 +27,19 @@ import {
   createNode,
   updateNode,
   moveChildNode,
+  moveSharedNodePlacement,
   deleteNode as apiDeleteNode,
   fetchNodeDeletePreview,
-  restoreNode as apiRestoreNode,
   type NodeDeletePreview,
 } from '@/features/nodes/nodes-api';
+import {
+  fetchNodeCollaborators,
+  type NodeCollaboratorsResponse,
+} from '@/features/nodes/node-collaborators-api';
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCorners, DragStartEvent, DragOverlay, pointerWithin, type CollisionDetection } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
+import { BoardGanttView } from './BoardGanttView';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
@@ -42,6 +52,41 @@ type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
 type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
 const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
 type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+
+type GanttLinkType = 'FS' | 'SS' | 'FF' | 'SF';
+type GanttLinkMode = 'ASAP' | 'FREE';
+
+export type GanttDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: GanttLinkType;
+  lag: number;
+  mode: GanttLinkMode;
+  hardConstraint: boolean;
+};
+
+export type ScheduleChange = {
+  id: string;
+  start?: Date | null;
+  end?: Date | null;
+  dueAt?: Date | null;
+};
+
+const generateDependencyId = () => {
+  if (typeof globalThis !== 'undefined' && 'crypto' in globalThis && typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 10);
+};
+
+const serializeDependencies = (deps: GanttDependency[]) =>
+  deps
+    .map((dep) =>
+      [dep.id, dep.fromId, dep.toId, dep.type, dep.lag, dep.mode, dep.hardConstraint ? '1' : '0'].join('|'),
+    )
+    .sort()
+    .join('||');
 
 const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showShortId: true,
@@ -230,15 +275,172 @@ function BoardSkeleton(){
   );
 }
 
+// Panneau d'invitations flottant
+interface InvitationsPanelProps {
+  invitations: NodeShareIncomingInvitation[];
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+}
+
+function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelProps) {
+  const { accessToken } = useAuth();
+  const { t } = useTranslation('board');
+  const { success, error: toastError } = useToast();
+  const { refreshActiveBoard, teamId } = useBoardData();
+  const router = useRouter();
+  const [actionState, setActionState] = useState<{ invitationId: string; action: 'accept' | 'decline' } | null>(null);
+
+  const pendingInvitations = invitations.filter(inv => inv.status === 'PENDING');
+
+  const handleAction = async (invitationId: string, action: 'accept' | 'decline') => {
+    if (!accessToken) return;
+    setActionState({ invitationId, action });
+    try {
+      const { respondToInvitation } = await import('@/features/nodes/invitations/node-share-invitations-api');
+      const result = await respondToInvitation(invitationId, action, accessToken);
+      
+      if (action === 'accept') {
+        success(t('invitationCenter.toast.accepted', { title: result.nodeTitle }));
+        await refreshActiveBoard();
+        if (result.boardId && teamId) {
+          router.push(`/boards/${teamId}/${result.boardId}`);
+        }
+      } else {
+        success(t('invitationCenter.toast.declined', { title: result.nodeTitle }));
+      }
+      await onRefresh();
+    } catch (err) {
+      toastError((err as Error).message || 'Erreur');
+    } finally {
+      setActionState(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-end p-6">
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-[380px] max-w-[90vw] rounded-2xl border border-white/10 bg-background/95 p-5 shadow-2xl backdrop-blur">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-base font-semibold text-foreground">{t('invitationCenter.title')}</h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[18px]">refresh</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        </div>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          {pendingInvitations.length === 0 ? (
+            <p className="text-sm text-muted">{t('invitationCenter.empty')}</p>
+          ) : (
+            pendingInvitations.map(item => (
+              <div key={item.id} className="rounded-xl border border-white/10 bg-surface/80 p-3">
+                <h3 className="text-sm font-semibold text-foreground">{item.nodeTitle}</h3>
+                <p className="text-xs text-muted mt-1">
+                  {item.inviterDisplayName 
+                    ? t('invitationCenter.invitedBy', { name: item.inviterDisplayName })
+                    : t('invitationCenter.invitedByEmail', { email: item.inviterEmail })}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAction(item.id, 'accept')}
+                    disabled={actionState?.invitationId === item.id && actionState.action === 'accept'}
+                    className="flex-1 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-background transition hover:bg-accent-strong disabled:opacity-60"
+                  >
+                    {actionState?.invitationId === item.id && actionState.action === 'accept'
+                      ? t('invitationCenter.accepting')
+                      : t('invitationCenter.accept')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction(item.id, 'decline')}
+                    disabled={actionState?.invitationId === item.id && actionState.action === 'decline'}
+                    className="flex-1 rounded-full border border-white/15 px-3 py-2 text-xs font-semibold text-muted transition hover:border-red-400 hover:text-red-200 disabled:opacity-60"
+                  >
+                    {actionState?.invitationId === item.id && actionState.action === 'decline'
+                      ? t('invitationCenter.declining')
+                      : t('invitationCenter.decline')}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
-  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard } = useBoardData();
+  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
-  const { expertMode, setExpertMode } = useBoardUiSettings();
+  const { expertMode, setExpertMode, boardView, setBoardView } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
+
+  // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
+  // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
+  const shouldPoll = board?.isShared ?? true; // Default true (safe) si indéterminé
+  
+  // Debug: vérifier le comportement du polling
+  useEffect(() => {
+    if (board && activeBoardId) {
+      console.debug('[BoardPageShell] Polling status:', {
+        boardId: activeBoardId,
+        isShared: board.isShared,
+        shouldPoll,
+      });
+    }
+  }, [board, shouldPoll, activeBoardId]);
+  
+  useAutoRefreshBoard({
+    intervalMs: 15000, // 15 secondes
+    onRefresh: refreshActiveBoard,
+    enabled: shouldPoll,
+    boardId: activeBoardId,
+  });
+
+  // 📊 Statistiques d'activité pour le badge
+  const { data: activityStats } = useBoardActivityStats(activeBoardId ?? undefined, accessToken ?? undefined);
+
+  // 📜 État du panneau d'activité
+  const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(false);
+
+  // 📬 Invitations entrantes
+  const [invitations, setInvitations] = useState<NodeShareIncomingInvitation[]>([]);
+  const [isInvitationsPanelOpen, setIsInvitationsPanelOpen] = useState(false);
+
+  // Charger les invitations
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchIncomingInvitations(accessToken);
+        if (!cancelled) setInvitations(data);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken]);
+
+  const pendingInvitationsCount = invitations.filter(inv => inv.status === 'PENDING').length;
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -294,27 +496,18 @@ export function TeamBoardPage(){
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteShareSummary, setDeleteShareSummary] = useState<NodeCollaboratorsResponse | null>(null);
+  const [deleteShareError, setDeleteShareError] = useState<string | null>(null);
   const [archivedColumn, setArchivedColumn] = useState<{
     id: string;
     name: string;
     behavior: ColumnBehaviorKey;
   } | null>(null);
   const [archivedNodes, setArchivedNodes] = useState<ArchivedBoardNode[]>([]);
-  const [archivedLoading, setArchivedLoading] = useState(false);
-  const [archivedError, setArchivedError] = useState<string | null>(null);
-  const [archivedSubmittingId, setArchivedSubmittingId] = useState<string | null>(null);
-  const [archivedSubmittingAction, setArchivedSubmittingAction] = useState<'restore' | 'delete' | null>(null);
-  const [snoozedColumn, setSnoozedColumn] = useState<{
-    id: string;
-    name: string;
-    behavior: ColumnBehaviorKey;
-  } | null>(null);
   // Mode d'affichage par colonne: null = normal, 'snoozed' = voir snoozées, 'archived' = voir archivées
   const [columnViewMode, setColumnViewMode] = useState<Record<string, 'snoozed' | 'archived' | null>>({});
-  const [snoozedNodes, setSnoozedNodes] = useState<BoardNode[]>([]);
-  const [snoozedLoading, setSnoozedLoading] = useState(false);
-  const [snoozedError, setSnoozedError] = useState<string | null>(null);
-  const [snoozedSubmittingId, setSnoozedSubmittingId] = useState<string | null>(null);
+  const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
+  const [scheduleSavingIds, setScheduleSavingIds] = useState<string[]>([]);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   const advancedFiltersActive =
     selectedAssignees.length > 0 ||
@@ -576,6 +769,34 @@ export function TeamBoardPage(){
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [filtersExpanded]);
 
+  useEffect(() => {
+    if (!board?.id) {
+      setGanttDependencies([]);
+      return;
+    }
+    const remote: GanttDependency[] = (board.dependencies ?? []).map((entry) => {
+      const normalizedType: GanttLinkType = (['FS', 'SS', 'FF', 'SF'] as GanttLinkType[]).includes(entry.type as GanttLinkType)
+        ? (entry.type as GanttLinkType)
+        : 'FS';
+      const normalizedMode: GanttLinkMode = entry.mode === 'FREE' ? 'FREE' : 'ASAP';
+      return {
+        id: entry.id,
+        fromId: entry.fromId,
+        toId: entry.toId,
+        type: normalizedType,
+        lag: entry.lag,
+        mode: normalizedMode,
+        hardConstraint: Boolean(entry.hardConstraint),
+      };
+    });
+    setGanttDependencies((prev) => {
+      if (serializeDependencies(prev) === serializeDependencies(remote)) {
+        return prev;
+      }
+      return remote;
+    });
+  }, [board?.id, board?.dependencies]);
+
   const displayedColumns: BoardColumnWithNodes[] | undefined = useMemo(() => {
     if (!effectiveColumns) return effectiveColumns;
 
@@ -696,14 +917,39 @@ export function TeamBoardPage(){
     });
   }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate, priorityLabelMap]);
 
+  const scheduleSavingSet = useMemo(() => new Set(scheduleSavingIds), [scheduleSavingIds]);
+
+  const visibleTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!displayedColumns) return ids;
+    for (const column of displayedColumns) {
+      if (!column?.nodes) continue;
+      for (const node of column.nodes) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  }, [displayedColumns]);
+
+  const activeGanttDependencies = useMemo(() => {
+    if (!visibleTaskIds.size) return [] as GanttDependency[];
+    return ganttDependencies.filter((dep) => visibleTaskIds.has(dep.fromId) && visibleTaskIds.has(dep.toId));
+  }, [ganttDependencies, visibleTaskIds]);
+
+  const backlogColumnId = useMemo(() => {
+    if (!board?.columns?.length) return null;
+    const backlog = board.columns.find((col) => col.behaviorKey === 'BACKLOG');
+    return backlog?.id ?? board.columns[0]?.id ?? null;
+  }, [board?.columns]);
+
   const resetColumnForm = () => { setColumnName(''); setColumnBehavior('BACKLOG'); setColumnWip(''); setColumnError(null); };
 
   // --- Utilitaire de gestion d'appels API avec toasts centralisés ---
-  async function handleApi<T>(op:()=>Promise<T>, opts?: { success?: string; warnWip?: string; }) {
+  const handleApi = useCallback(async <T,>(op: () => Promise<T>, opts?: { success?: string; warnWip?: string; }) => {
     try {
       const result = await op();
       if (opts?.success) success(opts.success);
-      return result;
+      return result as T;
     } catch (e) {
       const err = e as Error & { status?: number; message?: string };
       const msg = (err?.message || '').toLowerCase();
@@ -721,7 +967,7 @@ export function TeamBoardPage(){
       }
       throw err;
     }
-  }
+  }, [logout, success, toastError, tBoard]);
 
   const handleSubmitColumn = async (e:FormEvent) => {
     e.preventDefault();
@@ -965,11 +1211,13 @@ export function TeamBoardPage(){
     setArchivedColumn({ id: column.id, name: column.name, behavior: column.behaviorKey });
     archivedColumnIdRef.current = column.id;
     setArchivedNodes([]);
-    setArchivedError(null);
-    setArchivedLoading(true);
     if (!accessToken) {
-      setArchivedLoading(false);
-      setArchivedError(tBoard('alerts.sessionInvalid'));
+      toastError(tBoard('alerts.sessionInvalid'));
+      setColumnViewMode((prev) => ({
+        ...prev,
+        [column.id]: null,
+      }));
+      closeArchivedDialog();
       return;
     }
     try {
@@ -979,13 +1227,12 @@ export function TeamBoardPage(){
       }
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : tBoard('alerts.archivedLoadFailed');
-      if (archivedColumnIdRef.current === column.id) {
-        setArchivedError(message);
-      }
-    } finally {
-      if (archivedColumnIdRef.current === column.id) {
-        setArchivedLoading(false);
-      }
+      toastError(message);
+      setColumnViewMode((prev) => ({
+        ...prev,
+        [column.id]: null,
+      }));
+      closeArchivedDialog();
     }
   };
 
@@ -997,84 +1244,220 @@ export function TeamBoardPage(){
     }));
   };
 
-  const closeSnoozedDialog = () => {
-    setSnoozedColumn(null);
-    setSnoozedNodes([]);
-    setSnoozedLoading(false);
-    setSnoozedError(null);
-    setSnoozedSubmittingId(null);
-  };
-
-  const handleUnsnoozeSnoozed = async (nodeId: string) => {
-    if (!accessToken) {
-      toastError(tBoard('alerts.sessionInvalid'));
-      return;
-    }
-    setSnoozedSubmittingId(nodeId);
-    try {
-      await updateNode(nodeId, { backlogHiddenUntil: null }, accessToken);
-      setSnoozedNodes((prev) => prev.filter((node) => node.id !== nodeId));
-      await refreshActiveBoard();
-      success(tBoard('cards.notifications.unsnoozed'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.unsnoozeFailed');
-      toastError(message);
-    } finally {
-      setSnoozedSubmittingId(null);
-    }
-  };
-
   const closeArchivedDialog = () => {
     setArchivedColumn(null);
     setArchivedNodes([]);
-    setArchivedLoading(false);
-    setArchivedError(null);
-    setArchivedSubmittingId(null);
-    setArchivedSubmittingAction(null);
     archivedColumnIdRef.current = null;
   };
 
-  const handleRestoreArchived = async (nodeId: string) => {
-    if (!accessToken) {
-      toastError(tBoard('alerts.sessionInvalid'));
-      return;
-    }
-    setArchivedSubmittingId(nodeId);
-    setArchivedSubmittingAction('restore');
-    try {
-      await apiRestoreNode(nodeId, accessToken);
-      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
-      await refreshActiveBoard();
-      success(tBoard('cards.notifications.restored'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.restoreFailed');
-      toastError(message);
-    } finally {
-      setArchivedSubmittingId(null);
-      setArchivedSubmittingAction(null);
-    }
+  const toPlannedIsoDate = (input: Date | null | undefined) => {
+    if (!input) return null;
+    const normalized = new Date(input);
+    normalized.setHours(12, 0, 0, 0);
+    return normalized.toISOString().slice(0, 10);
   };
 
-  const handleDeleteArchived = async (nodeId: string) => {
+  const registerSavingIds = useCallback((ids: string[]) => {
+    setScheduleSavingIds((prev) => {
+      const set = new Set(prev);
+      ids.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+  }, []);
+
+  const releaseSavingIds = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setScheduleSavingIds((prev) => prev.filter((id) => !ids.includes(id)));
+  }, []);
+
+  const persistNodeDependencies = useCallback(async (
+    targetId: string,
+    nodeDependencies: GanttDependency[],
+  ) => {
     if (!accessToken) {
       toastError(tBoard('alerts.sessionInvalid'));
       return;
     }
-    setArchivedSubmittingId(nodeId);
-    setArchivedSubmittingAction('delete');
+
+    registerSavingIds([targetId]);
     try {
-      await apiDeleteNode(nodeId, { recursive: true }, accessToken);
-      setArchivedNodes((prev) => prev.filter((node) => node.id !== nodeId));
+      const scheduleDependencies = nodeDependencies.map((dep) => ({
+        id: dep.id,
+        fromId: dep.fromId,
+        type: dep.type,
+        lag: dep.lag,
+        mode: dep.mode,
+        hardConstraint: dep.hardConstraint,
+      }));
+      const scheduleMode = nodeDependencies.some((dep) => dep.mode === 'ASAP') ? 'asap' : 'manual';
+      const payload: Parameters<typeof updateNode>[1] = {
+        scheduleDependencies,
+        scheduleMode,
+      };
+      await handleApi(() => updateNode(targetId, payload, accessToken));
       await refreshActiveBoard();
-      success(tBoard('cards.notifications.archivedDeleted'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : tBoard('cards.errors.deleteArchivedFailed');
-      toastError(message);
+    } catch {
+      // handled by handleApi
     } finally {
-      setArchivedSubmittingId(null);
-      setArchivedSubmittingAction(null);
+      releaseSavingIds([targetId]);
     }
+  }, [accessToken, handleApi, refreshActiveBoard, registerSavingIds, releaseSavingIds, tBoard, toastError]);
+
+  const handleCommitScheduleChanges = useCallback(async (changes: ScheduleChange[]) => {
+    if (!changes.length) return;
+    if (!accessToken) {
+      toastError(tBoard('alerts.sessionInvalid'));
+      return;
+    }
+    registerSavingIds(changes.map((change) => change.id));
+    try {
+      for (const change of changes) {
+        const payload: Parameters<typeof updateNode>[1] = {};
+        if ('start' in change) {
+          payload.plannedStartDate = toPlannedIsoDate(change.start ?? null);
+        }
+        if ('end' in change) {
+          payload.plannedEndDate = toPlannedIsoDate(change.end ?? null);
+        }
+        if ('dueAt' in change) {
+          payload.dueAt = change.dueAt ? change.dueAt.toISOString() : null;
+        }
+        if (Object.keys(payload).length === 0) {
+          continue;
+        }
+        await handleApi(() => updateNode(change.id, payload, accessToken));
+      }
+      await refreshActiveBoard();
+      success(tBoard('gantt.notifications.scheduleUpdated'));
+    } catch {
+      // handled by handleApi
+    } finally {
+      releaseSavingIds(changes.map((change) => change.id));
+    }
+  }, [accessToken, handleApi, refreshActiveBoard, registerSavingIds, releaseSavingIds, success, tBoard, toastError]);
+
+  const handleCreateScheduledCard = useCallback(async (input: {
+    columnId: string;
+    title: string;
+    start?: Date | null;
+    end?: Date | null;
+  }) => {
+    if (!accessToken || !board) {
+      toastError(tBoard('alerts.sessionInvalid'));
+      return;
+    }
+    try {
+      const created = await handleApi(
+        () =>
+          createNode(
+            {
+              title: input.title,
+              columnId: input.columnId,
+              dueAt: input.end ? input.end.toISOString() : undefined,
+            },
+            accessToken,
+          ),
+        { success: undefined },
+      );
+      if (!created) {
+        return;
+      }
+      const schedulePayload: Parameters<typeof updateNode>[1] = {};
+      if (input.start) schedulePayload.plannedStartDate = toPlannedIsoDate(input.start);
+      if (input.end) schedulePayload.plannedEndDate = toPlannedIsoDate(input.end);
+      if (Object.keys(schedulePayload).length > 0) {
+        await handleApi(() => updateNode(created.id, schedulePayload, accessToken));
+      }
+      await refreshActiveBoard();
+      success(tBoard('gantt.notifications.taskCreated'));
+    } catch {
+      // toast already managed
+    }
+  }, [accessToken, board, handleApi, refreshActiveBoard, success, tBoard, toastError]);
+
+  type PendingDependencyPersist = {
+    targetId: string;
+    next: GanttDependency[];
   };
+
+  const scheduleDependencyPersist = useCallback((pending: PendingDependencyPersist | null) => {
+    if (!pending) return;
+    setTimeout(() => {
+      void persistNodeDependencies(pending.targetId, pending.next);
+    }, 0);
+  }, [persistNodeDependencies]);
+
+  const handleCreateDependency = useCallback((input: {
+    fromId: string;
+    toId: string;
+    type: GanttLinkType;
+    lag?: number;
+    mode?: GanttLinkMode;
+    hardConstraint?: boolean;
+  }) => {
+    let pending: PendingDependencyPersist | null = null;
+    setGanttDependencies((prev) => {
+      const exists = prev.some((dep) => dep.fromId === input.fromId && dep.toId === input.toId && dep.type === input.type);
+      if (exists) return prev;
+      const nextDependency: GanttDependency = {
+        id: generateDependencyId(),
+        fromId: input.fromId,
+        toId: input.toId,
+        type: input.type,
+        lag: input.lag ?? 0,
+        mode: input.mode ?? 'ASAP',
+        hardConstraint: Boolean(input.hardConstraint),
+      };
+      const next = [...prev, nextDependency];
+      pending = {
+        targetId: input.toId,
+        next: next.filter((dep) => dep.toId === input.toId),
+      };
+      return next;
+    });
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
+
+  const handleUpdateDependency = useCallback((id: string, patch: Partial<GanttDependency>) => {
+    let pending: PendingDependencyPersist | null = null;
+    setGanttDependencies((prev) => {
+      const index = prev.findIndex((dep) => dep.id === id);
+      if (index === -1) return prev;
+      const current = prev[index];
+      const updated = { ...current, ...patch, id } as GanttDependency;
+      if (
+        current.type === updated.type &&
+        current.lag === updated.lag &&
+        current.mode === updated.mode &&
+        current.hardConstraint === updated.hardConstraint
+      ) {
+        return prev;
+      }
+      const next = [...prev];
+      next[index] = updated;
+      pending = {
+        targetId: updated.toId,
+        next: next.filter((dep) => dep.toId === updated.toId),
+      };
+      return next;
+    });
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
+
+  const handleDeleteDependency = useCallback((id: string) => {
+    let pending: PendingDependencyPersist | null = null;
+    setGanttDependencies((prev) => {
+      const target = prev.find((dep) => dep.id === id);
+      if (!target) return prev;
+      const next = prev.filter((dep) => dep.id !== id);
+      pending = {
+        targetId: target.toId,
+        next: next.filter((dep) => dep.toId === target.toId),
+      };
+      return next;
+    });
+    scheduleDependencyPersist(pending);
+  }, [scheduleDependencyPersist]);
 
   const handleCreateCard = async (columnId:string, title:string) => {
     if(!accessToken || !board) throw new Error(tBoard('alerts.sessionInvalid'));
@@ -1100,6 +1483,8 @@ export function TeamBoardPage(){
     setDeleteError(null);
     setDeleteSubmitting(null);
     setDeleteLoading(true);
+    setDeleteShareSummary(null);
+    setDeleteShareError(null);
   };
 
   const closeDeleteDialog = () => {
@@ -1108,32 +1493,85 @@ export function TeamBoardPage(){
     setDeleteError(null);
     setDeleteSubmitting(null);
     setDeleteLoading(false);
+    setDeleteShareSummary(null);
+    setDeleteShareError(null);
   };
 
   useEffect(() => {
     if (!deleteTarget || !deleteLoading || !accessToken) return;
     let cancelled = false;
     (async () => {
-      try {
-        const preview = await fetchNodeDeletePreview(deleteTarget.id, accessToken);
-        if (!cancelled) {
-          setDeletePreview(preview);
-          setDeleteLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setDeleteError((err as Error).message);
-          setDeleteLoading(false);
-        }
+      const operations: Array<Promise<unknown>> = [
+        fetchNodeDeletePreview(deleteTarget.id, accessToken),
+      ];
+      const shouldCheckShare = !deleteTarget.parentId;
+      const shareIndex = shouldCheckShare
+        ? operations.push(fetchNodeCollaborators(deleteTarget.id, accessToken)) - 1
+        : null;
+      const results = await Promise.allSettled(operations);
+      if (cancelled) return;
+      const previewResult = results[0];
+      if (previewResult.status === 'fulfilled') {
+        setDeletePreview(previewResult.value as NodeDeletePreview);
+      } else {
+        const reason = previewResult.reason;
+        const message = reason instanceof Error && reason.message
+          ? reason.message
+          : tBoard('alerts.unexpectedError');
+        setDeleteError(message);
       }
+      if (shareIndex !== null) {
+        const shareResult = results[shareIndex];
+        if (shareResult.status === 'fulfilled') {
+          setDeleteShareSummary(shareResult.value as NodeCollaboratorsResponse);
+        } else {
+          const reason = shareResult.reason;
+          const message = reason instanceof Error && reason.message
+            ? reason.message
+            : tBoard('deleteDialog.shareLoadError');
+          setDeleteShareError(message);
+        }
+      } else {
+        setDeleteShareSummary(null);
+        setDeleteShareError(null);
+      }
+      setDeleteLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [deleteTarget, deleteLoading, accessToken]);
+  }, [deleteTarget, deleteLoading, accessToken, tBoard]);
+
+  const externalCollaborators = useMemo<NodeCollaboratorsResponse['collaborators']>(() => {
+    if (!deleteShareSummary) return [];
+    return deleteShareSummary.collaborators.filter((collaborator) => {
+      if (!collaborator.userId || collaborator.userId === user?.id) return false;
+      return collaborator.accessType === 'DIRECT' || collaborator.accessType === 'INHERITED';
+    });
+  }, [deleteShareSummary, user?.id]);
+
+  const pendingInvitations = useMemo<NodeCollaboratorsResponse['invitations']>(() => {
+    if (!deleteShareSummary) return [];
+    return deleteShareSummary.invitations.filter((invitation) => invitation.status === 'PENDING');
+  }, [deleteShareSummary]);
+
+  const shouldCheckShareGuard = Boolean(deleteTarget && !deleteTarget.parentId);
+
+  const shareDeletionBlocked = useMemo(() => {
+    if (!shouldCheckShareGuard) return false;
+    return externalCollaborators.length > 0 || pendingInvitations.length > 0;
+  }, [shouldCheckShareGuard, externalCollaborators, pendingInvitations]);
+
+  const singleDeleteBlocked = shareDeletionBlocked || (deletePreview?.hasChildren ?? false);
+  const singleDeleteDisabled = deleteLoading || deleteSubmitting !== null || singleDeleteBlocked;
+  const recursiveDeleteDisabled = deleteLoading || deleteSubmitting !== null || shareDeletionBlocked;
 
   const confirmDelete = async (recursive: boolean) => {
     if (!deleteTarget || !accessToken) return;
+    if (shareDeletionBlocked) {
+      setDeleteError(tBoard('deleteDialog.shareBlockedTooltip'));
+      return;
+    }
     setDeleteSubmitting(recursive ? 'recursive' : 'single');
     setDeleteError(null);
     try {
@@ -1328,15 +1766,28 @@ export function TeamBoardPage(){
     const snapshot = optimisticColumns ? structuredClone(optimisticColumns) : structuredClone(board.columns) as BoardColumnWithNodes[];
     setOptimisticColumns(currentCols);
     try {
-      await handleApi(() =>
-        moveChildNode(
-          parentId,
-          moving.id,
-          { targetColumnId: finalTargetCol.id, position: targetIndex },
-          accessToken,
-        ),
-        { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
-      );
+      // Si c'est une tâche mère partagée, utiliser l'endpoint de placement personnel
+      if (moving.isSharedRoot) {
+        await handleApi(() =>
+          moveSharedNodePlacement(
+            moving.id,
+            { columnId: finalTargetCol.id, position: targetIndex },
+            accessToken,
+          ),
+          { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
+        );
+      } else {
+        // Sinon, utiliser le déplacement standard
+        await handleApi(() =>
+          moveChildNode(
+            parentId,
+            moving.id,
+            { targetColumnId: finalTargetCol.id, position: targetIndex },
+            accessToken,
+          ),
+          { success: tBoard('cards.notifications.moved'), warnWip: tBoard('alerts.wipLimitReached') }
+        );
+      }
       await refreshActiveBoard();
       setOptimisticColumns(null);
       // Inform listeners (e.g., TaskDrawer) that the node changed column
@@ -1354,30 +1805,66 @@ export function TeamBoardPage(){
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50">
-        <div className="flex items-center justify-between gap-4 px-8 py-4">
+        <div className="flex items-center justify-between gap-4 px-8 py-3">
           <div className="flex items-center gap-3">
             <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
           </div>
           <div className="flex items-center gap-2">
+            {/* Badge invitations avec icône cloud */}
+            {pendingInvitationsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsInvitationsPanelOpen(true)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+                title={`${pendingInvitationsCount} invitation(s) en attente`}
+                aria-label={`${pendingInvitationsCount} invitations en attente`}
+              >
+                <span className="material-symbols-outlined text-[20px]">cloud</span>
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
+                  {pendingInvitationsCount}
+                </span>
+              </button>
+            )}
+            {/* Badge d'activité avec icône receipt */}
+            {activityStats && activityStats.todayCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsActivityPanelOpen(true)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+                title={tBoard('activity.badge.tooltip', { count: activityStats.todayCount })}
+                aria-label={tBoard('activity.badge.aria', { count: activityStats.todayCount })}
+              >
+                <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
+                  {activityStats.todayCount}
+                </span>
+              </button>
+            )}
+            {/* Bouton paramètres (icône seule) */}
             <Link
               href="/settings"
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title={t("common.actions.settings")}
+              aria-label={t("common.actions.settings")}
             >
-              {t("common.actions.settings")}
+              <span className="material-symbols-outlined text-[20px]">settings</span>
             </Link>
+            {/* Bouton déconnexion (icône seule) */}
             <button
               onClick={() => logout()}
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title={t("common.actions.signOut")}
+              aria-label={t("common.actions.signOut")}
             >
-              {t("common.actions.signOut")}
+              <span className="material-symbols-outlined text-[20px]">logout</span>
             </button>
           </div>
         </div>
       </header>
-      <main className="flex flex-col gap-8 px-8 pt-8 pb-12 w-full">
+      <main className="flex flex-col gap-6 px-8 pt-6 pb-12 w-full">
         {(showBoardControls || isAddingColumn) && (
-          <section className="grid gap-6">
-            <div className="relative rounded-2xl border border-white/10 bg-card/70 p-6 w-full">
+          <section className="grid gap-4">
+            <div className="relative rounded-xl border border-white/10 bg-card/70 px-6 py-2 w-full">
               {showBoardControls && (
                 <>
                   <div className="flex flex-col gap-4">
@@ -1388,26 +1875,22 @@ export function TeamBoardPage(){
                           description={tBoard('help.search.body')}
                           hint={tBoard('help.search.hint')}
                         >
-                          <label className="flex flex-col gap-1 text-xs text-muted">
-                            <span className="text-[10px] uppercase tracking-wide">{tBoard('search.label')}</span>
-                            <input
-                              type="search"
-                              value={searchDraft}
-                              onChange={(event) => setSearchDraft(event.target.value)}
-                              onFocus={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                setSearchFocused(true);
-                              }}
-                              onBlur={() => {
-                                if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                                searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                              }}
-                              placeholder={tBoard('search.placeholder')}
-                              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                              aria-label={tBoard('search.aria')}
-                            />
-                            <span className="text-[10px] text-muted">{tBoard('search.helper')}</span>
-                          </label>
+                          <input
+                            type="search"
+                            value={searchDraft}
+                            onChange={(event) => setSearchDraft(event.target.value)}
+                            onFocus={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              setSearchFocused(true);
+                            }}
+                            onBlur={() => {
+                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
+                              searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
+                            }}
+                            placeholder={tBoard('search.placeholder')}
+                            className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                            aria-label={tBoard('search.aria')}
+                          />
                         </HelpTooltip>
                         {mentionContext && (
                           <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
@@ -1571,7 +2054,7 @@ export function TeamBoardPage(){
                     className="block"
                   >
                     <label className="text-xs text-muted">{tBoard('columns.form.behavior')}
-                      <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+                      <select value={columnBehavior} onChange={e=>setColumnBehavior(e.target.value as 'BACKLOG'|'IN_PROGRESS'|'BLOCKED'|'DONE'|'CUSTOM')} className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent text-foreground">
                         <option value="BACKLOG">{tBoard('behaviors.BACKLOG')}</option>
                         <option value="IN_PROGRESS">{tBoard('behaviors.IN_PROGRESS')}</option>
                         <option value="BLOCKED">{tBoard('behaviors.BLOCKED')}</option>
@@ -1604,7 +2087,7 @@ export function TeamBoardPage(){
         {loading && <BoardSkeleton />}
         {!loading && board && (
           <section className="space-y-4 w-full">
-            <div className="flex items-baseline justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                   <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
                 <HelpTooltip
@@ -1651,84 +2134,134 @@ export function TeamBoardPage(){
                   </div>
                 </button>
               </div>
-              <span className="text-xs uppercase tracking-wide text-muted">
-                  {detailLoading
-                    ? tBoard('columns.header.status.refreshing')
-                    : board.columns.length === 0
-                      ? tBoard('columns.header.status.empty')
-                      : board.columns.length === 1
-                        ? tBoard('columns.header.status.single')
-                        : tBoard('columns.header.status.multiple', { count: board.columns.length })}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setBoardView('kanban')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'kanban'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'kanban'}
+                    title={tBoard('viewToggle.kanbanHint')}
+                  >
+                    {tBoard('viewToggle.kanban')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBoardView('gantt')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'gantt'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'gantt'}
+                    title={tBoard('viewToggle.ganttHint')}
+                  >
+                    {tBoard('viewToggle.gantt')}
+                  </button>
+                </div>
+                <span className="text-xs uppercase tracking-wide text-muted">
+                    {detailLoading
+                      ? tBoard('columns.header.status.refreshing')
+                      : board.columns.length === 0
+                        ? tBoard('columns.header.status.empty')
+                        : board.columns.length === 1
+                          ? tBoard('columns.header.status.single')
+                          : tBoard('columns.header.status.multiple', { count: board.columns.length })}
+                </span>
+              </div>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
-              <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-                <ColumnList
+              boardView === 'kanban' ? (
+                <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                  <ColumnList
+                    columns={displayedColumns}
+                    childBoards={childBoards}
+                    editingColumnId={editingColumnId}
+                    editingValues={{
+                      name: editingName,
+                      wip: editingWip,
+                      backlogReviewAfter: editingBacklogReviewAfter,
+                      backlogReviewEvery: editingBacklogReviewEvery,
+                      backlogArchiveAfter: editingBacklogArchiveAfter,
+                      doneArchiveAfter: editingDoneArchiveAfter,
+                      submitting: editingSubmitting,
+                      error: editingError,
+                    }}
+                    loadingCards={detailLoading}
+                    displayOptions={displayOptions}
+                    onRequestEdit={handleOpenColumnEditorById}
+                    onCancelEdit={handleCancelEditColumn}
+                    onSubmitEdit={handleUpdateColumn}
+                    onFieldChange={(field,val)=>{
+                      switch(field){
+                        case 'name':
+                          setEditingName(val);
+                          break;
+                        case 'wip':
+                          setEditingWip(val);
+                          break;
+                        case 'backlogReviewAfter':
+                          setEditingBacklogReviewAfter(val);
+                          break;
+                        case 'backlogReviewEvery':
+                          setEditingBacklogReviewEvery(val);
+                          break;
+                        case 'backlogArchiveAfter':
+                          setEditingBacklogArchiveAfter(val);
+                          break;
+                        case 'doneArchiveAfter':
+                          setEditingDoneArchiveAfter(val);
+                          break;
+                        default:
+                          break;
+                      }
+                    }}
+                    onMoveColumn={handleMoveColumn}
+                    onDeleteColumn={handleDeleteColumn}
+                    onCreateCard={handleCreateCard}
+                    onOpenCard={handleOpenCard}
+                    onOpenChildBoard={openChildBoard}
+                    onRenameCard={handleRenameCard}
+                    onRequestMoveCard={handleRequestMoveCard}
+                    onRequestDeleteCard={handleRequestDeleteCard}
+                    onShowArchived={handleShowArchived}
+                    onShowSnoozed={handleShowSnoozed}
+                    columnViewMode={columnViewMode}
+                    archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
+                    helpMode={helpMode}
+                  />
+                  <DragOverlay dropAnimation={null}>
+                    {draggingCard && (
+                      <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">
+                        <p className="text-sm font-medium">{draggingCard.title}</p>
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              ) : (
+                <BoardGanttView
+                  key={`gantt-${board.id}`}
+                  boardId={board.id}
+                  boardName={board.name}
                   columns={displayedColumns}
+                  defaultColumnId={backlogColumnId}
                   childBoards={childBoards}
-                  editingColumnId={editingColumnId}
-                  editingValues={{
-                    name: editingName,
-                    wip: editingWip,
-                    backlogReviewAfter: editingBacklogReviewAfter,
-                    backlogReviewEvery: editingBacklogReviewEvery,
-                    backlogArchiveAfter: editingBacklogArchiveAfter,
-                    doneArchiveAfter: editingDoneArchiveAfter,
-                    submitting: editingSubmitting,
-                    error: editingError,
-                  }}
-                  loadingCards={detailLoading}
-                  displayOptions={displayOptions}
-                  onRequestEdit={handleOpenColumnEditorById}
-                  onCancelEdit={handleCancelEditColumn}
-                  onSubmitEdit={handleUpdateColumn}
-                  onFieldChange={(field,val)=>{
-                    switch(field){
-                      case 'name':
-                        setEditingName(val);
-                        break;
-                      case 'wip':
-                        setEditingWip(val);
-                        break;
-                      case 'backlogReviewAfter':
-                        setEditingBacklogReviewAfter(val);
-                        break;
-                      case 'backlogReviewEvery':
-                        setEditingBacklogReviewEvery(val);
-                        break;
-                      case 'backlogArchiveAfter':
-                        setEditingBacklogArchiveAfter(val);
-                        break;
-                      case 'doneArchiveAfter':
-                        setEditingDoneArchiveAfter(val);
-                        break;
-                      default:
-                        break;
-                    }
-                  }}
-                  onMoveColumn={handleMoveColumn}
-                  onDeleteColumn={handleDeleteColumn}
-                  onCreateCard={handleCreateCard}
-                  onOpenCard={handleOpenCard}
+                  dependencies={activeGanttDependencies}
+                  scheduleSavingIds={scheduleSavingSet}
+                  onCreateDependency={handleCreateDependency}
+                  onUpdateDependency={handleUpdateDependency}
+                  onDeleteDependency={handleDeleteDependency}
+                  onCommitScheduleChanges={handleCommitScheduleChanges}
+                  onCreateTask={handleCreateScheduledCard}
+                  onOpenTask={handleOpenCard}
                   onOpenChildBoard={openChildBoard}
-                  onRenameCard={handleRenameCard}
-                  onRequestMoveCard={handleRequestMoveCard}
-                  onRequestDeleteCard={handleRequestDeleteCard}
-                  onShowArchived={handleShowArchived}
-                  onShowSnoozed={handleShowSnoozed}
-                  snoozedColumnId={snoozedColumn?.id ?? null}
-                  columnViewMode={columnViewMode}
-                  archivedNodesByColumn={archivedColumn ? { [archivedColumn.id]: archivedNodes } : {}}
-                  helpMode={helpMode}
+                  loading={detailLoading}
                 />
-                <DragOverlay dropAnimation={null}>
-                  {draggingCard && (
-                    <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">
-                      <p className="text-sm font-medium">{draggingCard.title}</p>
-                    </div>
-                  )}
-                </DragOverlay>
-              </DndContext>
+              )
             ) : (
               <div className="rounded-2xl border border-dashed border-white/15 bg-card/60 p-8 text-center">
                 <p className="text-sm text-muted">{tBoard('columns.emptyBoard')}</p>
@@ -1770,6 +2303,23 @@ export function TeamBoardPage(){
             {deleteError && (
               <p className="mt-3 text-sm text-rose-300">{deleteError}</p>
             )}
+            {shouldCheckShareGuard && deleteShareError && (
+              <p className="mt-3 text-sm text-amber-300">{deleteShareError}</p>
+            )}
+            {shareDeletionBlocked && (
+              <div className="mt-4 rounded-xl border border-amber-400/60 bg-amber-500/10 p-3 text-sm text-amber-100">
+                <p className="font-semibold">{tBoard('deleteDialog.shareBlockedTitle')}</p>
+                <p className="mt-2">{tBoard('deleteDialog.shareBlockedBody')}</p>
+                <ul className="mt-3 space-y-1 text-xs">
+                  {externalCollaborators.length > 0 && (
+                    <li>{tBoard('deleteDialog.shareBlockedCollaborators', { count: externalCollaborators.length })}</li>
+                  )}
+                  {pendingInvitations.length > 0 && (
+                    <li>{tBoard('deleteDialog.shareBlockedInvitations', { count: pendingInvitations.length })}</li>
+                  )}
+                </ul>
+              </div>
+            )}
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -1780,18 +2330,19 @@ export function TeamBoardPage(){
               </button>
               <button
                 type="button"
-                disabled={deleteLoading || deleteSubmitting !== null || (deletePreview?.hasChildren ?? false)}
-                title={deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined}
+                disabled={singleDeleteDisabled}
+                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : (deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined)}
                 onClick={() => confirmDelete(false)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${deletePreview?.hasChildren ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${singleDeleteBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
               >
                 {deleteSubmitting === 'single' ? tBoard('deleteDialog.deletingSingle') : tBoard('deleteDialog.deleteSingle')}
               </button>
               <button
                 type="button"
-                disabled={deleteLoading || deleteSubmitting !== null}
+                disabled={recursiveDeleteDisabled}
+                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : undefined}
                 onClick={() => confirmDelete(true)}
-                className={`rounded-full border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-200 hover:text-rose-100 ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${shareDeletionBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-rose-400/40 bg-rose-500/10 text-rose-200 hover:border-rose-200 hover:text-rose-100'} ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
               >
                 {deleteSubmitting === 'recursive' ? tBoard('deleteDialog.deletingRecursive') : tBoard('deleteDialog.deleteRecursive')}
               </button>
@@ -1812,6 +2363,34 @@ export function TeamBoardPage(){
               const message = err instanceof Error && err.message ? err.message : tBoard('alerts.boardRefreshFailed');
               toastError(message);
             }
+          }}
+        />
+      )}
+
+      {/* Panneau d'activité */}
+      {activeBoardId && accessToken && (
+        <ActivityPanel
+          boardId={activeBoardId}
+          accessToken={accessToken}
+          isOpen={isActivityPanelOpen}
+          onClose={() => setIsActivityPanelOpen(false)}
+          onNavigateToTask={(nodeId) => {
+            open(nodeId);
+          }}
+        />
+      )}
+
+      {/* Panneau d'invitations */}
+      {isInvitationsPanelOpen && (
+        <InvitationsPanel
+          invitations={invitations}
+          onClose={() => setIsInvitationsPanelOpen(false)}
+          onRefresh={async () => {
+            if (!accessToken) return;
+            try {
+              const data = await fetchIncomingInvitations(accessToken);
+              setInvitations(data);
+            } catch { /* silent */ }
           }}
         />
       )}

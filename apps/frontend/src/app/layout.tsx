@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { DEFAULT_THEME } from "@/themes";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,10 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // Forcer le thème sombre côté serveur : ajoute la classe `dark` sur l'élément html
-    // Cela garantit que les utilitaires Tailwind `dark:` s'appliquent immédiatement
-    // (évite le flash ou l'affichage en mode clair quand le navigateur masque `prefers-color-scheme`).
-    <html lang="en" className="dark">
+    <html
+      lang="en"
+      data-theme={DEFAULT_THEME.id}
+      className={DEFAULT_THEME.tone === "dark" ? "dark" : undefined}
+    >
       <head>
         {/* Pré-chargement pour fiabiliser le rendu des icônes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -47,7 +49,10 @@ export default function RootLayout({
         />
   {/* Favicon: inutile d'ajouter <link> car app/favicon.ico est détecté automatiquement */}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}>
+      <body
+        data-theme={DEFAULT_THEME.id}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>

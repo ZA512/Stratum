@@ -261,7 +261,7 @@ export function FractalBreadcrumb({
             <button
               type="button"
               onClick={() => handleNavigate(item, index)}
-              className="group cursor-pointer bg-transparent border-none p-0 m-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-sm text-white"
+              className="group cursor-pointer bg-transparent border-none p-0 m-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-sm"
               style={{
                 // Effet de perspective avec le même angle que la barre oblique
                 transform: (() => {
@@ -278,16 +278,16 @@ export function FractalBreadcrumb({
               aria-current={isCurrent ? 'page' : undefined}
             >
               <span
-                className="block text-lg font-medium tracking-wide leading-tight hover:text-white/90 transition-colors duration-200 whitespace-nowrap uppercase"
+                className="block text-lg font-medium tracking-wide leading-tight transition duration-200 whitespace-nowrap uppercase text-[color:var(--color-breadcrumb-label)] group-hover:opacity-90"
                 style={{
                   display: 'inline-block',
                   maxWidth: labelWidth,
                   textShadow: `
-                    0 2px 4px rgba(0,0,0,0.9),
-                    0 0 12px ${color.replace(/\/.*/, '/0.4')},
-                    2px 2px 0 rgba(0,0,0,0.8)
+                    0 2px 6px var(--color-breadcrumb-shadow),
+                    0 0 14px var(--color-breadcrumb-glow),
+                    2px 2px 0 var(--color-breadcrumb-shadow)
                   `,
-                  filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.7))',
+                  filter: 'drop-shadow(0 3px 6px var(--color-breadcrumb-shadow))',
                 }}
                 title={item.title}
               >

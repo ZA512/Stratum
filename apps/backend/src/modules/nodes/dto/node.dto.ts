@@ -46,6 +46,46 @@ export class NodeTimeTrackingDto {
 
   @ApiProperty({ example: '2025-03-18', nullable: true })
   actualEndDate!: string | null;
+
+  @ApiProperty({
+    example: 'manual',
+    enum: ['manual', 'asap'],
+    nullable: true,
+    description: 'Mode de planification appliqué à la tâche',
+  })
+  scheduleMode!: 'manual' | 'asap' | null;
+
+  @ApiProperty({
+    example: false,
+    description: 'Empêche les recalculs automatiques',
+  })
+  hardConstraint!: boolean;
+
+  @ApiProperty({ type: () => NodeScheduleDependencyDto, isArray: true })
+  dependencies!: NodeScheduleDependencyDto[];
+}
+
+export class NodeScheduleDependencyDto {
+  @ApiProperty({ example: 'dep_abcd' })
+  id!: string;
+
+  @ApiProperty({ example: 'task_A' })
+  fromId!: string;
+
+  @ApiProperty({ example: 'task_B' })
+  toId!: string;
+
+  @ApiProperty({ example: 'FS', enum: ['FS', 'SS', 'FF', 'SF'] })
+  type!: 'FS' | 'SS' | 'FF' | 'SF';
+
+  @ApiProperty({ example: 0 })
+  lag!: number;
+
+  @ApiProperty({ example: 'ASAP', enum: ['ASAP', 'FREE'] })
+  mode!: 'ASAP' | 'FREE';
+
+  @ApiProperty({ example: false })
+  hardConstraint!: boolean;
 }
 
 export class NodeFinancialDto {

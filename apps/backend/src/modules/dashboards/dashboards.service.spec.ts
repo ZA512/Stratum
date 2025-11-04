@@ -23,9 +23,6 @@ interface PrismaMock extends PrismaService {
   boardDailySnapshot: {
     findMany: jest.Mock;
   };
-  membership: {
-    findFirst: jest.Mock;
-  };
 }
 
 function createPrismaMock(): PrismaMock {
@@ -42,9 +39,6 @@ function createPrismaMock(): PrismaMock {
     },
     boardDailySnapshot: {
       findMany: jest.fn(),
-    },
-    membership: {
-      findFirst: jest.fn(),
     },
   } as unknown as PrismaMock;
 }
@@ -123,13 +117,12 @@ describe('DashboardsService', () => {
 
     service = module.get(DashboardsService);
 
-    prisma.membership.findFirst.mockResolvedValue({ id: 'membership-1' });
     prisma.board.findUnique.mockResolvedValue({
       id: 'board-1',
+      ownerUserId: 'user-1',
       node: {
         id: 'node-1',
         title: 'Board',
-        teamId: 'team-1',
         path: '/node-1',
         depth: 0,
         parentId: null,
@@ -161,7 +154,6 @@ describe('DashboardsService', () => {
         statusMetadata: null,
         path: '/node-1/task-1',
         depth: 1,
-        teamId: 'team-1',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z'),
         archivedAt: null,
@@ -190,7 +182,6 @@ describe('DashboardsService', () => {
         statusMetadata: null,
         path: '/node-1/task-2',
         depth: 1,
-        teamId: 'team-1',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z'),
         archivedAt: null,
@@ -218,7 +209,6 @@ describe('DashboardsService', () => {
   it('returns computed widgets and hides those failing requirements', async () => {
     const response = await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'SELF',
@@ -251,7 +241,6 @@ describe('DashboardsService', () => {
       expect.objectContaining({
         where: {
           archivedAt: null,
-          teamId: 'team-1',
           column: { boardId: { in: ['board-1'] } },
         },
         orderBy: { id: 'asc' },
@@ -312,7 +301,6 @@ describe('DashboardsService', () => {
         statusMetadata: null,
         path: '/node-1/task-1',
         depth: 1,
-        teamId: 'team-1',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z'),
         archivedAt: null,
@@ -341,7 +329,6 @@ describe('DashboardsService', () => {
         statusMetadata: null,
         path: '/node-1/task-2',
         depth: 1,
-        teamId: 'team-1',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z'),
         archivedAt: null,
@@ -362,7 +349,6 @@ describe('DashboardsService', () => {
 
     const response = await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'SELF',
@@ -394,7 +380,6 @@ describe('DashboardsService', () => {
 
     const response = await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'SELF',
@@ -421,10 +406,10 @@ describe('DashboardsService', () => {
     prisma.board.findMany.mockResolvedValueOnce([
       {
         id: 'board-child',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-child',
           title: 'Child Board',
-          teamId: 'team-1',
           path: '/node-1/node-child',
           depth: 1,
           parentId: 'node-1',
@@ -432,10 +417,10 @@ describe('DashboardsService', () => {
       },
       {
         id: 'board-grandchild',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-grand',
           title: 'Grand Board',
-          teamId: 'team-1',
           path: '/node-1/node-child/node-grand',
           depth: 2,
           parentId: 'node-child',
@@ -445,7 +430,6 @@ describe('DashboardsService', () => {
 
     await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'AGGREGATED',
@@ -455,7 +439,6 @@ describe('DashboardsService', () => {
       expect.objectContaining({
         where: {
           archivedAt: null,
-          teamId: 'team-1',
           column: {
             boardId: {
               in: ['board-1', 'board-child', 'board-grandchild'],
@@ -472,10 +455,10 @@ describe('DashboardsService', () => {
     prisma.board.findMany.mockResolvedValueOnce([
       {
         id: 'board-child',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-child',
           title: 'Child Board',
-          teamId: 'team-1',
           path: '/node-1/node-child',
           depth: 1,
           parentId: 'node-1',
@@ -483,10 +466,10 @@ describe('DashboardsService', () => {
       },
       {
         id: 'board-grandchild',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-grand',
           title: 'Grand Board',
-          teamId: 'team-1',
           path: '/node-1/node-child/node-grand',
           depth: 2,
           parentId: 'node-child',
@@ -496,7 +479,6 @@ describe('DashboardsService', () => {
 
     await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'COMPARISON',
@@ -506,7 +488,6 @@ describe('DashboardsService', () => {
       expect.objectContaining({
         where: {
           archivedAt: null,
-          teamId: 'team-1',
           column: { boardId: { in: ['board-child'] } },
         },
         orderBy: { id: 'asc' },
@@ -519,21 +500,21 @@ describe('DashboardsService', () => {
     prisma.board.findMany.mockResolvedValueOnce([
       {
         id: 'board-valid',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-valid',
           title: 'Valid Child',
-          teamId: 'team-1',
           path: '/node-1/node-valid',
           depth: 1,
           parentId: 'node-1',
         },
       },
       {
-        id: 'board-other-team',
+        id: 'board-other-owner',
+        ownerUserId: 'other-user',
         node: {
           id: 'node-other',
-          title: 'Other Team',
-          teamId: 'team-2',
+          title: 'Other Owner',
           path: '/node-1/node-other',
           depth: 1,
           parentId: 'node-1',
@@ -541,10 +522,10 @@ describe('DashboardsService', () => {
       },
       {
         id: 'board-outside',
+        ownerUserId: 'user-1',
         node: {
           id: 'node-outside',
           title: 'Outside',
-          teamId: 'team-1',
           path: '/different-root/node',
           depth: 1,
           parentId: 'different-root',
@@ -554,7 +535,6 @@ describe('DashboardsService', () => {
 
     await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'AGGREGATED',
@@ -564,7 +544,6 @@ describe('DashboardsService', () => {
       expect.objectContaining({
         where: {
           archivedAt: null,
-          teamId: 'team-1',
           column: { boardId: { in: ['board-1', 'board-valid'] } },
         },
         orderBy: { id: 'asc' },
@@ -573,13 +552,22 @@ describe('DashboardsService', () => {
     );
   });
 
-  it('throws when user is not a member of the requested team', async () => {
-    prisma.membership.findFirst.mockResolvedValueOnce(null);
+  it('throws when the requested board is owned by someone else', async () => {
+    prisma.board.findUnique.mockResolvedValueOnce({
+      id: 'board-1',
+      ownerUserId: 'someone-else',
+      node: {
+        id: 'node-1',
+        title: 'Board',
+        path: '/node-1',
+        depth: 0,
+        parentId: null,
+      },
+    });
 
     await expect(
       service.getDashboard({
         userId: 'user-1',
-        teamId: 'team-1',
         boardId: 'board-1',
         dashboard: 'EXECUTION',
         mode: 'SELF',
@@ -622,7 +610,6 @@ describe('DashboardsService', () => {
         statusMetadata: null,
         path: '/node-1/task-secure',
         depth: 1,
-        teamId: 'team-1',
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z'),
         archivedAt: null,
@@ -631,7 +618,6 @@ describe('DashboardsService', () => {
 
     await service.getDashboard({
       userId: 'user-1',
-      teamId: 'team-1',
       boardId: 'board-1',
       dashboard: 'EXECUTION',
       mode: 'SELF',

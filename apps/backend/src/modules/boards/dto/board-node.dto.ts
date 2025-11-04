@@ -83,6 +83,26 @@ export class BoardNodeDto {
   @ApiProperty({ example: 7, nullable: true })
   estimatedDurationDays?: number | null;
 
+  @ApiPropertyOptional({ example: '2025-03-01', nullable: true })
+  plannedStartDate?: string | null;
+
+  @ApiPropertyOptional({ example: '2025-03-05', nullable: true })
+  plannedEndDate?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'manual',
+    enum: ['manual', 'asap'],
+    nullable: true,
+    description: 'Mode de planification pour la tâche dans le Gantt',
+  })
+  scheduleMode?: 'manual' | 'asap' | null;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Empêche le recalcul automatique',
+  })
+  hardConstraint?: boolean;
+
   @ApiProperty({ example: ['infra', 'urgent'], isArray: true, required: false })
   tags?: string[];
 
@@ -136,4 +156,16 @@ export class BoardNodeDto {
 
   @ApiPropertyOptional({ example: false })
   isSnoozed?: boolean;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: "Indique si c'est une tâche mère partagée",
+  })
+  isSharedRoot?: boolean;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: "Indique si l'utilisateur peut supprimer cette tâche",
+  })
+  canDelete?: boolean;
 }

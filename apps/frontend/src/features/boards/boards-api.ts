@@ -11,6 +11,10 @@ export type BoardNode = {
   position: number;
   parentId: string | null;
   dueAt: string | null;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  scheduleMode?: 'manual' | 'asap' | null;
+  hardConstraint?: boolean;
   description?: string | null;
   // Enrichissements renvoyés par /boards/:id/detail
   effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
@@ -40,6 +44,8 @@ export type BoardNode = {
   lastKnownColumnBehavior?: ColumnBehaviorKey | null;
   doneArchiveScheduledAt?: string | null;
   isSnoozed?: boolean;
+  isSharedRoot?: boolean;
+  canDelete?: boolean;
 };
 
 export type ArchivedBoardNode = {
@@ -67,11 +73,23 @@ export type BoardColumn = {
   badges?: { archived: number; snoozed: number };
 };
 
+export type BoardGanttDependency = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
+  mode: 'ASAP' | 'FREE';
+  hardConstraint: boolean;
+};
+
 export type Board = {
   id: string;
   nodeId: string;
   name: string;
   columns: BoardColumn[];
+  isShared: boolean; // True si le board contient des tâches partagées avec d'autres utilisateurs
+  dependencies: BoardGanttDependency[];
 };
 
 export type NodeBreadcrumbItem = {
@@ -119,21 +137,51 @@ function createOptions(accessToken: string, init?: RequestInit): RequestInit {
   } satisfies RequestInit;
 }
 
-export async function fetchRootBoard(teamId: string, accessToken: string): Promise<Board> {
-  const response = await fetch(`${API_BASE_URL}/boards/team/${teamId}`, createOptions(accessToken));
+// Cache ETag pour optimiser les requêtes de polling
+const etagCache = new Map<string, string>();
+
+export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board | null> {
+  const cachedETag = etagCache.get(boardId);
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  
+  // Si on a un ETag en cache, l'inclure pour éviter le transfert inutile
+  if (cachedETag) {
+    headers['If-None-Match'] = cachedETag;
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/detail`, {
+    headers,
+    cache: "no-store",
+  });
+
+  // 304 Not Modified = pas de changement, retourner null pour signaler au caller
+  if (response.status === 304) {
+    return null;
+  }
 
   if (!response.ok) {
-    await throwApiError(response, "Impossible de charger le board");
+    await throwApiError(response, "Impossible de charger le detail du board");
+  }
+
+  // Sauvegarder le nouvel ETag pour les prochaines requêtes
+  const newETag = response.headers.get('ETag');
+  if (newETag) {
+    etagCache.set(boardId, newETag);
   }
 
   return (await response.json()) as Board;
 }
 
-export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board> {
-  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/detail`, createOptions(accessToken));
+export async function fetchRootBoard(
+  ...args: [accessToken: string] | [teamId: string, accessToken: string]
+): Promise<Board> {
+  const accessToken = args.length === 1 ? args[0] : args[1];
+  const response = await fetch(`${API_BASE_URL}/boards/me`, createOptions(accessToken));
 
   if (!response.ok) {
-    await throwApiError(response, "Impossible de charger le detail du board");
+    await throwApiError(response, "Impossible de charger le board");
   }
 
   return (await response.json()) as Board;

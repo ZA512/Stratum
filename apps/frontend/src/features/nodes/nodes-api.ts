@@ -40,6 +40,16 @@ export type UpdateNodeInput = {
   backlogHiddenUntil?: string | null;
   backlogReviewRestart?: boolean;
   archivedAt?: string | null;
+  scheduleMode?: 'manual' | 'asap' | null;
+  hardConstraint?: boolean;
+  scheduleDependencies?: Array<{
+    id?: string;
+    fromId: string;
+    type: 'FS' | 'SS' | 'FF' | 'SF';
+    lag?: number;
+    mode?: 'ASAP' | 'FREE';
+    hardConstraint?: boolean;
+  }> | null;
 };
 
 export async function createNode(input: CreateNodeInput, accessToken: string): Promise<BoardNode> {
@@ -216,6 +226,21 @@ export async function moveNodeToBoard(
     await throwNodeError(response, "Impossible de deplacer la tache vers un autre kanban");
   }
   return (await response.json()) as NodeDetail;
+}
+
+export async function moveSharedNodePlacement(
+  nodeId: string,
+  input: { columnId: string; position?: number },
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/placement`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    await throwNodeError(response, "Impossible de déplacer la tâche partagée");
+  }
 }
 
 export type NodeDeletePreview = {
