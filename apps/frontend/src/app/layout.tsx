@@ -27,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // Forcer le thème sombre côté serveur : ajoute la classe `dark` sur l'élément html
+    // Cela garantit que les utilitaires Tailwind `dark:` s'appliquent immédiatement
+    // (évite le flash ou l'affichage en mode clair quand le navigateur masque `prefers-color-scheme`).
+    <html lang="en" className="dark">
       <head>
         {/* Pré-chargement pour fiabiliser le rendu des icônes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
