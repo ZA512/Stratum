@@ -1,40 +1,82 @@
-# Backend (NestJS) multi-stage build
-FROM node:20-alpine AS base
+# Backend (NestJS) multi-stage build optimized for GHCR
+# syntax=docker/dockerfile:1
+
+# ============================================
+# Stage 1: Dependencies
+# ============================================
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Copie fichiers principaux monorepo
+# Install only production dependencies first for better caching
 COPY package*.json ./
-COPY apps ./apps
+COPY apps/backend/package*.json ./apps/backend/
 COPY packages ./packages
 
-# Installer dépendances (optimisation possible via npm ci + cache mounts)
-RUN npm install --workspace backend --include-workspace-root --omit=dev=false
+# Use cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --workspace backend --include-workspace-root
 
-# Générer client Prisma (si schema dans apps/backend/prisma)
+# ============================================
+# Stage 2: Builder
+# ============================================
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# npm workspaces hoists dependencies to root node_modules
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+COPY apps/backend ./apps/backend
+COPY packages ./packages
+
+# Generate Prisma client
 WORKDIR /app/apps/backend
 RUN npx prisma generate
 
-# Build
+# Build the application
 RUN npm run build
 
-# --- Image de production ---
+# ============================================
+# Stage 3: Production
+# ============================================
 FROM node:20-alpine AS prod
+
+# OCI labels for GHCR
+LABEL org.opencontainers.image.title="Stratum Backend"
+LABEL org.opencontainers.image.description="NestJS backend API for Stratum"
+LABEL org.opencontainers.image.source="https://github.com/ZA512/Stratum"
+LABEL org.opencontainers.image.licenses="UNLICENSED"
+
+# Security: run as non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs
+
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Copier uniquement ce qui est nécessaire
+# Copy only production artifacts
 COPY package*.json ./
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/apps/backend/dist ./apps/backend/dist
-COPY --from=base /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+# Prisma client is generated in root node_modules/.prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY docker/entrypoint-backend.sh /app/apps/backend/entrypoint-backend.sh
 
 WORKDIR /app/apps/backend
-# Normalize entrypoint: remove CR, strip any markdown fences (```), and make executable
-RUN sed -i 's/\r$//' entrypoint-backend.sh || true
-RUN sed -i '/^```/d' entrypoint-backend.sh || true
-RUN sed -i "1s/^\xef\xbb\xbf//" entrypoint-backend.sh || true
-RUN chmod +x entrypoint-backend.sh
+
+# Normalize entrypoint and set permissions
+RUN sed -i 's/\r$//' entrypoint-backend.sh && \
+    sed -i '/^```/d' entrypoint-backend.sh && \
+    sed -i "1s/^\xef\xbb\xbf//" entrypoint-backend.sh && \
+    chmod +x entrypoint-backend.sh && \
+    chown -R nestjs:nodejs /app
+
+# Switch to non-root user
+USER nestjs
+
 EXPOSE 4001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:4001/health || exit 1
 
 ENTRYPOINT ["/bin/sh", "/app/apps/backend/entrypoint-backend.sh"]

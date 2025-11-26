@@ -1,4 +1,4 @@
-﻿# Stratum Monorepo
+﻿# Stratum (in Alpha mode)
 
 NPM workspaces monorepo for the Stratum fractal kanban platform. The repository hosts the NestJS backend, the Next.js frontend and future shared packages.
 
