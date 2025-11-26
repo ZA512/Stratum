@@ -1,4 +1,5 @@
 import { PrismaClient, MembershipStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { seedDemoData } from './seed';
 
 /**
@@ -37,9 +38,11 @@ async function main() {
       await prisma.membership.create({
         data: { teamId: personalTeam.id, userId: user.id, status: MembershipStatus.ACTIVE },
       });
+      const boardId = randomUUID();
       const rootNode = await prisma.node.create({
         data: {
           teamId: personalTeam.id,
+          workspaceId: boardId,
           parentId: null,
           title: 'Projet Racine',
           description: null,
@@ -50,7 +53,7 @@ async function main() {
         },
       });
       const board = await prisma.board.create({
-        data: { nodeId: rootNode.id },
+        data: { id: boardId, nodeId: rootNode.id },
       });
       // Créer comportements et colonnes standards
       const defaults = [

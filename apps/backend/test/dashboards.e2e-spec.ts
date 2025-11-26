@@ -84,6 +84,7 @@ async function createTaskForBoard(
     data: {
       id: taskId,
       teamId: node.teamId,
+      workspaceId: boardId,
       parentId: node.id,
       columnId: data.columnId ?? DEMO_IDS.columns.inProgress,
       title: data.title ?? `Task ${taskId}`,
@@ -286,6 +287,7 @@ describeIfDatabase('Dashboards API (e2e)', () => {
       data: {
         id: 'node_empty_dashboard',
         teamId: DEMO_IDS.team,
+        workspaceId: 'board_empty_dashboard',
         parentId: DEMO_IDS.rootNode,
         title: 'Empty dashboard node',
         path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/node_empty_dashboard`,
@@ -330,6 +332,7 @@ describeIfDatabase('Dashboards API (e2e)', () => {
       data: {
         id: 'node_secure_guard',
         teamId: otherTeam.id,
+        workspaceId: 'board_secure_guard',
         title: 'Guarded board',
         path: `${otherTeam.id}/node_secure_guard`,
         depth: 0,

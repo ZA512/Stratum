@@ -8,6 +8,7 @@ This document enumerates the major usages of the legacy team concept across the 
 - [x] Add a personal board bootstrap endpoint so clients no longer need to pass a team identifier.
 - [x] Remove the team-scoped board fetch endpoint in favor of the personal board flow.
 - [ ] Remove team data structures from Prisma and backfill owner-centric relationships (column behaviors are now global but other tables still reference teams).
+- [x] Update personal workspace bootstrap to rely solely on board ownership (nodes now carry a `workspaceId` matching their board, allowing bootstrap flows to avoid guessing a `teamId`).
 - [ ] Update backend services and DTOs to operate without `teamId` (board write guards now rely solely on owners; dashboards now validate board ownership but remaining services still emit `teamId`).
 - [ ] Simplify frontend routing and API clients to stop referencing teams (dashboards UI now works from the personal board without team selectors, other areas still depend on teams).
 - [ ] Migrate RACI presets away from the team abstraction.
@@ -16,13 +17,16 @@ This document enumerates the major usages of the legacy team concept across the 
 ## Database layer (`apps/backend/prisma`)
 
 - `apps/backend/prisma/schema.prisma`
-  - Models depending on teams: `Team`, `Membership`, `Node.teamId`, `AutomationRule.teamId`, `Invitation.teamId`.
+  - Models depending on teams: `Team`, `Membership`, `AutomationRule.teamId`, `Invitation.teamId`.
   - Enums such as `MembershipStatus` still used throughout the services.
+  - ✅ `Node.workspaceId` now stores the owning board identifier so new records no longer depend on `teamId` to resolve their workspace; legacy fields remain until the teams table disappears.
 - Migrations under `apps/backend/prisma/migrations/`
+  - `20251023120000_add_node_workspace/migration.sql` backfills `Node.workspaceId` from existing boards and columns and enforces the new index.
   - `20250919232547_init/migration.sql` creates the `Team` table and all foreign keys on `teamId`.
   - `20250920100000_auth_enhancements.sql` and `20250923163019_auth_enhancements/migration.sql` extend the invitation workflow with `teamId` references.
   - `20251015120000_personal_board_isolation/migration.sql` adds the `Team.isPersonal` flag.
 - Seed/reset scripts under `apps/backend/prisma/` (`reset-personal.ts`, `seed.ts`) bootstrap personal teams, create memberships, column behaviors, and boards scoped by `teamId`.
+  - ✅ Bootstrap now seeds `workspaceId` values using deterministic board IDs; path prefixes still rely on `teamId` and must be migrated in a later step.
 
 ## Backend application (`apps/backend/src`)
 

@@ -225,10 +225,12 @@ export class TeamsService {
 
       // Créer node racine SIMPLE puis promouvoir en COMPLEX pour générer board + colonnes
       const rootId = randomUUID();
+      const boardId = randomUUID();
       const rootNode = await tx.node.create({
         data: {
           id: rootId,
           teamId: team.id,
+          workspaceId: boardId,
           parentId: null,
           title: 'Projet Racine',
           description: null,
@@ -243,6 +245,7 @@ export class TeamsService {
       if (!board) {
         board = await tx.board.create({
           data: {
+            id: boardId,
             nodeId: rootNode.id,
             ownerUserId: userId,
             isPersonal: true,

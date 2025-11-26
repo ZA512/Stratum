@@ -129,6 +129,7 @@ model Membership {
 model Node {
   id              String            @id @default(cuid())
   teamId          String
+  workspaceId     String
   parentId        String?
   columnId        String?
   title           String
@@ -170,6 +171,8 @@ model Node {
   shareInvitations NodeShareInvitation[]
   sharedPlacements SharedNodePlacement[]
   activityLogs    ActivityLog[]
+
+  @@index([workspaceId])
 }
 
 model Board {

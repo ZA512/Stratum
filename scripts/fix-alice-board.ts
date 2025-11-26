@@ -37,10 +37,12 @@ async function main() {
     });
     
     const rootId = randomUUID();
+    const boardId = randomUUID();
     const rootNode = await prisma.node.create({
       data: {
         id: rootId,
         teamId: team.id,
+        workspaceId: boardId,
         parentId: null,
         title: 'Projet Racine',
         description: null,
@@ -53,6 +55,7 @@ async function main() {
     
     const board = await prisma.board.create({
       data: {
+        id: boardId,
         nodeId: rootNode.id,
         ownerUserId: 'user_alice',
         isPersonal: true,

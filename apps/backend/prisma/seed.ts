@@ -104,10 +104,15 @@ async function upsertColumnBehaviors(prisma: PrismaClient) {
 async function createRootBoard(prisma: PrismaClient, userId: string) {
   const rootNode = await prisma.node.upsert({
     where: { id: DEMO_IDS.rootNode },
-    update: { title: 'Master Kanban', description: 'Master project board showcasing the fractal kanban.' },
+    update: {
+      title: 'Master Kanban',
+      description: 'Master project board showcasing the fractal kanban.',
+      workspaceId: DEMO_IDS.board,
+    },
     create: {
       id: DEMO_IDS.rootNode,
       teamId: DEMO_IDS.team,
+      workspaceId: DEMO_IDS.board,
       title: 'Master Kanban',
       description: 'Master project board showcasing the fractal kanban.',
       path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}`,
@@ -145,10 +150,15 @@ async function seedDemoNodes(prisma: PrismaClient, rootNodeId: string, userId: s
   const makeNode = async (id: string, columnId: string | null, title: string, position: number, extra: any = {}) => {
     await prisma.node.upsert({
       where: { id },
-      update: { title, columnId: columnId ?? undefined },
+      update: {
+        title,
+        columnId: columnId ?? undefined,
+        workspaceId: DEMO_IDS.board,
+      },
       create: {
         id,
         teamId: DEMO_IDS.team,
+        workspaceId: DEMO_IDS.board,
         parentId: rootNodeId,
         columnId: columnId ?? undefined,
         title,

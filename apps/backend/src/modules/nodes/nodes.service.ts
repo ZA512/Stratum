@@ -402,7 +402,13 @@ export class NodesService {
         board: {
           include: {
             node: {
-              select: { id: true, path: true, depth: true, teamId: true },
+              select: {
+                id: true,
+                path: true,
+                depth: true,
+                teamId: true,
+                workspaceId: true,
+              },
             },
           },
         },
@@ -418,13 +424,13 @@ export class NodesService {
 
     const parent = await this.resolveParent(parentId, boardNode);
 
-    if (parent.teamId !== boardNode.teamId) {
+    if (parent.workspaceId !== boardNode.workspaceId) {
       throw new BadRequestException(
-        'Le parent et la colonne doivent appartenir a la meme equipe',
+        'Le parent et la colonne doivent appartenir au meme espace de travail',
       );
     }
 
-    await this.ensureUserCanWrite(boardNode.teamId, userId);
+    await this.ensureUserCanWrite(boardNode.workspaceId, userId);
 
     const dueAt = dto.dueAt ? new Date(dto.dueAt) : null;
     if (dto.dueAt && Number.isNaN(dueAt?.getTime())) {
@@ -455,6 +461,7 @@ export class NodesService {
         data: {
           id: newNodeId,
           teamId: boardNode.teamId,
+          workspaceId: boardNode.workspaceId,
           parentId: parent.id,
           columnId: column.id,
           title: dto.title.trim(),
@@ -492,7 +499,7 @@ export class NodesService {
       },
     });
     if (!node) throw new NotFoundException('Tâche introuvable');
-    await this.ensureUserCanWrite(node.teamId, userId);
+    await this.ensureUserCanWrite(node.workspaceId ?? node.teamId, userId);
     // Si board déjà présent => retourner directement
     if (node.board) {
       // garantir presence boardId dans statusMetadata si absent
@@ -601,6 +608,7 @@ export class NodesService {
         data: {
           id: newNodeId,
           teamId: parent.teamId,
+          workspaceId: parent.workspaceId,
           parentId: parent.id,
           columnId: backlogColumn.id,
           title: dto.title.trim(),
@@ -896,6 +904,7 @@ export class NodesService {
       select: {
         id: true,
         teamId: true,
+        workspaceId: true,
         parentId: true,
         columnId: true,
         position: true,
@@ -905,12 +914,20 @@ export class NodesService {
       },
     });
     if (!node) throw new NotFoundException('Tâche introuvable');
-    await this.ensureUserCanWrite(node.teamId, userId);
+    await this.ensureUserCanWrite(node.workspaceId ?? node.teamId, userId);
 
     const board = await this.prisma.board.findUnique({
       where: { id: dto.targetBoardId },
       include: {
-        node: { select: { id: true, path: true, depth: true, teamId: true } },
+        node: {
+          select: {
+            id: true,
+            path: true,
+            depth: true,
+            teamId: true,
+            workspaceId: true,
+          },
+        },
         columns: {
           select: {
             id: true,
@@ -924,7 +941,7 @@ export class NodesService {
     if (!board || !board.node)
       throw new NotFoundException('Board cible introuvable');
 
-    await this.ensureUserCanWrite(board.node.teamId, userId);
+    await this.ensureUserCanWrite(dto.targetBoardId, userId);
 
     if (board.node.teamId !== node.teamId) {
       throw new BadRequestException(
@@ -966,6 +983,7 @@ export class NodesService {
         select: {
           id: true,
           teamId: true,
+          workspaceId: true,
           parentId: true,
           columnId: true,
           position: true,
@@ -997,7 +1015,7 @@ export class NodesService {
 
       const descendants = await tx.node.findMany({
         where: { path: { startsWith: sourcePath + '/' } },
-        select: { id: true, path: true, depth: true },
+        select: { id: true, path: true, depth: true, workspaceId: true },
       });
 
       const siblingsTarget = await tx.node.findMany({
@@ -1089,6 +1107,7 @@ export class NodesService {
         data: {
           parent: { connect: { id: board.node.id } },
           team: { connect: { id: board.node.teamId } },
+          workspaceId: dto.targetBoardId,
           column: { connect: { id: targetColumn.id } },
           position: targetPosition,
           path: newPath,
@@ -1110,6 +1129,10 @@ export class NodesService {
             path: updatedPath,
             depth: descendant.depth + depthDelta,
             teamId: board.node.teamId,
+            workspaceId:
+              descendant.workspaceId === freshNode.workspaceId
+                ? dto.targetBoardId
+                : descendant.workspaceId,
           },
         });
       }
@@ -2136,10 +2159,10 @@ export class NodesService {
   ): Promise<void> {
     const node = await this.prisma.node.findUnique({
       where: { id: nodeId },
-      select: { id: true, teamId: true, parentId: true },
+      select: { id: true, teamId: true, workspaceId: true, parentId: true },
     });
     if (!node) throw new NotFoundException();
-    await this.ensureUserCanWrite(node.teamId, userId);
+    await this.ensureUserCanWrite(node.workspaceId ?? node.teamId, userId);
 
     if (!node.parentId) {
       const fullNode = await this.prisma.node.findUnique({
@@ -2193,6 +2216,7 @@ export class NodesService {
       select: {
         id: true,
         teamId: true,
+        workspaceId: true,
         parentId: true,
         archivedAt: true,
       },
@@ -2206,7 +2230,10 @@ export class NodesService {
       throw new BadRequestException("La tâche n'est pas archivée");
     }
 
-    await this.ensureUserCanWrite(archived.teamId, userId);
+    await this.ensureUserCanWrite(
+      archived.workspaceId ?? archived.teamId,
+      userId,
+    );
 
     if (!archived.parentId) {
       throw new BadRequestException(
@@ -2220,6 +2247,7 @@ export class NodesService {
         select: {
           id: true,
           teamId: true,
+          workspaceId: true,
           parentId: true,
           columnId: true,
           statusMetadata: true,
@@ -2244,7 +2272,7 @@ export class NodesService {
 
       const parent = await tx.node.findUnique({
         where: { id: freshNode.parentId },
-        select: { id: true, teamId: true },
+        select: { id: true, teamId: true, workspaceId: true },
       });
 
       if (!parent) {
@@ -2356,7 +2384,13 @@ export class NodesService {
 
   private async resolveParent(
     parentId: string,
-    boardNode: { id: string; path: string; depth: number; teamId: string },
+    boardNode: {
+      id: string;
+      path: string;
+      depth: number;
+      teamId: string;
+      workspaceId: string;
+    },
   ) {
     if (parentId === boardNode.id) {
       return boardNode;
@@ -2369,6 +2403,7 @@ export class NodesService {
         path: true,
         depth: true,
         teamId: true,
+        workspaceId: true,
       },
     });
 
@@ -2379,20 +2414,75 @@ export class NodesService {
     return parent;
   }
 
-  private async ensureUserCanWrite(teamId: string, userId: string) {
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        teamId,
-        userId,
-        status: MembershipStatus.ACTIVE,
+  private async ensureUserCanWrite(
+    workspaceIdOrLegacyTeamId: string,
+    userId: string,
+  ) {
+    if (!userId) {
+      throw new ForbiddenException(
+        'Utilisateur requis pour modifier ce workspace',
+      );
+    }
+
+    const workspaceBoard = await this.prisma.board.findUnique({
+      where: { id: workspaceIdOrLegacyTeamId },
+      select: {
+        ownerUserId: true,
+        isPersonal: true,
+        node: { select: { teamId: true } },
       },
     });
 
-    if (!membership) {
+    if (!workspaceBoard) {
+      // Tant que le schéma n'est pas intégralement migré, certains appels transmettent
+      // encore un identifiant d'équipe. On préserve ce comportement pour éviter de
+      // casser les flux existants, mais on souhaite l'éliminer à terme.
+      const legacyMembership = await this.prisma.membership.findFirst({
+        where: {
+          teamId: workspaceIdOrLegacyTeamId,
+          userId,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+
+      if (legacyMembership) {
+        return;
+      }
+
       throw new ForbiddenException(
-        'Vous ne pouvez pas ecrire sur cette equipe',
+        'Board introuvable pour cet espace de travail',
       );
     }
+
+    if (workspaceBoard.ownerUserId) {
+      if (workspaceBoard.ownerUserId !== userId) {
+        throw new ForbiddenException(
+          'Vous ne pouvez pas ecrire sur ce workspace personnel',
+        );
+      }
+      return;
+    }
+
+    // Fallback transitoire: tant que les teams existent encore, on laisse les anciens
+    // membres actifs modifier le contenu si le board n'a pas encore d'owner explicite.
+    const legacyTeamId = workspaceBoard.node?.teamId ?? null;
+    if (legacyTeamId) {
+      const membership = await this.prisma.membership.findFirst({
+        where: {
+          teamId: legacyTeamId,
+          userId,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+
+      if (membership) {
+        return;
+      }
+    }
+
+    throw new ForbiddenException(
+      "Vous n'avez pas la permission de modifier ce workspace",
+    );
   }
 
   // promoteToMedium removed (legacy)
@@ -4380,6 +4470,7 @@ export class NodesService {
       id: node.id,
       shortId: Number(node.shortId ?? 0),
       teamId: node.teamId,
+      workspaceId: node.workspaceId,
       parentId: node.parentId,
       type: derivedType,
       title: node.title,

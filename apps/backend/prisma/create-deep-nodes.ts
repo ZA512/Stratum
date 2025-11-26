@@ -66,6 +66,7 @@ async function createDeepHierarchy() {
       data: {
         id: 'node_level2_design',
         teamId: DEMO_IDS.team,
+        workspaceId: subBoard.id,
         parentId: backlogNode.id,
         columnId: subColumns[0].id, // Sub Backlog
         title: 'Composants de design',
@@ -115,6 +116,7 @@ async function createDeepHierarchy() {
         data: {
           id: 'node_level3_icons',
           teamId: DEMO_IDS.team,
+          workspaceId: level2Board.id,
           parentId: level2Node.id,
           columnId: level2Columns[0].id,
           title: 'Icônes de type',
@@ -129,6 +131,7 @@ async function createDeepHierarchy() {
         data: {
           id: 'node_level3_colors',
           teamId: DEMO_IDS.team,
+          workspaceId: level2Board.id,
           parentId: level2Node.id,
           columnId: level2Columns[0].id,
           title: 'Palette de couleurs',
@@ -170,6 +173,7 @@ async function createDeepHierarchy() {
         data: {
           id: 'node_level4_hsl',
           teamId: DEMO_IDS.team,
+          workspaceId: level3Board.id,
           parentId: level3ColorNode.id,
           columnId: level3Column.id,
           title: 'Algorithme HSL',

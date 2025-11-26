@@ -140,6 +140,9 @@ export class NodeDto {
   @ApiProperty({ example: 'team_demo' })
   teamId!: string;
 
+  @ApiProperty({ example: 'board_stratum_root' })
+  workspaceId!: string;
+
   @ApiProperty({ example: null, nullable: true })
   parentId!: string | null;
 
