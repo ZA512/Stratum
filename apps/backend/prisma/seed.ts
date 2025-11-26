@@ -214,10 +214,11 @@ async function createDeepHierarchy(prisma: PrismaClient) {
 
   const level2Node = await prisma.node.upsert({
     where: { id: 'node_level2_design' },
-    update: {},
+    update: { workspaceId: subBoard.id },
     create: {
       id: 'node_level2_design',
       teamId: DEMO_IDS.team,
+      workspaceId: subBoard.id,
       parentId: backlogNode.id,
       columnId: 'col_sub_backlog',
       title: 'Composants de design',
@@ -235,16 +236,16 @@ async function createDeepHierarchy(prisma: PrismaClient) {
 
   await prisma.node.upsert({
     where: { id: 'node_level3_icons' },
-    update: {},
+    update: { workspaceId: level2Board.id },
     create: {
-      id: 'node_level3_icons', teamId: DEMO_IDS.team, parentId: level2Node.id, columnId: 'col_l2_backlog', title: 'Icônes de type', description: 'Créer les icônes S, M, K pour les types de nœuds', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_icons`, depth: 3, position: 0, createdById: DEMO_IDS.user
+      id: 'node_level3_icons', teamId: DEMO_IDS.team, workspaceId: level2Board.id, parentId: level2Node.id, columnId: 'col_l2_backlog', title: 'Icônes de type', description: 'Créer les icônes S, M, K pour les types de nœuds', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_icons`, depth: 3, position: 0, createdById: DEMO_IDS.user
     }
   });
   await prisma.node.upsert({
     where: { id: 'node_level3_colors' },
-    update: {},
+    update: { workspaceId: level2Board.id },
     create: {
-      id: 'node_level3_colors', teamId: DEMO_IDS.team, parentId: level2Node.id, columnId: 'col_l2_progress', title: 'Palette de couleurs', description: 'Définir la génération de couleurs HSL pour les couches', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors`, depth: 3, position: 1, createdById: DEMO_IDS.user
+      id: 'node_level3_colors', teamId: DEMO_IDS.team, workspaceId: level2Board.id, parentId: level2Node.id, columnId: 'col_l2_progress', title: 'Palette de couleurs', description: 'Définir la génération de couleurs HSL pour les couches', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${backlogNode.id}/node_level2_design/node_level3_colors`, depth: 3, position: 1, createdById: DEMO_IDS.user
     }
   });
 
@@ -253,9 +254,9 @@ async function createDeepHierarchy(prisma: PrismaClient) {
 
   await prisma.node.upsert({
     where: { id: 'node_level4_hsl' },
-    update: {},
+    update: { workspaceId: level3Board.id },
     create: {
-      id: 'node_level4_hsl', teamId: DEMO_IDS.team, parentId: 'node_level3_colors', columnId: 'col_l3_tasks', title: 'Algorithme HSL', description: 'Implémentation de la fonction generateLayerColors', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${DEMO_IDS.nodes.backlog}/node_level2_design/node_level3_colors/node_level4_hsl`, depth: 4, position: 0, createdById: DEMO_IDS.user
+      id: 'node_level4_hsl', teamId: DEMO_IDS.team, workspaceId: level3Board.id, parentId: 'node_level3_colors', columnId: 'col_l3_tasks', title: 'Algorithme HSL', description: 'Implémentation de la fonction generateLayerColors', path: `${DEMO_IDS.team}/${DEMO_IDS.rootNode}/${DEMO_IDS.nodes.backlog}/node_level2_design/node_level3_colors/node_level4_hsl`, depth: 4, position: 0, createdById: DEMO_IDS.user
     }
   });
 

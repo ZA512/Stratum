@@ -5123,13 +5123,12 @@ export class NodesService {
         archivedAt: null,
         column: { behavior: { key: ColumnBehaviorKey.BACKLOG } },
       },
-      include: {
-        column: {
-          select: {
-            id: true,
-            settings: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        parentId: true,
+        columnId: true,
+        metadata: true,
         assignments: {
           select: {
             role: true,
@@ -5143,6 +5142,25 @@ export class NodesService {
       return;
     }
 
+    const columnIds = Array.from(
+      new Set(
+        nodes
+          .map((node) => node.columnId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    const columnById = columnIds.length
+      ? new Map(
+          (
+            await this.prisma.column.findMany({
+              where: { id: { in: columnIds } },
+              select: { id: true, settings: true },
+            })
+          ).map((column) => [column.id, column]),
+        )
+      : new Map<string, { id: string; settings: Prisma.JsonValue | null }>();
+
     const nowMs = now.getTime();
     const nowIso = now.toISOString();
 
@@ -5150,7 +5168,7 @@ export class NodesService {
       const metadata = this.extractMetadata(node as unknown as NodeModel);
       const backlogState = metadata.workflow.backlog;
       const columnSettings = this.normalizeColumnSettings(
-        (node.column as any)?.settings ?? null,
+        node.columnId ? columnById.get(node.columnId)?.settings ?? null : null,
       );
       const backlogSettings = this.normalizeBacklogSettings(columnSettings);
       const recipients = this.buildAssignmentRecipients(
@@ -5257,7 +5275,12 @@ export class NodesService {
         archivedAt: null,
         column: { behavior: { key: ColumnBehaviorKey.DONE } },
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        parentId: true,
+        columnId: true,
+        metadata: true,
         assignments: {
           select: {
             role: true,
