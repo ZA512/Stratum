@@ -22,8 +22,8 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# npm workspaces hoists dependencies to root node_modules
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY package*.json ./
 COPY apps/backend ./apps/backend
 COPY packages ./packages
@@ -58,7 +58,8 @@ COPY package*.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
-COPY --from=builder /app/apps/backend/node_modules/.prisma ./apps/backend/node_modules/.prisma
+# Prisma client is generated in root node_modules/.prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY docker/entrypoint-backend.sh /app/apps/backend/entrypoint-backend.sh
 
 WORKDIR /app/apps/backend

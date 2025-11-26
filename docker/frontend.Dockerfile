@@ -21,8 +21,8 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# npm workspaces hoists dependencies to root node_modules
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/frontend/node_modules ./apps/frontend/node_modules
 COPY package*.json ./
 COPY apps/frontend ./apps/frontend
 COPY packages ./packages
