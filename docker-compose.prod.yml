@@ -85,10 +85,6 @@ services:
       start_period: 15s
       retries: 3
 
-volumes:
-  # Les volumes sont gérés via les bind mounts dans DATA_PATH
-  # Pas besoin de volumes Docker nommés
-
 networks:
   default:
     name: stratum-network
