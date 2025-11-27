@@ -1,13 +1,70 @@
 # Guide de déploiement Stratum sur Unraid
 
-## Architecture recommandée
+## Méthode recommandée : Docker Compose
+
+La méthode la plus simple est d'utiliser Docker Compose sur Unraid. **Vous n'avez pas besoin du code source**, seulement des fichiers de configuration.
+
+### Étape 1 : Préparer le dossier sur Unraid
+
+Connectez-vous en SSH à votre Unraid et créez le dossier :
+
+```bash
+mkdir -p /mnt/user/appdata/stratum
+cd /mnt/user/appdata/stratum
+```
+
+### Étape 2 : Télécharger les fichiers de configuration
+
+```bash
+# Télécharger docker-compose.prod.yml
+curl -o docker-compose.yml https://raw.githubusercontent.com/ZA512/Stratum/main/docker-compose.prod.yml
+
+# Télécharger le template .env
+curl -o .env https://raw.githubusercontent.com/ZA512/Stratum/main/.env.unraid.example
+```
+
+### Étape 3 : Configurer le fichier .env
+
+Éditez le fichier `.env` :
+
+```bash
+nano .env
+```
+
+**Variables à modifier obligatoirement :**
+- `POSTGRES_PASSWORD` : Un mot de passe sécurisé pour PostgreSQL
+- `JWT_SECRET` : Une clé secrète d'au moins 32 caractères (générer avec `openssl rand -base64 32`)
+- `CORS_ORIGINS` : L'URL de votre domaine (ex: `https://stratum.mondomaine.com`)
+
+### Étape 4 : Lancer Stratum
+
+```bash
+cd /mnt/user/appdata/stratum
+docker-compose up -d
+```
+
+### Étape 5 : Vérifier que tout fonctionne
+
+```bash
+# Voir les logs
+docker-compose logs -f
+
+# Vérifier l'état des conteneurs
+docker-compose ps
+```
+
+Accédez à `http://192.168.1.59:3000` pour voir le frontend.
+
+---
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Reverse Proxy (SWAG/Nginx)                    │
-│                    stratum.votredomaine.com                      │
+│                    Reverse Proxy (SWAG/Nginx)                   │
+│                    stratum.votredomaine.com                     │
 ├──────────────────────────┬──────────────────────────────────────┤
-│        Frontend          │              Backend                  │
+│        Frontend          │              Backend                 │
 │   stratum.domain.com     │   stratum.domain.com/api/v1/*        │
 │   ou app.stratum.domain  │   ou api.stratum.domain              │
 └──────────────────────────┴──────────────────────────────────────┘
@@ -20,11 +77,38 @@
                                       │
                     ┌─────────────────┼─────────────────┐
                     ▼                 ▼                 ▼
-             ┌───────────┐     ┌───────────┐     ┌───────────┐
-             │ PostgreSQL │     │   Redis   │     │           │
-             │    :5432   │     │   :6379   │     │           │
-             └───────────┘     └───────────┘     └───────────┘
+             ┌────────────┐     ┌───────────┐
+             │ PostgreSQL │     │   Redis   │
+             │    :5432   │     │   :6379   │
+             └────────────┘     └───────────┘
 ```
+
+## Commandes utiles
+
+```bash
+# Démarrer
+docker-compose up -d
+
+# Arrêter
+docker-compose down
+
+# Voir les logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Mettre à jour les images
+docker-compose pull
+docker-compose up -d
+
+# Redémarrer un service
+docker-compose restart backend
+```
+
+---
+
+## Méthode alternative : Conteneurs individuels
+
+Si vous préférez installer chaque conteneur manuellement via l'interface Unraid :
 
 ## Variables d'environnement requises
 
@@ -47,7 +131,7 @@
 | `PORT` | ❌ | `3000` | Port d'écoute (défaut: 3000) |
 | `HOSTNAME` | ❌ | `0.0.0.0` | Hostname d'écoute (défaut: 0.0.0.0) |
 
-## Configuration Unraid
+## Configuration Unraid (méthode manuelle)
 
 ### 1. Backend Container
 
