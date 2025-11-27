@@ -15,6 +15,19 @@ const nextConfig: NextConfig = {
   // Correction du problème de workspace root
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
+  
+  // Rewrites pour proxifier les requêtes API vers le backend
+  // Cela permet d'utiliser /api/v1 en relatif côté client
+  // et de configurer BACKEND_INTERNAL_URL au runtime
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_INTERNAL_URL || 'http://localhost:4001';
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
