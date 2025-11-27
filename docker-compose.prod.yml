@@ -72,7 +72,7 @@ services:
       backend:
         condition: service_healthy
     environment:
-      PORT: 3000
+      PORT: "${FRONTEND_PORT:-3000}:3000"
       HOSTNAME: "0.0.0.0"
       # URL interne pour le SSR (via le réseau Docker)
       BACKEND_INTERNAL_URL: http://backend:4001
