@@ -3,6 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { loginRequest, refreshTokens } from "./auth-api";
 import { useRouter } from "next/navigation";
+import { 
+  initializeApiClient, 
+  cleanupApiClient, 
+  notifyTokenRefresh, 
+  notifyLogout 
+} from "@/lib/api-client";
 
 type AuthUser = {
   id: string;
@@ -54,6 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const router = useRouter();
   const refreshTimerRef = useRef<number | null>(null);
+  const periodicCheckRef = useRef<number | null>(null);
+  
+  // Ref pour éviter les closures stale dans les event handlers
+  const sessionRef = useRef<AuthSession | null>(null);
+  
+  // Synchroniser la ref avec le state
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   // Décoder un JWT pour récupérer exp (en secondes). Retourne epoch ms ou null.
   const getAccessExpiryMs = useCallback((token: string | null | undefined): number | null => {
@@ -75,6 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = null;
     }
+    if (periodicCheckRef.current) {
+      window.clearInterval(periodicCheckRef.current);
+      periodicCheckRef.current = null;
+    }
   }, []);
 
   // Persistance de session (définie avant scheduleNextRefresh pour éviter la TDZ)
@@ -83,10 +102,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem(STORAGE_KEY);
       deleteCookie(ACCESS_COOKIE);
       clearRefreshTimer();
+      notifyLogout(); // Notifier les autres onglets
       return;
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
     setCookie(ACCESS_COOKIE, value.tokens.accessToken, 90);
+    // Notifier les autres onglets du nouveau token
+    notifyTokenRefresh({
+      accessToken: value.tokens.accessToken,
+      refreshToken: value.tokens.refreshToken,
+      refreshExpiresAt: value.tokens.refreshExpiresAt,
+    });
     // Pas de schedule ici pour éviter dépendance circulaire; gérer en amont/après login
   }, [clearRefreshTimer]);
 
@@ -139,6 +165,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }, delay) as unknown as number;
   }, [clearRefreshTimer, getAccessExpiryMs, persistSession, router]);
+
+  // Initialisation du client API centralisé
+  useEffect(() => {
+    initializeApiClient({
+      getTokens: () => ({
+        accessToken: sessionRef.current?.tokens.accessToken ?? null,
+        refreshToken: sessionRef.current?.tokens.refreshToken ?? null,
+      }),
+      setTokens: (tokens) => {
+        const currentSession = sessionRef.current;
+        if (currentSession) {
+          const nextSession: AuthSession = {
+            user: currentSession.user,
+            tokens: {
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              refreshExpiresAt: tokens.refreshExpiresAt,
+            },
+          };
+          setSession(nextSession);
+          persistSession(nextSession);
+          scheduleNextRefresh(nextSession);
+        }
+      },
+      onUnauthorized: () => {
+        setSession(null);
+        persistSession(null);
+        const path = window.location.pathname;
+        const next = encodeURIComponent(path + window.location.search + window.location.hash);
+        router.replace(`/login?next=${next}`);
+      },
+    });
+    
+    return () => {
+      cleanupApiClient();
+    };
+  }, [persistSession, scheduleNextRefresh, router]);
 
   useEffect(() => {
     try {
@@ -193,37 +256,109 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [persistSession, router]);
 
-  // Rafraichir à la reprise de focus si proche de l'expiration d'accès
+  // Rafraichir à la reprise de focus si token expiré ou proche de l'expiration
+  // Utilise sessionRef pour éviter les closures stale
   useEffect(() => {
-    function onFocus() {
-      if (!session) return;
-      const expMs = getAccessExpiryMs(session.tokens.accessToken);
-      const REFRESH_BEFORE_MS = 2 * 60 * 1000; // 2 minutes
-      if (expMs && expMs - Date.now() < REFRESH_BEFORE_MS) {
-        // si moins de 2 minutes restantes, forcer un refresh immédiat
+    async function forceRefreshIfNeeded() {
+      const currentSession = sessionRef.current;
+      if (!currentSession) return;
+      
+      const expMs = getAccessExpiryMs(currentSession.tokens.accessToken);
+      const now = Date.now();
+      
+      // Refresh si token expiré OU expire dans les 5 prochaines minutes
+      const REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
+      if (!expMs || expMs - now < REFRESH_THRESHOLD_MS) {
         clearRefreshTimer();
-        (async () => {
-          try {
-            const res = await refreshTokens(session.tokens.refreshToken);
-            const nextSession: AuthSession = {
-              user: session.user,
-              tokens: {
-                accessToken: res.accessToken,
-                refreshToken: res.refreshToken,
-                refreshExpiresAt: res.refreshExpiresAt,
-              },
-            };
-            setSession(nextSession);
-            persistSession(nextSession);
-      } catch {
-        // ignorer, le timer normal reprendra
-      }
-        })();
+        try {
+          const res = await refreshTokens(currentSession.tokens.refreshToken);
+          const nextSession: AuthSession = {
+            user: currentSession.user,
+            tokens: {
+              accessToken: res.accessToken,
+              refreshToken: res.refreshToken,
+              refreshExpiresAt: res.refreshExpiresAt,
+            },
+          };
+          setSession(nextSession);
+          persistSession(nextSession);
+          scheduleNextRefresh(nextSession);
+        } catch (err: unknown) {
+          const status = (err as { status?: number } | undefined)?.status;
+          if (status === 401 || status === 403) {
+            // Refresh token invalide, forcer la déconnexion
+            setSession(null);
+            persistSession(null);
+            router.replace("/login");
+          }
+          // Autres erreurs: ignorer, le prochain check réessaiera
+        }
       }
     }
+    
+    function onFocus() {
+      forceRefreshIfNeeded();
+    }
+    
+    // Événement visibilitychange est plus fiable que focus pour détecter le retour
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        forceRefreshIfNeeded();
+      }
+    }
+    
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [session, getAccessExpiryMs, clearRefreshTimer, persistSession]);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [getAccessExpiryMs, clearRefreshTimer, persistSession, scheduleNextRefresh, router]);
+
+  // Vérification périodique toutes les 60 secondes (filet de sécurité)
+  // Les timers JavaScript peuvent être throttled/skipped en arrière-plan
+  useEffect(() => {
+    if (!session) return;
+    
+    const PERIODIC_CHECK_INTERVAL_MS = 60 * 1000; // 60 secondes
+    
+    periodicCheckRef.current = window.setInterval(async () => {
+      const currentSession = sessionRef.current;
+      if (!currentSession) return;
+      
+      const expMs = getAccessExpiryMs(currentSession.tokens.accessToken);
+      const now = Date.now();
+      
+      // Refresh si token expire dans les 2 prochaines minutes
+      const REFRESH_THRESHOLD_MS = 2 * 60 * 1000;
+      if (expMs && expMs - now < REFRESH_THRESHOLD_MS) {
+        try {
+          const res = await refreshTokens(currentSession.tokens.refreshToken);
+          const nextSession: AuthSession = {
+            user: currentSession.user,
+            tokens: {
+              accessToken: res.accessToken,
+              refreshToken: res.refreshToken,
+              refreshExpiresAt: res.refreshExpiresAt,
+            },
+          };
+          setSession(nextSession);
+          persistSession(nextSession);
+          scheduleNextRefresh(nextSession);
+        } catch {
+          // Ignorer, le prochain intervalle réessaiera
+        }
+      }
+    }, PERIODIC_CHECK_INTERVAL_MS) as unknown as number;
+    
+    return () => {
+      if (periodicCheckRef.current) {
+        window.clearInterval(periodicCheckRef.current);
+        periodicCheckRef.current = null;
+      }
+    };
+  }, [session, getAccessExpiryMs, persistSession, scheduleNextRefresh]);
 
   // Rafraîchir à chaque interaction utilisateur (clic, scroll, mouvement souris)
   useEffect(() => {

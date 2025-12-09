@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/api-client';
 
 import type { NodeComment } from "./types";
 
@@ -26,7 +27,7 @@ async function throwCommentError(response: Response, fallback: string): Promise<
 }
 
 export async function fetchNodeComments(nodeId: string, accessToken: string): Promise<NodeComment[]> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/comments`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/comments`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
@@ -41,7 +42,7 @@ export async function createNodeComment(
   input: CreateNodeCommentInput,
   accessToken: string,
 ): Promise<NodeComment> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/comments`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/comments`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

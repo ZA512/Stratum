@@ -40,7 +40,7 @@ const BoardDataContext = createContext<BoardDataContextValue | null>(null);
 export function BoardDataProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams<{ teamId: string; board?: string[] }>();
-  const { accessToken } = useAuth();
+  const { accessToken, initializing } = useAuth();
   const teamId = params?.teamId ?? null;
   const routeBoardId = params?.board && params.board.length > 0 ? params.board[0] : null;
 
@@ -65,14 +65,17 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
   }, [routeBoardId]);
 
   // Resolve root board if none specified
+  // IMPORTANT: Attendre que l'auth soit initialisé ET qu'on ait un token
   useEffect(() => {
     if (!teamId) return;
     if (activeBoardId) return; // already determined
+    if (initializing) return; // Attendre que l'auth soit chargé
+    if (!accessToken) return; // Pas de token = pas d'appel API
     let cancelled = false;
     (async () => {
       try {
         setStatus("loading");
-        const root = await fetchRootBoard(teamId, accessToken || "");
+        const root = await fetchRootBoard(teamId, accessToken);
         if (cancelled) return;
         cachesRef.current.boards.set(root.id, root);
         // Affiche immédiatement un placeholder (root sans nodes) pour éviter flash.
@@ -86,7 +89,7 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [teamId, activeBoardId, accessToken]);
+  }, [teamId, activeBoardId, accessToken, initializing]);
 
   const loadBoardBundle = useCallback(async (boardId: string) => {
     // Use cache if present
@@ -102,7 +105,7 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       setStatus(cached ? "ready" : "loading");
-      const detail = await fetchBoardDetail(boardId, accessToken || "");
+      const detail = await fetchBoardDetail(boardId, accessToken!);
       
       // Si detail est null, cela signifie 304 Not Modified (pas de changement)
       // On garde le cache actuel et on ne met rien à jour
@@ -114,8 +117,8 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       cachesRef.current.boards.set(boardId, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken || ""),
-          fetchChildBoards(detail.nodeId, accessToken || ""),
+          fetchNodeBreadcrumb(detail.nodeId, accessToken!),
+          fetchChildBoards(detail.nodeId, accessToken!),
         ]);
         cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
         const map: Record<string, NodeChildBoard> = {};
@@ -140,9 +143,9 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       if (errorMessage.includes('Forbidden') || errorMessage.includes('403') || errorMessage.includes('personnel inaccessible')) {
         console.warn('[BoardDataProvider] Access forbidden to board, redirecting to root board:', boardId);
         // Rediriger vers le root board du team
-        if (teamId) {
+        if (teamId && accessToken) {
           try {
-            const rootBoard = await fetchRootBoard(teamId, accessToken || "");
+            const rootBoard = await fetchRootBoard(teamId, accessToken);
             if (rootBoard?.id && rootBoard.id !== boardId) {
               router.replace(`/boards/${teamId}/${rootBoard.id}`);
               return;
@@ -159,15 +162,19 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
   }, [accessToken, router, teamId]);
 
   // Load when activeBoardId changes
+  // IMPORTANT: Attendre que l'auth soit initialisé ET qu'on ait un token
   useEffect(() => {
     if (!activeBoardId) return;
+    if (initializing) return; // Attendre que l'auth soit chargé
+    if (!accessToken) return; // Pas de token = pas d'appel API
     loadBoardBundle(activeBoardId);
-  }, [activeBoardId, loadBoardBundle]);
+  }, [activeBoardId, loadBoardBundle, initializing, accessToken]);
 
   const prefetchBoard = useCallback(async (id: string) => {
     if (cachesRef.current.boards.has(id)) return;
+    if (!accessToken) return; // Ne pas prefetch sans token
     try {
-      const detail = await fetchBoardDetail(id, accessToken || "");
+      const detail = await fetchBoardDetail(id, accessToken);
       
       // Si null (304 Not Modified), on ne fait rien
       if (detail === null) return;
@@ -175,8 +182,8 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       cachesRef.current.boards.set(id, detail);
       if (detail.nodeId) {
         const [breadcrumbItems, childEntries] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken || ""),
-          fetchChildBoards(detail.nodeId, accessToken || ""),
+          fetchNodeBreadcrumb(detail.nodeId, accessToken),
+          fetchChildBoards(detail.nodeId, accessToken),
         ]);
         cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
         const map: Record<string, NodeChildBoard> = {};

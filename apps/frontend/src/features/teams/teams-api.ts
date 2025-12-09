@@ -1,4 +1,5 @@
 ﻿import { API_BASE_URL } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export type Team = {
   id: string;
@@ -9,7 +10,7 @@ export type Team = {
 };
 
 export async function fetchTeams(accessToken: string): Promise<Team[]> {
-  const response = await fetch(`${API_BASE_URL}/teams`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/teams`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -40,7 +41,7 @@ export type BootstrapTeamResponse = {
 };
 
 export async function bootstrapTeams(accessToken: string): Promise<BootstrapTeamResponse> {
-  const response = await fetch(`${API_BASE_URL}/teams/bootstrap`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/teams/bootstrap`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

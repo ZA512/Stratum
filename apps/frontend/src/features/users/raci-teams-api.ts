@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export type RaciTeamPreset = {
   id: string;
@@ -14,7 +15,7 @@ export type RaciTeamPreset = {
 };
 
 export async function fetchRaciTeams(accessToken: string): Promise<RaciTeamPreset[]> {
-  const response = await fetch(`${API_BASE_URL}/users/me/raci-teams`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/users/me/raci-teams`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
@@ -28,7 +29,7 @@ export async function createRaciTeam(
   input: { name: string; raci: { R: string[]; A: string[]; C: string[]; I: string[] } },
   accessToken: string,
 ): Promise<RaciTeamPreset> {
-  const response = await fetch(`${API_BASE_URL}/users/me/raci-teams`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/users/me/raci-teams`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -47,7 +48,7 @@ export async function renameRaciTeam(
   name: string,
   accessToken: string,
 ): Promise<RaciTeamPreset> {
-  const response = await fetch(`${API_BASE_URL}/users/me/raci-teams/${teamId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/users/me/raci-teams/${teamId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -62,7 +63,7 @@ export async function renameRaciTeam(
 }
 
 export async function deleteRaciTeam(teamId: string, accessToken: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/users/me/raci-teams/${teamId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/users/me/raci-teams/${teamId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });

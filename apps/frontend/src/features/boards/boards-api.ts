@@ -1,4 +1,5 @@
 ﻿import { API_BASE_URL } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export type ColumnBehaviorKey = "BACKLOG" | "IN_PROGRESS" | "BLOCKED" | "DONE" | "CUSTOM";
 
@@ -137,6 +138,11 @@ function createOptions(accessToken: string, init?: RequestInit): RequestInit {
   } satisfies RequestInit;
 }
 
+// Helper pour utiliser authenticatedFetch avec les mêmes options
+async function authFetch(url: string, options: RequestInit): Promise<Response> {
+  return authenticatedFetch(url, options);
+}
+
 // Cache ETag pour optimiser les requêtes de polling
 const etagCache = new Map<string, string>();
 
@@ -151,7 +157,7 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
     headers['If-None-Match'] = cachedETag;
   }
   
-  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/detail`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/boards/${boardId}/detail`, {
     headers,
     cache: "no-store",
   });
@@ -178,7 +184,7 @@ export async function fetchRootBoard(
   ...args: [accessToken: string] | [teamId: string, accessToken: string]
 ): Promise<Board> {
   const accessToken = args.length === 1 ? args[0] : args[1];
-  const response = await fetch(`${API_BASE_URL}/boards/me`, createOptions(accessToken));
+  const response = await authFetch(`${API_BASE_URL}/boards/me`, createOptions(accessToken));
 
   if (!response.ok) {
     await throwApiError(response, "Impossible de charger le board");
@@ -192,7 +198,7 @@ export async function fetchArchivedNodes(
   columnId: string,
   accessToken: string,
 ): Promise<ArchivedBoardNode[]> {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/boards/${boardId}/columns/${columnId}/archived`,
     createOptions(accessToken),
   );
@@ -208,7 +214,7 @@ export async function fetchArchivedNodes(
 }
 
 export async function fetchNodeBreadcrumb(nodeId: string, accessToken: string): Promise<NodeBreadcrumbItem[]> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/breadcrumb`, createOptions(accessToken));
+  const response = await authFetch(`${API_BASE_URL}/nodes/${nodeId}/breadcrumb`, createOptions(accessToken));
 
   if (!response.ok) {
     await throwApiError(response, "Impossible de charger le breadcrumb");
@@ -228,7 +234,7 @@ export async function fetchNodeBreadcrumb(nodeId: string, accessToken: string): 
 }
 
 export async function fetchChildBoards(nodeId: string, accessToken: string): Promise<NodeChildBoard[]> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/children`, createOptions(accessToken));
+  const response = await authFetch(`${API_BASE_URL}/nodes/${nodeId}/children`, createOptions(accessToken));
 
   if (!response.ok) {
     await throwApiError(response, "Impossible de charger les sous-boards");
@@ -238,7 +244,7 @@ export async function fetchChildBoards(nodeId: string, accessToken: string): Pro
 }
 
 export async function ensureChildBoard(nodeId: string, accessToken: string): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/ensure-board`, createOptions(accessToken, { method: 'POST' }));
+  const response = await authFetch(`${API_BASE_URL}/nodes/${nodeId}/ensure-board`, createOptions(accessToken, { method: 'POST' }));
   if (!response.ok) {
     await throwApiError(response, 'Impossible de créer le sous-board');
   }
@@ -251,7 +257,7 @@ export async function createBoardColumn(
   input: CreateBoardColumnInput,
   accessToken: string,
 ): Promise<BoardColumn> {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/boards/${boardId}/columns`,
     createOptions(accessToken, {
       method: "POST",
@@ -275,7 +281,7 @@ export async function updateBoardColumn(
   input: UpdateBoardColumnInput,
   accessToken: string,
 ): Promise<BoardColumn> {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/boards/${boardId}/columns/${columnId}`,
     createOptions(accessToken, {
       method: "PATCH",
@@ -298,7 +304,7 @@ export async function deleteBoardColumn(
   columnId: string,
   accessToken: string,
 ): Promise<void> {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/boards/${boardId}/columns/${columnId}`,
     createOptions(accessToken, {
       method: "DELETE",

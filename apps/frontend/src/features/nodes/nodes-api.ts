@@ -1,4 +1,5 @@
 ﻿import { API_BASE_URL } from '@/lib/api-config';
+import { authenticatedFetch } from '@/lib/api-client';
 
 import type { BoardNode } from "@/features/boards/boards-api";
 import type { NodeDetail } from "./types";
@@ -53,7 +54,7 @@ export type UpdateNodeInput = {
 };
 
 export async function createNode(input: CreateNodeInput, accessToken: string): Promise<BoardNode> {
-  const response = await fetch(`${API_BASE_URL}/nodes`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -101,7 +102,7 @@ type NodeErrorPayload = {
 };
 
 export async function updateNode(nodeId: string, input: UpdateNodeInput, accessToken: string): Promise<NodeDetail> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -116,7 +117,7 @@ export async function updateNode(nodeId: string, input: UpdateNodeInput, accessT
 }
 
 export async function resetBacklogArchiveCounter(boardId: string, nodeId: string, accessToken: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/boards/${boardId}/nodes/${nodeId}/reset-archive-counter`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/boards/${boardId}/nodes/${nodeId}/reset-archive-counter`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -128,7 +129,7 @@ export async function resetBacklogArchiveCounter(boardId: string, nodeId: string
 }
 
 export async function fetchNodeDetail(nodeId: string, accessToken: string): Promise<NodeDetail> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/detail`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/detail`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -141,7 +142,7 @@ export async function fetchNodeDetail(nodeId: string, accessToken: string): Prom
 }
 
 export async function fetchNodeSummary(nodeId: string, accessToken: string): Promise<{ id: string; hasBoard: boolean; counts: { backlog:number; inProgress:number; blocked:number; done:number } }>{
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/summary`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/summary`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
@@ -184,7 +185,7 @@ export type NodeLite = {
 };
 
 export async function fetchNode(nodeId: string, accessToken: string): Promise<NodeLite> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
   });
@@ -195,7 +196,7 @@ export async function fetchNode(nodeId: string, accessToken: string): Promise<No
 }
 
 export async function moveChildNode(parentId: string, childId: string, input: { targetColumnId: string; position?: number }, accessToken: string) {
-  const response = await fetch(`${API_BASE_URL}/nodes/${parentId}/children/${childId}/move`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${parentId}/children/${childId}/move`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(input),
@@ -217,7 +218,7 @@ export async function moveNodeToBoard(
   input: MoveNodeToBoardInput,
   accessToken: string,
 ): Promise<NodeDetail> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/move-board`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/move-board`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(input),
@@ -233,7 +234,7 @@ export async function moveSharedNodePlacement(
   input: { columnId: string; position?: number },
   accessToken: string,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/placement`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/placement`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(input),
@@ -255,7 +256,7 @@ export async function fetchNodeDeletePreview(
   nodeId: string,
   accessToken: string,
 ): Promise<NodeDeletePreview> {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_BASE_URL}/nodes/${nodeId}/delete-preview`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -273,7 +274,7 @@ export async function deleteNode(
   options: { recursive: boolean },
   accessToken: string,
 ): Promise<void> {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_BASE_URL}/nodes/${nodeId}?recursive=${options.recursive ? 'true' : 'false'}`,
     {
       method: 'DELETE',
@@ -289,7 +290,7 @@ export async function restoreNode(
   nodeId: string,
   accessToken: string,
 ): Promise<NodeDetail> {
-  const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}/restore`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/restore`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
