@@ -78,12 +78,12 @@ services:
       BACKEND_INTERNAL_URL: http://backend:4001
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      start_period: 15s
-      retries: 3
+    #healthcheck:
+    #  test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+    #  interval: 30s
+    #  timeout: 10s
+    #  start_period: 15s
+    #  retries: 3
 
 networks:
   default:
