@@ -1,3 +1,10 @@
+# Docker Compose pour déploiement Unraid (sans code source)
+# Utilise les images pré-construites depuis GHCR
+#
+# Usage sur Unraid:
+# 1. Copier ce fichier sur Unraid: /mnt/user/appdata/stratum/docker-compose.yml
+# 2. Créer le fichier .env à côté (voir .env.example ci-dessous)
+# 3. docker-compose -f docker-compose.yml up -d
 
 services:
   postgres:
@@ -42,17 +49,16 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-stratum}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stratum}?schema=stratum
+      DATABASE_URL: postgres://${POSTGRES_USER:-stratum}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stratum}?schema=public
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Définir JWT_SECRET dans .env (min 32 caractères)}
       PORT: 4001
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      AUTORUN_MIGRATIONS: ${AUTORUN_MIGRATIONS:-true}
-      SEED_ON_START: ${SEED_ON_START:-true}
+      AUTORUN_MIGRATIONS: "true"
     ports:
       - "${BACKEND_PORT:-4001}:4001"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/health"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -66,7 +72,7 @@ services:
       backend:
         condition: service_healthy
     environment:
-      PORT: "${FRONTEND_PORT:-3000}:3000"
+      PORT: 3000
       HOSTNAME: "0.0.0.0"
       # URL interne pour le SSR (via le réseau Docker)
       BACKEND_INTERNAL_URL: http://backend:4001
@@ -78,6 +84,10 @@ services:
       timeout: 10s
       start_period: 15s
       retries: 3
+
+volumes:
+  # Les volumes sont gérés via les bind mounts dans DATA_PATH
+  # Pas besoin de volumes Docker nommés
 
 networks:
   default:
