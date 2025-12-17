@@ -12,21 +12,22 @@
  * - BACKEND_INTERNAL_URL: URL interne du backend (pour SSR, ex: http://stratum-backend:4001)
  */
 
-// Ajoute systématiquement le suffixe /api/v1 si absent (évite les 404 en prod)
+// Ajoute exactement une fois /api/v1 (gère les cas /api, /api/, /api/v1)
 function ensureApiV1(url: string): string {
   if (!url) return '/api/v1';
   const trimmed = url.trim();
-  if (trimmed === '/api/v1' || trimmed === '/api/v1/') return '/api/v1';
+  if (!trimmed) return '/api/v1';
 
-  // Cas où l'URL se termine déjà par /api/v1 ou /api/v1/
-  const normalized = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
-  if (normalized.endsWith('/api/v1')) return '/api/v1' === normalized ? '/api/v1' : `${normalized}`;
+  const withoutTrailingSlash = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
 
-  // Si c'est une URL relative (commence par /), préfixer /api/v1 correctement
-  if (normalized.startsWith('/')) return `${normalized.replace(/\/$/, '')}/api/v1`;
+  if (withoutTrailingSlash.endsWith('/api/v1')) return withoutTrailingSlash;
+  if (withoutTrailingSlash.endsWith('/api')) return `${withoutTrailingSlash}/v1`;
 
-  // URL absolue: ajouter /api/v1
-  return `${normalized}/api/v1`;
+  // URL relative
+  if (withoutTrailingSlash.startsWith('/')) return `${withoutTrailingSlash}/api/v1`;
+
+  // URL absolue
+  return `${withoutTrailingSlash}/api/v1`;
 }
 
 // Fonction pour obtenir l'URL de l'API de manière sécurisée
@@ -37,7 +38,7 @@ function getApiUrl(): string {
   }
   
   // Côté serveur (SSR): utiliser l'URL interne du backend (prioritaire) ou l'URL publique
-  const serverBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api/v1';
+  const serverBase = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
   return ensureApiV1(serverBase);
 }
 
