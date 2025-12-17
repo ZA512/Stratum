@@ -1,13 +1,4 @@
-﻿// Resolve NEXT_PUBLIC_API_URL defensively: ignore empty strings and trim whitespace.
-const rawPublicUrl = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
-const trimmed = rawPublicUrl ? rawPublicUrl.trim() : "";
-const DEFAULT_API = `http://localhost:${process.env.BACKEND_PORT ?? 4001}/api/v1`;
-const API_BASE_URL = trimmed.length > 0 ? trimmed : DEFAULT_API;
-
-// Debug: show which base URL the frontend uses for API calls (helps troubleshooting builds/runtime)
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
-  console.debug("auth-api: NEXT_PUBLIC_API_URL raw=", rawPublicUrl, " resolved API_BASE_URL=", API_BASE_URL);
-}
+﻿import { API_BASE_URL } from "../../lib/api-config";
 
 type LoginResponse = {
   user: {
