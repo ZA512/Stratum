@@ -8,7 +8,7 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: stratum-postgres
     restart: unless-stopped
     environment:
@@ -20,15 +20,16 @@ services:
     volumes:
       - ${DATA_PATH:-/mnt/user/appdata/stratum}/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stratum} -d ${POSTGRES_DB:-stratum}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-stratum}", "-d", "${POSTGRES_DB:-stratum}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
     container_name: stratum-redis
     restart: unless-stopped
+    command: ["redis-server", "--bind", "0.0.0.0", "--protected-mode", "no"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -58,7 +59,7 @@ services:
     ports:
       - "${BACKEND_PORT:-4001}:4001"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/health"]
+      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://127.0.0.1:4001/api/v1/health',res=>process.exit(res.statusCode&&res.statusCode<500?0:1));req.on('error',()=>process.exit(1));" ]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -79,7 +80,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://127.0.0.1:3000',res=>process.exit(res.statusCode&&res.statusCode<500?0:1));req.on('error',()=>process.exit(1));" ]
       interval: 30s
       timeout: 10s
       start_period: 15s

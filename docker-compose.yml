@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: stratum-postgres
     restart: unless-stopped
     env_file: [.env]
@@ -13,18 +13,22 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      # Cibler explicitement la base configurée pour éviter des FATAL sur une DB inexistante
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Éviter CMD-SHELL (certaines images durcies n'embarquent pas /bin/sh)
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
     container_name: stratum-redis
     restart: unless-stopped
+    # Certaines images durcies (ex: DHI) activent un mode “protected” qui refuse
+    # les connexions depuis d'autres containers. On force un bind réseau explicite.
+    command: ["redis-server", "--bind", "0.0.0.0", "--protected-mode", "no"]
     ports:
-      - "6379:6379"
+      # Windows a souvent un service/port réservé sur 6379. Par défaut on bind en local et on décale le port hôte.
+      - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-16379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -49,12 +53,10 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: ${BACKEND_PORT}
       AUTORUN_MIGRATIONS: "true"
-    entrypoint: ["/bin/sh", "/app/apps/backend/entrypoint-backend.sh"]
     ports:
       - "${BACKEND_PORT}:4001"
     restart: unless-stopped
-    # Note: do not mount the host entrypoint here (it may contain CRLF/markdown artifacts).
-    # The image contains a sanitized entrypoint; mounting a host file can override it and break /bin/sh.
+    # Note: the DHI node image may not ship with /bin/sh; avoid shell-based entrypoints.
 
   frontend:
     build:
@@ -74,7 +76,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: ${NGINX_IMAGE:-nginx:alpine}
     container_name: stratum-nginx
     profiles: ["nginx"]
     depends_on:

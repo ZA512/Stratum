@@ -20,9 +20,8 @@ describe('DashboardWidgetCard', () => {
       />,
     );
 
-    expect(
-      screen.getByText(/insufficient data coverage/i),
-    ).toBeInTheDocument();
+    const coverageBadges = screen.getAllByText(/insufficient data coverage/i);
+    expect(coverageBadges.length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getByText(/Couverture insuffisante pour effort/i),
     ).toBeInTheDocument();

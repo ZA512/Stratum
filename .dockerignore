@@ -1,4 +1,6 @@
 node_modules
+**/node_modules
+**/node_modules/**
 .git
 .gitignore
 Dockerfile
@@ -6,6 +8,8 @@ npm-debug.log
 yarn-error.log
 .vscode
 **/dist
+**/.next
+**/.next/**
 **/.next/cache
 **/.turbo
 coverage

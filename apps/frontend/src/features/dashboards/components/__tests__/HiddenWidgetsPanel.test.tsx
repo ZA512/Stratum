@@ -33,7 +33,7 @@ describe('HiddenWidgetsPanel', () => {
       screen.getByText(/Effort-weighted progress/i),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /fermer/i }));
+    await user.click(screen.getByRole('button', { name: /fermer|close/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
     await user.keyboard('{Escape}');

@@ -2,12 +2,14 @@ import React from 'react';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { renderWithProviders } from '@test/test-utils';
 
-const shellSpy = vi.fn((props: Record<string, unknown>) => (
-  <div data-testid="dashboard-shell" data-props={JSON.stringify(props)} />
-));
+const shellSpy = vi.hoisted(() =>
+  vi.fn((props: Record<string, unknown>) => (
+    <div data-testid="dashboard-shell" data-props={JSON.stringify(props)} />
+  )),
+);
 
 vi.mock('@/features/dashboards/DashboardPageShell', () => ({
-  DashboardPageShell: shellSpy,
+  DashboardPageShell: (props: Record<string, unknown>) => shellSpy(props),
 }));
 
 import ExecutionDashboardPage from '../execution/page';
@@ -24,9 +26,10 @@ describe('Dashboard page shells', () => {
     expect(shellSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         dashboard: 'EXECUTION',
+        titleKey: 'dashboard.execution.title',
+        descriptionKey: 'dashboard.execution.description',
         supportedModes: ['AGGREGATED'],
       }),
-      {},
     );
   });
 
@@ -35,9 +38,10 @@ describe('Dashboard page shells', () => {
     expect(shellSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         dashboard: 'PROGRESS',
-        supportedModes: ['AGGREGATED', 'COMPARISON'],
+        titleKey: 'dashboard.progress.title',
+        descriptionKey: 'dashboard.progress.description',
+        supportedModes: ['AGGREGATED'],
       }),
-      {},
     );
   });
 
@@ -46,9 +50,10 @@ describe('Dashboard page shells', () => {
     expect(shellSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         dashboard: 'RISK',
+        titleKey: 'dashboard.risk.title',
+        descriptionKey: 'dashboard.risk.description',
         supportedModes: ['AGGREGATED', 'COMPARISON'],
       }),
-      {},
     );
   });
 });

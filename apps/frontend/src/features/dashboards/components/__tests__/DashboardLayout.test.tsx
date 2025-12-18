@@ -35,7 +35,7 @@ describe('DashboardLayout', () => {
       name: /descendants/i,
     });
     const comparisonToggle = screen.getByRole('switch', {
-      name: /comparer/i,
+      name: /comparer|compare sub-boards/i,
     });
 
     await user.click(aggregatedToggle);
