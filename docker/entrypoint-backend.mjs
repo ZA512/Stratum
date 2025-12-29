@@ -25,6 +25,13 @@ function runNodeScript(filePath, args, { cwd }) {
       process.stderr.write(text);
     });
 
+    child.on('error', (err) => {
+      const message = err?.stack ?? String(err);
+      stderr += `\n${message}`;
+      warn(message);
+      resolve({ code: 1, stderr });
+    });
+
     child.on('exit', (code) => {
       resolve({ code: code ?? 1, stderr });
     });
@@ -38,6 +45,7 @@ function runBinary(binary, args, { cwd }) {
       env: process.env,
       stdio: 'inherit',
     });
+    child.on('error', () => resolve(1));
     child.on('exit', (code) => resolve(code ?? 1));
   });
 }
@@ -139,8 +147,18 @@ async function main() {
   const seedOnStart = (process.env.SEED_ON_START ?? 'false') === 'true';
   if (seedOnStart) {
     log('[backend] Running DB seed...');
-    const code = await runBinary('npm', ['--workspace', 'backend', 'run', 'db:seed'], { cwd: path.resolve(cwd, '..', '..') });
-    if (code !== 0) warn('[backend] Seed failed (continuing)');
+    const tsNodeCli = path.resolve(cwd, '..', '..', 'node_modules', 'ts-node', 'dist', 'bin.js');
+    const seedScript = path.resolve(cwd, 'prisma', 'seed.ts');
+    const projectTsConfig = path.resolve(cwd, 'tsconfig.json');
+
+    if (!fs.existsSync(tsNodeCli)) {
+      warn(`[backend] ts-node not found at ${tsNodeCli}; skipping seed`);
+    } else if (!fs.existsSync(seedScript)) {
+      warn(`[backend] Seed script not found at ${seedScript}; skipping seed`);
+    } else {
+      const seed = await runNodeScript(tsNodeCli, ['--project', projectTsConfig, seedScript], { cwd });
+      if (seed.code !== 0) warn('[backend] Seed failed (continuing)');
+    }
   }
 
   const mainJs = findMainJs(cwd);
