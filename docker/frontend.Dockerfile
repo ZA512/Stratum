@@ -8,12 +8,16 @@ FROM dhi.io/node:20-alpine3.22-dev AS deps
 WORKDIR /app
 USER root
 
+ENV NODE_ENV=development
+ENV NPM_CONFIG_OMIT=
+ENV npm_config_omit=
+
 # Install dependencies with cache mount
 COPY package*.json ./
 COPY apps/frontend/package*.json ./apps/frontend/
 COPY packages ./packages
 
-RUN --mount=type=cache,target=/root/.npm ["npm","ci","--workspace","frontend","--include-workspace-root"]
+RUN --mount=type=cache,target=/root/.npm ["npm","ci","--workspace","frontend","--include-workspace-root","--include=dev"]
 
 # ============================================
 # Stage 2: Builder
@@ -22,8 +26,11 @@ FROM dhi.io/node:20-alpine3.22-dev AS builder
 WORKDIR /app
 USER root
 
+ENV NODE_ENV=production
+
 # npm workspaces hoists dependencies to root node_modules
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/frontend/node_modules ./apps/frontend/node_modules
 COPY package*.json ./
 COPY apps/frontend ./apps/frontend
 COPY packages ./packages
@@ -56,10 +63,9 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 WORKDIR /app
 
-# Copy only what's needed for production
-COPY --chown=1000:1000 package*.json ./
-COPY --chown=1000:1000 --from=deps /app/node_modules ./node_modules
-COPY --chown=1000:1000 --from=builder /app/apps/frontend/.next ./apps/frontend/.next
+# Standalone output contains a minimal runtime (apps/frontend/server.js + traced node_modules)
+COPY --chown=1000:1000 --from=builder /app/apps/frontend/.next/standalone ./
+COPY --chown=1000:1000 --from=builder /app/apps/frontend/.next/static ./apps/frontend/.next/static
 COPY --chown=1000:1000 --from=builder /app/apps/frontend/public ./apps/frontend/public
 
 USER 1000
@@ -73,4 +79,4 @@ ENV HOSTNAME="0.0.0.0"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["node","-e","const http=require('http');const req=http.get('http://127.0.0.1:3000',res=>process.exit(res.statusCode&&res.statusCode<500?0:1));req.on('error',()=>process.exit(1));"]
 
-CMD ["node", "/app/node_modules/next/dist/bin/next", "start", "-p", "3000"]
+CMD ["node", "server.js"]

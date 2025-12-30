@@ -24,7 +24,7 @@ interface ApiClientConfig {
 interface QueuedRequest {
   resolve: (value: Response) => void;
   reject: (reason: Error) => void;
-  url: string;
+  apiUrl: string;
   options: RequestInit;
 }
 
@@ -44,22 +44,61 @@ const BROADCAST_CHANNEL_NAME = 'stratum_auth_sync';
  * Valide qu'une URL est sûre pour les appels API (prévention SSRF).
  * Autorise uniquement les URLs relatives ou celles pointant vers notre API.
  */
-function isValidApiUrl(url: string): boolean {
-  // URLs relatives sont toujours OK
-  if (url.startsWith('/')) {
-    return true;
+function getAllowedApiBaseUrl(): URL {
+  // API_BASE_URL peut être relatif côté client (ex: /api/v1)
+  if (/^https?:\/\//i.test(API_BASE_URL)) {
+    return new URL(API_BASE_URL);
   }
-  
-  // URLs absolues: vérifier qu'elles pointent vers notre API
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+  return new URL(API_BASE_URL, origin);
+}
+
+function ensureTrailingSlash(url: string): string {
+  return url.endsWith('/') ? url : `${url}/`;
+}
+
+function normalizeAndValidateApiUrl(input: string): URL {
+  const allowedBase = getAllowedApiBaseUrl();
+  const allowedOrigin = allowedBase.origin;
+  const allowedPathPrefix = allowedBase.pathname.endsWith('/')
+    ? allowedBase.pathname
+    : `${allowedBase.pathname}/`;
+
+  // Bloquer explicitement les URLs "protocol-relative" (//evil.com)
+  if (input.startsWith('//')) {
+    throw new Error('Invalid API URL: protocol-relative URLs are not allowed.');
+  }
+
+  // Ce client ne doit JAMAIS accepter une URL absolue fournie par l'appelant.
+  // Cela évite toute possibilité de SSRF (choix de host/protocole) côté serveur.
+  if (/^https?:\/\//i.test(input)) {
+    throw new Error('Invalid API URL: absolute URLs are not allowed.');
+  }
+
+  let candidate: URL;
   try {
-    const parsed = new URL(url);
-    const apiUrl = new URL(API_BASE_URL, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
-    
-    // Vérifier que le host correspond à notre API
-    return parsed.host === apiUrl.host;
+    if (input.startsWith('/')) {
+      candidate = new URL(input, allowedOrigin);
+    } else {
+      candidate = new URL(input, ensureTrailingSlash(allowedBase.href));
+    }
   } catch {
-    return false;
+    throw new Error(`Invalid API URL: ${input}`);
   }
+
+  // Autoriser uniquement l'origin de l'API configurée
+  if (candidate.origin !== allowedOrigin) {
+    throw new Error(`Invalid API URL: origin ${candidate.origin} is not allowed.`);
+  }
+
+  // Autoriser uniquement les chemins sous /api/v1 (ou le préfixe configuré)
+  const candidatePath = candidate.pathname.endsWith('/') ? candidate.pathname : `${candidate.pathname}/`;
+  if (!candidatePath.startsWith(allowedPathPrefix)) {
+    throw new Error(`Invalid API URL: path ${candidate.pathname} is not under ${allowedBase.pathname}.`);
+  }
+
+  return candidate;
 }
 
 /**
@@ -240,11 +279,11 @@ async function handleRefresh(): Promise<boolean> {
       const requests = [...pendingRequests];
       pendingRequests.length = 0;
       
-      for (const req of requests) {
+      for (const queuedRequest of requests) {
         // Retry avec le nouveau token
-        apiFetch(req.url, req.options)
-          .then(req.resolve)
-          .catch(req.reject);
+        apiFetch(queuedRequest.apiUrl, queuedRequest.options)
+          .then(queuedRequest.resolve)
+          .catch(queuedRequest.reject);
       }
     } else {
       // Échec du refresh, rejeter toutes les requêtes en attente
@@ -284,16 +323,8 @@ export async function apiFetch(
   }
   
   const { accessToken } = config.getTokens();
-  
-  // Construire l'URL complète si nécessaire
-  const fullUrl = url.startsWith('http') || url.startsWith('/') 
-    ? url 
-    : `${API_BASE_URL}/${url}`;
-  
-  // Validation SSRF: s'assurer que l'URL pointe vers notre API
-  if (!isValidApiUrl(fullUrl)) {
-    throw new Error(`Invalid API URL: ${fullUrl}. Only requests to the configured API are allowed.`);
-  }
+
+  const fullUrl = normalizeAndValidateApiUrl(url);
   
   // Ajouter le header Authorization si on a un token
   const headers = new Headers(options.headers);
@@ -301,20 +332,22 @@ export async function apiFetch(
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
   
-  const response = await fetch(fullUrl, {
+  const response = await fetch(new Request(fullUrl, {
     ...options,
     headers,
-  });
+  }));
   
   // Si 401 et pas déjà en train de refresh
   if (response.status === 401) {
     // Si un refresh est déjà en cours, mettre la requête en queue
     if (isRefreshing) {
       return new Promise<Response>((resolve, reject) => {
+        const apiUrl = `${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
+
         pendingRequests.push({
           resolve,
           reject,
-          url: fullUrl,
+          apiUrl,
           options,
         });
       });
@@ -331,10 +364,10 @@ export async function apiFetch(
         newHeaders.set('Authorization', `Bearer ${newToken}`);
       }
       
-      return fetch(fullUrl, {
+      return fetch(new Request(fullUrl, {
         ...options,
         headers: newHeaders,
-      });
+      }));
     }
     
     // Refresh échoué, propager l'erreur 401

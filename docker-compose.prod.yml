@@ -73,12 +73,12 @@ services:
       backend:
         condition: service_healthy
     environment:
-      PORT: 3000
+      PORT: 3100
       HOSTNAME: "0.0.0.0"
       # URL interne pour le SSR (via le réseau Docker)
       BACKEND_INTERNAL_URL: http://backend:4001
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3100}:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://127.0.0.1:3000',res=>process.exit(res.statusCode&&res.statusCode<500?0:1));req.on('error',()=>process.exit(1));" ]
       interval: 30s
