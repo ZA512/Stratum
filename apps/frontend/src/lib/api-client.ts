@@ -478,14 +478,41 @@ export async function authenticatedFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  // Validation SSRF: s'assurer que l'URL pointe vers notre API
-  if (!isValidApiUrl(url)) {
-    throw new Error(`Invalid API URL: ${url}. Only requests to the configured API are allowed.`);
+  // Compat: certains appels historiques passent une URL absolue.
+  // On la "rebase" vers une URL relative sous l'API configurée, puis on réutilise la validation stricte.
+  let rebasedUrl = url;
+  if (/^https?:\/\//i.test(url)) {
+    const allowedBase = getAllowedApiBaseUrl();
+    const allowedOrigin = allowedBase.origin;
+    const allowedPathPrefix = allowedBase.pathname.endsWith('/')
+      ? allowedBase.pathname
+      : `${allowedBase.pathname}/`;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error(`Invalid API URL: ${url}`);
+    }
+
+    if (parsed.origin !== allowedOrigin) {
+      throw new Error(`Invalid API URL: origin ${parsed.origin} is not allowed.`);
+    }
+
+    const parsedPath = parsed.pathname.endsWith('/') ? parsed.pathname : `${parsed.pathname}/`;
+    if (!parsedPath.startsWith(allowedPathPrefix)) {
+      throw new Error(`Invalid API URL: path ${parsed.pathname} is not under ${allowedBase.pathname}.`);
+    }
+
+    rebasedUrl = `${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
+
+  // Validation SSRF / allow-list
+  const fullUrl = normalizeAndValidateApiUrl(rebasedUrl);
   
   // Si le client n'est pas initialisé, faire un fetch normal
   if (!config) {
-    return fetch(url, options);
+    return fetch(new Request(fullUrl, options));
   }
   
   // Utiliser le token du header si fourni, sinon prendre celui du config
@@ -493,17 +520,19 @@ export async function authenticatedFetch(
     ? options.headers.get('Authorization')
     : (options.headers as Record<string, string>)?.['Authorization'];
   
-  const response = await fetch(url, options);
+  const response = await fetch(new Request(fullUrl, options));
   
   // Si 401 et qu'on a un config, tenter le refresh
   if (response.status === 401 && providedAuth) {
     // Si un refresh est déjà en cours, mettre en queue
     if (isRefreshing) {
       return new Promise<Response>((resolve, reject) => {
+        const apiUrl = `${fullUrl.pathname}${fullUrl.search}${fullUrl.hash}`;
+
         pendingRequests.push({
           resolve,
           reject,
-          url,
+          apiUrl,
           options,
         });
       });
@@ -520,10 +549,10 @@ export async function authenticatedFetch(
         newHeaders.set('Authorization', `Bearer ${newToken}`);
       }
       
-      return fetch(url, {
+      return fetch(new Request(fullUrl, {
         ...options,
         headers: newHeaders,
-      });
+      }));
     }
   }
   

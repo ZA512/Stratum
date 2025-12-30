@@ -50,7 +50,9 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-stratum}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stratum}?schema=public
+      # IMPORTANT: les migrations init créent les tables dans le schema "stratum".
+      # Si on pointe Prisma sur "public", certaines migrations (ex: personal_board_isolation) échouent avec "relation \"Team\" does not exist".
+      DATABASE_URL: postgres://${POSTGRES_USER:-stratum}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-stratum}?schema=stratum
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Définir JWT_SECRET dans .env (min 32 caractères)}
       PORT: 4001
@@ -73,7 +75,9 @@ services:
       backend:
         condition: service_healthy
     environment:
-      PORT: 3100
+      # Le conteneur Next écoute sur 3000 (valeur par défaut de l'image).
+      # Le port exposé côté hôte se règle via FRONTEND_PORT (dans .env).
+      PORT: 3000
       HOSTNAME: "0.0.0.0"
       # URL interne pour le SSR (via le réseau Docker)
       BACKEND_INTERNAL_URL: http://backend:4001
