@@ -145,6 +145,10 @@ async function authFetch(url: string, options: RequestInit): Promise<Response> {
 
 // Cache ETag pour optimiser les requêtes de polling
 const etagCache = new Map<string, string>();
+// Cache mémoire du dernier payload /boards/:id/detail pour pouvoir exploiter 304 sans perdre les données.
+// Important: le BoardDataProvider peut être démonté/remonté lors de la navigation (ex: aller-retour /settings),
+// alors que ce module reste en mémoire. Sans ce cache, un 304 renvoie `null` et l'UI se retrouve sans tâches.
+const boardDetailCache = new Map<string, Board>();
 
 export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board | null> {
   const cachedETag = etagCache.get(boardId);
@@ -164,7 +168,8 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
 
   // 304 Not Modified = pas de changement, retourner null pour signaler au caller
   if (response.status === 304) {
-    return null;
+    // Si on a déjà un payload en mémoire, le renvoyer pour éviter un board vide côté UI.
+    return boardDetailCache.get(boardId) ?? null;
   }
 
   if (!response.ok) {
@@ -177,7 +182,9 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
     etagCache.set(boardId, newETag);
   }
 
-  return (await response.json()) as Board;
+  const payload = (await response.json()) as Board;
+  boardDetailCache.set(boardId, payload);
+  return payload;
 }
 
 export async function fetchRootBoard(
