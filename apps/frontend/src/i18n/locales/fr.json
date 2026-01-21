@@ -95,6 +95,22 @@
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
     "back": "Retour au tableau de bord",
+    "testData": {
+      "title": "Import / export complet (test)",
+      "description": "Sauvegarde ou restaure l'intégralité de la base pour vos tests.",
+      "warning": "Alerte à supprimer avant mise en production",
+      "importLabel": "Importer un dump",
+      "importHint": "Sélectionnez un fichier .dump généré par l'export complet.",
+      "exportButton": "Exporter un dump complet",
+      "exporting": "Export en cours…",
+      "importButton": "Importer un dump complet",
+      "importing": "Import en cours…",
+      "exportSuccess": "Export prêt.",
+      "importSuccess": "Import terminé. Pensez à rafraîchir l'application.",
+      "error": "Impossible d'effectuer l'opération.",
+      "noFile": "Sélectionnez un fichier d'import.",
+      "importConfirm": "Cette action va écraser toutes les données actuelles. Continuer ?"
+    },
     "theme": {
       "title": "Thème visuel",
       "description": "Choisissez l'ambiance de Stratum. La sélection est mémorisée localement sur cet appareil.",

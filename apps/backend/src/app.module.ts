@@ -14,6 +14,7 @@ import { DashboardSnapshotsModule } from './modules/dashboard-snapshots/dashboar
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { WorkflowAutomationModule } from './modules/workflow-automation/workflow-automation.module';
 import { ActivityModule } from './modules/activity/activity.module';
+import { TestDataModule } from './modules/test-data/test-data.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ActivityModule } from './modules/activity/activity.module';
     MetricsModule,
     WorkflowAutomationModule,
     ActivityModule,
+    TestDataModule,
   ],
   controllers: [AppController],
   providers: [AppService],
