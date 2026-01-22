@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { spawn } from 'child_process';
+import { createReadStream } from 'fs';
 import type { Response } from 'express';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -22,15 +23,21 @@ export class TestDataService {
     this.ensureAuthorized(user);
     const databaseUrl = this.getDatabaseUrl();
     const schema = this.getSchemaFromUrl(databaseUrl);
+    const exportUrl = this.stripQueryParams(databaseUrl);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `${EXPORT_FILE_PREFIX}-${timestamp}.dump`;
+    const dockerContainer = this.configService.get<string>(
+      'TEST_DATA_PG_DOCKER_CONTAINER',
+    );
+    const dumpCommand =
+      this.configService.get<string>('TEST_DATA_PG_DUMP_PATH') || 'pg_dump';
 
     const args = [
       '--format=custom',
       '--no-owner',
       '--no-privileges',
       ...(schema ? [`--schema=${schema}`] : []),
-      databaseUrl,
+      exportUrl,
     ];
 
     res.setHeader('Content-Type', 'application/octet-stream');
@@ -39,13 +46,28 @@ export class TestDataService {
       `attachment; filename="${filename}"`,
     );
 
-    await this.runDumpProcess('pg_dump', args, res);
+    if (dockerContainer) {
+      await this.runDumpProcess(
+        'docker',
+        ['exec', '-i', dockerContainer, dumpCommand, ...args],
+        res,
+      );
+      return;
+    }
+
+    await this.runDumpProcess(dumpCommand, args, res);
   }
 
   async importDatabase(user: AuthenticatedUser, filePath: string): Promise<void> {
     this.ensureAuthorized(user);
     const databaseUrl = this.getDatabaseUrl();
     const schema = this.getSchemaFromUrl(databaseUrl);
+    const exportUrl = this.stripQueryParams(databaseUrl);
+    const dockerContainer = this.configService.get<string>(
+      'TEST_DATA_PG_DOCKER_CONTAINER',
+    );
+    const restoreCommand =
+      this.configService.get<string>('TEST_DATA_PG_RESTORE_PATH') || 'pg_restore';
 
     const args = [
       '--clean',
@@ -54,11 +76,20 @@ export class TestDataService {
       '--no-privileges',
       ...(schema ? [`--schema=${schema}`] : []),
       '--dbname',
-      databaseUrl,
+      exportUrl,
       filePath,
     ];
 
-    await this.runProcess('pg_restore', args);
+    if (dockerContainer) {
+      await this.runProcessWithInput(
+        'docker',
+        ['exec', '-i', dockerContainer, restoreCommand, ...args.slice(0, -1)],
+        filePath,
+      );
+      return;
+    }
+
+    await this.runProcess(restoreCommand, args);
   }
 
   private ensureAuthorized(user?: AuthenticatedUser): void {
@@ -95,6 +126,16 @@ export class TestDataService {
     }
   }
 
+  private stripQueryParams(databaseUrl: string): string {
+    try {
+      const parsed = new URL(databaseUrl);
+      parsed.search = '';
+      return parsed.toString();
+    } catch {
+      return databaseUrl;
+    }
+  }
+
   private async runDumpProcess(
     command: string,
     args: string[],
@@ -121,6 +162,7 @@ export class TestDataService {
           `Export test-data échoué (code ${exitCode}). ${stderr}`,
         );
         if (!res.headersSent) {
+          res.setHeader('Content-Type', 'application/json');
           res.status(500).json({ message: 'Export impossible' });
           return;
         }
@@ -129,6 +171,7 @@ export class TestDataService {
     } catch (error) {
       this.logger.error('Export test-data impossible', error);
       if (!res.headersSent) {
+        res.setHeader('Content-Type', 'application/json');
         throw new InternalServerErrorException('Export impossible');
       }
       res.end();
@@ -143,6 +186,40 @@ export class TestDataService {
       proc.stderr.on('data', (chunk) => {
         stderrChunks.push(chunk);
       });
+
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        proc.on('error', reject);
+        proc.on('close', resolve);
+      });
+
+      if (exitCode !== 0) {
+        const stderr = Buffer.concat(stderrChunks).toString('utf-8');
+        this.logger.error(
+          `Import test-data échoué (code ${exitCode}). ${stderr}`,
+        );
+        throw new InternalServerErrorException('Import impossible');
+      }
+    } catch (error) {
+      this.logger.error('Import test-data impossible', error);
+      throw new InternalServerErrorException('Import impossible');
+    }
+  }
+
+  private async runProcessWithInput(
+    command: string,
+    args: string[],
+    filePath: string,
+  ): Promise<void> {
+    try {
+      const proc = spawn(command, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+
+      const stderrChunks: Buffer[] = [];
+      proc.stderr.on('data', (chunk) => {
+        stderrChunks.push(chunk);
+      });
+
+      const fileStream = createReadStream(filePath);
+      fileStream.pipe(proc.stdin);
 
       const exitCode = await new Promise<number>((resolve, reject) => {
         proc.on('error', reject);

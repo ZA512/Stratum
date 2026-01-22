@@ -25,7 +25,8 @@ services:
     restart: unless-stopped
     # Certaines images durcies (ex: DHI) activent un mode “protected” qui refuse
     # les connexions depuis d'autres containers. On force un bind réseau explicite.
-    command: ["redis-server", "--bind", "0.0.0.0", "--protected-mode", "no"]
+    # Désactivation de la persistance pour éviter les erreurs MISCONF en dev
+    command: ["redis-server", "--bind", "0.0.0.0", "--protected-mode", "no", "--save", "", "--appendonly", "no"]
     ports:
       # Windows a souvent un service/port réservé sur 6379. Par défaut on bind en local et on décale le port hôte.
       - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-16379}:6379"

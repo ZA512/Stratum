@@ -18,7 +18,10 @@ import { TestDataModule } from './modules/test-data/test-data.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', 'apps/backend/.env'],
+    }),
     PrismaModule,
     UsersModule,
     AuthModule,
