@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   fetchBoardDetail,
@@ -12,12 +13,6 @@ import {
   type NodeBreadcrumbItem,
   type NodeChildBoard,
 } from "@/features/boards/boards-api";
-
-interface BoardCaches {
-  boards: Map<string, Board>;
-  breadcrumbs: Map<string, NodeBreadcrumbItem[]>;
-  childBoards: Map<string, Record<string, NodeChildBoard>>;
-}
 
 interface BoardDataContextValue {
   teamId: string | null;
@@ -37,208 +32,240 @@ interface BoardDataContextValue {
 
 const BoardDataContext = createContext<BoardDataContextValue | null>(null);
 
+const childBoardsToMap = (entries: NodeChildBoard[] | undefined | null) => {
+  const map: Record<string, NodeChildBoard> = {};
+  if (!entries) return map;
+  for (const entry of entries) {
+    map[entry.nodeId] = entry;
+  }
+  return map;
+};
+
 export function BoardDataProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams<{ teamId: string; board?: string[] }>();
   const { accessToken, initializing } = useAuth();
+  const queryClient = useQueryClient();
   const teamId = params?.teamId ?? null;
   const routeBoardId = params?.board && params.board.length > 0 ? params.board[0] : null;
-
-  const cachesRef = useRef<BoardCaches>({
-    boards: new Map(),
-    breadcrumbs: new Map(),
-    childBoards: new Map(),
-  });
-
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(routeBoardId);
+  const [rootError, setRootError] = useState<string | null>(null);
   const descendTriggerRef = useRef<((href: string) => void) | null>(null);
 
-  const [activeBoardId, setActiveBoardId] = useState<string | null>(routeBoardId);
-  const [board, setBoard] = useState<Board | null>(null);
-  const [breadcrumb, setBreadcrumb] = useState<NodeBreadcrumbItem[]>([]);
-  const [childBoards, setChildBoards] = useState<Record<string, NodeChildBoard>>({});
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  // Sync activeBoardId with route changes
   useEffect(() => {
     setActiveBoardId(routeBoardId);
   }, [routeBoardId]);
 
-  // Resolve root board if none specified
-  // IMPORTANT: Attendre que l'auth soit initialisé ET qu'on ait un token
+  const getBoardDetailCached = useCallback(
+    async (boardId: string) => {
+      if (!accessToken) return null;
+      const fetched = await fetchBoardDetail(boardId, accessToken);
+      if (fetched) return fetched;
+      return queryClient.getQueryData<Board>(["board", boardId]) ?? null;
+    },
+    [accessToken, queryClient],
+  );
+
   useEffect(() => {
     if (!teamId) return;
-    if (activeBoardId) return; // already determined
-    if (initializing) return; // Attendre que l'auth soit chargé
-    if (!accessToken) return; // Pas de token = pas d'appel API
+    if (activeBoardId) return;
+    if (initializing) return;
+    if (!accessToken) return;
     let cancelled = false;
+    setRootError(null);
     (async () => {
       try {
-        setStatus("loading");
-        const root = await fetchRootBoard(teamId, accessToken);
+        const root = await queryClient.fetchQuery({
+          queryKey: ["root-board", teamId],
+          queryFn: () => fetchRootBoard(teamId, accessToken),
+          staleTime: 60_000,
+        });
         if (cancelled) return;
-        cachesRef.current.boards.set(root.id, root);
-        // Affiche immédiatement un placeholder (root sans nodes) pour éviter flash.
-        setBoard((prev) => prev ?? root);
-        setActiveBoardId(root.id);
+        if (root?.id) setActiveBoardId(root.id);
       } catch (err) {
         if (!cancelled) {
-          setError((err as Error).message);
-          setStatus("error");
+          setRootError(err instanceof Error ? err.message : String(err));
         }
       }
     })();
-    return () => { cancelled = true; };
-  }, [teamId, activeBoardId, accessToken, initializing]);
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, activeBoardId, initializing, accessToken, queryClient]);
 
-  const loadBoardBundle = useCallback(async (boardId: string) => {
-    // Use cache if present
-    const cached = cachesRef.current.boards.get(boardId);
-    if (cached) {
-      setBoard(cached);
-      if (cached.nodeId) {
-        const bc = cachesRef.current.breadcrumbs.get(cached.nodeId);
-        if (bc) setBreadcrumb(bc);
-        const ch = cachesRef.current.childBoards.get(cached.nodeId);
-        if (ch) setChildBoards(ch);
-      }
-    }
-    try {
-      setStatus(cached ? "ready" : "loading");
-      const detail = await fetchBoardDetail(boardId, accessToken!);
-      
-      // Si detail est null, cela signifie 304 Not Modified (pas de changement)
-      // On garde le cache actuel et on ne met rien à jour
-      if (detail === null) {
-        setStatus("ready");
-        return;
-      }
-      
-      cachesRef.current.boards.set(boardId, detail);
-      if (detail.nodeId) {
-        const [breadcrumbItems, childEntries] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken!),
-          fetchChildBoards(detail.nodeId, accessToken!),
-        ]);
-        cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
-        const map: Record<string, NodeChildBoard> = {};
-        for (const entry of childEntries) map[entry.nodeId] = entry;
-        cachesRef.current.childBoards.set(detail.nodeId, map);
-        // Update visible state only after all ready to minimize flicker
-        setBoard(detail);
-        setBreadcrumb(breadcrumbItems);
-        setChildBoards(map);
-        setStatus("ready");
-        setError(null);
-      } else {
-        setBoard(detail);
-        setBreadcrumb([]);
-        setChildBoards({});
-        setStatus("ready");
-      }
-    } catch (err) {
-      const errorMessage = (err as Error).message;
-      
-      // Si erreur 403 Forbidden (board personnel inaccessible), rediriger vers le root board
-      if (errorMessage.includes('Forbidden') || errorMessage.includes('403') || errorMessage.includes('personnel inaccessible')) {
-        console.warn('[BoardDataProvider] Access forbidden to board, redirecting to root board:', boardId);
-        // Rediriger vers le root board du team
-        if (teamId && accessToken) {
-          try {
-            const rootBoard = await fetchRootBoard(teamId, accessToken);
-            if (rootBoard?.id && rootBoard.id !== boardId) {
-              router.replace(`/boards/${teamId}/${rootBoard.id}`);
-              return;
-            }
-          } catch (rootErr) {
-            console.error('[BoardDataProvider] Failed to fetch root board:', rootErr);
-          }
-        }
-      }
-      
-      setError(errorMessage);
-      if (!cached) setStatus("error");
-    }
-  }, [accessToken, router, teamId]);
+  const boardQuery = useQuery({
+    queryKey: ["board", activeBoardId],
+    queryFn: () => (activeBoardId ? getBoardDetailCached(activeBoardId) : null),
+    enabled: Boolean(activeBoardId && accessToken && !initializing),
+    staleTime: 20_000,
+  });
 
-  // Load when activeBoardId changes
-  // IMPORTANT: Attendre que l'auth soit initialisé ET qu'on ait un token
+  const board = boardQuery.data ?? null;
+  const nodeId = board?.nodeId ?? null;
+
+  const breadcrumbQuery = useQuery({
+    queryKey: ["breadcrumb", nodeId],
+    queryFn: () => fetchNodeBreadcrumb(nodeId!, accessToken!),
+    enabled: Boolean(nodeId && accessToken),
+    staleTime: 20_000,
+  });
+
+  const childBoardsQuery = useQuery({
+    queryKey: ["child-boards", nodeId],
+    queryFn: () => fetchChildBoards(nodeId!, accessToken!),
+    enabled: Boolean(nodeId && accessToken),
+    staleTime: 20_000,
+  });
+
   useEffect(() => {
-    if (!activeBoardId) return;
-    if (initializing) return; // Attendre que l'auth soit chargé
-    if (!accessToken) return; // Pas de token = pas d'appel API
-    loadBoardBundle(activeBoardId);
-  }, [activeBoardId, loadBoardBundle, initializing, accessToken]);
+    if (!boardQuery.error) return;
+    if (!activeBoardId || !teamId || !accessToken) return;
+    const status = (boardQuery.error as { status?: number } | undefined)?.status;
+    const message = boardQuery.error instanceof Error
+      ? boardQuery.error.message
+      : String(boardQuery.error);
+    const isForbidden = status === 403 || message.includes("Forbidden") || message.includes("personnel inaccessible");
+    if (!isForbidden) return;
 
-  const prefetchBoard = useCallback(async (id: string) => {
-    if (cachesRef.current.boards.has(id)) return;
-    if (!accessToken) return; // Ne pas prefetch sans token
-    try {
-      const detail = await fetchBoardDetail(id, accessToken);
-      
-      // Si null (304 Not Modified), on ne fait rien
-      if (detail === null) return;
-      
-      cachesRef.current.boards.set(id, detail);
-      if (detail.nodeId) {
-        const [breadcrumbItems, childEntries] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken),
-          fetchChildBoards(detail.nodeId, accessToken),
-        ]);
-        cachesRef.current.breadcrumbs.set(detail.nodeId, breadcrumbItems);
-        const map: Record<string, NodeChildBoard> = {};
-        for (const entry of childEntries) map[entry.nodeId] = entry;
-        cachesRef.current.childBoards.set(detail.nodeId, map);
+    (async () => {
+      try {
+        const root = await queryClient.fetchQuery({
+          queryKey: ["root-board", teamId],
+          queryFn: () => fetchRootBoard(teamId, accessToken),
+          staleTime: 60_000,
+        });
+        if (root?.id && root.id !== activeBoardId) {
+          router.replace(`/boards/${teamId}/${root.id}`);
+        }
+      } catch (err) {
+        console.error("[BoardDataProvider] Failed to fetch root board:", err);
       }
-    } catch {
-      /* silent */
-    }
-  }, [accessToken]);
+    })();
+  }, [boardQuery.error, activeBoardId, teamId, accessToken, queryClient, router]);
 
-  // Prefetch ancêtres du breadcrumb pour remontées instantanées.
+  const breadcrumb = breadcrumbQuery.data ?? [];
+  const childBoards = useMemo(
+    () => childBoardsToMap(childBoardsQuery.data),
+    [childBoardsQuery.data],
+  );
+
+  const error = useMemo(() => {
+    const err = boardQuery.error ?? breadcrumbQuery.error ?? childBoardsQuery.error;
+    if (err) return err instanceof Error ? err.message : String(err);
+    return rootError;
+  }, [boardQuery.error, breadcrumbQuery.error, childBoardsQuery.error, rootError]);
+
+  const status = useMemo<"idle" | "loading" | "ready" | "error">(() => {
+    if (!accessToken || initializing) return "idle";
+    if (error) return "error";
+    if (boardQuery.isLoading || breadcrumbQuery.isLoading || childBoardsQuery.isLoading) return "loading";
+    if (board) return "ready";
+    return "idle";
+  }, [accessToken, initializing, error, boardQuery.isLoading, breadcrumbQuery.isLoading, childBoardsQuery.isLoading, board]);
+
+  const prefetchBoard = useCallback(
+    async (id: string) => {
+      if (!accessToken) return;
+      try {
+        const detail = await queryClient.fetchQuery({
+          queryKey: ["board", id],
+          queryFn: () => getBoardDetailCached(id),
+          staleTime: 20_000,
+        });
+        const resolved = detail ?? queryClient.getQueryData<Board>(["board", id]);
+        if (!resolved?.nodeId) return;
+        await Promise.all([
+          queryClient.prefetchQuery({
+            queryKey: ["breadcrumb", resolved.nodeId],
+            queryFn: () => fetchNodeBreadcrumb(resolved.nodeId, accessToken),
+            staleTime: 20_000,
+          }),
+          queryClient.prefetchQuery({
+            queryKey: ["child-boards", resolved.nodeId],
+            queryFn: () => fetchChildBoards(resolved.nodeId, accessToken),
+            staleTime: 20_000,
+          }),
+        ]);
+      } catch {
+        /* silent */
+      }
+    },
+    [accessToken, getBoardDetailCached, queryClient],
+  );
+
   useEffect(() => {
     if (!breadcrumb.length) return;
     for (const item of breadcrumb) {
-      if (item.boardId && !cachesRef.current.boards.has(item.boardId)) {
-        prefetchBoard(item.boardId);
+      if (item.boardId) {
+        void prefetchBoard(item.boardId);
       }
     }
   }, [breadcrumb, prefetchBoard]);
 
   const refreshActiveBoard = useCallback(async () => {
     if (!activeBoardId) return;
-    await loadBoardBundle(activeBoardId);
-  }, [activeBoardId, loadBoardBundle]);
-
-  const openChildBoard = useCallback((boardId: string) => {
-    if (!teamId || !boardId) return;
-    prefetchBoard(boardId); // warm
-    const href = `/boards/${teamId}/${boardId}`;
-    if (descendTriggerRef.current) {
-      descendTriggerRef.current(href);
-    } else {
-      router.push(href);
+    await queryClient.invalidateQueries({ queryKey: ["board", activeBoardId] });
+    await queryClient.refetchQueries({ queryKey: ["board", activeBoardId] });
+    const current = queryClient.getQueryData<Board>(["board", activeBoardId]);
+    if (current?.nodeId) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["breadcrumb", current.nodeId] }),
+        queryClient.invalidateQueries({ queryKey: ["child-boards", current.nodeId] }),
+      ]);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["breadcrumb", current.nodeId] }),
+        queryClient.refetchQueries({ queryKey: ["child-boards", current.nodeId] }),
+      ]);
     }
-  }, [prefetchBoard, teamId, router]);
+  }, [activeBoardId, queryClient]);
+
+  const openChildBoard = useCallback(
+    (boardId: string) => {
+      if (!teamId || !boardId) return;
+      void prefetchBoard(boardId);
+      const href = `/boards/${teamId}/${boardId}`;
+      if (descendTriggerRef.current) {
+        descendTriggerRef.current(href);
+      } else {
+        router.push(href);
+      }
+    },
+    [prefetchBoard, teamId, router],
+  );
 
   const registerDescendTrigger = useCallback((fn: (href: string) => void) => {
     descendTriggerRef.current = fn;
   }, []);
 
-  const value: BoardDataContextValue = useMemo(() => ({
-    teamId,
-    activeBoardId,
-    board,
-    breadcrumb,
-    childBoards,
-    status,
-    error,
-    setActiveBoardId,
-    prefetchBoard,
-    openChildBoard,
-    refreshActiveBoard,
-    registerDescendTrigger,
-  }), [teamId, activeBoardId, board, breadcrumb, childBoards, status, error, prefetchBoard, openChildBoard, refreshActiveBoard, registerDescendTrigger]);
+  const value: BoardDataContextValue = useMemo(
+    () => ({
+      teamId,
+      activeBoardId,
+      board,
+      breadcrumb,
+      childBoards,
+      status,
+      error,
+      setActiveBoardId,
+      prefetchBoard,
+      openChildBoard,
+      refreshActiveBoard,
+      registerDescendTrigger,
+    }),
+    [
+      teamId,
+      activeBoardId,
+      board,
+      breadcrumb,
+      childBoards,
+      status,
+      error,
+      prefetchBoard,
+      openChildBoard,
+      refreshActiveBoard,
+      registerDescendTrigger,
+    ],
+  );
 
   return <BoardDataContext.Provider value={value}>{children}</BoardDataContext.Provider>;
 }

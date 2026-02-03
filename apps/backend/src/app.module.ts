@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import * as path from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,7 +21,17 @@ import { TestDataModule } from './modules/test-data/test-data.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', 'apps/backend/.env'],
+      envFilePath: [
+        // CWD (ex: apps/backend)
+        path.resolve(process.cwd(), '.env'),
+        // racine repo quand le CWD est apps/backend
+        path.resolve(process.cwd(), '../..', '.env'),
+        // fallback basé sur __dirname (dev/production)
+        path.resolve(__dirname, '../../../.env'),
+        path.resolve(__dirname, '../../../../.env'),
+        // ancien emplacement éventuel
+        path.resolve(process.cwd(), 'apps/backend/.env'),
+      ],
     }),
     PrismaModule,
     UsersModule,

@@ -17,6 +17,9 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
         offsetY={40}
         labelWidth={220}
         visibleTrailingCount={8}
+        animated={false}
+        travelAnimation={false}
+        enableDescendAnimation={false}
         registerDescend={registerDescendTrigger}
         buildHref={(item) => {
           if (!teamId) return "#";

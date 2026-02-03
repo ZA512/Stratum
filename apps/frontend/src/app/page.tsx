@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/auth-provider";
 import { fetchTeams, bootstrapTeams, type Team, type BootstrapTeamResponse } from "@/features/teams/teams-api";
 import { useTranslation } from "@/i18n";
@@ -11,80 +12,50 @@ export default function Home() {
   const { user, accessToken, initializing, logout } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
-  const [teams, setTeams] = useState<Team[]>([]);
+  const queryClient = useQueryClient();
   const [bootstrapResult, setBootstrapResult] = useState<BootstrapTeamResponse | null>(null);
-  const [loadingTeams, setLoadingTeams] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [bootstrapping, setBootstrapping] = useState(false);
-  const [teamsResolved, setTeamsResolved] = useState(false);
   const bootstrapAttemptedRef = useRef(false);
+
+  const teamsQuery = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => fetchTeams(accessToken!),
+    enabled: Boolean(accessToken),
+    staleTime: 30_000,
+  });
+
+  const bootstrapMutation = useMutation({
+    mutationFn: () => bootstrapTeams(accessToken!),
+    onSuccess: (boot) => {
+      setBootstrapResult(boot);
+      void queryClient.invalidateQueries({ queryKey: ["teams"] });
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "Non authentifie") {
+        void logout();
+      }
+    },
+  });
+
+  const teams: Team[] = teamsQuery.data ?? [];
 
   useEffect(() => {
     if (!accessToken) {
-      setTeams([]);
-      setError(null);
-      setLoadingTeams(false);
-      setBootstrapping(false);
-      setTeamsResolved(false);
       bootstrapAttemptedRef.current = false;
+      setBootstrapResult(null);
       return;
     }
-
-    let cancelled = false;
-    setTeamsResolved(false);
-
-    const loadTeams = async () => {
-      try {
-        setLoadingTeams(true);
-        setError(null);
-        const response = await fetchTeams(accessToken);
-        if (cancelled) return;
-        setTeams(response);
-        if (response.length === 0 && !bootstrapAttemptedRef.current) {
-          bootstrapAttemptedRef.current = true;
-          setBootstrapping(true);
-          try {
-            const boot = await bootstrapTeams(accessToken);
-            setBootstrapResult(boot);
-            if (cancelled) return;
-            const again = await fetchTeams(accessToken);
-            if (!cancelled) {
-              setTeams(again);
-            }
-          } catch (err) {
-            if (!cancelled) {
-              const message = err instanceof Error ? err.message : String(err);
-              // If API reports unauthenticated, force logout to clear state and show login
-              if (message === 'Non authentifie') {
-                void logout();
-                return;
-              }
-              setError(message);
-            }
-          } finally {
-            if (!cancelled) {
-              setBootstrapping(false);
-            }
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingTeams(false);
-          setTeamsResolved(true);
-        }
-      }
-    };
-
-    void loadTeams();
-
-    return () => {
-      cancelled = true;
-    };
   }, [accessToken, logout]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    if (!teamsQuery.isSuccess) return;
+    if (teamsQuery.data.length > 0) return;
+    if (bootstrapAttemptedRef.current) return;
+    if (bootstrapMutation.isPending) return;
+    bootstrapAttemptedRef.current = true;
+    bootstrapMutation.mutate();
+  }, [accessToken, teamsQuery.isSuccess, teamsQuery.data, bootstrapMutation]);
 
   const hasTeams = teams.length > 0;
 
@@ -133,7 +104,11 @@ export default function Home() {
     );
   }
 
-  const isResolvingTeams = loadingTeams || bootstrapping || !teamsResolved;
+  const isResolvingTeams =
+    teamsQuery.isLoading ||
+    teamsQuery.isFetching ||
+    bootstrapMutation.isPending ||
+    (!teamsQuery.isSuccess && !teamsQuery.isError);
 
   if (user && isResolvingTeams) {
     return (
@@ -145,26 +120,26 @@ export default function Home() {
 
   const handleManualBootstrap = async () => {
     if (!accessToken) return;
-    setBootstrapping(true);
-    setError(null);
     try {
-  const boot = await bootstrapTeams(accessToken);
-  setBootstrapResult(boot);
+      bootstrapMutation.reset();
+      const boot = await bootstrapMutation.mutateAsync();
+      setBootstrapResult(boot);
       bootstrapAttemptedRef.current = true;
-      const again = await fetchTeams(accessToken);
-      setTeams(again);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'Non authentifie') {
         void logout();
         return;
       }
-      setError(message);
     } finally {
-      setBootstrapping(false);
-      setTeamsResolved(true);
     }
   };
+
+  const error = useMemo(() => {
+    const err = bootstrapMutation.error ?? teamsQuery.error;
+    if (!err) return null;
+    return err instanceof Error ? err.message : String(err);
+  }, [bootstrapMutation.error, teamsQuery.error]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center">
@@ -174,17 +149,17 @@ export default function Home() {
         </div>
       ) : null}
       <p className="text-sm text-muted">
-        {bootstrapping || loadingTeams
+        {bootstrapMutation.isPending || teamsQuery.isLoading
           ? t("home.bootstrapping")
           : t("home.waitingForTeams")}
       </p>
       <button
         type="button"
         onClick={handleManualBootstrap}
-        disabled={bootstrapping || loadingTeams}
+        disabled={bootstrapMutation.isPending || teamsQuery.isLoading}
         className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {bootstrapping
+        {bootstrapMutation.isPending
           ? t("home.bootstrappingAction")
           : t("home.bootstrapCta")}
       </button>
