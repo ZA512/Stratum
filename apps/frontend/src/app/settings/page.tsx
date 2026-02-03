@@ -12,6 +12,7 @@ import {
 } from "@/features/users/raci-teams-api";
 import { useTheme, ThemeProvider } from "@/themes/theme-provider";
 import type { ThemeDefinition } from "@/themes";
+import { exportTestData, importTestData } from "@/features/test-data/test-data-api";
 
 export default function SettingsPage() {
   const { t, locale, availableLocales, setLocale } = useTranslation();
@@ -22,6 +23,10 @@ export default function SettingsPage() {
   const [raciTeamsError, setRaciTeamsError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [testDataMessage, setTestDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const { activeThemeId, themes: availableThemes, setTheme } = useTheme();
 
   const handleThemeSelect = useCallback(
@@ -140,6 +145,49 @@ export default function SettingsPage() {
       .finally(() => {
         setDeletingId(null);
       });
+  };
+
+  const handleExportTestData = async () => {
+    if (!accessToken || exporting || importing) return;
+    setExporting(true);
+    setTestDataMessage(null);
+    try {
+      const { blob, filename } = await exportTestData(accessToken);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename ?? `stratum-export-${new Date().toISOString().slice(0, 10)}.dump`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      setTestDataMessage({ type: "success", text: t("settings.testData.exportSuccess") });
+    } catch {
+      setTestDataMessage({ type: "error", text: t("settings.testData.error") });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportTestData = async () => {
+    if (!accessToken || exporting || importing) return;
+    if (!importFile) {
+      setTestDataMessage({ type: "error", text: t("settings.testData.noFile") });
+      return;
+    }
+    const confirmation = window.confirm(t("settings.testData.importConfirm"));
+    if (!confirmation) return;
+    setImporting(true);
+    setTestDataMessage(null);
+    try {
+      await importTestData(importFile, accessToken);
+      setTestDataMessage({ type: "success", text: t("settings.testData.importSuccess") });
+      setImportFile(null);
+    } catch {
+      setTestDataMessage({ type: "error", text: t("settings.testData.error") });
+    } finally {
+      setImporting(false);
+    }
   };
 
   // Fallback: si hook lève une erreur (provider absent), on encapsule dynamiquement.
@@ -306,6 +354,60 @@ export default function SettingsPage() {
                 ))}
               </ul>
             ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-red-500/40 bg-red-500/5 p-6 shadow-md">
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-red-500">
+            {t("settings.testData.warning")}
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-foreground">{t("settings.testData.title")}</h2>
+          <p className="mt-2 text-sm text-muted">{t("settings.testData.description")}</p>
+
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm text-muted">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
+                {t("settings.testData.importLabel")}
+              </span>
+              <input
+                type="file"
+                accept=".dump,application/octet-stream"
+                onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                className="block w-full rounded-xl border border-white/15 bg-surface px-3 py-2 text-sm text-foreground"
+              />
+              <span className="mt-1 block text-xs text-muted">{t("settings.testData.importHint")}</span>
+            </label>
+          </div>
+
+          {testDataMessage ? (
+            <div
+              className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                testDataMessage.type === "success"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-red-500/40 bg-red-500/10 text-red-400"
+              }`}
+            >
+              {testDataMessage.text}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleExportTestData}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-foreground transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!accessToken || exporting || importing}
+            >
+              {exporting ? t("settings.testData.exporting") : t("settings.testData.exportButton")}
+            </button>
+            <button
+              type="button"
+              onClick={handleImportTestData}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-400 transition hover:border-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!accessToken || exporting || importing}
+            >
+              {importing ? t("settings.testData.importing") : t("settings.testData.importButton")}
+            </button>
           </div>
         </section>
       </div>

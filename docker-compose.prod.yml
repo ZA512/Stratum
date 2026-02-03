@@ -93,6 +93,7 @@ services:
 volumes:
   # Les volumes sont gérés via les bind mounts dans DATA_PATH
   # Pas besoin de volumes Docker nommés
+  {}
 
 networks:
   default:

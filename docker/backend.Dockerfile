@@ -37,6 +37,12 @@ RUN ["node","./node_modules/prisma/build/index.js","generate","--schema","./apps
 RUN ["npm","--workspace","backend","run","build"]
 
 # ============================================
+# Stage 2.5: PostgreSQL Tools (Alpine standard image)
+# ============================================
+FROM alpine:3.22 AS pg-tools
+RUN apk add --no-cache postgresql-client
+
+# ============================================
 # Stage 3: Production
 # ============================================
 FROM dhi.io/node:20-alpine3.22 AS prod
@@ -49,6 +55,19 @@ LABEL org.opencontainers.image.licenses="UNLICENSED"
 
 ENV NODE_ENV=production
 WORKDIR /app
+
+# Copy PostgreSQL client binaries from pg-tools stage
+USER root
+COPY --from=pg-tools /usr/bin/pg_dump /usr/bin/pg_dump
+COPY --from=pg-tools /usr/bin/pg_restore /usr/bin/pg_restore
+# Copy required shared libraries
+COPY --from=pg-tools /usr/lib/libpq.so.5 /usr/lib/libpq.so.5
+COPY --from=pg-tools /usr/lib/libssl.so.3 /usr/lib/libssl.so.3
+COPY --from=pg-tools /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.3
+COPY --from=pg-tools /usr/lib/libz.so.1 /usr/lib/libz.so.1
+COPY --from=pg-tools /usr/lib/liblz4.so.1 /usr/lib/liblz4.so.1
+COPY --from=pg-tools /usr/lib/libzstd.so.1 /usr/lib/libzstd.so.1
+USER 1000
 
 # Copy only production artifacts
 COPY --chown=1000:1000 package*.json ./
