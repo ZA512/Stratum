@@ -13,7 +13,7 @@ Principes clés :
 - Simplicité : pas de sous‑droits, pas de “sous‑partage” compliqué.
 - Cohérence : éviter les doubles partages parent/enfant.
 - Prévisibilité UX : aucune action ne doit surprendre ou faire “disparaître” un kanban sans explication.
-- Traçabilité : tout événement important est journalisé.
+- Traçabilité : tout événement important est journalisé. 
 
 ---
 
