@@ -25,8 +25,8 @@ export interface FractalBreadcrumbProps {
   travelDuration?: number; // en secondes
   travelLateralFactor?: number; // proportion du déplacement horizontal par niveau (0..1)
   enableDescendAnimation?: boolean;
-  /** Fournit une fonction pour lancer une descente: registerDescend(fn => fn(href)) */
-  registerDescend?: (fn: (href: string) => void) => void;
+  /** Fournit une fonction pour lancer une descente: registerDescend(fn => fn(href, { skipNavigate })) */
+  registerDescend?: (fn: (href: string, options?: { skipNavigate?: boolean }) => void) => void;
   /** Facteur d'overshoot vertical (remontée). 0 = pas d'overshoot. Ancien comportement ~0.6 */
   ascendOvershootFactor?: number;
 }
@@ -81,15 +81,26 @@ export function FractalBreadcrumb({
   // Expose descend trigger to parent if requested
   useEffect(() => {
     if (!registerDescend) return;
-    registerDescend((href: string) => {
+    registerDescend((href: string, options?: { skipNavigate?: boolean }) => {
       if (!enableDescendAnimation) {
-        router.push(href);
+        if (!options?.skipNavigate) {
+          router.push(href);
+        }
         return;
+      }
+      try {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem('board-transition', 'descend');
+        }
+      } catch {
+        // ignore storage errors
       }
       // Lancer animation avant navigation
       setIsPreDescending(true);
       setTimeout(() => {
-        router.push(href);
+        if (!options?.skipNavigate) {
+          router.push(href);
+        }
         // petite marge pour éviter clignotement si le composant reste monté
         setTimeout(() => {
           setIsPreDescending(false);

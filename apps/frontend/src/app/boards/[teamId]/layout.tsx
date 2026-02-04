@@ -11,15 +11,18 @@ function TeamBoardsShell({ children }: { children: React.ReactNode }) {
   const { breadcrumb, registerDescendTrigger, teamId, prefetchBoard } = useBoardData();
   return (
     <div className="pt-[76px]">
+      <div id="board-fixed-header-root" className="fixed top-0 left-0 right-0 z-50" />
       <FractalBreadcrumb
         items={breadcrumb}
         offsetX={56}
         offsetY={40}
         labelWidth={220}
         visibleTrailingCount={8}
-        animated={false}
-        travelAnimation={false}
-        enableDescendAnimation={false}
+        animated
+        travelAnimation
+        enableDescendAnimation
+        travelDuration={0.5}
+        ascendOvershootFactor={0.25}
         registerDescend={registerDescendTrigger}
         buildHref={(item) => {
           if (!teamId) return "#";

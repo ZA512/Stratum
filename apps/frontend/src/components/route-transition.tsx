@@ -16,6 +16,7 @@ export function RouteTransition({ children }: RouteTransitionProps) {
   const setNavigation = useUiShellStore((state: UiShellState) => state.setNavigation);
   const direction = useUiShellStore((state: UiShellState) => state.direction);
   const prevDepthRef = useRef(getDepth(pathname));
+  const disableRouteAnimation = pathname.startsWith("/boards");
 
   useEffect(() => {
     const nextDepth = getDepth(pathname);
@@ -47,6 +48,10 @@ export function RouteTransition({ children }: RouteTransitionProps) {
     }),
     [],
   );
+
+  if (disableRouteAnimation) {
+    return <div className="min-h-screen">{children}</div>;
+  }
 
   return (
     <AnimatePresence mode="sync" initial={false}>

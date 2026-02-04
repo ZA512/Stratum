@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, FormEvent, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -387,13 +388,14 @@ function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelP
 
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
-  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId } = useBoardData();
+  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
   const { open } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
   const { expertMode, setExpertMode, boardView, setBoardView } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
+  const isPushing = transitionPhase === 'pushing' && transitionDirection === 'descend';
 
   // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
   // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
@@ -1802,9 +1804,49 @@ export function TeamBoardPage(){
     setDraggingCard(null);
   };
 
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50">
+  const [headerRoot, setHeaderRoot] = useState<HTMLElement | null>(null);
+  const [isEntering, setIsEntering] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.sessionStorage.getItem('board-transition') === 'descend';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    setHeaderRoot(document.getElementById('board-fixed-header-root'));
+  }, []);
+
+  useEffect(() => {
+    if (!isEntering) return;
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('board-transition');
+      }
+    } catch {
+      // ignore
+    }
+    const rafId = requestAnimationFrame(() => {
+      setIsEntering(false);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [isEntering]);
+
+  const enterClassName = isEntering
+    ? 'opacity-0 translate-x-4 translate-y-4'
+    : 'opacity-100 translate-x-0 translate-y-0';
+
+  const headerClassName = `${headerRoot
+    ? 'border-b border-white/10 bg-surface/90 backdrop-blur'
+    : 'border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50'}
+    transition duration-500 ease-out transform-gpu ${enterClassName}`;
+
+  const headerContent = (
+      <header className={headerClassName}>
         <div className="flex items-center justify-between gap-4 px-8 py-3">
           <div className="flex items-center gap-3">
             <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
@@ -1861,7 +1903,17 @@ export function TeamBoardPage(){
           </div>
         </div>
       </header>
-      <main className="flex flex-col gap-6 px-8 pt-6 pb-12 w-full">
+  );
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      {headerRoot ? createPortal(headerContent, headerRoot) : headerContent}
+      <main className="relative flex flex-col gap-6 w-full px-8 pt-6 pb-12">
+        <div
+          className={`transition duration-500 ease-out transform-gpu will-change-transform will-change-opacity ${
+            isPushing ? '-translate-x-4 -translate-y-4 opacity-70' : 'translate-x-0 translate-y-0 opacity-100'
+          }`}
+        >
         {(showBoardControls || isAddingColumn) && (
           <section className="grid gap-4">
             <div className="relative rounded-xl border border-white/10 bg-card/70 px-6 py-2 w-full">
@@ -2268,6 +2320,19 @@ export function TeamBoardPage(){
               </div>
             )}
           </section>
+        )}
+        </div>
+        <div className="pointer-events-none absolute inset-0">
+          <div
+            className={`transition duration-500 ease-out transform-gpu will-change-transform will-change-opacity ${
+              isPushing ? 'opacity-100 translate-x-0 translate-y-0' : 'opacity-0 translate-x-4 translate-y-4'
+            }`}
+          >
+            <BoardSkeleton />
+          </div>
+        </div>
+        {isFetching && (
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-black/20 backdrop-blur-[1px] transition-opacity duration-300" />
         )}
       </main>
       {deleteTarget && (

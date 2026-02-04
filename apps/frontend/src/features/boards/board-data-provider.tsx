@@ -21,13 +21,16 @@ interface BoardDataContextValue {
   breadcrumb: NodeBreadcrumbItem[];
   childBoards: Record<string, NodeChildBoard>;
   status: "idle" | "loading" | "ready" | "error";
+  isFetching: boolean;
+  transitionPhase: "idle" | "pushing" | "settling";
+  transitionDirection: "descend" | null;
   error: string | null;
   setActiveBoardId: (id: string | null) => void;
   prefetchBoard: (id: string) => Promise<void>;
   openChildBoard: (boardId: string) => void;
   refreshActiveBoard: () => Promise<void>;
   refreshArchivedNodesForColumn?: (columnId: string) => Promise<void>;
-  registerDescendTrigger: (fn: (href: string) => void) => void;
+  registerDescendTrigger: (fn: (href: string, options?: { skipNavigate?: boolean }) => void) => void;
 }
 
 const BoardDataContext = createContext<BoardDataContextValue | null>(null);
@@ -42,6 +45,7 @@ const childBoardsToMap = (entries: NodeChildBoard[] | undefined | null) => {
 };
 
 export function BoardDataProvider({ children }: { children: React.ReactNode }) {
+  const TRANSITION_MS = 520;
   const router = useRouter();
   const params = useParams<{ teamId: string; board?: string[] }>();
   const { accessToken, initializing } = useAuth();
@@ -50,11 +54,23 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
   const routeBoardId = params?.board && params.board.length > 0 ? params.board[0] : null;
   const [activeBoardId, setActiveBoardId] = useState<string | null>(routeBoardId);
   const [rootError, setRootError] = useState<string | null>(null);
-  const descendTriggerRef = useRef<((href: string) => void) | null>(null);
+  const descendTriggerRef = useRef<((href: string, options?: { skipNavigate?: boolean }) => void) | null>(null);
+  const [transitionPhase, setTransitionPhase] = useState<"idle" | "pushing" | "settling">("idle");
+  const [transitionDirection, setTransitionDirection] = useState<"descend" | null>(null);
+  const transitionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setActiveBoardId(routeBoardId);
   }, [routeBoardId]);
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current !== null) {
+        window.clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const getBoardDetailCached = useCallback(
     async (boardId: string) => {
@@ -163,6 +179,8 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     return "idle";
   }, [accessToken, initializing, error, boardQuery.isLoading, breadcrumbQuery.isLoading, childBoardsQuery.isLoading, board]);
 
+  const isFetching = boardQuery.isFetching || breadcrumbQuery.isFetching || childBoardsQuery.isFetching;
+
   const prefetchBoard = useCallback(
     async (id: string) => {
       if (!accessToken) return;
@@ -225,7 +243,16 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       void prefetchBoard(boardId);
       const href = `/boards/${teamId}/${boardId}`;
       if (descendTriggerRef.current) {
-        descendTriggerRef.current(href);
+        setTransitionPhase("pushing");
+        setTransitionDirection("descend");
+        descendTriggerRef.current(href, { skipNavigate: true });
+        if (transitionTimerRef.current !== null) {
+          window.clearTimeout(transitionTimerRef.current);
+        }
+        transitionTimerRef.current = window.setTimeout(() => {
+          setTransitionPhase("settling");
+          router.push(href);
+        }, TRANSITION_MS);
       } else {
         router.push(href);
       }
@@ -233,9 +260,16 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     [prefetchBoard, teamId, router],
   );
 
-  const registerDescendTrigger = useCallback((fn: (href: string) => void) => {
+  const registerDescendTrigger = useCallback((fn: (href: string, options?: { skipNavigate?: boolean }) => void) => {
     descendTriggerRef.current = fn;
   }, []);
+
+  useEffect(() => {
+    if (transitionPhase !== "settling") return;
+    if (!board || !activeBoardId) return;
+    setTransitionPhase("idle");
+    setTransitionDirection(null);
+  }, [transitionPhase, board, activeBoardId]);
 
   const value: BoardDataContextValue = useMemo(
     () => ({
@@ -245,6 +279,9 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       breadcrumb,
       childBoards,
       status,
+      isFetching,
+      transitionPhase,
+      transitionDirection,
       error,
       setActiveBoardId,
       prefetchBoard,
@@ -259,6 +296,9 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
       breadcrumb,
       childBoards,
       status,
+      isFetching,
+      transitionPhase,
+      transitionDirection,
       error,
       prefetchBoard,
       openChildBoard,
