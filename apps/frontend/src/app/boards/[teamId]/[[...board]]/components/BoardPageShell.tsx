@@ -1882,6 +1882,10 @@ export function TeamBoardPage(){
                 </span>
               </button>
             )}
+            <div
+              data-quick-notes-anchor="header"
+              className="flex items-center"
+            />
             {/* Bouton paramètres (icône seule) */}
             <Link
               href="/settings"

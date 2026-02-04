@@ -71,6 +71,12 @@ enum ActivityType {
   RACI_UPDATED
 }
 
+enum QuickNoteType {
+  NOTE
+  DONE
+  WAITING
+}
+
 model User {
   id              String        @id @default(cuid())
   email           String        @unique
@@ -94,6 +100,7 @@ model User {
   nodeShareInvitationsReceived NodeShareInvitation[] @relation("NodeShareInvitationsReceived")
   sharedNodePlacements SharedNodePlacement[]
   activityLogs    ActivityLog[]
+  quickNotes      QuickNote[]
 }
 
 model Team {
@@ -190,6 +197,7 @@ model Board {
   columns         Column[]
   dailySnapshots  BoardDailySnapshot[]
   owner           User?             @relation("UserOwnedBoards", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  quickNotes      QuickNote[]
 }
 
 model Column {
@@ -383,6 +391,24 @@ model UserSettings {
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model QuickNote {
+  id          String        @id @default(cuid())
+  userId      String
+  text        String
+  type        QuickNoteType
+  kanbanId    String?
+  kanbanName  String?
+  createdAt   DateTime      @default(now())
+  treatedAt   DateTime?
+  reminderAt  DateTime?
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kanban      Board?        @relation(fields: [kanbanId], references: [id], onDelete: SetNull)
+
+  @@index([userId, treatedAt])
+  @@index([kanbanId])
 }
 
 model BoardDailySnapshot {

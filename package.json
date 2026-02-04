@@ -6,8 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-  "dev": "npm run dev --workspace backend",
-  "dev:backend": "npm --prefix apps/backend run start:dev",
+    "dev": "npm run dev --workspace backend",
+    "dev:backend": "npm --prefix apps/backend run start:dev",
     "dev:frontend": "npm run dev --workspace frontend",
     "build": "npm run build --workspaces",
     "build:backend": "npm run build --workspace backend",
@@ -18,5 +18,8 @@
     "test": "npm run test --workspace backend",
     "test:backend": "npm run test --workspace backend",
     "test:e2e": "npm run test:e2e --workspace backend"
+  },
+  "devDependencies": {
+    "baseline-browser-mapping": "^2.9.19"
   }
 }

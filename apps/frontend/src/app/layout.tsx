@@ -4,6 +4,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { DEFAULT_THEME } from "@/themes";
+import { QuickNotesRadar } from "@/features/quick-notes/QuickNotesRadar";
+import { QuickNotesDock } from "@/features/quick-notes/QuickNotesDock";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,7 +55,11 @@ export default function RootLayout({
         data-theme={DEFAULT_THEME.id}
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <QuickNotesRadar />
+          <QuickNotesDock />
+          {children}
+        </Providers>
       </body>
     </html>
   );

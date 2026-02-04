@@ -16,6 +16,7 @@ import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { WorkflowAutomationModule } from './modules/workflow-automation/workflow-automation.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { TestDataModule } from './modules/test-data/test-data.module';
+import { QuickNotesModule } from './modules/quick-notes/quick-notes.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { TestDataModule } from './modules/test-data/test-data.module';
     WorkflowAutomationModule,
     ActivityModule,
     TestDataModule,
+    QuickNotesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
