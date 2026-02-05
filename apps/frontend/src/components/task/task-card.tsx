@@ -45,6 +45,8 @@ export interface TaskCardProps {
   onFractalPathClick?: () => void;
   /** Clic sur le bouton menu (trois points) */
   onMenuButtonClick?: () => void;
+  /** Ref externe pour positionner un menu custom */
+  menuButtonRef?: React.Ref<HTMLButtonElement>;
   /** Masque le bouton menu interne (utilisé quand un menu externe est injecté) */
   hideInternalMenuButton?: boolean;
   /**
@@ -128,6 +130,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onClick,
   onFractalPathClick,
   onMenuButtonClick,
+  menuButtonRef,
   hideInternalMenuButton = false,
   variant = "default",
   className,
@@ -256,6 +259,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               type="button"
               aria-label="Actions de la tâche"
               onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
+              ref={menuButtonRef}
               className="p-1 -m-1 rounded text-muted transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>

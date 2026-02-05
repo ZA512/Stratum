@@ -990,6 +990,7 @@
       "legend": "Ordre : Backlog, En cours, Bloqué, Fait.",
       "cancel": "Annuler",
       "singleDisabledTooltip": "Des sous-tâches existent : utilisez la suppression récursive.",
+      "cascadeWarning": "Attention : cela supprimera tous les kanbans sous-jacents.",
       "deleteSingle": "Supprimer la carte",
       "deletingSingle": "Suppression…",
       "deleteRecursive": "Supprimer tout (cascade)",

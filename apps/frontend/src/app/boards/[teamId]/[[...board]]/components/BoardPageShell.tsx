@@ -2403,24 +2403,28 @@ export function TeamBoardPage(){
               >
                 {tBoard('deleteDialog.cancel')}
               </button>
-              <button
-                type="button"
-                disabled={singleDeleteDisabled}
-                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : (deletePreview?.hasChildren ? tBoard('deleteDialog.singleDisabledTooltip') : undefined)}
-                onClick={() => confirmDelete(false)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${singleDeleteBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
-              >
-                {deleteSubmitting === 'single' ? tBoard('deleteDialog.deletingSingle') : tBoard('deleteDialog.deleteSingle')}
-              </button>
-              <button
-                type="button"
-                disabled={recursiveDeleteDisabled}
-                title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : undefined}
-                onClick={() => confirmDelete(true)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${shareDeletionBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-rose-400/40 bg-rose-500/10 text-rose-200 hover:border-rose-200 hover:text-rose-100'} ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
-              >
-                {deleteSubmitting === 'recursive' ? tBoard('deleteDialog.deletingRecursive') : tBoard('deleteDialog.deleteRecursive')}
-              </button>
+              {deletePreview?.hasChildren ? (
+                <button
+                  type="button"
+                  disabled={recursiveDeleteDisabled}
+                  title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : tBoard('deleteDialog.cascadeWarning')}
+                  onClick={() => confirmDelete(true)}
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${shareDeletionBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-rose-400/40 bg-rose-500/10 text-rose-200 hover:border-rose-200 hover:text-rose-100'} ${deleteSubmitting === 'recursive' ? 'opacity-60' : ''}`}
+                >
+                  <span className="text-rose-200" aria-hidden>⚠️</span>
+                  {deleteSubmitting === 'recursive' ? tBoard('deleteDialog.deletingRecursive') : tBoard('deleteDialog.deleteRecursive')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={singleDeleteDisabled}
+                  title={shareDeletionBlocked ? tBoard('deleteDialog.shareBlockedTooltip') : undefined}
+                  onClick={() => confirmDelete(false)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${singleDeleteBlocked ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted' : 'border border-white/15 bg-white/5 text-foreground hover:border-accent'} ${deleteSubmitting === 'single' ? 'opacity-60' : ''}`}
+                >
+                  {deleteSubmitting === 'single' ? tBoard('deleteDialog.deletingSingle') : tBoard('deleteDialog.deleteSingle')}
+                </button>
+              )}
             </div>
           </div>
         </div>

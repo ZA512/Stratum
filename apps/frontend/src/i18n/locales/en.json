@@ -991,6 +991,7 @@
       "legend": "Legend order: Backlog, In progress, Blocked, Done.",
       "cancel": "Cancel",
       "singleDisabledTooltip": "Subtasks detected: use recursive deletion.",
+      "cascadeWarning": "Warning: this will delete all nested kanbans.",
       "deleteSingle": "Delete card",
       "deletingSingle": "Deleting…",
       "deleteRecursive": "Delete all (cascade)",
