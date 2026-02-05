@@ -926,6 +926,7 @@ export class NodesService {
             depth: true,
             teamId: true,
             workspaceId: true,
+            metadata: true,
           },
         },
         columns: {
@@ -1012,6 +1013,51 @@ export class NodesService {
       const sourceColumnId = freshNode.columnId;
       const sourcePath = freshNode.path;
       const sourceDepth = freshNode.depth;
+
+      let wasShared = false;
+      const sourceAncestors = sourcePath.split('/').filter(Boolean).slice(0, -1);
+      if (sourceAncestors.length > 0) {
+        const ancestors = await tx.node.findMany({
+          where: { id: { in: sourceAncestors } },
+          select: { metadata: true },
+        });
+        for (const ancestor of ancestors) {
+          const ancestorRaw =
+            ancestor.metadata &&
+            typeof ancestor.metadata === 'object' &&
+            !Array.isArray(ancestor.metadata)
+              ? { ...(ancestor.metadata as Record<string, any>) }
+              : {};
+          const share = normalizeShare(ancestorRaw);
+          if (share.collaborators.length > 0) {
+            wasShared = true;
+            break;
+          }
+        }
+      }
+
+      if (!wasShared) {
+        const selfRaw =
+          freshNode.metadata &&
+          typeof freshNode.metadata === 'object' &&
+          !Array.isArray(freshNode.metadata)
+            ? { ...(freshNode.metadata as Record<string, any>) }
+            : {};
+        const selfShare = normalizeShare(selfRaw);
+        if (selfShare.collaborators.length > 0) {
+          wasShared = true;
+        }
+      }
+
+      const targetRaw =
+        board.node?.metadata &&
+        typeof board.node.metadata === 'object' &&
+        !Array.isArray(board.node.metadata)
+          ? { ...(board.node.metadata as Record<string, any>) }
+          : {};
+      const targetShare = normalizeShare(targetRaw);
+      const shouldLogBecameShared =
+        targetShare.collaborators.length > 0 && !wasShared;
 
       const descendants = await tx.node.findMany({
         where: { path: { startsWith: sourcePath + '/' } },
@@ -1156,6 +1202,18 @@ export class NodesService {
           targetColumnId: targetColumn.id,
         },
       );
+
+      if (shouldLogBecameShared) {
+        await this.activityService.logActivity(
+          node.id,
+          userId,
+          ActivityType.KANBAN_BECAME_SHARED,
+          {
+            fromParentId: sourceParentId,
+            toParentId: board.node.id,
+          },
+        );
+      }
 
       return this.mapNode(updated);
     });
@@ -1417,6 +1475,22 @@ export class NodesService {
     if (!node) throw new NotFoundException();
     await this.ensureUserCanWrite(node.teamId, userId);
 
+    const placementArchiveTarget =
+      dto.archivedAt !== undefined
+        ? await this.prisma.sharedNodePlacement.findUnique({
+            where: {
+              nodeId_userId: {
+                nodeId,
+                userId,
+              },
+            },
+            select: { id: true },
+          })
+        : null;
+    const shouldArchivePlacement = Boolean(
+      dto.archivedAt !== undefined && placementArchiveTarget,
+    );
+
     if (
       dto.title === undefined &&
       dto.description === undefined &&
@@ -1448,7 +1522,8 @@ export class NodesService {
       dto.consumedBudgetPercent === undefined &&
       dto.backlogHiddenUntil === undefined &&
       dto.backlogReviewRestart === undefined &&
-      dto.archivedAt === undefined
+      dto.archivedAt === undefined &&
+      !shouldArchivePlacement
     ) {
       throw new BadRequestException('Aucun champ a mettre a jour');
     }
@@ -1925,21 +2000,49 @@ export class NodesService {
     }
 
     if (dto.archivedAt !== undefined) {
-      if (dto.archivedAt === null) {
-        data.archivedAt = null;
-      } else {
-        const archivedAt = new Date(dto.archivedAt);
-        if (Number.isNaN(archivedAt.getTime())) {
-          throw new BadRequestException("Date d'archivage invalide");
+      if (shouldArchivePlacement) {
+        if (dto.archivedAt === null) {
+          await this.prisma.sharedNodePlacement.update({
+            where: {
+              nodeId_userId: {
+                nodeId,
+                userId,
+              },
+            },
+            data: { archivedAt: null },
+          });
+        } else {
+          const archivedAt = new Date(dto.archivedAt);
+          if (Number.isNaN(archivedAt.getTime())) {
+            throw new BadRequestException("Date d'archivage invalide");
+          }
+          await this.prisma.sharedNodePlacement.update({
+            where: {
+              nodeId_userId: {
+                nodeId,
+                userId,
+              },
+            },
+            data: { archivedAt },
+          });
         }
-        data.archivedAt = archivedAt;
+      } else {
+        if (dto.archivedAt === null) {
+          data.archivedAt = null;
+        } else {
+          const archivedAt = new Date(dto.archivedAt);
+          if (Number.isNaN(archivedAt.getTime())) {
+            throw new BadRequestException("Date d'archivage invalide");
+          }
+          data.archivedAt = archivedAt;
 
-        // Save the column ID in metadata so archived nodes can be counted by column
-        if (node.columnId) {
-          const workflowMeta = metadata.workflow || {};
-          workflowMeta.lastKnownColumnId = node.columnId;
-          metadata.workflow = workflowMeta;
-          metadataChanged = true;
+          // Save the column ID in metadata so archived nodes can be counted by column
+          if (node.columnId) {
+            const workflowMeta = metadata.workflow || {};
+            workflowMeta.lastKnownColumnId = node.columnId;
+            metadata.workflow = workflowMeta;
+            metadataChanged = true;
+          }
         }
       }
     }
@@ -1970,19 +2073,24 @@ export class NodesService {
       I: nextRaci.I,
     };
 
-    const updated = shouldUpdateAssignments
-      ? await this.prisma.$transaction(async (tx) => {
-          const nodeUpdate = await tx.node.update({
+    const shouldUpdateNode =
+      shouldUpdateAssignments || Object.keys(data).length > 0;
+
+    const updated = shouldUpdateNode
+      ? shouldUpdateAssignments
+        ? await this.prisma.$transaction(async (tx) => {
+            const nodeUpdate = await tx.node.update({
+              where: { id: nodeId },
+              data,
+            });
+            await this.syncRaciAssignments(tx, nodeId, desiredRaci);
+            return nodeUpdate;
+          })
+        : await this.prisma.node.update({
             where: { id: nodeId },
             data,
-          });
-          await this.syncRaciAssignments(tx, nodeId, desiredRaci);
-          return nodeUpdate;
-        })
-      : await this.prisma.node.update({
-          where: { id: nodeId },
-          data,
-        });
+          })
+      : node;
 
     // Logs d'activité pour tous les changements de champs
     const activityPromises: Promise<void>[] = [];
@@ -2101,20 +2209,41 @@ export class NodesService {
     }
 
     if (dto.archivedAt !== undefined) {
-      const wasArchived = node.archivedAt !== null;
-      const nowArchived = dto.archivedAt !== null;
-
-      if (wasArchived !== nowArchived) {
+      if (shouldArchivePlacement) {
         activityPromises.push(
           this.activityService.logActivity(
             nodeId,
             userId,
-            nowArchived
-              ? ActivityType.NODE_ARCHIVED
-              : ActivityType.NODE_RESTORED,
-            nowArchived ? { archivedAt: dto.archivedAt } : undefined,
+            dto.archivedAt ? ActivityType.KANBAN_SOFT_DELETED : ActivityType.KANBAN_RESTORED,
+            dto.archivedAt ? { archivedAt: dto.archivedAt } : undefined,
           ),
         );
+      } else {
+        const wasArchived = node.archivedAt !== null;
+        const nowArchived = dto.archivedAt !== null;
+
+        if (wasArchived !== nowArchived) {
+          activityPromises.push(
+            this.activityService.logActivity(
+              nodeId,
+              userId,
+              nowArchived
+                ? ActivityType.NODE_ARCHIVED
+                : ActivityType.NODE_RESTORED,
+              nowArchived ? { archivedAt: dto.archivedAt } : undefined,
+            ),
+          );
+          activityPromises.push(
+            this.activityService.logActivity(
+              nodeId,
+              userId,
+              nowArchived
+                ? ActivityType.KANBAN_SOFT_DELETED
+                : ActivityType.KANBAN_RESTORED,
+              nowArchived ? { archivedAt: dto.archivedAt } : undefined,
+            ),
+          );
+        }
       }
     }
 
@@ -2368,6 +2497,16 @@ export class NodesService {
         nodeId,
         userId,
         ActivityType.NODE_RESTORED,
+        {
+          columnId: targetColumn.id,
+          columnName: targetColumn.name,
+        },
+      );
+
+      await this.activityService.logActivity(
+        nodeId,
+        userId,
+        ActivityType.KANBAN_RESTORED,
         {
           columnId: targetColumn.id,
           columnName: targetColumn.name,
@@ -3369,12 +3508,11 @@ export class NodesService {
     await this.ensureUserCanWrite(node.teamId, userId);
 
     const currentSummary = await this.buildNodeShareSummary(node, userId);
-    if (
-      currentSummary.collaborators.some((collab) => {
-        if (!collab.email) return false;
-        return collab.email.toLowerCase() === email;
-      })
-    ) {
+    const existingAccess = currentSummary.collaborators.find((collab) => {
+      if (!collab.email) return false;
+      return collab.email.toLowerCase() === email;
+    });
+    if (existingAccess && existingAccess.accessType !== 'INHERITED') {
       throw new ConflictException('Cet utilisateur a déjà accès à la tâche');
     }
 
@@ -3390,6 +3528,16 @@ export class NodesService {
 
     const metadata = this.extractMetadata(node);
     let nodeForSummary: NodeModel = node;
+    let metadataUpdated = false;
+
+    if (!metadata.share.collaborators.some((collab) => collab.userId === userId)) {
+      metadata.share.collaborators.push({
+        userId,
+        addedById: userId,
+        addedAt: new Date().toISOString(),
+      });
+      metadataUpdated = true;
+    }
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -3424,6 +3572,10 @@ export class NodesService {
       metadata.share.invitations = metadata.share.invitations.filter(
         (invite) => invite.email !== email,
       );
+      metadataUpdated = true;
+    }
+
+    if (metadataUpdated) {
       writeShareBack(metadata);
       await this.prisma.node.update({
         where: { id: node.id },
@@ -3451,7 +3603,7 @@ export class NodesService {
       await this.activityService.logActivity(
         node.id,
         userId,
-        ActivityType.INVITATION_SENT,
+        ActivityType.SHARE_INVITE_CREATED,
         { email, expiresAt: expiresAt.toISOString() },
       );
     } catch (error) {
@@ -3502,6 +3654,8 @@ export class NodesService {
     const expiredInvitations: Array<{
       id: string;
       inviteeUserId: string | null;
+      nodeId: string;
+      inviteeEmail: string;
     }> = [];
     const linkIds: string[] = [];
     const results: NodeShareIncomingInvitationDto[] = [];
@@ -3514,6 +3668,8 @@ export class NodesService {
         expiredInvitations.push({
           id: invitation.id,
           inviteeUserId: invitation.inviteeUserId,
+          nodeId: invitation.nodeId,
+          inviteeEmail: invitation.inviteeEmail,
         });
         continue;
       }
@@ -3559,6 +3715,19 @@ export class NodesService {
       await this.prisma.$transaction(updates);
     }
 
+    if (expiredInvitations.length > 0) {
+      await Promise.all(
+        expiredInvitations.map((expired) =>
+          this.activityService.logActivity(
+            expired.nodeId,
+            userId,
+            ActivityType.SHARE_INVITE_EXPIRED,
+            { email: expired.inviteeEmail },
+          ),
+        ),
+      );
+    }
+
     return results;
   }
 
@@ -3582,6 +3751,7 @@ export class NodesService {
     targetStatus: 'ACCEPTED' | 'DECLINED',
   ): Promise<NodeShareInvitationActionResultDto> {
     const now = new Date();
+    let acceptedWithInheritedAccess = false;
 
     return this.prisma.$transaction(async (tx) => {
       const invitation = await tx.nodeShareInvitation.findUnique({
@@ -3593,6 +3763,7 @@ export class NodesService {
               teamId: true,
               metadata: true,
               title: true,
+              path: true,
               column: {
                 select: {
                   id: true,
@@ -3695,76 +3866,119 @@ export class NodesService {
           });
         }
 
+        let hasInheritedAccess = false;
+        const nodePath = node.path ?? '';
+        const ancestorIds = nodePath.split('/').filter(Boolean).slice(0, -1);
+        if (ancestorIds.length > 0) {
+          const ancestors = await tx.node.findMany({
+            where: { id: { in: ancestorIds } },
+            select: { id: true, metadata: true },
+          });
+          for (const ancestor of ancestors) {
+            const ancestorRaw =
+              ancestor.metadata &&
+              typeof ancestor.metadata === 'object' &&
+              !Array.isArray(ancestor.metadata)
+                ? { ...(ancestor.metadata as Record<string, any>) }
+                : {};
+            const share = normalizeShare(ancestorRaw);
+            if (share.collaborators.some((collab) => collab.userId === userId)) {
+              hasInheritedAccess = true;
+              break;
+            }
+          }
+        }
+
         const metadata = this.extractMetadata(node);
         const alreadyCollaborator = metadata.share.collaborators.some(
           (collab) => collab.userId === userId,
         );
-        if (!alreadyCollaborator) {
+        let metadataChanged = false;
+
+        if (!hasInheritedAccess && !alreadyCollaborator) {
           metadata.share.collaborators.push({
             userId,
             addedById: invitation.inviterId,
             addedAt: now.toISOString(),
           });
+          metadataChanged = true;
         }
 
-        metadata.share.invitations = metadata.share.invitations.filter(
-          (invite) => invite.email !== invitation.inviteeEmail,
-        );
+        if (
+          metadata.share.invitations.some(
+            (invite) => invite.email === invitation.inviteeEmail,
+          )
+        ) {
+          metadata.share.invitations = metadata.share.invitations.filter(
+            (invite) => invite.email !== invitation.inviteeEmail,
+          );
+          metadataChanged = true;
+        }
 
-        writeShareBack(metadata);
-        await tx.node.update({
-          where: { id: node.id },
-          data: { metadata: metadata.raw as Prisma.InputJsonValue },
-        });
+        if (metadataChanged) {
+          writeShareBack(metadata);
+          await tx.node.update({
+            where: { id: node.id },
+            data: { metadata: metadata.raw as Prisma.InputJsonValue },
+          });
+        }
 
-        // Log de l'ajout du collaborateur après acceptation de l'invitation
-        await this.activityService.logActivity(
-          node.id,
-          userId,
-          ActivityType.COLLABORATOR_ADDED,
-          { addedById: invitation.inviterId },
-        );
+        if (!hasInheritedAccess && !alreadyCollaborator) {
+          // Log de l'ajout du collaborateur après acceptation de l'invitation
+          await this.activityService.logActivity(
+            node.id,
+            userId,
+            ActivityType.COLLABORATOR_ADDED,
+            { addedById: invitation.inviterId },
+          );
+        }
 
         // Log de l'acceptation de l'invitation
         await this.activityService.logActivity(
           node.id,
           userId,
-          ActivityType.INVITATION_ACCEPTED,
+          ActivityType.SHARE_INVITE_ACCEPTED,
           { inviterId: invitation.inviterId },
         );
 
-        // Créer un placement personnel pour la tâche partagée dans le board personnel de l'utilisateur
-        const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
-        if (userPersonalBoard && userPersonalBoard.columns.length > 0) {
-          const firstColumn = userPersonalBoard.columns[0];
+        if (!hasInheritedAccess) {
+          // Créer un placement personnel pour la tâche partagée dans le board personnel de l'utilisateur
+          const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
+          if (userPersonalBoard && userPersonalBoard.columns.length > 0) {
+            const firstColumn = userPersonalBoard.columns[0];
 
-          // Vérifier si un placement existe déjà
-          const existingPlacement = await tx.sharedNodePlacement.findUnique({
-            where: {
-              nodeId_userId: {
-                nodeId: node.id,
-                userId,
-              },
-            },
-          });
-
-          if (!existingPlacement) {
-            // Calculer la prochaine position dans la colonne
-            const maxPosition = await tx.sharedNodePlacement.findFirst({
-              where: { columnId: firstColumn.id },
-              orderBy: { position: 'desc' },
-              select: { position: true },
-            });
-
-            await tx.sharedNodePlacement.create({
-              data: {
-                nodeId: node.id,
-                userId,
-                columnId: firstColumn.id,
-                position: maxPosition ? maxPosition.position + 1000 : 0,
+            // Vérifier si un placement existe déjà
+            const existingPlacement = await tx.sharedNodePlacement.findUnique({
+              where: {
+                nodeId_userId: {
+                  nodeId: node.id,
+                  userId,
+                },
               },
             });
+
+            if (!existingPlacement) {
+              // Calculer la prochaine position dans la colonne
+              const maxPosition = await tx.sharedNodePlacement.findFirst({
+                where: { columnId: firstColumn.id },
+                orderBy: { position: 'desc' },
+                select: { position: true },
+              });
+
+              await tx.sharedNodePlacement.create({
+                data: {
+                  nodeId: node.id,
+                  userId,
+                  columnId: firstColumn.id,
+                  position: maxPosition ? maxPosition.position + 1000 : 0,
+                },
+              });
+            }
           }
+        }
+
+        if (hasInheritedAccess) {
+          acceptedWithInheritedAccess = true;
         }
       }
 
@@ -3772,7 +3986,7 @@ export class NodesService {
       // plutôt que celui de la tâche originale (Alice), car Bob doit être redirigé vers son propre board
       let responseBoardId: string | null = null;
       let responseColumnId: string | null = null;
-      if (targetStatus === 'ACCEPTED') {
+      if (targetStatus === 'ACCEPTED' && !acceptedWithInheritedAccess) {
         const userPersonalBoard = await this.getUserPersonalBoard(tx, userId);
         if (userPersonalBoard) {
           responseBoardId = userPersonalBoard.id;
@@ -3801,7 +4015,7 @@ export class NodesService {
         await this.activityService.logActivity(
           invitation.nodeId,
           userId,
-          ActivityType.INVITATION_DECLINED,
+          ActivityType.SHARE_INVITE_DECLINED,
           { inviterId: invitation.inviterId },
         );
       }
@@ -3835,43 +4049,90 @@ export class NodesService {
     targetUserId: string,
     userId: string,
   ): Promise<NodeShareSummaryDto> {
+    if (targetUserId !== userId) {
+      throw new ForbiddenException(
+        "Vous ne pouvez supprimer que votre propre lien",
+      );
+    }
+
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) throw new NotFoundException();
     await this.ensureUserCanWrite(node.teamId, userId);
 
-    const metadata = this.extractMetadata(node);
-    const initialLength = metadata.share.collaborators.length;
-    metadata.share.collaborators = metadata.share.collaborators.filter(
-      (collab) => collab.userId !== targetUserId,
-    );
+    const result = await this.prisma.$transaction(async (tx) => {
+      const freshNode = await tx.node.findUnique({ where: { id: nodeId } });
+      if (!freshNode) throw new NotFoundException();
 
-    if (metadata.share.collaborators.length === initialLength) {
-      throw new NotFoundException('Collaborateur non trouvé');
-    }
+      const metadata = this.extractMetadata(freshNode);
+      const wasDirect = metadata.share.collaborators.some(
+        (collab) => collab.userId === targetUserId,
+      );
 
-    writeShareBack(metadata);
-    await this.prisma.node.update({
-      where: { id: node.id },
-      data: { metadata: metadata.raw as Prisma.InputJsonValue },
+      if (!wasDirect) {
+        throw new NotFoundException('Collaborateur non trouvé');
+      }
+
+      const placement = await tx.sharedNodePlacement.findUnique({
+        where: {
+          nodeId_userId: {
+            nodeId: freshNode.id,
+            userId: targetUserId,
+          },
+        },
+      });
+
+      metadata.share.collaborators = metadata.share.collaborators.filter(
+        (collab) => collab.userId !== targetUserId,
+      );
+
+      const isLastOwner = metadata.share.collaborators.length === 0;
+      if (isLastOwner) {
+        metadata.share.invitations = [];
+      }
+
+      writeShareBack(metadata);
+
+      const updateData: Prisma.NodeUpdateInput = {
+        metadata: metadata.raw as Prisma.InputJsonValue,
+      };
+
+      if (isLastOwner && placement?.columnId) {
+        updateData.column = { connect: { id: placement.columnId } };
+        updateData.position = placement.position;
+      }
+
+      const updatedNode = await tx.node.update({
+        where: { id: freshNode.id },
+        data: updateData,
+      });
+
+      if (isLastOwner) {
+        await tx.sharedNodePlacement.deleteMany({
+          where: { nodeId: freshNode.id },
+        });
+        await tx.nodeShareInvitation.deleteMany({
+          where: { nodeId: freshNode.id },
+        });
+      } else {
+        await tx.sharedNodePlacement.deleteMany({
+          where: { nodeId: freshNode.id, userId: targetUserId },
+        });
+      }
+
+      return { updatedNode, isLastOwner };
     });
 
-    // Supprimer le placement personnel si existant
-    await this.prisma.sharedNodePlacement.deleteMany({
-      where: {
-        nodeId: node.id,
-        userId: targetUserId,
-      },
-    });
-
-    // Log de la suppression du collaborateur
     await this.activityService.logActivity(
-      node.id,
+      nodeId,
       userId,
-      ActivityType.COLLABORATOR_REMOVED,
-      { removedUserId: targetUserId },
+      ActivityType.SHARE_LINK_REMOVED,
+      { isLastOwner: result.isLastOwner },
     );
 
-    const nextNode = { ...node, metadata: metadata.raw } as NodeModel;
+    const nextNode = {
+      ...result.updatedNode,
+      metadata: (result.updatedNode as NodeModel).metadata,
+    } as NodeModel;
     return this.buildNodeShareSummary(nextNode, userId);
   }
 
@@ -3884,13 +4145,18 @@ export class NodesService {
     // Vérifier que l'utilisateur est bien collaborateur de cette tâche
     const node = await this.prisma.node.findUnique({
       where: { id: nodeId },
+      select: {
+        id: true,
+        path: true,
+        metadata: true,
+      },
     });
 
     if (!node) {
       throw new NotFoundException('Tâche introuvable');
     }
 
-    const metadata = this.extractMetadata(node);
+    const metadata = this.extractMetadata(node as NodeModel);
     const isCollaborator = metadata.share.collaborators.some(
       (collab) => collab.userId === userId,
     );
@@ -3899,6 +4165,29 @@ export class NodesService {
       throw new ForbiddenException(
         "Vous n'êtes pas collaborateur de cette tâche",
       );
+    }
+
+    const nodePath = node.path ?? '';
+    const ancestorIds = nodePath.split('/').filter(Boolean).slice(0, -1);
+    if (ancestorIds.length > 0) {
+      const ancestorPlacement = await this.prisma.sharedNodePlacement.findFirst({
+        where: {
+          userId,
+          nodeId: { in: ancestorIds },
+        },
+        select: { nodeId: true },
+      });
+      if (ancestorPlacement) {
+        await this.activityService.logActivity(
+          nodeId,
+          userId,
+          ActivityType.KANBAN_MOVE_REFUSED,
+          { reason: 'NESTED_SHARE', parentShareId: ancestorPlacement.nodeId },
+        );
+        throw new ConflictException(
+          'Impossible de déplacer un partage imbriqué',
+        );
+      }
     }
 
     // Vérifier que la colonne existe et récupérer son board
@@ -3970,10 +4259,10 @@ export class NodesService {
       await this.activityService.logActivity(
         nodeId,
         userId,
-        ActivityType.NODE_MOVED,
+        ActivityType.KANBAN_MOVED,
         {
-          fromColumn: oldPlacement.column.name,
-          toColumn: column.name,
+          fromColumnName: oldPlacement.column.name,
+          toColumnName: column.name,
         },
       );
     }

@@ -16,7 +16,7 @@ export type NodeCollaboratorInvitation = {
   email: string;
   invitedAt: string | null;
   invitedById: string | null;
-  status: 'PENDING' | 'ACCEPTED';
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
 };
 
 export type NodeCollaboratorsResponse = {

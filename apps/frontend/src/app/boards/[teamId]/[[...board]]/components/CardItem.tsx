@@ -309,7 +309,14 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
               <div className="flex items-center gap-1.5">
                 <p className="text-sm font-medium leading-tight break-words pr-6">{title}</p>
                 {node.isSharedRoot && (
-                  <span className="shrink-0 text-purple-400/60 text-xs" title="Tâche partagée - Ne peut pas être supprimée">🤝</span>
+                  <span
+                    className={`shrink-0 text-xs ${node.sharedPlacementLocked ? 'text-slate-400/70' : 'text-purple-400/60'}`}
+                    title={node.sharedPlacementLocked
+                      ? 'Tache partagee imbriquee - point dentree verrouille'
+                      : 'Tache partagee - suppression non autorisee'}
+                  >
+                    🤝
+                  </span>
                 )}
               </div>
             )}

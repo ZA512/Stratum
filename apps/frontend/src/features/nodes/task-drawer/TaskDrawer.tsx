@@ -2088,7 +2088,7 @@ export const TaskDrawer: React.FC = () => {
                                         </p>
                                       )}
                                     </div>
-                                    {collab.accessType === 'DIRECT' && collab.userId !== user?.id ? (
+                                    {collab.accessType === 'DIRECT' && collab.userId === user?.id ? (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -2112,7 +2112,7 @@ export const TaskDrawer: React.FC = () => {
                                         disabled={removingCollaboratorId === collab.userId}
                                         className="self-start rounded border border-white/20 px-3 py-1 text-xs font-medium text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
                                       >
-                                        {removingCollaboratorId === collab.userId ? 'Suppression…' : 'Retirer'}
+                                        {removingCollaboratorId === collab.userId ? 'Suppression…' : 'Supprimer le lien'}
                                       </button>
                                     ) : null}
                                   </div>
@@ -2142,7 +2142,13 @@ export const TaskDrawer: React.FC = () => {
                                 <div className="flex flex-col gap-1">
                                   <span className="font-medium text-foreground">{invite.email}</span>
                                   <span className="text-xs text-[color:var(--color-task-label)]">
-                                    Statut : {invite.status === 'PENDING' ? 'En attente' : 'Acceptée'}
+                                    Statut : {invite.status === 'PENDING'
+                                      ? 'En attente'
+                                      : invite.status === 'ACCEPTED'
+                                        ? 'Acceptée'
+                                        : invite.status === 'DECLINED'
+                                          ? 'Refusée'
+                                          : 'Expirée'}
                                     {invite.invitedAt ? ` • Envoyée le ${new Date(invite.invitedAt).toLocaleDateString('fr-FR', { dateStyle: 'medium' })}` : ''}
                                   </span>
                                 </div>

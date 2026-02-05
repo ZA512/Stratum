@@ -1770,6 +1770,12 @@ export function TeamBoardPage(){
     try {
       // Si c'est une tâche mère partagée, utiliser l'endpoint de placement personnel
       if (moving.isSharedRoot) {
+        if (moving.sharedPlacementLocked) {
+          toastError(tBoard('alerts.sharedPlacementLocked'));
+          setOptimisticColumns(snapshot);
+          setDraggingCard(null);
+          return;
+        }
         await handleApi(() =>
           moveSharedNodePlacement(
             moving.id,

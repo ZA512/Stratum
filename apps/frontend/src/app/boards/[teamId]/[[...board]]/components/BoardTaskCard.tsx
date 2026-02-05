@@ -57,9 +57,11 @@ export function BoardTaskCard({
   displayOptions,
   helpMode,
 }: BoardTaskCardProps) {
+  const isSharedLocked = Boolean(node.sharedPlacementLocked);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
-    data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
+    data: { columnId, type: 'card', node: { id: node.id, title: node.title } },
+    disabled: isSharedLocked,
   });
   const { accessToken } = useAuth();
   const { t: tBoard, locale } = useTranslation("board");
@@ -437,7 +439,7 @@ export function BoardTaskCard({
           }
         }}
         onMenuButtonClick={() => setMenuOpen(prev => !prev)}
-        className="cursor-grab active:cursor-grabbing"
+        className={isSharedLocked ? "cursor-not-allowed opacity-70" : "cursor-grab active:cursor-grabbing"}
       />
       {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
         <div

@@ -36,8 +36,22 @@ function extractMetadata(log: ActivityLog): Record<string, string | number> {
       break;
 
     case 'NODE_MOVED':
-      result.fromColumn = String(metadata.fromColumnName || '');
-      result.toColumn = String(metadata.toColumnName || '');
+      result.fromColumn = String(
+        metadata.fromColumnName || metadata.fromColumn || '',
+      );
+      result.toColumn = String(metadata.toColumnName || metadata.toColumn || '');
+      break;
+
+    case 'KANBAN_MOVED':
+      result.fromColumn = String(
+        metadata.fromColumnName || metadata.fromColumn || '',
+      );
+      result.toColumn = String(metadata.toColumnName || metadata.toColumn || '');
+      break;
+
+    case 'SHARE_INVITE_CREATED':
+    case 'SHARE_INVITE_EXPIRED':
+      result.email = String(metadata.email || '');
       break;
 
     case 'INVITATION_SENT':
