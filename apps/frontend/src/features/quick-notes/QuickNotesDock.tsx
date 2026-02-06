@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/toast/ToastProvider";
 import { useQuickNotesStore } from "@/stores/quick-notes";
 import { useAuth } from "@/features/auth/auth-provider";
+import { QuickNoteAiPanel } from "@/features/quick-notes/QuickNoteAiPanel";
 import {
   useCleanupQuickNotes,
   useQuickNotesOpen,
@@ -25,11 +26,16 @@ export function QuickNotesDock() {
   const { success, error: toastError } = useToast();
   const treatMutation = useTreatQuickNote();
   const cleanupMutation = useCleanupQuickNotes();
+  const [activeAiNoteId, setActiveAiNoteId] = useState<string | null>(null);
   const prevCountRef = useRef<number>(data?.count ?? 0);
 
-  const notes = data?.items ?? [];
+  const notes = useMemo(() => data?.items ?? [], [data?.items]);
   const openCount = data?.count ?? 0;
   const shouldShowDock = openCount > 0 && !isDockHidden;
+  const activeAiNote = useMemo(
+    () => notes.find((note) => note.id === activeAiNoteId) ?? null,
+    [activeAiNoteId, notes],
+  );
 
   useEffect(() => {
     const prev = prevCountRef.current;
@@ -45,14 +51,22 @@ export function QuickNotesDock() {
     hideDock();
   }, [accessToken, hideDock]);
 
-  const handleTreat = async (noteId: string) => {
+  useEffect(() => {
+    if (!activeAiNoteId) return;
+    const stillExists = notes.some((note) => note.id === activeAiNoteId);
+    if (!stillExists) {
+      setActiveAiNoteId(null);
+    }
+  }, [activeAiNoteId, notes]);
+
+  const handleTreat = useCallback(async (noteId: string) => {
     try {
       await treatMutation.mutateAsync(noteId);
       success("Note archivée");
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Erreur inattendue");
     }
-  };
+  }, [treatMutation, success, toastError]);
 
   const handleHide = () => {
     hideDock();
@@ -90,6 +104,14 @@ export function QuickNotesDock() {
           </div>
           <button
             type="button"
+            onClick={() => setActiveAiNoteId(note.id)}
+            className="rounded-full border border-accent/30 px-2 py-1 text-[11px] font-semibold text-accent transition hover:border-accent"
+            aria-label="Ouvrir l'assistant IA"
+          >
+            IA
+          </button>
+          <button
+            type="button"
             onClick={() => void handleTreat(note.id)}
             className="rounded-full p-1 text-muted transition hover:text-foreground"
             aria-label="Traiter la note"
@@ -125,6 +147,13 @@ export function QuickNotesDock() {
       <div className="max-h-[240px] overflow-y-auto px-4 py-2">
         {noteRows}
       </div>
+
+      {activeAiNote && (
+        <QuickNoteAiPanel
+          note={activeAiNote}
+          onClose={() => setActiveAiNoteId(null)}
+        />
+      )}
     </div>
   );
 }

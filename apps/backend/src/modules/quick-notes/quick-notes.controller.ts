@@ -28,6 +28,14 @@ import {
   QuickNoteDto,
   QuickNoteListDto,
 } from './dto/quick-note.dto';
+import {
+  QuickNoteAiExecuteRequestDto,
+  QuickNoteAiExecuteResponseDto,
+  QuickNoteAiRefineRequestDto,
+  QuickNoteAiSuggestRequestDto,
+  QuickNoteAiSuggestResponseDto,
+} from './dto/quick-note-ai.dto';
+import { QuickNotesAiService } from './quick-notes-ai.service';
 import { QuickNotesService } from './quick-notes.service';
 
 @ApiTags('QuickNotes')
@@ -35,7 +43,10 @@ import { QuickNotesService } from './quick-notes.service';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class QuickNotesController {
-  constructor(private readonly quickNotesService: QuickNotesService) {}
+  constructor(
+    private readonly quickNotesService: QuickNotesService,
+    private readonly quickNotesAiService: QuickNotesAiService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Créer une note rapide' })
@@ -85,7 +96,9 @@ export class QuickNotesController {
   }
 
   @Get('boards')
-  @ApiOperation({ summary: 'Lister les kanbans disponibles pour les notes rapides' })
+  @ApiOperation({
+    summary: 'Lister les kanbans disponibles pour les notes rapides',
+  })
   @ApiOkResponse({ type: QuickNoteBoardDto, isArray: true })
   listBoards(
     @CurrentUser() user: AuthenticatedUser,
@@ -95,12 +108,54 @@ export class QuickNotesController {
 
   @Post('cleanup')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Supprimer les notes archivées depuis plus de 7 jours' })
+  @ApiOperation({
+    summary: 'Supprimer les notes archivées depuis plus de 7 jours',
+  })
   @ApiOkResponse({ type: QuickNoteCleanupDto })
   async cleanup(
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuickNoteCleanupDto> {
     const deleted = await this.quickNotesService.cleanup(user.id);
     return { deleted };
+  }
+
+  @Post(':id/ai/suggest')
+  @ApiOperation({ summary: 'Générer des propositions IA pour une quick note' })
+  @ApiParam({ name: 'id', example: 'note_123' })
+  @ApiOkResponse({ type: QuickNoteAiSuggestResponseDto })
+  suggestWithAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: QuickNoteAiSuggestRequestDto,
+  ): Promise<QuickNoteAiSuggestResponseDto> {
+    return this.quickNotesAiService.suggest(user.id, id, dto);
+  }
+
+  @Post(':id/ai/refine')
+  @ApiOperation({
+    summary: 'Affiner les propositions IA avec un feedback utilisateur',
+  })
+  @ApiParam({ name: 'id', example: 'note_123' })
+  @ApiOkResponse({ type: QuickNoteAiSuggestResponseDto })
+  refineWithAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: QuickNoteAiRefineRequestDto,
+  ): Promise<QuickNoteAiSuggestResponseDto> {
+    return this.quickNotesAiService.refine(user.id, id, dto);
+  }
+
+  @Post(':id/ai/execute')
+  @ApiOperation({
+    summary: "Exécuter une sélection d'actions IA sur la quick note",
+  })
+  @ApiParam({ name: 'id', example: 'note_123' })
+  @ApiOkResponse({ type: QuickNoteAiExecuteResponseDto })
+  executeAiActions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: QuickNoteAiExecuteRequestDto,
+  ): Promise<QuickNoteAiExecuteResponseDto> {
+    return this.quickNotesAiService.execute(user.id, id, dto);
   }
 }
