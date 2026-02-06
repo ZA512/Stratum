@@ -46,6 +46,7 @@ export type BoardNode = {
   doneArchiveScheduledAt?: string | null;
   isSnoozed?: boolean;
   isSharedRoot?: boolean;
+  sharedPlacementLocked?: boolean;
   canDelete?: boolean;
 };
 

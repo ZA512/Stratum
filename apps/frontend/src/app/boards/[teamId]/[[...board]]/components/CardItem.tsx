@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useCallback, useId } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useId, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -47,8 +48,10 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
   const [counts, setCounts] = useState<{backlog:number; inProgress:number; blocked:number; done:number} | null>(node.counts ?? null);
   const [effort, setEffort] = useState<null | 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL'>(node.effort ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuPortalRef = useRef<HTMLDivElement | null>(null);
 
   const [raciOpen, setRaciOpen] = useState(false);
   const raciTimerRef = useRef<number | null>(null);
@@ -93,6 +96,37 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
   }, [raciOpen, handleRaciClose]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!menuOpen || !menuButtonRef.current) return;
+    const rect = menuButtonRef.current.getBoundingClientRect();
+    const menuHeight = menuPortalRef.current?.offsetHeight ?? 160;
+    const menuWidth = menuPortalRef.current?.offsetWidth ?? 200;
+    const padding = 4;
+    const availableBelow = window.innerHeight - rect.bottom;
+    const openUp = availableBelow < menuHeight + padding;
+    const top = openUp ? rect.top - menuHeight - padding : rect.bottom + padding;
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = window.innerWidth - menuWidth - 8;
+    }
+    if (left < 8) {
+      left = 8;
+    }
+    setMenuPosition({ top: Math.max(top, 8), left });
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    updateMenuPosition();
+    const handleScroll = () => updateMenuPosition();
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [menuOpen, updateMenuPosition]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -252,53 +286,57 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
               <circle cx="19" cy="12" r="2" />
             </svg>
           </button>
-          {menuOpen && (
+          {menuOpen && menuPosition && createPortal(
             <div
-              ref={menuRef}
+              ref={menuPortalRef}
               role="menu"
-              className="absolute right-0 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
+              className="fixed z-[10000] min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
+              style={{ top: menuPosition.top, left: menuPosition.left }}
             >
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeMenu();
-                  onOpen(node.id);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-              >
-                ✏️ <span>Éditer la tâche</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeMenu();
-                  onRequestMove(node);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-              >
-                📦 <span>Déplacer dans un autre kanban</span>
-              </button>
-              {node.canDelete !== false && (
+              <div ref={menuRef}>
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => {
                     closeMenu();
-                    onRequestDelete(node);
+                    onOpen(node.id);
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
                 >
-                  🗑️ <span>Supprimer…</span>
+                  ✏️ <span>Éditer la tâche</span>
                 </button>
-              )}
-              {node.canDelete === false && (
-                <div className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-muted/50 cursor-not-allowed">
-                  🔒 <span>Tâche partagée - Suppression non autorisée</span>
-                </div>
-              )}
-            </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeMenu();
+                    onRequestMove(node);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+                >
+                  📦 <span>Déplacer dans un autre kanban</span>
+                </button>
+                {node.canDelete !== false && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeMenu();
+                      onRequestDelete(node);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
+                  >
+                    🗑️ <span>Supprimer…</span>
+                  </button>
+                )}
+                {node.canDelete === false && (
+                  <div className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-muted/50 cursor-not-allowed">
+                    🔒 <span>Tâche partagée - Suppression non autorisée</span>
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body,
           )}
         </div>
       </div>
@@ -309,7 +347,14 @@ export function CardItem({ node, columnId, childBoard, onOpen, onRename, onReque
               <div className="flex items-center gap-1.5">
                 <p className="text-sm font-medium leading-tight break-words pr-6">{title}</p>
                 {node.isSharedRoot && (
-                  <span className="shrink-0 text-purple-400/60 text-xs" title="Tâche partagée - Ne peut pas être supprimée">🤝</span>
+                  <span
+                    className={`shrink-0 text-xs ${node.sharedPlacementLocked ? 'text-slate-400/70' : 'text-purple-400/60'}`}
+                    title={node.sharedPlacementLocked
+                      ? 'Tache partagee imbriquee - point dentree verrouille'
+                      : 'Tache partagee - suppression non autorisee'}
+                  >
+                    🤝
+                  </span>
                 )}
               </div>
             )}

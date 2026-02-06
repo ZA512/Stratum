@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-card';
@@ -57,9 +58,11 @@ export function BoardTaskCard({
   displayOptions,
   helpMode,
 }: BoardTaskCardProps) {
+  const isSharedLocked = Boolean(node.sharedPlacementLocked);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
     id: node.id, 
-    data: { columnId, type: 'card', node: { id: node.id, title: node.title } }
+    data: { columnId, type: 'card', node: { id: node.id, title: node.title } },
+    disabled: isSharedLocked,
   });
   const { accessToken } = useAuth();
   const { t: tBoard, locale } = useTranslation("board");
@@ -73,9 +76,20 @@ export function BoardTaskCard({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(node.title);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [fractalLoading, setFractalLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuPortalRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  const setCardRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      setNodeRef(element);
+      cardRef.current = element;
+    },
+    [setNodeRef],
+  );
 
   useEffect(() => { setTitle(node.title); }, [node.id, node.title]);
 
@@ -114,6 +128,37 @@ export function BoardTaskCard({
       document.removeEventListener('keydown', handleKey);
     };
   }, [menuOpen, closeMenu]);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!menuOpen || !menuButtonRef.current) return;
+    const rect = menuButtonRef.current.getBoundingClientRect();
+    const menuHeight = menuPortalRef.current?.offsetHeight ?? 180;
+    const menuWidth = menuPortalRef.current?.offsetWidth ?? 200;
+    const padding = 4;
+    const availableBelow = window.innerHeight - rect.bottom;
+    const openUp = availableBelow < menuHeight + padding;
+    const top = openUp ? rect.top - menuHeight - padding : rect.bottom + padding;
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = window.innerWidth - menuWidth - 8;
+    }
+    if (left < 8) {
+      left = 8;
+    }
+    setMenuPosition({ top: Math.max(top, 8), left });
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    updateMenuPosition();
+    const handleScroll = () => updateMenuPosition();
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [menuOpen, updateMenuPosition]);
 
   // Mapping vers TaskCard props
   const priority: TaskCardProps['priority'] = 
@@ -391,7 +436,7 @@ export function BoardTaskCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setCardRef}
       style={style}
       {...attributes}
       {...listeners}
@@ -417,6 +462,7 @@ export function BoardTaskCard({
         isShared={node.isSharedRoot}
         helpMode={helpMode}
         helpMessages={helpMessages}
+        menuButtonRef={menuButtonRef}
         onClick={() => onOpen(node.id)}
         onFractalPathClick={async () => {
           if (!onOpenChildBoard || fractalLoading) return;
@@ -437,7 +483,7 @@ export function BoardTaskCard({
           }
         }}
         onMenuButtonClick={() => setMenuOpen(prev => !prev)}
-        className="cursor-grab active:cursor-grabbing"
+        className={isSharedLocked ? "cursor-not-allowed opacity-70" : "cursor-grab active:cursor-grabbing"}
       />
       {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
         <div
@@ -465,57 +511,61 @@ export function BoardTaskCard({
       )}
       
       {/* Menu contextuel overlay */}
-      {menuOpen && (
-        <div
-          ref={menuRef}
-          role="menu"
-          className="absolute right-2 top-12 min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur z-50"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenu();
-              onOpen(node.id);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+      {menuOpen && menuPosition && createPortal(
+          <div
+            ref={menuPortalRef}
+            role="menu"
+            className="fixed z-[10000] min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
           >
-            ✏️ <span>{tBoard('cards.menu.open')}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenu();
-              setEditing(true);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-          >
-            📝 <span>{tBoard('cards.menu.rename')}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenu();
-              onRequestMove(node);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-          >
-            📦 <span>{tBoard('cards.menu.move')}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              closeMenu();
-              onRequestDelete(node);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
-          >
-            🗑️ <span>{tBoard('cards.menu.delete')}</span>
-          </button>
-        </div>
+            <div ref={menuRef}>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMenu();
+                onOpen(node.id);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+            >
+              ✏️ <span>{tBoard('cards.menu.open')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMenu();
+                setEditing(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+            >
+              📝 <span>{tBoard('cards.menu.rename')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMenu();
+                onRequestMove(node);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
+            >
+              📦 <span>{tBoard('cards.menu.move')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMenu();
+                onRequestDelete(node);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
+            >
+              🗑️ <span>{tBoard('cards.menu.delete')}</span>
+            </button>
+          </div>
+        </div>,
+        document.body,
       )}
       
       {/* Mode édition overlay */}

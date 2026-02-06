@@ -187,6 +187,7 @@ export class BoardsService {
       nodeId: string;
       columnId: string;
       position: number;
+      archivedAt: Date | null;
       node: any;
     }> = [];
 
@@ -204,6 +205,7 @@ export class BoardsService {
               columnId: true,
               position: true,
               parentId: true,
+              path: true,
               dueAt: true,
               shortId: true,
               description: true,
@@ -328,14 +330,32 @@ export class BoardsService {
       }
     }
 
+    const sharedPlacementNodeIds = new Set(
+      sharedPlacements
+        .filter((placement) => !placement.archivedAt)
+        .map((placement) => placement.nodeId),
+    );
+    const lockedSharedPlacements = new Set<string>();
+
+    for (const placement of sharedPlacements) {
+      const nodePath = placement.node?.path ?? '';
+      if (!nodePath) continue;
+      const ancestors = nodePath.split('/').filter(Boolean).slice(0, -1);
+      if (ancestors.some((ancestorId) => sharedPlacementNodeIds.has(ancestorId))) {
+        lockedSharedPlacements.add(placement.nodeId);
+      }
+    }
+
     // Ajouter les tâches partagées avec leur placement personnel (en écrasant position et columnId)
     for (const placement of sharedPlacements) {
+      if (placement.archivedAt) continue;
       if (placement.node && !placement.node.archivedAt) {
         allNodesMap.set(placement.nodeId, {
           ...placement.node,
           columnId: placement.columnId, // Position personnalisée de l'utilisateur
           position: placement.position,
           isSharedRoot: true, // Flag pour identifier les tâches mères partagées
+          sharedPlacementLocked: lockedSharedPlacements.has(placement.nodeId),
         });
       }
     }
@@ -609,8 +629,7 @@ export class BoardsService {
       // 1. Si elle provient d'un SharedNodePlacement reçu (node.isSharedRoot déjà true)
       // 2. OU si elle a des partages actifs avec d'autres utilisateurs (propriétaire qui a partagé)
       const isSharedRoot = node.isSharedRoot ?? nodeIdsWithSharing.has(node.id);
-      const isCreator = userId && node.createdById === userId;
-      const canDelete = !isSharedRoot || isCreator;
+      const canDelete = !isSharedRoot;
 
       bucket.push({
         id: node.id,
@@ -661,6 +680,9 @@ export class BoardsService {
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
         isSnoozed: node.isSnoozed ?? false,
         isSharedRoot,
+        sharedPlacementLocked: Boolean(
+          (node as { sharedPlacementLocked?: boolean }).sharedPlacementLocked,
+        ),
         canDelete,
         plannedStartDate,
         plannedEndDate,

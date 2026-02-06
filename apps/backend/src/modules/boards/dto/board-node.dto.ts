@@ -164,6 +164,13 @@ export class BoardNodeDto {
   isSharedRoot?: boolean;
 
   @ApiPropertyOptional({
+    example: false,
+    description:
+      "Indique si le point d'entrée partagé est verrouillé (imbriqué sous un autre partage)",
+  })
+  sharedPlacementLocked?: boolean;
+
+  @ApiPropertyOptional({
     example: true,
     description: "Indique si l'utilisateur peut supprimer cette tâche",
   })

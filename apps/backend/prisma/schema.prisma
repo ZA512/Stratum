@@ -44,6 +44,16 @@ enum Effort {
 }
 
 enum ActivityType {
+  SHARE_INVITE_CREATED
+  SHARE_INVITE_ACCEPTED
+  SHARE_INVITE_DECLINED
+  SHARE_INVITE_EXPIRED
+  SHARE_LINK_REMOVED
+  KANBAN_SOFT_DELETED
+  KANBAN_RESTORED
+  KANBAN_MOVED
+  KANBAN_MOVE_REFUSED
+  KANBAN_BECAME_SHARED
   NODE_CREATED
   NODE_UPDATED
   NODE_MOVED
@@ -435,6 +445,7 @@ model SharedNodePlacement {
   userId     String
   columnId   String
   position   Float    @default(0)
+  archivedAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
