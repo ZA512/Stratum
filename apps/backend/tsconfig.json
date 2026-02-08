@@ -31,6 +31,10 @@
     "dist",
     "test",
     "**/*.spec.ts",
-    "scripts/migrate-checklists-to-children.ts"
-  ]
+    "scripts/migrate-checklists-to-children.ts",
+    "scripts/**/*.ts",
+    "prisma/**/*.ts",
+    "prisma.config.ts"
+  ],
+  "include": ["src/**/*.ts"]
 }

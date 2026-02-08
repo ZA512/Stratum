@@ -3,11 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ColumnBehaviorKey, MembershipStatus, QuickNoteType } from '@prisma/client';
+import {
+  ColumnBehaviorKey,
+  MembershipStatus,
+  QuickNoteType,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AttachQuickNoteDto } from './dto/attach-quick-note.dto';
 import { CreateQuickNoteDto } from './dto/create-quick-note.dto';
-import type { QuickNoteBoardDto, QuickNoteDto, QuickNoteListDto } from './dto/quick-note.dto';
+import type {
+  QuickNoteBoardDto,
+  QuickNoteDto,
+  QuickNoteListDto,
+} from './dto/quick-note.dto';
 
 const NOTE_TEXT_MAX = 2000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -247,7 +255,9 @@ export class QuickNotesService {
     return (value ?? '').trim();
   }
 
-  private normalizeType(value: QuickNoteType | undefined | null): QuickNoteType {
+  private normalizeType(
+    value: QuickNoteType | undefined | null,
+  ): QuickNoteType {
     if (!value) {
       throw new BadRequestException('Le type est obligatoire.');
     }
@@ -324,7 +334,8 @@ export class QuickNotesService {
   }): QuickNoteDto {
     const kanban = note.kanban;
     const isArchived = kanban?.node.archivedAt ? true : false;
-    const isDone = kanban?.node.column?.behavior?.key === ColumnBehaviorKey.DONE;
+    const isDone =
+      kanban?.node.column?.behavior?.key === ColumnBehaviorKey.DONE;
     const kanbanAvailable = Boolean(kanban && !isArchived && !isDone);
 
     return {

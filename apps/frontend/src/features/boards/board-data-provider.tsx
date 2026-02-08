@@ -159,7 +159,10 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [boardQuery.error, activeBoardId, teamId, accessToken, queryClient, router]);
 
-  const breadcrumb = breadcrumbQuery.data ?? [];
+  const breadcrumb = useMemo(
+    () => breadcrumbQuery.data ?? [],
+    [breadcrumbQuery.data],
+  );
   const childBoards = useMemo(
     () => childBoardsToMap(childBoardsQuery.data),
     [childBoardsQuery.data],

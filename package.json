@@ -20,6 +20,8 @@
     "test:e2e": "npm run test:e2e --workspace backend"
   },
   "devDependencies": {
+    "@swc/cli": "^0.5.2",
+    "@swc/core": "^1.15.11",
     "baseline-browser-mapping": "^2.9.19"
   }
 }

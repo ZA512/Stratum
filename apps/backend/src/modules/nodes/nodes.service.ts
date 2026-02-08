@@ -44,7 +44,7 @@ import {
 } from './dto/node-share.dto';
 
 function normalizeJson(
-  value: Prisma.JsonValue | null,
+  value: Prisma.JsonValue,
 ): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -181,7 +181,7 @@ type ExtractedMetadata = {
       lastReminderAt: string | null;
       nextReviewAt: string | null;
       lastKnownColumnId: string | null;
-      lastKnownBehavior: ColumnBehaviorKey | 'CUSTOM' | null;
+      lastKnownBehavior: ColumnBehaviorKey | null;
     };
     done: {
       completedAt: string | null;
@@ -1015,7 +1015,10 @@ export class NodesService {
       const sourceDepth = freshNode.depth;
 
       let wasShared = false;
-      const sourceAncestors = sourcePath.split('/').filter(Boolean).slice(0, -1);
+      const sourceAncestors = sourcePath
+        .split('/')
+        .filter(Boolean)
+        .slice(0, -1);
       if (sourceAncestors.length > 0) {
         const ancestors = await tx.node.findMany({
           where: { id: { in: sourceAncestors } },
@@ -2214,7 +2217,9 @@ export class NodesService {
           this.activityService.logActivity(
             nodeId,
             userId,
-            dto.archivedAt ? ActivityType.KANBAN_SOFT_DELETED : ActivityType.KANBAN_RESTORED,
+            dto.archivedAt
+              ? ActivityType.KANBAN_SOFT_DELETED
+              : ActivityType.KANBAN_RESTORED,
             dto.archivedAt ? { archivedAt: dto.archivedAt } : undefined,
           ),
         );
@@ -3530,7 +3535,9 @@ export class NodesService {
     let nodeForSummary: NodeModel = node;
     let metadataUpdated = false;
 
-    if (!metadata.share.collaborators.some((collab) => collab.userId === userId)) {
+    if (
+      !metadata.share.collaborators.some((collab) => collab.userId === userId)
+    ) {
       metadata.share.collaborators.push({
         userId,
         addedById: userId,
@@ -3882,7 +3889,9 @@ export class NodesService {
                 ? { ...(ancestor.metadata as Record<string, any>) }
                 : {};
             const share = normalizeShare(ancestorRaw);
-            if (share.collaborators.some((collab) => collab.userId === userId)) {
+            if (
+              share.collaborators.some((collab) => collab.userId === userId)
+            ) {
               hasInheritedAccess = true;
               break;
             }
@@ -4051,7 +4060,7 @@ export class NodesService {
   ): Promise<NodeShareSummaryDto> {
     if (targetUserId !== userId) {
       throw new ForbiddenException(
-        "Vous ne pouvez supprimer que votre propre lien",
+        'Vous ne pouvez supprimer que votre propre lien',
       );
     }
 
@@ -4131,7 +4140,7 @@ export class NodesService {
 
     const nextNode = {
       ...result.updatedNode,
-      metadata: (result.updatedNode as NodeModel).metadata,
+      metadata: result.updatedNode.metadata,
     } as NodeModel;
     return this.buildNodeShareSummary(nextNode, userId);
   }
@@ -4170,13 +4179,15 @@ export class NodesService {
     const nodePath = node.path ?? '';
     const ancestorIds = nodePath.split('/').filter(Boolean).slice(0, -1);
     if (ancestorIds.length > 0) {
-      const ancestorPlacement = await this.prisma.sharedNodePlacement.findFirst({
-        where: {
-          userId,
-          nodeId: { in: ancestorIds },
+      const ancestorPlacement = await this.prisma.sharedNodePlacement.findFirst(
+        {
+          where: {
+            userId,
+            nodeId: { in: ancestorIds },
+          },
+          select: { nodeId: true },
         },
-        select: { nodeId: true },
-      });
+      );
       if (ancestorPlacement) {
         await this.activityService.logActivity(
           nodeId,
@@ -4663,7 +4674,7 @@ export class NodesService {
   }
 
   private normalizeColumnSettings(
-    value: Prisma.JsonValue | null,
+    value: Prisma.JsonValue,
   ): Record<string, any> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null;
@@ -5213,7 +5224,7 @@ export class NodesService {
       typeof backlogWorkflowRaw.lastKnownBehavior === 'string'
         ? backlogWorkflowRaw.lastKnownBehavior
         : null;
-    const allowedBehaviors = new Set<ColumnBehaviorKey | 'CUSTOM'>([
+    const allowedBehaviors = new Set<ColumnBehaviorKey>([
       ColumnBehaviorKey.BACKLOG,
       ColumnBehaviorKey.BLOCKED,
       ColumnBehaviorKey.DONE,
@@ -5222,10 +5233,8 @@ export class NodesService {
     ]);
     const backlogLastBehavior =
       backlogLastBehaviorRaw &&
-      allowedBehaviors.has(
-        backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM',
-      )
-        ? (backlogLastBehaviorRaw as ColumnBehaviorKey | 'CUSTOM')
+      allowedBehaviors.has(backlogLastBehaviorRaw as ColumnBehaviorKey)
+        ? (backlogLastBehaviorRaw as ColumnBehaviorKey)
         : null;
     if (backlogLastBehavior === null)
       delete backlogWorkflowRaw.lastKnownBehavior;
@@ -5448,7 +5457,7 @@ export class NodesService {
             })
           ).map((column) => [column.id, column]),
         )
-      : new Map<string, { id: string; settings: Prisma.JsonValue | null }>();
+      : new Map<string, { id: string; settings: Prisma.JsonValue }>();
 
     const nowMs = now.getTime();
     const nowIso = now.toISOString();
@@ -5457,7 +5466,9 @@ export class NodesService {
       const metadata = this.extractMetadata(node as unknown as NodeModel);
       const backlogState = metadata.workflow.backlog;
       const columnSettings = this.normalizeColumnSettings(
-        node.columnId ? columnById.get(node.columnId)?.settings ?? null : null,
+        node.columnId
+          ? (columnById.get(node.columnId)?.settings ?? null)
+          : null,
       );
       const backlogSettings = this.normalizeBacklogSettings(columnSettings);
       const recipients = this.buildAssignmentRecipients(

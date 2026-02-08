@@ -50,6 +50,15 @@ type DoneColumnSettings = {
   archiveAfterDays: number;
 };
 
+type JsonPayload = Record<string, unknown> | null;
+
+type ColumnUpdatePayload = {
+  name?: string;
+  position?: number;
+  wipLimit?: number | null;
+  settings?: JsonPayload;
+};
+
 const isPlainObject = (value: unknown): value is Record<string, any> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -93,7 +102,8 @@ export class BoardsService {
     ownerUserId: string | null;
     isPersonal: boolean;
   }> {
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
     });
     if (!board) {
@@ -108,7 +118,8 @@ export class BoardsService {
 
   async getBoard(boardId: string, _userId?: string): Promise<BoardDto> {
     void _userId;
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
       include: {
         node: {
@@ -153,7 +164,8 @@ export class BoardsService {
     boardId: string,
     userId?: string,
   ): Promise<BoardWithNodesDto> {
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
       include: {
         node: {
@@ -192,7 +204,7 @@ export class BoardsService {
     }> = [];
 
     if (userId) {
-      sharedPlacements = await this.prisma.sharedNodePlacement.findMany({
+      sharedPlacements = await prisma.sharedNodePlacement.findMany({
         where: {
           userId,
           columnId: { in: columnIds },
@@ -240,7 +252,7 @@ export class BoardsService {
     }
 
     // Charger les tâches appartenant directement au board
-    const rawNodes = await this.prisma.node.findMany({
+    const rawNodes = await prisma.node.findMany({
       where: {
         archivedAt: null,
         columnId: { in: columnIds },
@@ -312,7 +324,7 @@ export class BoardsService {
           userId && node.metadata
             ? (() => {
                 try {
-                  const meta = node.metadata as any;
+                  const meta = node.metadata;
                   const collaborators = meta?.share?.collaborators;
                   return (
                     Array.isArray(collaborators) &&
@@ -341,7 +353,9 @@ export class BoardsService {
       const nodePath = placement.node?.path ?? '';
       if (!nodePath) continue;
       const ancestors = nodePath.split('/').filter(Boolean).slice(0, -1);
-      if (ancestors.some((ancestorId) => sharedPlacementNodeIds.has(ancestorId))) {
+      if (
+        ancestors.some((ancestorId) => sharedPlacementNodeIds.has(ancestorId))
+      ) {
         lockedSharedPlacements.add(placement.nodeId);
       }
     }
@@ -371,7 +385,7 @@ export class BoardsService {
     const nodeIdsWithSharing = new Set<string>();
     if (userId && filteredNodes.length > 0) {
       const nodeIds = filteredNodes.map((n) => n.id as string);
-      const sharingPlacements = await this.prisma.sharedNodePlacement.findMany({
+      const sharingPlacements = await prisma.sharedNodePlacement.findMany({
         where: {
           nodeId: { in: nodeIds },
           userId: { not: userId }, // Partages avec d'AUTRES utilisateurs
@@ -422,7 +436,7 @@ export class BoardsService {
     >();
     if (nodes.length > 0) {
       const nodeIds = nodes.map((n) => n.id as string);
-      const children = await this.prisma.node.findMany({
+      const children = await prisma.node.findMany({
         where: { parentId: { in: nodeIds } },
         select: {
           parentId: true,
@@ -691,7 +705,7 @@ export class BoardsService {
       } as any);
     }
 
-    const archivedNodes = await this.prisma.node.findMany({
+    const archivedNodes = await prisma.node.findMany({
       where: { parentId: board.nodeId, archivedAt: { not: null } },
       select: { metadata: true, columnId: true },
     });
@@ -712,7 +726,7 @@ export class BoardsService {
     // (polling n'est utile que si collaboration active)
     let isShared = false;
     if (userId) {
-      const sharedCount = await this.prisma.sharedNodePlacement.count({
+      const sharedCount = await prisma.sharedNodePlacement.count({
         where: {
           columnId: { in: columnIds },
           userId: { not: userId }, // Autres users que moi
@@ -732,9 +746,7 @@ export class BoardsService {
         behaviorKey: column.behavior.key,
         position: column.position,
         wipLimit: column.wipLimit,
-        settings: this.normalizeColumnSettings(
-          (column as any).settings ?? null,
-        ),
+        settings: this.normalizeColumnSettings(column.settings ?? null),
         badges: {
           archived: archivedCounts.get(column.id) ?? 0,
           snoozed: snoozedCounts.get(column.id) ?? 0,
@@ -751,7 +763,8 @@ export class BoardsService {
     columnId: string,
     userId: string,
   ): Promise<ArchivedBoardNodeDto[]> {
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
       include: {
         node: { select: { id: true } },
@@ -776,7 +789,7 @@ export class BoardsService {
       throw new NotFoundException('Colonne introuvable');
     }
 
-    const archivedNodes = await this.prisma.node.findMany({
+    const archivedNodes = await prisma.node.findMany({
       where: {
         parentId: board.nodeId,
         archivedAt: { not: null },
@@ -839,7 +852,8 @@ export class BoardsService {
     const sanitizedName = dto.name.trim();
     const requestedBehaviorKey = dto.behaviorKey ?? ColumnBehaviorKey.BACKLOG;
 
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
       include: {
         columns: {
@@ -877,7 +891,7 @@ export class BoardsService {
       board.columns.length > 0 ? board.columns[0].position + 1 : 0;
 
     // Initialiser les settings par défaut selon le comportement
-    let initialSettings: Prisma.InputJsonValue | undefined;
+    let initialSettings: JsonPayload | undefined;
     if (requestedBehaviorKey === ColumnBehaviorKey.BACKLOG) {
       initialSettings = {
         backlog: {
@@ -894,7 +908,7 @@ export class BoardsService {
       };
     }
 
-    const created = await this.prisma.column.create({
+    const created = await prisma.column.create({
       data: {
         boardId,
         name: sanitizedName,
@@ -914,7 +928,7 @@ export class BoardsService {
       behaviorKey: created.behavior.key,
       position: created.position,
       wipLimit: created.wipLimit,
-      settings: this.normalizeColumnSettings((created as any).settings ?? null),
+      settings: this.normalizeColumnSettings(created.settings ?? null),
     };
   }
 
@@ -932,7 +946,8 @@ export class BoardsService {
       throw new BadRequestException('Aucune modification fournie');
     }
 
-    const column = await this.prisma.column.findFirst({
+    const prisma = this.prisma;
+    const column = await prisma.column.findFirst({
       where: { id: columnId, boardId },
       include: {
         board: {
@@ -960,12 +975,12 @@ export class BoardsService {
     );
 
     const currentSettings = this.normalizeColumnSettings(
-      (column as any).settings ?? null,
+      column.settings ?? null,
     );
-    const updateData: Prisma.ColumnUpdateInput = {};
+    const updateData: ColumnUpdatePayload = {};
     let hasChange = false;
     let settingsChanged = false;
-    let nextSettingsPayload: Prisma.InputJsonValue | undefined;
+    let nextSettingsPayload: JsonPayload | undefined;
 
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
@@ -1062,7 +1077,7 @@ export class BoardsService {
       if (backlogChanged) {
         const base = currentSettings ? { ...currentSettings } : {};
         base.backlog = nextBacklog;
-        nextSettingsPayload = base as Prisma.InputJsonValue;
+        nextSettingsPayload = base as JsonPayload;
         settingsChanged = true;
       }
     }
@@ -1089,7 +1104,7 @@ export class BoardsService {
       if (doneChanged) {
         const base = currentSettings ? { ...currentSettings } : {};
         base.done = nextDone;
-        nextSettingsPayload = base as Prisma.InputJsonValue;
+        nextSettingsPayload = base as JsonPayload;
         settingsChanged = true;
       }
     }
@@ -1140,34 +1155,36 @@ export class BoardsService {
       };
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (reorderPlan) {
-        const originalPositions = new Map(
-          orderedColumns.map((entry) => [entry.id, entry.position] as const),
-        );
-        for (const entry of reorderPlan) {
-          if (originalPositions.get(entry.id) === entry.position) {
-            continue;
+    const updated = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        if (reorderPlan) {
+          const originalPositions = new Map(
+            orderedColumns.map((entry) => [entry.id, entry.position] as const),
+          );
+          for (const entry of reorderPlan) {
+            if (originalPositions.get(entry.id) === entry.position) {
+              continue;
+            }
+            await tx.column.update({
+              where: { id: entry.id },
+              data: { position: entry.position },
+            });
           }
+        }
+
+        if (Object.keys(updateData).length > 0) {
           await tx.column.update({
-            where: { id: entry.id },
-            data: { position: entry.position },
+            where: { id: column.id },
+            data: updateData as any,
           });
         }
-      }
 
-      if (Object.keys(updateData).length > 0) {
-        await tx.column.update({
+        return tx.column.findUnique({
           where: { id: column.id },
-          data: updateData,
+          include: { behavior: true },
         });
-      }
-
-      return tx.column.findUnique({
-        where: { id: column.id },
-        include: { behavior: true },
-      });
-    });
+      },
+    );
 
     if (!updated) {
       throw new NotFoundException('Colonne introuvable');
@@ -1179,7 +1196,7 @@ export class BoardsService {
       behaviorKey: updated.behavior.key,
       position: updated.position,
       wipLimit: updated.wipLimit,
-      settings: this.normalizeColumnSettings((updated as any).settings ?? null),
+      settings: this.normalizeColumnSettings(updated.settings ?? null),
     };
   }
 
@@ -1188,7 +1205,8 @@ export class BoardsService {
     columnId: string,
     userId: string,
   ): Promise<void> {
-    const column = await this.prisma.column.findFirst({
+    const prisma = this.prisma;
+    const column = await prisma.column.findFirst({
       where: { id: columnId, boardId },
       include: {
         board: true,
@@ -1214,7 +1232,7 @@ export class BoardsService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.column.delete({ where: { id: column.id } });
       const remaining = await tx.column.findMany({
         where: { boardId },
@@ -1250,7 +1268,8 @@ export class BoardsService {
   }
 
   private async getOrCreateBehavior(key: ColumnBehaviorKey) {
-    const existing = await this.prisma.columnBehavior.findFirst({
+    const prisma = this.prisma;
+    const existing = await prisma.columnBehavior.findFirst({
       where: { key },
       orderBy: { createdAt: 'asc' },
     });
@@ -1264,7 +1283,7 @@ export class BoardsService {
       color: null,
     };
 
-    return this.prisma.columnBehavior.create({
+    return prisma.columnBehavior.create({
       data: {
         key,
         label: defaults.label,
@@ -1378,10 +1397,10 @@ export class BoardsService {
     columns: Array<{
       id: string;
       behavior: { key: ColumnBehaviorKey };
-      settings: Prisma.JsonValue | null;
+      settings: unknown;
     }>,
   ): Promise<void> {
-    const repairs: Array<{ id: string; payload: Prisma.InputJsonValue }> = [];
+    const repairs: Array<{ id: string; payload: JsonPayload }> = [];
     for (const col of columns) {
       const raw = this.normalizeColumnSettings(col.settings ?? null);
       if (raw) continue; // déjà configuré
@@ -1394,7 +1413,7 @@ export class BoardsService {
               reviewEveryDays: DEFAULT_BACKLOG_SETTINGS.reviewEveryDays,
               archiveAfterDays: DEFAULT_BACKLOG_SETTINGS.archiveAfterDays,
             },
-          } as Prisma.InputJsonValue,
+          } as JsonPayload,
         });
       } else if (col.behavior.key === ColumnBehaviorKey.DONE) {
         repairs.push({
@@ -1403,17 +1422,18 @@ export class BoardsService {
             done: {
               archiveAfterDays: DEFAULT_DONE_SETTINGS.archiveAfterDays,
             },
-          } as Prisma.InputJsonValue,
+          } as JsonPayload,
         });
       }
     }
     if (!repairs.length) return;
     // Effectuer les updates en batch via transaction pour minimiser l'impact.
-    await this.prisma.$transaction(async (tx) => {
+    const prisma = this.prisma;
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const entry of repairs) {
         await tx.column.update({
           where: { id: entry.id },
-          data: { settings: entry.payload },
+          data: { settings: entry.payload } as any,
         });
       }
     });
@@ -1489,7 +1509,8 @@ export class BoardsService {
     nodeId: string,
     userId: string,
   ): Promise<void> {
-    const board = await this.prisma.board.findUnique({
+    const prisma = this.prisma;
+    const board = await prisma.board.findUnique({
       where: { id: boardId },
       include: { node: { select: { teamId: true } } },
     });
@@ -1505,7 +1526,7 @@ export class BoardsService {
       userId,
     );
 
-    const node = await this.prisma.node.findUnique({
+    const node = await prisma.node.findUnique({
       where: { id: nodeId },
       select: { id: true, metadata: true, columnId: true },
     });
@@ -1520,23 +1541,23 @@ export class BoardsService {
         ? node.metadata
         : {}),
       workflow: {
-        ...(typeof (node.metadata as any)?.workflow === 'object' &&
-        (node.metadata as any)?.workflow !== null
-          ? (node.metadata as any).workflow
+        ...(typeof node.metadata?.workflow === 'object' &&
+        node.metadata?.workflow !== null
+          ? node.metadata.workflow
           : {}),
         backlog: {
-          ...(typeof (node.metadata as any)?.workflow?.backlog === 'object' &&
-          (node.metadata as any)?.workflow?.backlog !== null
-            ? (node.metadata as any).workflow.backlog
+          ...(typeof node.metadata?.workflow?.backlog === 'object' &&
+          node.metadata?.workflow?.backlog !== null
+            ? node.metadata.workflow.backlog
             : {}),
           lastInteractionAt: now.toISOString(),
         },
       },
     };
 
-    await this.prisma.node.update({
+    await prisma.node.update({
       where: { id: nodeId },
-      data: { metadata: updatedMetadata as Prisma.InputJsonValue },
+      data: { metadata: updatedMetadata } as any,
     });
   }
 }

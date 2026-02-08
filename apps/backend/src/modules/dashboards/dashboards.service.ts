@@ -549,9 +549,7 @@ export class DashboardsService {
     }));
   }
 
-  private sanitizeTaskMetadata(
-    metadata: Prisma.JsonValue | null,
-  ): Prisma.JsonValue | null {
+  private sanitizeTaskMetadata(metadata: Prisma.JsonValue): Prisma.JsonValue {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
       return metadata;
     }

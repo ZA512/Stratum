@@ -45,8 +45,8 @@ export interface DashboardTask {
   progress: number;
   effort: Effort | null;
   priority: Priority;
-  metadata: Prisma.JsonValue | null;
-  statusMetadata: Prisma.JsonValue | null;
+  metadata: Prisma.JsonValue;
+  statusMetadata: Prisma.JsonValue;
   path: string;
   depth: number;
   createdAt: Date;

@@ -21,6 +21,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateRaciTeamDto, UpdateRaciTeamDto } from './dto/raci-team.dto';
 import { UsersService, RaciTeamPreference } from './users.service';
+import { AiSettingsDto, UpdateAiSettingsDto } from './dto/ai-settings.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -107,5 +108,40 @@ export class UsersController {
   ): Promise<{ success: true }> {
     await this.usersService.deleteRaciTeam(user.id, teamId);
     return { success: true };
+  }
+
+  @Get('me/ai-settings')
+  @ApiOperation({ summary: "Récupère les paramètres IA de l'utilisateur" })
+  @ApiOkResponse({ type: AiSettingsDto })
+  async getAiSettings(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AiSettingsDto> {
+    const settings = await this.usersService.getAiSettings(user.id);
+    return {
+      provider: settings.provider,
+      model: settings.model,
+      baseUrl: settings.baseUrl,
+      timeoutMs: settings.timeoutMs,
+      hasApiKey: settings.apiKeyPresent,
+      updatedAt: settings.updatedAt,
+    };
+  }
+
+  @Patch('me/ai-settings')
+  @ApiOperation({ summary: "Met à jour les paramètres IA de l'utilisateur" })
+  @ApiOkResponse({ type: AiSettingsDto })
+  async updateAiSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateAiSettingsDto,
+  ): Promise<AiSettingsDto> {
+    const settings = await this.usersService.updateAiSettings(user.id, dto);
+    return {
+      provider: settings.provider,
+      model: settings.model,
+      baseUrl: settings.baseUrl,
+      timeoutMs: settings.timeoutMs,
+      hasApiKey: settings.apiKeyPresent,
+      updatedAt: settings.updatedAt,
+    };
   }
 }

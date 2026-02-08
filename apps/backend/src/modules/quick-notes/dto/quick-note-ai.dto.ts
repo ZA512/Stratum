@@ -3,10 +3,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export const QUICK_NOTE_AI_ACTION_TYPES = [
   'MOVE_NODE_TO_COLUMN',
   'UPDATE_NODE_FIELDS',
+  'APPEND_NODE_DESCRIPTION',
   'ADD_COMMENT',
   'CREATE_CHILD_TASK',
-  'ATTACH_QUICK_NOTE_TO_KANBAN',
-  'TREAT_QUICK_NOTE',
 ] as const;
 
 export type QuickNoteAiActionType = (typeof QUICK_NOTE_AI_ACTION_TYPES)[number];
@@ -21,6 +20,13 @@ export class QuickNoteAiActionDto {
     additionalProperties: true,
   })
   params!: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    description: 'Libellés enrichis pour affichage (optionnel)',
+    type: 'object',
+    additionalProperties: true,
+  })
+  labels?: Record<string, string>;
 }
 
 export class QuickNoteAiSuggestionDto {

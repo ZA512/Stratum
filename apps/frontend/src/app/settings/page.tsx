@@ -10,6 +10,11 @@ import {
   renameRaciTeam,
   type RaciTeamPreset,
 } from "@/features/users/raci-teams-api";
+import {
+  fetchAiSettings,
+  updateAiSettings,
+  type AiSettings,
+} from "@/features/users/ai-settings-api";
 import { useTheme, ThemeProvider } from "@/themes/theme-provider";
 import type { ThemeDefinition } from "@/themes";
 import { exportTestData, importTestData } from "@/features/test-data/test-data-api";
@@ -23,6 +28,16 @@ export default function SettingsPage() {
   const [raciTeamsError, setRaciTeamsError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiSettingsLoading, setAiSettingsLoading] = useState(false);
+  const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiProvider, setAiProvider] = useState("heuristic");
+  const [aiModel, setAiModel] = useState("");
+  const [aiBaseUrl, setAiBaseUrl] = useState("");
+  const [aiTimeoutMs, setAiTimeoutMs] = useState("");
+  const [aiApiKeyInput, setAiApiKeyInput] = useState("");
+  const [aiClearApiKey, setAiClearApiKey] = useState(false);
   const [testDataMessage, setTestDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -99,6 +114,41 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [accessToken, sortRaciTeams, t]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setAiSettings(null);
+      return;
+    }
+    let cancelled = false;
+    setAiSettingsLoading(true);
+    setAiSettingsError(null);
+    fetchAiSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        setAiSettings(settings);
+        setAiProvider(settings.provider || "heuristic");
+        setAiModel(settings.model ?? "");
+        setAiBaseUrl(settings.baseUrl ?? "");
+        setAiTimeoutMs(settings.timeoutMs ? String(settings.timeoutMs) : "");
+        setAiApiKeyInput("");
+        setAiClearApiKey(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAiSettingsError(
+          error instanceof Error
+            ? error.message
+            : t("settings.ai.loadError"),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setAiSettingsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, t]);
 
   const handleRenameTeam = (team: RaciTeamPreset) => {
     if (!accessToken) return;
@@ -187,6 +237,63 @@ export default function SettingsPage() {
       setTestDataMessage({ type: "error", text: t("settings.testData.error") });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const aiProviderOptions = useMemo(
+    () => [
+      { value: "heuristic", label: t("settings.ai.providers.heuristic") },
+      { value: "openai", label: t("settings.ai.providers.openai") },
+      { value: "anthropic", label: t("settings.ai.providers.anthropic") },
+      { value: "mistral", label: t("settings.ai.providers.mistral") },
+      { value: "gemini", label: t("settings.ai.providers.gemini") },
+      { value: "ollama", label: t("settings.ai.providers.ollama") },
+      { value: "custom", label: t("settings.ai.providers.custom") },
+    ],
+    [t],
+  );
+
+  const handleAiSave = async () => {
+    if (!accessToken || aiSaving) return;
+    setAiSaving(true);
+    setAiSettingsError(null);
+    try {
+      const timeoutRaw = aiTimeoutMs.trim();
+      const timeoutValue = timeoutRaw ? Number(timeoutRaw) : null;
+      if (timeoutRaw && !Number.isFinite(timeoutValue)) {
+        setAiSettingsError(t("settings.ai.saveError"));
+        return;
+      }
+      const payload: {
+        provider: string;
+        model: string | null;
+        baseUrl: string | null;
+        timeoutMs: number | null;
+        apiKey?: string | null;
+      } = {
+        provider: aiProvider,
+        model: aiModel.trim() ? aiModel.trim() : null,
+        baseUrl: aiBaseUrl.trim() ? aiBaseUrl.trim() : null,
+        timeoutMs: timeoutValue,
+      };
+
+      if (aiClearApiKey) {
+        payload.apiKey = null;
+      } else if (aiApiKeyInput.trim()) {
+        payload.apiKey = aiApiKeyInput.trim();
+      }
+
+      const saved = await updateAiSettings(payload);
+      setAiSettings(saved);
+      setAiApiKeyInput("");
+      setAiClearApiKey(false);
+      setFeedback(t("settings.ai.saved"));
+    } catch (error) {
+      setAiSettingsError(
+        error instanceof Error ? error.message : t("settings.ai.saveError"),
+      );
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -294,6 +401,144 @@ export default function SettingsPage() {
                 ))}
               </select>
             </label>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+          <h2 className="text-lg font-semibold text-foreground">{t("settings.ai.title")}</h2>
+          <p className="mt-2 text-sm text-muted">{t("settings.ai.description")}</p>
+
+          <div className="mt-4 space-y-4">
+            {aiSettingsLoading ? (
+              <p className="text-sm text-muted">{t("common.loading")}</p>
+            ) : null}
+
+            {aiSettingsError ? (
+              <p className="text-sm text-red-500 dark:text-red-400">{aiSettingsError}</p>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-sm text-muted">
+                <span className="mb-2 block font-medium text-foreground">
+                  {t("settings.ai.providerLabel")}
+                </span>
+                <select
+                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                  value={aiProvider}
+                  onChange={(event) => setAiProvider(event.target.value)}
+                  disabled={aiSettingsLoading}
+                >
+                  {aiProviderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-muted">
+                  {t("settings.ai.providerHelp")}
+                </span>
+              </label>
+
+              <label className="block text-sm text-muted">
+                <span className="mb-2 block font-medium text-foreground">
+                  {t("settings.ai.modelLabel")}
+                </span>
+                <input
+                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                  value={aiModel}
+                  onChange={(event) => setAiModel(event.target.value)}
+                  placeholder="gpt-4.1-mini"
+                  disabled={aiSettingsLoading}
+                />
+                <span className="mt-1 block text-xs text-muted">
+                  {t("settings.ai.modelHint")}
+                </span>
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-sm text-muted">
+                <span className="mb-2 block font-medium text-foreground">
+                  {t("settings.ai.baseUrlLabel")}
+                </span>
+                <input
+                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                  value={aiBaseUrl}
+                  onChange={(event) => setAiBaseUrl(event.target.value)}
+                  placeholder="https://api.openai.com/v1"
+                  disabled={aiSettingsLoading}
+                />
+                <span className="mt-1 block text-xs text-muted">
+                  {t("settings.ai.baseUrlHint")}
+                </span>
+              </label>
+
+              <label className="block text-sm text-muted">
+                <span className="mb-2 block font-medium text-foreground">
+                  {t("settings.ai.timeoutLabel")}
+                </span>
+                <input
+                  type="number"
+                  min={3000}
+                  max={120000}
+                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                  value={aiTimeoutMs}
+                  onChange={(event) => setAiTimeoutMs(event.target.value)}
+                  placeholder="15000"
+                  disabled={aiSettingsLoading}
+                />
+                <span className="mt-1 block text-xs text-muted">
+                  {t("settings.ai.timeoutHint")}
+                </span>
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-sm text-muted">
+                <span className="mb-2 block font-medium text-foreground">
+                  {t("settings.ai.apiKeyLabel")}
+                </span>
+                <input
+                  type="password"
+                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                  value={aiApiKeyInput}
+                  onChange={(event) => setAiApiKeyInput(event.target.value)}
+                  placeholder={t("settings.ai.apiKeyPlaceholder")}
+                  disabled={aiSettingsLoading}
+                />
+                <span className="mt-1 block text-xs text-muted">
+                  {aiSettings?.hasApiKey
+                    ? t("settings.ai.apiKeySaved")
+                    : t("settings.ai.apiKeyHint")}
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-muted">
+                <input
+                  type="checkbox"
+                  checked={aiClearApiKey}
+                  onChange={(event) => setAiClearApiKey(event.target.checked)}
+                  disabled={aiSettingsLoading || !aiSettings?.hasApiKey}
+                />
+                {t("settings.ai.apiKeyClearLabel")}
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted">
+                {aiSettings?.updatedAt
+                  ? t("settings.ai.updatedAt", { date: aiSettings.updatedAt })
+                  : t("settings.ai.notConfigured")}
+              </p>
+              <button
+                type="button"
+                onClick={handleAiSave}
+                disabled={!accessToken || aiSettingsLoading || aiSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-foreground transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {aiSaving ? t("settings.ai.saving") : t("settings.ai.saveButton")}
+              </button>
+            </div>
           </div>
         </section>
 

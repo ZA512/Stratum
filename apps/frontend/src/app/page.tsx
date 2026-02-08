@@ -37,7 +37,7 @@ export default function Home() {
     },
   });
 
-  const teams: Team[] = teamsQuery.data ?? [];
+  const teams = useMemo<Team[]>(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -50,12 +50,12 @@ export default function Home() {
   useEffect(() => {
     if (!accessToken) return;
     if (!teamsQuery.isSuccess) return;
-    if (teamsQuery.data.length > 0) return;
+    if (teams.length > 0) return;
     if (bootstrapAttemptedRef.current) return;
     if (bootstrapMutation.isPending) return;
     bootstrapAttemptedRef.current = true;
     bootstrapMutation.mutate();
-  }, [accessToken, teamsQuery.isSuccess, teamsQuery.data, bootstrapMutation]);
+  }, [accessToken, teamsQuery.isSuccess, teams, bootstrapMutation]);
 
   const hasTeams = teams.length > 0;
 
@@ -72,6 +72,12 @@ export default function Home() {
       router.replace(`/boards/${teams[0].id}`);
     }
   }, [user, bootstrapResult, teams, router]);
+
+  const error = useMemo(() => {
+    const err = bootstrapMutation.error ?? teamsQuery.error;
+    if (!err) return null;
+    return err instanceof Error ? err.message : String(err);
+  }, [bootstrapMutation.error, teamsQuery.error]);
 
   if (initializing) {
     return (
@@ -134,12 +140,6 @@ export default function Home() {
     } finally {
     }
   };
-
-  const error = useMemo(() => {
-    const err = bootstrapMutation.error ?? teamsQuery.error;
-    if (!err) return null;
-    return err instanceof Error ? err.message : String(err);
-  }, [bootstrapMutation.error, teamsQuery.error]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center">

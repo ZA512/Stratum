@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { appendFile } from 'node:fs/promises';
 import {
   BadRequestException,
   Injectable,
@@ -13,7 +15,6 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NodesService } from '../nodes/nodes.service';
-import { AttachQuickNoteDto } from './dto/attach-quick-note.dto';
 import {
   QUICK_NOTE_AI_ACTION_TYPES,
   QuickNoteAiActionDto,
@@ -27,11 +28,13 @@ import {
   QuickNoteAiSuggestionDto,
 } from './dto/quick-note-ai.dto';
 import { QuickNotesService } from './quick-notes.service';
+import { UsersService } from '../users/users.service';
 
 const MAX_ACTIONS_PER_REQUEST = 25;
 const DEFAULT_MAX_SUGGESTIONS = 3;
 const MAX_SUGGESTIONS = 10;
 const ACTION_TYPE_SET = new Set<string>(QUICK_NOTE_AI_ACTION_TYPES);
+const AI_ALLOWED_ACTION_TYPES = QUICK_NOTE_AI_ACTION_TYPES;
 const SUGGESTION_MODEL_HEURISTIC = 'heuristic-v1';
 
 type NormalizedAction = {
@@ -44,6 +47,14 @@ type SuggestionGenerationResult = {
   model: string;
   warnings: string[];
   suggestions: QuickNoteAiSuggestionDto[];
+};
+
+type AiRuntimeSettings = {
+  provider: string | null;
+  model: string | null;
+  baseUrl: string | null;
+  apiKey: string | null;
+  timeoutMs: number | null;
 };
 
 type NoteContext = {
@@ -59,6 +70,12 @@ type NoteContext = {
     id: string;
     nodeId: string;
     name: string;
+    hierarchy: Array<{
+      id: string;
+      parentId: string | null;
+      title: string;
+      depth: number;
+    }>;
     columns: Array<{
       id: string;
       name: string;
@@ -94,6 +111,19 @@ type NoteContext = {
     teamId: string;
     teamName: string;
   }>;
+  boardsIndex?: Array<{
+    id: string;
+    nodeId: string;
+    name: string;
+    teamId: string;
+    teamName: string;
+    columns: Array<{
+      id: string;
+      name: string;
+      behaviorKey: ColumnBehaviorKey;
+      position: number;
+    }>;
+  }>;
 };
 
 @Injectable()
@@ -105,6 +135,7 @@ export class QuickNotesAiService {
     private readonly nodesService: NodesService,
     private readonly quickNotesService: QuickNotesService,
     private readonly config: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
   async suggest(
@@ -115,6 +146,9 @@ export class QuickNotesAiService {
     const context = await this.loadContext(userId, noteId);
     const maxSuggestions = this.normalizeMaxSuggestions(dto?.maxSuggestions);
     const instructions = this.normalizeText(dto?.instructions);
+    const aiSettings = await this.resolveAiSettings(userId);
+
+    await this.logAiContext('suggest', context, maxSuggestions);
 
     const heuristicResult = this.buildHeuristicSuggestions(
       context,
@@ -126,6 +160,7 @@ export class QuickNotesAiService {
       context,
       { instructions, feedback: null },
       maxSuggestions,
+      aiSettings,
     );
 
     const effective =
@@ -164,6 +199,9 @@ export class QuickNotesAiService {
     const context = await this.loadContext(userId, noteId);
     const maxSuggestions = this.normalizeMaxSuggestions(dto?.maxSuggestions);
     const instructions = this.normalizeText(dto?.instructions);
+    const aiSettings = await this.resolveAiSettings(userId);
+
+    await this.logAiContext('refine', context, maxSuggestions);
 
     const heuristicResult = this.buildHeuristicSuggestions(
       context,
@@ -175,6 +213,7 @@ export class QuickNotesAiService {
       context,
       { instructions, feedback },
       maxSuggestions,
+      aiSettings,
     );
 
     const effective =
@@ -242,9 +281,6 @@ export class QuickNotesAiService {
       try {
         const message = await this.executeAction(userId, noteId, action);
         succeeded += 1;
-        if (action.type === 'TREAT_QUICK_NOTE') {
-          treated = true;
-        }
         results.push({
           index,
           type: action.type,
@@ -270,15 +306,11 @@ export class QuickNotesAiService {
         treated = true;
       } catch (error) {
         failed += 1;
-        results.push({
-          index: results.length,
-          type: 'TREAT_QUICK_NOTE',
-          success: false,
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Impossible de traiter la note.',
-        });
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Impossible de traiter la note.';
+        this.logger.warn(`Auto-traitement quick note échoué: ${message}`);
       }
     }
 
@@ -374,6 +406,29 @@ export class QuickNotesAiService {
         return 'Commentaire ajouté.';
       }
 
+      case 'APPEND_NODE_DESCRIPTION': {
+        const nodeId = this.readRequiredString(action.params, 'nodeId');
+        const text = this.readRequiredString(action.params, 'text');
+
+        const node = await this.prisma.node.findUnique({
+          where: { id: nodeId },
+          select: { description: true },
+        });
+        if (!node) {
+          throw new NotFoundException('Tâche introuvable.');
+        }
+
+        const current = node.description ?? '';
+        const nextDescription = current ? `${current}\n\n${text}` : text;
+
+        await this.nodesService.updateNode(
+          nodeId,
+          { description: nextDescription.slice(0, 50000) },
+          userId,
+        );
+        return 'Description enrichie.';
+      }
+
       case 'CREATE_CHILD_TASK': {
         const parentNodeId = this.readRequiredString(
           action.params,
@@ -396,27 +451,6 @@ export class QuickNotesAiService {
           userId,
         );
         return 'Sous-tâche créée.';
-      }
-
-      case 'ATTACH_QUICK_NOTE_TO_KANBAN': {
-        const kanbanReference = this.readOptionalString(
-          action.params,
-          'kanbanId',
-        );
-        const kanbanId = await this.resolveBoardReference(
-          userId,
-          kanbanReference,
-        );
-        const payload: AttachQuickNoteDto = { kanbanId };
-        await this.quickNotesService.attach(userId, noteId, payload);
-        return kanbanId
-          ? 'Quick note rattachée au kanban.'
-          : 'Lien kanban retiré de la quick note.';
-      }
-
-      case 'TREAT_QUICK_NOTE': {
-        await this.quickNotesService.treat(userId, noteId);
-        return 'Quick note traitée.';
       }
 
       default:
@@ -446,6 +480,43 @@ export class QuickNotesAiService {
 
     const availableBoards = await this.quickNotesService.listBoards(userId);
 
+    const boardsIndex = await this.prisma.board.findMany({
+      where: {
+        node: {
+          archivedAt: null,
+          team: {
+            memberships: {
+              some: { userId, status: MembershipStatus.ACTIVE },
+            },
+          },
+          OR: [
+            { columnId: null },
+            {
+              column: {
+                behavior: { key: { not: ColumnBehaviorKey.DONE } },
+              },
+            },
+          ],
+        },
+      },
+      include: {
+        node: {
+          select: {
+            id: true,
+            title: true,
+            teamId: true,
+            team: { select: { name: true } },
+          },
+        },
+        columns: {
+          include: { behavior: true },
+          orderBy: { position: 'asc' },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 40,
+    });
+
     let board: NoteContext['board'] = null;
     if (note.kanbanId) {
       const boardRecord = await this.prisma.board.findFirst({
@@ -465,6 +536,7 @@ export class QuickNotesAiService {
             select: {
               id: true,
               title: true,
+              path: true,
             },
           },
           columns: {
@@ -476,11 +548,10 @@ export class QuickNotesAiService {
 
       if (boardRecord) {
         const columnIds = boardRecord.columns.map((column) => column.id);
-        const nodes = await this.prisma.node.findMany({
+        const hierarchyNodes = await this.prisma.node.findMany({
           where: {
             archivedAt: null,
-            parentId: boardRecord.node.id,
-            columnId: { in: columnIds },
+            path: { startsWith: `${boardRecord.node.path}/` },
           },
           select: {
             id: true,
@@ -492,12 +563,17 @@ export class QuickNotesAiService {
             dueAt: true,
             priority: true,
             tags: true,
+            depth: true,
           },
-          orderBy: [{ position: 'asc' }],
-          take: 200,
+          orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+          take: 1000,
         });
 
-        const nodeIds = nodes.map((node) => node.id);
+        const nodes = hierarchyNodes.filter(
+          (node) => node.columnId && columnIds.includes(node.columnId),
+        );
+
+        const nodeIds = hierarchyNodes.map((node) => node.id);
         const comments =
           nodeIds.length > 0
             ? await this.prisma.comment.findMany({
@@ -531,6 +607,20 @@ export class QuickNotesAiService {
           id: boardRecord.id,
           nodeId: boardRecord.node.id,
           name: boardRecord.node.title,
+          hierarchy: [
+            {
+              id: boardRecord.node.id,
+              parentId: null,
+              title: boardRecord.node.title,
+              depth: 0,
+            },
+            ...hierarchyNodes.map((node) => ({
+              id: node.id,
+              parentId: node.parentId,
+              title: node.title,
+              depth: node.depth,
+            })),
+          ],
           columns: boardRecord.columns.map((column) => ({
             id: column.id,
             name: column.name,
@@ -574,7 +664,94 @@ export class QuickNotesAiService {
       },
       board,
       availableBoards,
+      boardsIndex: boardsIndex.map((entry) => ({
+        id: entry.id,
+        nodeId: entry.node.id,
+        name: entry.node.title,
+        teamId: entry.node.teamId,
+        teamName: entry.node.team.name,
+        columns: entry.columns.map((column) => ({
+          id: column.id,
+          name: column.name,
+          behaviorKey: column.behavior.key,
+          position: column.position,
+        })),
+      })),
     };
+  }
+
+  private shouldLogAiContext(): boolean {
+    return true;
+  }
+
+  private getAiContextLogFilePath(): string | null {
+    return path.resolve(process.cwd(), 'quick-notes-ai.log');
+  }
+
+  private buildAiContextLogPayload(
+    context: NoteContext,
+    maxSuggestions: number,
+  ) {
+    return {
+      note: context.note,
+      board: context.board
+        ? {
+            id: context.board.id,
+            nodeId: context.board.nodeId,
+            name: context.board.name,
+            hierarchy: context.board.hierarchy,
+            columns: context.board.columns,
+            nodes: context.board.nodes.slice(0, 60).map((node) => ({
+              id: node.id,
+              title: node.title,
+              columnId: node.columnId,
+              parentId: node.parentId,
+            })),
+            recentComments: context.board.recentComments
+              .slice(0, 60)
+              .map((comment) => ({
+                nodeId: comment.nodeId,
+                createdAt: comment.createdAt,
+              })),
+            recentActivity: context.board.recentActivity
+              .slice(0, 60)
+              .map((entry) => ({
+                nodeId: entry.nodeId,
+                type: entry.type,
+                createdAt: entry.createdAt,
+              })),
+          }
+        : null,
+      availableBoards: context.availableBoards.slice(0, 20),
+      boardsIndex: context.boardsIndex?.slice(0, 40) ?? [],
+      maxSuggestions,
+    };
+  }
+
+  private async logAiContext(
+    source: 'suggest' | 'refine',
+    context: NoteContext,
+    maxSuggestions: number,
+  ): Promise<void> {
+    if (!this.shouldLogAiContext()) {
+      return;
+    }
+
+    const payload = this.buildAiContextLogPayload(context, maxSuggestions);
+    const logLine = `[QuickNotesAI:${source}] ${JSON.stringify(payload)}`;
+    this.logger.log(logLine);
+
+    const logFilePath = this.getAiContextLogFilePath();
+    if (!logFilePath) {
+      return;
+    }
+
+    try {
+      await appendFile(logFilePath, `${logLine}\n`, 'utf8');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erreur de log';
+      this.logger.warn(`AI context log file failed: ${message}`);
+    }
   }
 
   private buildHeuristicSuggestions(
@@ -613,52 +790,8 @@ export class QuickNotesAiService {
     const inProgressColumn = context.board?.columns.find(
       (column) => column.behaviorKey === ColumnBehaviorKey.IN_PROGRESS,
     );
-    const backlogColumn = context.board?.columns.find(
-      (column) => column.behaviorKey === ColumnBehaviorKey.BACKLOG,
-    );
 
     const progressOverride = this.extractProgressOverride(options.feedback);
-    const boardHint = this.extractQuotedValue(options.feedback, 'kanban');
-    const hintedBoard = boardHint
-      ? context.availableBoards.find((board) =>
-          board.name.toLowerCase().includes(boardHint.toLowerCase()),
-        )
-      : null;
-
-    if (!context.note.kanbanId && hintedBoard) {
-      suggestions.push({
-        id: `sug_${suggestions.length + 1}`,
-        title: `Rattacher la note au kanban "${hintedBoard.name}"`,
-        why: 'Le feedback mentionne explicitement ce kanban.',
-        confidence: 0.86,
-        actions: [
-          {
-            type: 'ATTACH_QUICK_NOTE_TO_KANBAN',
-            params: { kanbanId: hintedBoard.id },
-          },
-        ],
-      });
-    }
-
-    if (
-      !context.note.kanbanId &&
-      !hintedBoard &&
-      context.availableBoards.length
-    ) {
-      const topBoard = context.availableBoards[0];
-      suggestions.push({
-        id: `sug_${suggestions.length + 1}`,
-        title: `Rattacher la note au kanban "${topBoard.name}"`,
-        why: "La note n'est liée à aucun kanban, le rattachement accélère le traitement.",
-        confidence: 0.55,
-        actions: [
-          {
-            type: 'ATTACH_QUICK_NOTE_TO_KANBAN',
-            params: { kanbanId: topBoard.id },
-          },
-        ],
-      });
-    }
 
     if (progressOverride !== null && primaryNode?.node) {
       suggestions.push({
@@ -726,16 +859,6 @@ export class QuickNotesAiService {
             body: `Attente identifiée depuis Quick Note: ${noteText}`,
           },
         },
-        {
-          type: 'UPDATE_NODE_FIELDS',
-          params: {
-            nodeId: primaryNode.node.id,
-            fields: {
-              blockedReason: noteText,
-              isBlockResolved: false,
-            },
-          },
-        },
       ];
       if (
         targetColumn &&
@@ -781,59 +904,6 @@ export class QuickNotesAiService {
       });
     }
 
-    if (context.board?.nodeId) {
-      const preferredColumn =
-        backlogColumn ??
-        context.board.columns.find(
-          (column) => column.behaviorKey !== ColumnBehaviorKey.DONE,
-        ) ??
-        context.board.columns[0] ??
-        null;
-      const taskTitle = this.deriveTaskTitle(noteText);
-      const actionList: QuickNoteAiActionDto[] = [
-        {
-          type: 'CREATE_CHILD_TASK',
-          params: {
-            parentNodeId: context.board.nodeId,
-            title: taskTitle,
-            description: noteText,
-          },
-        },
-      ];
-      if (preferredColumn) {
-        actionList.push({
-          type: 'ADD_COMMENT',
-          params: {
-            nodeId: context.board.nodeId,
-            body: `Création d'une tâche issue de Quick Note dans "${preferredColumn.name}".`,
-          },
-        });
-      }
-      suggestions.push({
-        id: `sug_${suggestions.length + 1}`,
-        title: `Créer une nouvelle carte à partir de la note`,
-        why: "Aucune correspondance fiable n'est garantie, création d'une carte dédiée.",
-        confidence: 0.61,
-        actions: actionList,
-      });
-    }
-
-    if (!suggestions.length) {
-      suggestions.push({
-        id: 'sug_1',
-        title: 'Marquer la quick note comme traitée',
-        why: 'Fallback: pas assez de contexte pour proposer une action plus ciblée.',
-        confidence: 0.3,
-        actions: [
-          {
-            type: 'TREAT_QUICK_NOTE',
-            params: {},
-          },
-        ],
-      });
-      warnings.push('Contexte limité, suggestion générique utilisée.');
-    }
-
     const filtered = suggestions
       .slice(0, maxSuggestions)
       .map((suggestion, index) => ({
@@ -841,11 +911,15 @@ export class QuickNotesAiService {
         id: `sug_${index + 1}`,
       }));
 
+    if (!filtered.length) {
+      warnings.push('Aucune action pertinente détectée pour cette note.');
+    }
+
     return {
       provider: 'heuristic',
       model: SUGGESTION_MODEL_HEURISTIC,
       warnings,
-      suggestions: filtered,
+      suggestions: this.attachLabels(context, filtered),
     };
   }
 
@@ -853,15 +927,16 @@ export class QuickNotesAiService {
     context: NoteContext,
     options: { instructions: string | null; feedback: string | null },
     maxSuggestions: number,
+    aiSettings: AiRuntimeSettings,
   ): Promise<SuggestionGenerationResult | null> {
-    const provider = this.normalizeText(this.config.get<string>('AI_PROVIDER'));
+    const provider = this.normalizeText(aiSettings.provider);
     if (!provider || provider.toLowerCase() === 'heuristic') {
       return null;
     }
 
     const lowerProvider = provider.toLowerCase();
     const model =
-      this.normalizeText(this.config.get<string>('AI_MODEL')) ??
+      this.normalizeText(aiSettings.model) ??
       (lowerProvider === 'anthropic'
         ? 'claude-3-5-sonnet-latest'
         : lowerProvider === 'ollama'
@@ -869,12 +944,17 @@ export class QuickNotesAiService {
           : 'gpt-4.1-mini');
 
     const promptPayload = {
-      note: context.note,
+      note: {
+        text: context.note.text,
+        type: context.note.type,
+        createdAt: context.note.createdAt,
+      },
       board: context.board
         ? {
             id: context.board.id,
             nodeId: context.board.nodeId,
             name: context.board.name,
+            hierarchy: context.board.hierarchy,
             columns: context.board.columns,
             nodes: context.board.nodes.slice(0, 60),
             recentComments: context.board.recentComments.slice(0, 60),
@@ -882,6 +962,8 @@ export class QuickNotesAiService {
           }
         : null,
       availableBoards: context.availableBoards.slice(0, 20),
+      boardsIndex: context.boardsIndex?.slice(0, 40) ?? [],
+      actionsCatalog: this.getActionsCatalog(),
       instructions: options.instructions,
       feedback: options.feedback,
       maxSuggestions,
@@ -890,14 +972,15 @@ export class QuickNotesAiService {
     try {
       let rawText: string | null = null;
       if (lowerProvider === 'anthropic') {
-        rawText = await this.callAnthropic(model, promptPayload);
+        rawText = await this.callAnthropic(model, promptPayload, aiSettings);
       } else if (lowerProvider === 'ollama') {
-        rawText = await this.callOllama(model, promptPayload);
+        rawText = await this.callOllama(model, promptPayload, aiSettings);
       } else {
         rawText = await this.callOpenAiCompatible(
           lowerProvider,
           model,
           promptPayload,
+          aiSettings,
         );
       }
 
@@ -926,14 +1009,18 @@ export class QuickNotesAiService {
 
       const suggestions = suggestionsRaw
         .map((item, index) => this.normalizeSuggestion(item, index + 1))
-        .filter((item): item is QuickNoteAiSuggestionDto => Boolean(item))
-        .slice(0, maxSuggestions);
+        .filter((item): item is QuickNoteAiSuggestionDto => Boolean(item));
+
+      const validatedSuggestions = this.filterSuggestionsByContext(
+        context,
+        suggestions,
+      ).slice(0, maxSuggestions);
 
       return {
         provider: lowerProvider,
         model,
         warnings: [],
-        suggestions,
+        suggestions: this.attachLabels(context, validatedSuggestions),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erreur IA';
@@ -951,15 +1038,14 @@ export class QuickNotesAiService {
     provider: string,
     model: string,
     payload: Record<string, unknown>,
+    settings: AiRuntimeSettings,
   ): Promise<string | null> {
-    const apiKey = this.normalizeText(this.config.get<string>('AI_API_KEY'));
-    const configuredBaseUrl = this.normalizeText(
-      this.config.get<string>('AI_BASE_URL'),
-    );
+    const apiKey = this.normalizeText(settings.apiKey);
+    const configuredBaseUrl = this.normalizeText(settings.baseUrl);
 
     const baseUrl =
       configuredBaseUrl ??
-      (provider === 'openai'
+      (provider === 'openai' || provider === 'custom'
         ? 'https://api.openai.com/v1'
         : provider === 'mistral'
           ? 'https://api.mistral.ai/v1'
@@ -978,28 +1064,32 @@ export class QuickNotesAiService {
     }
 
     const url = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
-    const response = await this.postJson(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const response = await this.postJson(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: this.getSystemPrompt(),
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(payload),
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt(),
-          },
-          {
-            role: 'user',
-            content: JSON.stringify(payload),
-          },
-        ],
-      }),
-    });
+      settings.timeoutMs,
+    );
 
     const content =
       response?.choices?.[0]?.message?.content ??
@@ -1011,11 +1101,11 @@ export class QuickNotesAiService {
   private async callAnthropic(
     model: string,
     payload: Record<string, unknown>,
+    settings: AiRuntimeSettings,
   ): Promise<string | null> {
-    const apiKey = this.normalizeText(this.config.get<string>('AI_API_KEY'));
+    const apiKey = this.normalizeText(settings.apiKey);
     const baseUrl =
-      this.normalizeText(this.config.get<string>('AI_BASE_URL')) ??
-      'https://api.anthropic.com/v1';
+      this.normalizeText(settings.baseUrl) ?? 'https://api.anthropic.com/v1';
     if (!apiKey) {
       throw new Error('AI_API_KEY manquant.');
     }
@@ -1042,6 +1132,7 @@ export class QuickNotesAiService {
           ],
         }),
       },
+      settings.timeoutMs,
     );
 
     const content = Array.isArray(response?.content)
@@ -1053,10 +1144,10 @@ export class QuickNotesAiService {
   private async callOllama(
     model: string,
     payload: Record<string, unknown>,
+    settings: AiRuntimeSettings,
   ): Promise<string | null> {
     const baseUrl =
-      this.normalizeText(this.config.get<string>('AI_BASE_URL')) ??
-      'http://localhost:11434';
+      this.normalizeText(settings.baseUrl) ?? 'http://localhost:11434';
 
     const response = await this.postJson(
       `${baseUrl.replace(/\/$/, '')}/api/chat`,
@@ -1079,6 +1170,7 @@ export class QuickNotesAiService {
           ],
         }),
       },
+      settings.timeoutMs,
     );
 
     const content = response?.message?.content ?? null;
@@ -1088,6 +1180,7 @@ export class QuickNotesAiService {
   private async postJson(
     url: string,
     init: Record<string, unknown>,
+    timeoutOverride?: number | null,
   ): Promise<any> {
     const fetchFn = (globalThis as any).fetch;
     if (typeof fetchFn !== 'function') {
@@ -1095,7 +1188,9 @@ export class QuickNotesAiService {
     }
 
     const timeoutMsRaw =
-      Number(this.config.get<string>('AI_TIMEOUT_MS') ?? 15_000) || 15_000;
+      typeof timeoutOverride === 'number'
+        ? timeoutOverride
+        : Number(this.config.get<string>('AI_TIMEOUT_MS') ?? 15_000) || 15_000;
     const timeoutMs = Math.max(3_000, Math.min(timeoutMsRaw, 120_000));
 
     const abortController = new AbortController();
@@ -1122,12 +1217,77 @@ export class QuickNotesAiService {
       "Tu es un assistant d'orchestration Quick Notes pour un kanban.",
       'Tu dois répondre UNIQUEMENT en JSON avec la structure:',
       '{ "suggestions": [ { "title": string, "why": string, "confidence": number, "actions": [ { "type": string, "params": object } ] } ] }',
-      `Types d'action autorisés: ${QUICK_NOTE_AI_ACTION_TYPES.join(', ')}`,
+      `Types d'action autorisés: ${AI_ALLOWED_ACTION_TYPES.join(', ')}`,
       "N'utilise aucun autre type.",
+      'La note est informative et temporaire: ne propose aucune action sur la quick note.',
+      "La note n'est pas une carte et n'a pas d'ID a utiliser.",
+      "N'utilise que des IDs provenant de board/columns/nodes/availableBoards/boardsIndex.",
+      "N'invente jamais d'ID. Si tu ne peux pas lier la note a une carte existante, propose seulement un commentaire generique ou aucune suggestion.",
+      'Actions autorisees: CREATE_CHILD_TASK, MOVE_NODE_TO_COLUMN, UPDATE_NODE_FIELDS, APPEND_NODE_DESCRIPTION, ADD_COMMENT.',
+      'UPDATE_NODE_FIELDS ne peut modifier que description, dueAt, progress, priority.',
+      'APPEND_NODE_DESCRIPTION ajoute du texte a la description (ne remplace pas).',
+      'Pour CREATE_CHILD_TASK, choisis parentNodeId dans board.hierarchy (taches + sous-taches).',
+      'Si board est null, tu peux choisir un kanban dans boardsIndex et utiliser son nodeId comme parentNodeId.',
+      'Ne cible jamais la tache principale (board.nodeId).',
+      'Si la note mentionne un projet en MAJUSCULES, utilise-le pour choisir la tache mere la plus pertinente.',
       'Ne propose que des actions concrètes et exécutables.',
+      'Le payload contient actionsCatalog et boardsIndex pour guider tes choix.',
       'confidence doit être entre 0 et 1.',
+      "Il n'y a aucune obligation de proposer 3 suggestions.",
       'Ne dépasse pas le nombre demandé de suggestions.',
     ].join(' ');
+  }
+
+  private getActionsCatalog(): Array<{
+    type: QuickNoteAiActionType;
+    description: string;
+    params: Record<string, string>;
+  }> {
+    return [
+      {
+        type: 'CREATE_CHILD_TASK',
+        description: 'Créer une tâche sous un parent.',
+        params: {
+          parentNodeId: 'ID du parent (tâche mère ou sous-tâche)',
+          title: 'Titre de la tâche',
+          description: 'Description optionnelle',
+          dueAt: 'Echeance ISO optionnelle',
+        },
+      },
+      {
+        type: 'MOVE_NODE_TO_COLUMN',
+        description: 'Déplacer une carte vers une autre colonne.',
+        params: {
+          nodeId: 'ID de la carte',
+          targetColumnId: 'ID de la colonne cible',
+          position: 'Position optionnelle (entier)',
+        },
+      },
+      {
+        type: 'UPDATE_NODE_FIELDS',
+        description: 'Mettre à jour les champs autorisés d’une carte.',
+        params: {
+          nodeId: 'ID de la carte',
+          fields: '{ description?, dueAt?, progress?, priority? }',
+        },
+      },
+      {
+        type: 'APPEND_NODE_DESCRIPTION',
+        description: 'Ajouter du texte a la description d’une carte.',
+        params: {
+          nodeId: 'ID de la carte',
+          text: 'Texte a ajouter a la description',
+        },
+      },
+      {
+        type: 'ADD_COMMENT',
+        description: 'Ajouter un commentaire à une carte.',
+        params: {
+          nodeId: 'ID de la carte',
+          body: 'Contenu du commentaire',
+        },
+      },
+    ];
   }
 
   private parseJsonPayload(input: string): Record<string, unknown> | null {
@@ -1190,6 +1350,153 @@ export class QuickNotesAiService {
       confidence,
       actions,
     };
+  }
+
+  private attachLabels(
+    context: NoteContext,
+    suggestions: QuickNoteAiSuggestionDto[],
+  ): QuickNoteAiSuggestionDto[] {
+    const nodeById = new Map(
+      (context.board?.nodes ?? []).map((node) => [node.id, node.title]),
+    );
+    for (const node of context.board?.hierarchy ?? []) {
+      if (!nodeById.has(node.id)) {
+        nodeById.set(node.id, node.title);
+      }
+    }
+    const columnById = new Map(
+      (context.board?.columns ?? []).map((column) => [column.id, column.name]),
+    );
+
+    for (const board of context.boardsIndex ?? []) {
+      for (const column of board.columns ?? []) {
+        if (!columnById.has(column.id)) {
+          columnById.set(column.id, column.name);
+        }
+      }
+    }
+
+    for (const board of context.boardsIndex ?? []) {
+      if (!nodeById.has(board.nodeId)) {
+        nodeById.set(board.nodeId, board.name);
+      }
+    }
+
+    return suggestions.map((suggestion) => ({
+      ...suggestion,
+      actions: suggestion.actions.map((action) => ({
+        ...action,
+        labels: this.buildActionLabels(action, nodeById, columnById),
+      })),
+    }));
+  }
+
+  private filterSuggestionsByContext(
+    context: NoteContext,
+    suggestions: QuickNoteAiSuggestionDto[],
+  ): QuickNoteAiSuggestionDto[] {
+    const nodeIds = new Set(
+      (context.board?.nodes ?? []).map((node) => node.id),
+    );
+    const rootNodeId = context.board?.nodeId ?? null;
+    for (const node of context.board?.hierarchy ?? []) {
+      nodeIds.add(node.id);
+    }
+    for (const board of context.boardsIndex ?? []) {
+      nodeIds.add(board.nodeId);
+    }
+    const columnIds = new Set(
+      (context.board?.columns ?? []).map((column) => column.id),
+    );
+
+    return suggestions
+      .map((suggestion) => {
+        const actions = suggestion.actions.filter((action) => {
+          if (action.type === 'MOVE_NODE_TO_COLUMN') {
+            const nodeId = this.normalizeText(action.params?.nodeId);
+            const targetColumnId = this.normalizeText(
+              action.params?.targetColumnId,
+            );
+            return Boolean(
+              nodeId &&
+                targetColumnId &&
+                nodeIds.has(nodeId) &&
+                (!rootNodeId || nodeId !== rootNodeId) &&
+                columnIds.has(targetColumnId),
+            );
+          }
+
+          if (
+            action.type === 'UPDATE_NODE_FIELDS' ||
+            action.type === 'ADD_COMMENT' ||
+            action.type === 'APPEND_NODE_DESCRIPTION'
+          ) {
+            const nodeId = this.normalizeText(action.params?.nodeId);
+            return Boolean(
+              nodeId &&
+                nodeIds.has(nodeId) &&
+                (!rootNodeId || nodeId !== rootNodeId),
+            );
+          }
+
+          if (action.type === 'CREATE_CHILD_TASK') {
+            const parentNodeId = this.normalizeText(
+              action.params?.parentNodeId,
+            );
+            return Boolean(parentNodeId && nodeIds.has(parentNodeId));
+          }
+
+          return true;
+        });
+
+        return actions.length
+          ? {
+              ...suggestion,
+              actions,
+            }
+          : null;
+      })
+      .filter((suggestion): suggestion is QuickNoteAiSuggestionDto =>
+        Boolean(suggestion),
+      );
+  }
+
+  private buildActionLabels(
+    action: QuickNoteAiActionDto,
+    nodeById: Map<string, string>,
+    columnById: Map<string, string>,
+  ): Record<string, string> | undefined {
+    const labels: Record<string, string> = {};
+    if (action.type === 'MOVE_NODE_TO_COLUMN') {
+      const nodeId = this.normalizeText(action.params?.nodeId);
+      const targetColumnId = this.normalizeText(action.params?.targetColumnId);
+      if (nodeId && nodeById.has(nodeId)) {
+        labels.nodeTitle = nodeById.get(nodeId) as string;
+      }
+      if (targetColumnId && columnById.has(targetColumnId)) {
+        labels.targetColumnName = columnById.get(targetColumnId) as string;
+      }
+    }
+
+    if (
+      action.type === 'UPDATE_NODE_FIELDS' ||
+      action.type === 'ADD_COMMENT' ||
+      action.type === 'APPEND_NODE_DESCRIPTION'
+    ) {
+      const nodeId = this.normalizeText(action.params?.nodeId);
+      if (nodeId && nodeById.has(nodeId)) {
+        labels.nodeTitle = nodeById.get(nodeId) as string;
+      }
+    }
+
+    if (action.type === 'CREATE_CHILD_TASK') {
+      const parentNodeId = this.normalizeText(action.params?.parentNodeId);
+      if (parentNodeId && nodeById.has(parentNodeId)) {
+        labels.parentTitle = nodeById.get(parentNodeId) as string;
+      }
+    }
+
+    return Object.keys(labels).length ? labels : undefined;
   }
 
   private normalizeAction(input: unknown): NormalizedAction | null {
@@ -1278,26 +1585,17 @@ export class QuickNotesAiService {
         };
       }
 
-      case 'ATTACH_QUICK_NOTE_TO_KANBAN': {
-        const kanbanIdRaw =
-          params.kanbanId ?? params.kanbanName ?? params.boardName;
-        const kanbanId =
-          typeof kanbanIdRaw === 'string'
-            ? kanbanIdRaw.trim() || null
-            : kanbanIdRaw === null
-              ? null
-              : null;
+      case 'APPEND_NODE_DESCRIPTION': {
+        const nodeId = this.normalizeText(params.nodeId);
+        const text = this.normalizeText(params.text);
+        if (!nodeId || !text) {
+          return null;
+        }
         return {
-          type: 'ATTACH_QUICK_NOTE_TO_KANBAN',
-          params: { kanbanId },
+          type: 'APPEND_NODE_DESCRIPTION',
+          params: { nodeId, text: text.slice(0, 5000) },
         };
       }
-
-      case 'TREAT_QUICK_NOTE':
-        return {
-          type: 'TREAT_QUICK_NOTE',
-          params: {},
-        };
 
       default:
         return null;
@@ -1308,9 +1606,6 @@ export class QuickNotesAiService {
     fields: Record<string, unknown>,
   ): Record<string, unknown> {
     const patch: Record<string, unknown> = {};
-
-    const title = this.normalizeText(fields.title);
-    if (title) patch.title = title.slice(0, 200);
 
     if (fields.description === null) patch.description = null;
     else {
@@ -1331,33 +1626,6 @@ export class QuickNotesAiService {
       patch.progress = Math.max(0, Math.min(100, Math.round(fields.progress)));
     }
 
-    if (fields.blockedReason === null) patch.blockedReason = null;
-    else {
-      const blockedReason = this.normalizeText(fields.blockedReason);
-      if (blockedReason) patch.blockedReason = blockedReason.slice(0, 5000);
-    }
-
-    if (typeof fields.isBlockResolved === 'boolean') {
-      patch.isBlockResolved = fields.isBlockResolved;
-    }
-
-    if (fields.blockedExpectedUnblockAt === null) {
-      patch.blockedExpectedUnblockAt = null;
-    } else {
-      const blockedExpectedUnblockAt = this.normalizeText(
-        fields.blockedExpectedUnblockAt,
-      );
-      if (blockedExpectedUnblockAt) {
-        patch.blockedExpectedUnblockAt = blockedExpectedUnblockAt;
-      }
-    }
-
-    if (fields.backlogHiddenUntil === null) patch.backlogHiddenUntil = null;
-    else {
-      const backlogHiddenUntil = this.normalizeText(fields.backlogHiddenUntil);
-      if (backlogHiddenUntil) patch.backlogHiddenUntil = backlogHiddenUntil;
-    }
-
     if (typeof fields.priority === 'string') {
       const candidate = fields.priority.trim().toUpperCase();
       if (
@@ -1369,160 +1637,7 @@ export class QuickNotesAiService {
       }
     }
 
-    if (fields.effort === null) {
-      patch.effort = null;
-    } else if (typeof fields.effort === 'string') {
-      const candidate = fields.effort.trim().toUpperCase();
-      if (['UNDER2MIN', 'XS', 'S', 'M', 'L', 'XL', 'XXL'].includes(candidate)) {
-        patch.effort = candidate;
-      }
-    }
-
-    if (Array.isArray(fields.tags)) {
-      const tags = Array.from(
-        new Set(
-          fields.tags
-            .map((entry) => this.normalizeText(entry))
-            .filter((entry): entry is string => Boolean(entry))
-            .map((entry) => entry.slice(0, 32)),
-        ),
-      ).slice(0, 20);
-      patch.tags = tags;
-    }
-
-    if (Array.isArray(fields.blockedReminderEmails)) {
-      const emails = Array.from(
-        new Set(
-          fields.blockedReminderEmails
-            .map((entry) => this.normalizeText(entry))
-            .filter((entry): entry is string => Boolean(entry))
-            .map((entry) => entry.toLowerCase()),
-        ),
-      );
-      patch.blockedReminderEmails = emails;
-    }
-
-    if (
-      typeof fields.blockedReminderIntervalDays === 'number' &&
-      Number.isFinite(fields.blockedReminderIntervalDays)
-    ) {
-      patch.blockedReminderIntervalDays = Math.max(
-        1,
-        Math.round(fields.blockedReminderIntervalDays),
-      );
-    } else if (fields.blockedReminderIntervalDays === null) {
-      patch.blockedReminderIntervalDays = null;
-    }
-
     return patch;
-  }
-
-  private async resolveBoardReference(
-    userId: string,
-    reference: string | null,
-  ): Promise<string | null> {
-    if (!reference) {
-      return null;
-    }
-
-    const byId = await this.prisma.board.findFirst({
-      where: {
-        id: reference,
-        node: {
-          archivedAt: null,
-          team: {
-            memberships: {
-              some: { userId, status: MembershipStatus.ACTIVE },
-            },
-          },
-          OR: [
-            { columnId: null },
-            {
-              column: {
-                behavior: {
-                  key: { not: ColumnBehaviorKey.DONE },
-                },
-              },
-            },
-          ],
-        },
-      },
-      select: { id: true },
-    });
-    if (byId) {
-      return byId.id;
-    }
-
-    const exactMatches = await this.prisma.board.findMany({
-      where: {
-        node: {
-          title: { equals: reference, mode: 'insensitive' },
-          archivedAt: null,
-          team: {
-            memberships: {
-              some: { userId, status: MembershipStatus.ACTIVE },
-            },
-          },
-          OR: [
-            { columnId: null },
-            {
-              column: {
-                behavior: {
-                  key: { not: ColumnBehaviorKey.DONE },
-                },
-              },
-            },
-          ],
-        },
-      },
-      select: { id: true },
-      take: 2,
-    });
-    if (exactMatches.length === 1) {
-      return exactMatches[0].id;
-    }
-    if (exactMatches.length > 1) {
-      throw new BadRequestException(
-        `Plusieurs kanbans correspondent au nom "${reference}". Préciser l'ID.`,
-      );
-    }
-
-    const partialMatches = await this.prisma.board.findMany({
-      where: {
-        node: {
-          title: { contains: reference, mode: 'insensitive' },
-          archivedAt: null,
-          team: {
-            memberships: {
-              some: { userId, status: MembershipStatus.ACTIVE },
-            },
-          },
-          OR: [
-            { columnId: null },
-            {
-              column: {
-                behavior: {
-                  key: { not: ColumnBehaviorKey.DONE },
-                },
-              },
-            },
-          ],
-        },
-      },
-      select: { id: true },
-      take: 2,
-    });
-
-    if (partialMatches.length === 1) {
-      return partialMatches[0].id;
-    }
-    if (partialMatches.length > 1) {
-      throw new BadRequestException(
-        `Le nom "${reference}" est ambigu. Préciser l'ID du kanban.`,
-      );
-    }
-
-    throw new NotFoundException(`Kanban introuvable: "${reference}".`);
   }
 
   private deriveTaskTitle(text: string): string {
@@ -1607,6 +1722,30 @@ export class QuickNotesAiService {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
     return trimmed.length ? trimmed : null;
+  }
+
+  private async resolveAiSettings(userId: string): Promise<AiRuntimeSettings> {
+    const userSettings = await this.usersService.getAiSettings(userId);
+    const hasUserSettings = Boolean(userSettings.updatedAt);
+
+    if (hasUserSettings) {
+      return {
+        provider: userSettings.provider,
+        model: userSettings.model,
+        baseUrl: userSettings.baseUrl,
+        apiKey: userSettings.apiKey,
+        timeoutMs: userSettings.timeoutMs,
+      };
+    }
+
+    return {
+      provider: this.normalizeText(this.config.get<string>('AI_PROVIDER')),
+      model: this.normalizeText(this.config.get<string>('AI_MODEL')),
+      baseUrl: this.normalizeText(this.config.get<string>('AI_BASE_URL')),
+      apiKey: this.normalizeText(this.config.get<string>('AI_API_KEY')),
+      timeoutMs:
+        Number(this.config.get<string>('AI_TIMEOUT_MS') ?? 15_000) || 15_000,
+    };
   }
 
   private readObject(

@@ -5,13 +5,13 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  
+
   // CORS: autoriser les origines configurées via CORS_ORIGINS (séparées par des virgules)
   // Par défaut: localhost sur ports 3xxx pour le dev
   const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
     : [/^http:\/\/localhost:3\d{3}$/];
-  
+
   app.enableCors({
     origin: corsOrigins,
     credentials: true,

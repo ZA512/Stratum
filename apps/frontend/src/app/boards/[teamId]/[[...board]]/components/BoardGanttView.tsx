@@ -21,7 +21,6 @@ import {
   Plus,
   Minus,
   Trash2,
-  Link2,
   Layers,
   Lock,
   Unlock,
@@ -1026,7 +1025,6 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     const box = layout.get(task.id);
     if (!box) return null;
     const isSaving = scheduleSavingIds.has(task.id);
-    const isMilestone = task.duration === 1;
     const childBoard = childBoards[task.id];
     const isCompact = box.width <= dayWidth * 1.25;
     const column = columnById.get(task.columnId);

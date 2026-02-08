@@ -3,14 +3,14 @@ import { apiPost } from '@/lib/api-client';
 export type QuickNoteAiActionType =
   | 'MOVE_NODE_TO_COLUMN'
   | 'UPDATE_NODE_FIELDS'
+  | 'APPEND_NODE_DESCRIPTION'
   | 'ADD_COMMENT'
-  | 'CREATE_CHILD_TASK'
-  | 'ATTACH_QUICK_NOTE_TO_KANBAN'
-  | 'TREAT_QUICK_NOTE';
+  | 'CREATE_CHILD_TASK';
 
 export type QuickNoteAiAction = {
   type: QuickNoteAiActionType;
   params: Record<string, unknown>;
+  labels?: Record<string, string>;
 };
 
 export type QuickNoteAiSuggestion = {

@@ -41,10 +41,7 @@ export class TestDataService {
     ];
 
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${filename}"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     if (dockerContainer) {
       await this.runDumpProcess(
@@ -58,7 +55,10 @@ export class TestDataService {
     await this.runDumpProcess(dumpCommand, args, res);
   }
 
-  async importDatabase(user: AuthenticatedUser, filePath: string): Promise<void> {
+  async importDatabase(
+    user: AuthenticatedUser,
+    filePath: string,
+  ): Promise<void> {
     this.ensureAuthorized(user);
     const databaseUrl = this.getDatabaseUrl();
     const schema = this.getSchemaFromUrl(databaseUrl);
@@ -67,7 +67,8 @@ export class TestDataService {
       'TEST_DATA_PG_DOCKER_CONTAINER',
     );
     const restoreCommand =
-      this.configService.get<string>('TEST_DATA_PG_RESTORE_PATH') || 'pg_restore';
+      this.configService.get<string>('TEST_DATA_PG_RESTORE_PATH') ||
+      'pg_restore';
 
     const args = [
       '--clean',
@@ -93,9 +94,7 @@ export class TestDataService {
   }
 
   private ensureAuthorized(user?: AuthenticatedUser): void {
-    const allowedHash = this.configService.get<string>(
-      'TEST_DATA_ACCESS_HASH',
-    );
+    const allowedHash = this.configService.get<string>('TEST_DATA_ACCESS_HASH');
     if (!allowedHash) {
       throw new ForbiddenException('Accès non autorisé');
     }
@@ -180,7 +179,9 @@ export class TestDataService {
 
   private async runProcess(command: string, args: string[]): Promise<void> {
     try {
-      const proc = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      const proc = spawn(command, args, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
 
       const stderrChunks: Buffer[] = [];
       proc.stderr.on('data', (chunk) => {

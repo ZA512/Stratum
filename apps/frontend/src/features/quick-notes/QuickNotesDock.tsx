@@ -6,6 +6,7 @@ import { useToast } from "@/components/toast/ToastProvider";
 import { useQuickNotesStore } from "@/stores/quick-notes";
 import { useAuth } from "@/features/auth/auth-provider";
 import { QuickNoteAiPanel } from "@/features/quick-notes/QuickNoteAiPanel";
+import { useAiSettings } from "@/features/users/useAiSettings";
 import {
   useCleanupQuickNotes,
   useQuickNotesOpen,
@@ -22,6 +23,7 @@ const TYPE_ICON: Record<QuickNote["type"], string> = {
 export function QuickNotesDock() {
   const { isDockHidden, hideDock, resetDockHidden } = useQuickNotesStore();
   const { accessToken } = useAuth();
+  const aiSettingsQuery = useAiSettings(Boolean(accessToken));
   const { data } = useQuickNotesOpen(Boolean(accessToken));
   const { success, error: toastError } = useToast();
   const treatMutation = useTreatQuickNote();
@@ -32,6 +34,12 @@ export function QuickNotesDock() {
   const notes = useMemo(() => data?.items ?? [], [data?.items]);
   const openCount = data?.count ?? 0;
   const shouldShowDock = openCount > 0 && !isDockHidden;
+  const aiSettings = aiSettingsQuery.data ?? null;
+  const aiReady = Boolean(
+    aiSettings &&
+      aiSettings.provider !== "heuristic" &&
+      (aiSettings.provider === "ollama" || aiSettings.hasApiKey),
+  );
   const activeAiNote = useMemo(
     () => notes.find((note) => note.id === activeAiNoteId) ?? null,
     [activeAiNoteId, notes],
@@ -104,8 +112,18 @@ export function QuickNotesDock() {
           </div>
           <button
             type="button"
-            onClick={() => setActiveAiNoteId(note.id)}
-            className="rounded-full border border-accent/30 px-2 py-1 text-[11px] font-semibold text-accent transition hover:border-accent"
+            onClick={() => aiReady && setActiveAiNoteId(note.id)}
+            disabled={!aiReady}
+            title={
+              aiReady
+                ? "Ouvrir l'assistant IA"
+                : "IA non configurée"
+            }
+            className={`rounded-full border px-2 py-1 text-[11px] font-semibold transition ${
+              aiReady
+                ? "border-accent/30 text-accent hover:border-accent"
+                : "cursor-not-allowed border-white/10 text-muted/60"
+            }`}
             aria-label="Ouvrir l'assistant IA"
           >
             IA
@@ -121,7 +139,7 @@ export function QuickNotesDock() {
         </div>
       );
     });
-  }, [notes, handleTreat]);
+  }, [notes, handleTreat, aiReady]);
 
   if (!accessToken || !shouldShowDock) {
     return null;
@@ -143,6 +161,12 @@ export function QuickNotesDock() {
           ✕
         </button>
       </div>
+
+      {!aiReady && (
+        <div className="border-b border-white/10 px-4 py-2 text-[11px] text-muted">
+          IA non configurée. <Link href="/settings" className="text-accent hover:underline">Paramétrer</Link>
+        </div>
+      )}
 
       <div className="max-h-[240px] overflow-y-auto px-4 py-2">
         {noteRows}

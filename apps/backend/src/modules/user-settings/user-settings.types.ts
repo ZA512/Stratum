@@ -36,7 +36,7 @@ export const DEFAULT_DASHBOARD_PREFERENCES: DashboardPreferences = {
 };
 
 export function toPreferenceRecord(
-  value: Prisma.JsonValue | null | undefined,
+  value: Prisma.JsonValue | undefined,
 ): Partial<DashboardPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
