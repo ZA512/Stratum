@@ -1,7 +1,8 @@
 import { PrismaClient, ColumnBehaviorKey } from '@prisma/client';
 import { DEMO_IDS } from './seed';
+import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(buildPrismaClientOptions());
 
 async function createDeepHierarchy() {
   try {

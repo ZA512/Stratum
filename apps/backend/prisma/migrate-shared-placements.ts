@@ -8,8 +8,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(buildPrismaClientOptions());
 
 interface Collaborator {
   userId: string;

@@ -17,8 +17,9 @@
 
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(buildPrismaClientOptions());
 
 async function main() {
   console.log('🔍 Recherche des teams personnelles corrompues...\n');

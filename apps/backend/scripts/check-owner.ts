@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(buildPrismaClientOptions());
 
 async function main() {
   const user = await prisma.user.findUnique({
