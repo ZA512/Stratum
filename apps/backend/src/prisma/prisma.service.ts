@@ -79,13 +79,7 @@ export class PrismaService
       });
       super({ adapter });
     } else {
-      super({
-        datasources: {
-          db: {
-            url: connectionString,
-          },
-        },
-      });
+      super();
     }
     if (process.env.NODE_ENV !== 'production') {
       this.logger.log(
