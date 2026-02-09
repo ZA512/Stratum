@@ -74,6 +74,7 @@ COPY --chown=1000:1000 package*.json ./
 COPY --chown=1000:1000 --from=deps /app/node_modules ./node_modules
 COPY --chown=1000:1000 --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --chown=1000:1000 --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+COPY --chown=1000:1000 --from=builder /app/apps/backend/prisma.config.ts ./apps/backend/prisma.config.ts
 # Prisma client is generated in root node_modules/.prisma
 COPY --chown=1000:1000 --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --chown=1000:1000 docker/entrypoint-backend.mjs /app/apps/backend/entrypoint-backend.mjs
