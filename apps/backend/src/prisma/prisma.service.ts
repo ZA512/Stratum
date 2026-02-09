@@ -69,26 +69,13 @@ export class PrismaService
     }
     const normalizedConnectionString =
       normalizePgConnectionString(connectionString);
-    const wantsAdapter = (process.env.PRISMA_USE_ADAPTER ?? 'true') === 'true';
-    const canUseAdapter = !schema || schema === 'public';
-    const useAdapter = wantsAdapter && canUseAdapter;
-
-    if (useAdapter) {
-      const adapter = new PrismaPg({
-        connectionString: normalizedConnectionString,
-      });
-      super({ adapter });
-    } else {
-      super({ datasourceUrl: connectionString });
-    }
+    const adapter = new PrismaPg({
+      connectionString: normalizedConnectionString,
+    });
+    super({ adapter });
     if (process.env.NODE_ENV !== 'production') {
       this.logger.log(
         `Prisma DATABASE_URL schema param present: ${hasSchemaParam}`,
-      );
-    }
-    if (wantsAdapter && !useAdapter && schema) {
-      this.logger.warn(
-        `Prisma adapter disabled for non-public schema (${schema}); using default engine instead.`,
       );
     }
     this.metricsService = metricsService;

@@ -7,6 +7,7 @@ import {
   Gauge,
 } from 'prom-client';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -166,6 +167,33 @@ export class MetricsService {
     }
   }
 
+  private extractSchema(raw: string): string | null {
+    try {
+      const url = new URL(raw);
+      return url.searchParams.get('schema');
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeConnectionString(raw: string): string {
+    try {
+      const url = new URL(raw);
+      const schema = url.searchParams.get('schema');
+      if (!schema) return raw;
+      url.searchParams.delete('schema');
+      const options = url.searchParams.get('options');
+      const searchPath = `-c search_path=${schema}`;
+      url.searchParams.set(
+        'options',
+        options ? `${options} ${searchPath}` : searchPath,
+      );
+      return url.toString();
+    } catch {
+      return raw;
+    }
+  }
+
   isEnabled(): boolean {
     return this.enabled;
   }
@@ -236,9 +264,23 @@ export class MetricsService {
       if (!this.prisma) {
         // charge dynamique pour éviter import direct circulaire
         const datasourceUrl = process.env.DATABASE_URL;
-        this.prisma = datasourceUrl
-          ? new PrismaClient({ datasourceUrl })
-          : new PrismaClient();
+        if (!datasourceUrl) {
+          this.prisma = new PrismaClient();
+        } else {
+          const schema = this.extractSchema(datasourceUrl);
+          if (schema) {
+            const searchPath = `-c search_path=${schema}`;
+            const pgOptions = process.env.PGOPTIONS;
+            if (!pgOptions || !pgOptions.includes('search_path')) {
+              process.env.PGOPTIONS = pgOptions
+                ? `${pgOptions} ${searchPath}`
+                : searchPath;
+            }
+          }
+          const normalized = this.normalizeConnectionString(datasourceUrl);
+          const adapter = new PrismaPg({ connectionString: normalized });
+          this.prisma = new PrismaClient({ adapter });
+        }
       }
       if (this.nodesTotal) {
         const total = await this.prisma.node.count();
