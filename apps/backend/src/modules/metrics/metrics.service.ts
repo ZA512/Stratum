@@ -235,7 +235,10 @@ export class MetricsService {
     try {
       if (!this.prisma) {
         // charge dynamique pour éviter import direct circulaire
-        this.prisma = new PrismaClient();
+        const datasourceUrl = process.env.DATABASE_URL;
+        this.prisma = datasourceUrl
+          ? new PrismaClient({ datasourceUrl })
+          : new PrismaClient();
       }
       if (this.nodesTotal) {
         const total = await this.prisma.node.count();
