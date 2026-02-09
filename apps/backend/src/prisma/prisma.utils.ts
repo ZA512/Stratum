@@ -23,8 +23,10 @@ export function resolveDatabaseUrlFromEnv(): string {
   return `postgresql://${encodedUser}:${encodedPassword}@${host}:${port}/${encodedDb}?schema=${encodedSchema}`;
 }
 
-export function buildPrismaClientOptions() {
-  return {
-    datasourceUrl: resolveDatabaseUrlFromEnv(),
-  };
+export function ensureDatabaseUrlEnv(): string {
+  const url = resolveDatabaseUrlFromEnv();
+  if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim().length === 0) {
+    process.env.DATABASE_URL = url;
+  }
+  return url;
 }

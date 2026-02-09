@@ -7,7 +7,7 @@ import {
   Gauge,
 } from 'prom-client';
 import { PrismaClient } from '@prisma/client';
-import { buildPrismaClientOptions } from '../../prisma/prisma.utils';
+import { ensureDatabaseUrlEnv } from '../../prisma/prisma.utils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -171,6 +171,7 @@ export class MetricsService {
     return this.enabled;
   }
 
+          ensureDatabaseUrlEnv();
   async getMetrics(): Promise<string> {
     if (!this.enabled) {
       return '# Metrics disabled (set METRICS_ENABLED=true)\n';
@@ -236,7 +237,8 @@ export class MetricsService {
     try {
       if (!this.prisma) {
         // charge dynamique pour ├®viter import direct circulaire
-        this.prisma = new PrismaClient(buildPrismaClientOptions());
+        ensureDatabaseUrlEnv();
+        this.prisma = new PrismaClient();
       }
       if (this.nodesTotal) {
         const total = await this.prisma.node.count();

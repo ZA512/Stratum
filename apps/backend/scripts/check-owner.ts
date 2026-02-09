@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
+import { ensureDatabaseUrlEnv } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient(buildPrismaClientOptions());
+ensureDatabaseUrlEnv();
+const prisma = new PrismaClient();
 
 async function main() {
   const user = await prisma.user.findUnique({

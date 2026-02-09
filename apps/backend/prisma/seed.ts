@@ -1,5 +1,5 @@
 import { ColumnBehaviorKey, MembershipStatus, PrismaClient } from '@prisma/client';
-import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
+import { ensureDatabaseUrlEnv } from '../src/prisma/prisma.utils';
 import * as bcrypt from 'bcryptjs';
 
 export const DEMO_IDS = {
@@ -273,7 +273,8 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
 }
 
 if (require.main === module) {
-  const prisma = new PrismaClient(buildPrismaClientOptions());
+  ensureDatabaseUrlEnv();
+  const prisma = new PrismaClient();
   seedDemoData(prisma)
     .catch((error) => {
       console.error('[seed] failed', error);

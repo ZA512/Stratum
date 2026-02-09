@@ -9,9 +9,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
+import { ensureDatabaseUrlEnv } from '../src/prisma/prisma.utils';
 
-const prisma = new PrismaClient(buildPrismaClientOptions());
+ensureDatabaseUrlEnv();
+const prisma = new PrismaClient();
 
 interface RepairIssue {
   boardId: string;
