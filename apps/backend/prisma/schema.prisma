@@ -5,6 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["stratum"]
   // Connection URL is configured in prisma.config.ts (Prisma ORM v7+)
 }
 
