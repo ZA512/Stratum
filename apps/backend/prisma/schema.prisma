@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   // Connection URL is configured in prisma.config.ts (Prisma ORM v7+)
+  schemas  = ["stratum"]
 }
 
 enum MembershipStatus {
@@ -110,6 +111,8 @@ model User {
   sharedNodePlacements SharedNodePlacement[]
   activityLogs    ActivityLog[]
   quickNotes      QuickNote[]
+
+  @@schema("stratum")
 }
 
 model Team {
@@ -125,6 +128,8 @@ model Team {
   automationRules AutomationRule[]
   invitations     Invitation[]
   isPersonal      Boolean          @default(false)
+
+  @@schema("stratum")
 }
 
 model Membership {
@@ -141,6 +146,8 @@ model Membership {
   team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([userId, teamId])
+
+  @@schema("stratum")
 }
 
 model Node {
@@ -190,6 +197,8 @@ model Node {
   activityLogs    ActivityLog[]
 
   @@index([workspaceId])
+
+  @@schema("stratum")
 }
 
 model Board {
@@ -207,6 +216,8 @@ model Board {
   dailySnapshots  BoardDailySnapshot[]
   owner           User?             @relation("UserOwnedBoards", fields: [ownerUserId], references: [id], onDelete: SetNull)
   quickNotes      QuickNote[]
+
+  @@schema("stratum")
 }
 
 model Column {
@@ -225,6 +236,8 @@ model Column {
   behavior        ColumnBehavior     @relation(fields: [behaviorId], references: [id], onDelete: Restrict)
   nodes           Node[]
   sharedNodePlacements SharedNodePlacement[]
+
+  @@schema("stratum")
 }
 
 model ColumnBehavior {
@@ -237,6 +250,8 @@ model ColumnBehavior {
   updatedAt DateTime          @updatedAt
 
   columns   Column[]
+
+  @@schema("stratum")
 }
 
 model NodeAssignment {
@@ -248,6 +263,8 @@ model NodeAssignment {
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("stratum")
 }
 
 // Checklist & ChecklistItem supprim├®s (migration unifi├®e vers enfants)
@@ -263,6 +280,8 @@ model Dependency {
   dependency     Node     @relation("DependencyDependencies", fields: [dependencyId], references: [id], onDelete: Cascade)
 
   @@unique([dependentId, dependencyId])
+
+  @@schema("stratum")
 }
 
 model Attachment {
@@ -276,6 +295,8 @@ model Attachment {
   createdAt   DateTime  @default(now())
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@schema("stratum")
 }
 
 model Comment {
@@ -296,6 +317,8 @@ model Comment {
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@schema("stratum")
 }
 
 model AutomationRule {
@@ -310,6 +333,8 @@ model AutomationRule {
   updatedAt   DateTime  @updatedAt
 
   team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@schema("stratum")
 }
 
 
@@ -338,6 +363,8 @@ model RefreshToken {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+
+  @@schema("stratum")
 }
 
 model PasswordResetToken {
@@ -351,6 +378,8 @@ model PasswordResetToken {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+
+  @@schema("stratum")
 }
 
 model Invitation {
@@ -369,6 +398,8 @@ model Invitation {
 
   @@index([email])
   @@index([teamId])
+
+  @@schema("stratum")
 }
 
 model NodeShareInvitation {
@@ -391,6 +422,8 @@ model NodeShareInvitation {
   @@index([inviteeEmail])
   @@index([inviteeUserId])
   @@index([status])
+
+  @@schema("stratum")
 }
 
 model UserSettings {
@@ -400,6 +433,8 @@ model UserSettings {
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("stratum")
 }
 
 model QuickNote {
@@ -418,6 +453,8 @@ model QuickNote {
 
   @@index([userId, treatedAt])
   @@index([kanbanId])
+
+  @@schema("stratum")
 }
 
 model BoardDailySnapshot {
@@ -436,6 +473,8 @@ model BoardDailySnapshot {
 
   @@unique([boardId, dateUTC])
   @@index([dateUTC])
+
+  @@schema("stratum")
 }
 
 model SharedNodePlacement {
@@ -456,6 +495,8 @@ model SharedNodePlacement {
   @@index([userId])
   @@index([nodeId])
   @@index([columnId])
+
+  @@schema("stratum")
 }
 
 model ActivityLog {
@@ -472,4 +513,6 @@ model ActivityLog {
   @@index([nodeId, createdAt])
   @@index([userId])
   @@index([type])
+
+  @@schema("stratum")
 }

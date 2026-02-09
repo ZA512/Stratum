@@ -36,7 +36,11 @@ export function ensureDatabaseUrlEnv(): string {
 
 export function buildPrismaClientOptions() {
   const url = ensureDatabaseUrlEnv();
-  const pool = new Pool({ connectionString: url });
+  const schema = process.env.POSTGRES_SCHEMA ?? 'public';
+  const pool = new Pool({
+    connectionString: url,
+    options: `-c search_path=${schema}`,
+  });
   const adapter = new PrismaPg(pool);
   return { adapter, log: [] };
 }
