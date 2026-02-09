@@ -25,10 +25,6 @@ export function resolveDatabaseUrlFromEnv(): string {
 
 export function buildPrismaClientOptions() {
   return {
-    datasources: {
-      db: {
-        url: resolveDatabaseUrlFromEnv(),
-      },
-    },
+    datasourceUrl: resolveDatabaseUrlFromEnv(),
   };
 }
