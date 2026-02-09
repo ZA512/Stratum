@@ -1,18 +1,17 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // Connection URL is configured in prisma.config.ts (Prisma ORM v7+)
+  url      = env("DATABASE_URL")
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL")  // D├®sactiv├® pour ├®viter erreurs P3006 en local
 }
 
 enum MembershipStatus {
   INVITED
   ACTIVE
   SUSPENDED
-  @@schema("stratum")
 }
 
 
@@ -22,7 +21,6 @@ enum ColumnBehaviorKey {
   BLOCKED
   DONE
   CUSTOM
-  @@schema("stratum")
 }
 
 enum Priority {
@@ -32,7 +30,6 @@ enum Priority {
   MEDIUM
   LOW
   LOWEST
-  @@schema("stratum")
 }
 
 enum Effort {
@@ -43,53 +40,6 @@ enum Effort {
   L
   XL
   XXL
-  @@schema("stratum")
-}
-
-enum ActivityType {
-  SHARE_INVITE_CREATED
-  SHARE_INVITE_ACCEPTED
-  SHARE_INVITE_DECLINED
-  SHARE_INVITE_EXPIRED
-  SHARE_LINK_REMOVED
-  KANBAN_SOFT_DELETED
-  KANBAN_RESTORED
-  KANBAN_MOVED
-  KANBAN_MOVE_REFUSED
-  KANBAN_BECAME_SHARED
-  NODE_CREATED
-  NODE_UPDATED
-  NODE_MOVED
-  NODE_DELETED
-  NODE_ARCHIVED
-  NODE_RESTORED
-  NODE_SNOOZED
-  NODE_UNSNOOZED
-  COLLABORATOR_ADDED
-  COLLABORATOR_REMOVED
-  INVITATION_SENT
-  INVITATION_ACCEPTED
-  INVITATION_DECLINED
-  COMMENT_ADDED
-  DESCRIPTION_UPDATED
-  TITLE_UPDATED
-  DUE_DATE_UPDATED
-  PRIORITY_UPDATED
-  EFFORT_UPDATED
-  TAGS_UPDATED
-  ASSIGNEES_UPDATED
-  MOVED_TO_BOARD
-  PROGRESS_UPDATED
-  BLOCKED_STATUS_CHANGED
-  RACI_UPDATED
-  @@schema("stratum")
-}
-
-enum QuickNoteType {
-  NOTE
-  DONE
-  WAITING
-  @@schema("stratum")
 }
 
 model User {
@@ -111,28 +61,22 @@ model User {
   invitationsSent  Invitation[] @relation("UserInvitations")
   settings        UserSettings?
   ownedBoards     Board[]       @relation("UserOwnedBoards")
-  nodeShareInvitationsSent NodeShareInvitation[] @relation("NodeShareInvitationsSent")
-  nodeShareInvitationsReceived NodeShareInvitation[] @relation("NodeShareInvitationsReceived")
-  sharedNodePlacements SharedNodePlacement[]
-  activityLogs    ActivityLog[]
-  quickNotes      QuickNote[]
-  @@schema("stratum")
 }
 
 model Team {
-  id              String           @id @default(cuid())
-  name            String
-  slug            String?          @unique
-  description     String?
-  settings        Json?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  memberships     Membership[]
-  nodes           Node[]
-  automationRules AutomationRule[]
-  invitations     Invitation[]
-  isPersonal      Boolean          @default(false)
-  @@schema("stratum")
+  id               String            @id @default(cuid())
+  name             String
+  slug             String?           @unique
+  description      String?
+  settings         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  memberships      Membership[]
+  nodes            Node[]
+  columnBehaviors  ColumnBehavior[]
+  automationRules  AutomationRule[]
+  invitations      Invitation[]
+  isPersonal       Boolean           @default(false)
 }
 
 model Membership {
@@ -149,13 +93,11 @@ model Membership {
   team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([userId, teamId])
-  @@schema("stratum")
 }
 
 model Node {
   id              String            @id @default(cuid())
   teamId          String
-  workspaceId     String
   parentId        String?
   columnId        String?
   title           String
@@ -194,12 +136,6 @@ model Node {
   dependents      Dependency[]      @relation("DependencyDependencies")
   attachments     Attachment[]
   comments        Comment[]
-  shareInvitations NodeShareInvitation[]
-  sharedPlacements SharedNodePlacement[]
-  activityLogs    ActivityLog[]
-
-  @@index([workspaceId])
-  @@schema("stratum")
 }
 
 model Board {
@@ -216,8 +152,6 @@ model Board {
   columns         Column[]
   dailySnapshots  BoardDailySnapshot[]
   owner           User?             @relation("UserOwnedBoards", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  quickNotes      QuickNote[]
-  @@schema("stratum")
 }
 
 model Column {
@@ -235,21 +169,20 @@ model Column {
   board           Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
   behavior        ColumnBehavior     @relation(fields: [behaviorId], references: [id], onDelete: Restrict)
   nodes           Node[]
-  sharedNodePlacements SharedNodePlacement[]
-  @@schema("stratum")
 }
 
 model ColumnBehavior {
-  id        String            @id @default(cuid())
-  key       ColumnBehaviorKey
-  label     String
-  metadata  Json?
-  color     String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String             @id @default(cuid())
+  teamId      String
+  key         ColumnBehaviorKey
+  label       String
+  metadata    Json?
+  color       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
-  columns   Column[]
-  @@schema("stratum")
+  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  columns     Column[]
 }
 
 model NodeAssignment {
@@ -261,7 +194,6 @@ model NodeAssignment {
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@schema("stratum")
 }
 
 // Checklist & ChecklistItem supprim├®s (migration unifi├®e vers enfants)
@@ -277,7 +209,6 @@ model Dependency {
   dependency     Node     @relation("DependencyDependencies", fields: [dependencyId], references: [id], onDelete: Cascade)
 
   @@unique([dependentId, dependencyId])
-  @@schema("stratum")
 }
 
 model Attachment {
@@ -291,7 +222,6 @@ model Attachment {
   createdAt   DateTime  @default(now())
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  @@schema("stratum")
 }
 
 model Comment {
@@ -312,7 +242,6 @@ model Comment {
 
   node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  @@schema("stratum")
 }
 
 model AutomationRule {
@@ -327,7 +256,6 @@ model AutomationRule {
   updatedAt   DateTime  @updatedAt
 
   team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  @@schema("stratum")
 }
 
 
@@ -336,15 +264,6 @@ enum InvitationStatus {
   ACCEPTED
   DECLINED
   EXPIRED
-  @@schema("stratum")
-}
-
-enum NodeShareInvitationStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  EXPIRED
-  @@schema("stratum")
 }
 
 model RefreshToken {
@@ -358,7 +277,6 @@ model RefreshToken {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@schema("stratum")
 }
 
 model PasswordResetToken {
@@ -372,7 +290,6 @@ model PasswordResetToken {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@schema("stratum")
 }
 
 model Invitation {
@@ -391,30 +308,6 @@ model Invitation {
 
   @@index([email])
   @@index([teamId])
-  @@schema("stratum")
-}
-
-model NodeShareInvitation {
-  id             String                     @id @default(cuid())
-  nodeId         String
-  inviterId      String
-  inviteeEmail   String
-  inviteeUserId  String?
-  status         NodeShareInvitationStatus  @default(PENDING)
-  expiresAt      DateTime
-  respondedAt    DateTime?
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
-
-  node           Node                       @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  inviter        User                       @relation("NodeShareInvitationsSent", fields: [inviterId], references: [id], onDelete: Cascade)
-  invitee        User?                      @relation("NodeShareInvitationsReceived", fields: [inviteeUserId], references: [id], onDelete: SetNull)
-
-  @@unique([nodeId, inviteeEmail])
-  @@index([inviteeEmail])
-  @@index([inviteeUserId])
-  @@index([status])
-  @@schema("stratum")
 }
 
 model UserSettings {
@@ -424,26 +317,6 @@ model UserSettings {
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@schema("stratum")
-}
-
-model QuickNote {
-  id          String        @id @default(cuid())
-  userId      String
-  text        String
-  type        QuickNoteType
-  kanbanId    String?
-  kanbanName  String?
-  createdAt   DateTime      @default(now())
-  treatedAt   DateTime?
-  reminderAt  DateTime?
-
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kanban      Board?        @relation(fields: [kanbanId], references: [id], onDelete: SetNull)
-
-  @@index([userId, treatedAt])
-  @@index([kanbanId])
-  @@schema("stratum")
 }
 
 model BoardDailySnapshot {
@@ -462,44 +335,4 @@ model BoardDailySnapshot {
 
   @@unique([boardId, dateUTC])
   @@index([dateUTC])
-  @@schema("stratum")
 }
-
-model SharedNodePlacement {
-  id         String   @id @default(cuid())
-  nodeId     String
-  userId     String
-  columnId   String
-  position   Float    @default(0)
-  archivedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  column     Column   @relation(fields: [columnId], references: [id], onDelete: Cascade)
-
-  @@unique([nodeId, userId])
-  @@index([userId])
-  @@index([nodeId])
-  @@index([columnId])
-  @@schema("stratum")
-}
-
-model ActivityLog {
-  id         String       @id @default(cuid())
-  nodeId     String
-  userId     String
-  type       ActivityType
-  metadata   Json?
-  createdAt  DateTime     @default(now())
-
-  node       Node         @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([nodeId, createdAt])
-  @@index([userId])
-  @@index([type])
-  @@schema("stratum")
-}
-

@@ -7,7 +7,6 @@ import {
   Gauge,
 } from 'prom-client';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -44,14 +43,14 @@ export class MetricsService {
 
       this.httpRequestsTotal = new Counter({
         name: 'stratum_http_requests_total',
-        help: 'Total des requêtes HTTP',
+        help: 'Total des requ├¬tes HTTP',
         labelNames: ['method', 'route', 'status'],
         registers: [this.register],
       });
 
       this.httpRequestDuration = new Histogram({
         name: 'stratum_http_request_duration_seconds',
-        help: 'Durée des requêtes HTTP en secondes',
+        help: 'Dur├®e des requ├¬tes HTTP en secondes',
         labelNames: ['method', 'route', 'status'],
         buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
         registers: [this.register],
@@ -59,34 +58,34 @@ export class MetricsService {
 
       this.httpErrorsTotal = new Counter({
         name: 'stratum_http_errors_total',
-        help: 'Total des réponses 5xx',
+        help: 'Total des r├®ponses 5xx',
         labelNames: ['method', 'route'],
         registers: [this.register],
       });
 
       this.activeUsersGauge = new Gauge({
         name: 'stratum_active_users_placeholder',
-        help: 'Placeholder (ex: utilisateurs actifs, à implémenter plus tard)',
+        help: 'Placeholder (ex: utilisateurs actifs, ├á impl├®menter plus tard)',
         registers: [this.register],
       });
 
       // Prisma metrics
       this.prismaQueryDuration = new Histogram({
         name: 'stratum_prisma_query_duration_seconds',
-        help: 'Durée des requêtes Prisma (DB) en secondes',
+        help: 'Dur├®e des requ├¬tes Prisma (DB) en secondes',
         labelNames: ['model', 'action', 'status'],
         buckets: [0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2],
         registers: [this.register],
       });
       this.prismaQueriesTotal = new Counter({
         name: 'stratum_prisma_queries_total',
-        help: 'Total des requêtes Prisma',
+        help: 'Total des requ├¬tes Prisma',
         labelNames: ['model', 'action', 'status'],
         registers: [this.register],
       });
       this.prismaErrorsTotal = new Counter({
         name: 'stratum_prisma_errors_total',
-        help: 'Erreurs Prisma categorizées',
+        help: 'Erreurs Prisma categoriz├®es',
         labelNames: ['model', 'action', 'error'],
         registers: [this.register],
       });
@@ -99,27 +98,27 @@ export class MetricsService {
       });
       this.nodesBlockedTotal = new Gauge({
         name: 'stratum_nodes_blocked_total',
-        help: 'Nodes bloqués non résolus',
+        help: 'Nodes bloqu├®s non r├®solus',
         registers: [this.register],
       });
       this.refreshTokensActive = new Gauge({
         name: 'stratum_refresh_tokens_active',
-        help: 'Tokens de refresh actifs (non expirés, non révoqués)',
+        help: 'Tokens de refresh actifs (non expir├®s, non r├®voqu├®s)',
         registers: [this.register],
       });
       this.backupAgeSeconds = new Gauge({
         name: 'stratum_backup_age_seconds',
-        help: 'Âge du backup le plus récent en secondes',
+        help: '├ége du backup le plus r├®cent en secondes',
         registers: [this.register],
       });
       this.eventLoopLagSeconds = new Gauge({
         name: 'stratum_event_loop_lag_seconds',
-        help: "Lag estimé de la boucle d'évènements Node.js (moyenne approximative)",
+        help: "Lag estim├® de la boucle d'├®v├¿nements Node.js (moyenne approximative)",
         registers: [this.register],
         labelNames: ['phase'],
       });
     } else {
-      // Créer des stubs no-op pour éviter les if partout
+      // Cr├®er des stubs no-op pour ├®viter les if partout
       this.httpRequestsTotal = new Counter({
         name: 'noop_total',
         help: 'noop',
@@ -164,33 +163,6 @@ export class MetricsService {
 
     if (this.enabled) {
       this.startSchedulers();
-    }
-  }
-
-  private extractSchema(raw: string): string | null {
-    try {
-      const url = new URL(raw);
-      return url.searchParams.get('schema');
-    } catch {
-      return null;
-    }
-  }
-
-  private normalizeConnectionString(raw: string): string {
-    try {
-      const url = new URL(raw);
-      const schema = url.searchParams.get('schema');
-      if (!schema) return raw;
-      url.searchParams.delete('schema');
-      const options = url.searchParams.get('options');
-      const searchPath = `-c search_path=${schema}`;
-      url.searchParams.set(
-        'options',
-        options ? `${options} ${searchPath}` : searchPath,
-      );
-      return url.toString();
-    } catch {
-      return raw;
     }
   }
 
@@ -262,25 +234,8 @@ export class MetricsService {
   private async safeCollectBusiness() {
     try {
       if (!this.prisma) {
-        // charge dynamique pour éviter import direct circulaire
-        const datasourceUrl = process.env.DATABASE_URL;
-        if (!datasourceUrl) {
-          this.prisma = new PrismaClient();
-        } else {
-          const schema = this.extractSchema(datasourceUrl);
-          if (schema) {
-            const searchPath = `-c search_path=${schema}`;
-            const pgOptions = process.env.PGOPTIONS;
-            if (!pgOptions || !pgOptions.includes('search_path')) {
-              process.env.PGOPTIONS = pgOptions
-                ? `${pgOptions} ${searchPath}`
-                : searchPath;
-            }
-          }
-          const normalized = this.normalizeConnectionString(datasourceUrl);
-          const adapter = new PrismaPg({ connectionString: normalized });
-          this.prisma = new PrismaClient({ adapter });
-        }
+        // charge dynamique pour ├®viter import direct circulaire
+        this.prisma = new PrismaClient();
       }
       if (this.nodesTotal) {
         const total = await this.prisma.node.count();
