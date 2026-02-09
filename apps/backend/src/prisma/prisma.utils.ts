@@ -1,3 +1,6 @@
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+
 export function resolveDatabaseUrlFromEnv(): string {
   const directUrl = process.env.DATABASE_URL;
   if (directUrl && directUrl.trim().length > 0) return directUrl;
@@ -32,8 +35,8 @@ export function ensureDatabaseUrlEnv(): string {
 }
 
 export function buildPrismaClientOptions() {
-  ensureDatabaseUrlEnv();
-  return {
-    log: [],
-  };
+  const url = ensureDatabaseUrlEnv();
+  const pool = new Pool({ connectionString: url });
+  const adapter = new PrismaPg(pool);
+  return { adapter, log: [] };
 }
