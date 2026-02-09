@@ -1,7 +1,7 @@
 import { PrismaClient, MembershipStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { seedDemoData } from './seed';
-import { ensureDatabaseUrlEnv } from '../src/prisma/prisma.utils';
+import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
 /**
  * Script de remise à zéro étendue:
@@ -10,8 +10,7 @@ import { ensureDatabaseUrlEnv } from '../src/prisma/prisma.utils';
  * 3. Pour chaque utilisateur existant (hors utilisateur démo), crée un espace personnel si absent.
  */
 async function main() {
-  ensureDatabaseUrlEnv();
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient(buildPrismaClientOptions());
   try {
     console.log('🚩 Reset personnel: démarrage');
     // Étape 1: (optionnel) Purge des boards orphelins personnels sans owner.

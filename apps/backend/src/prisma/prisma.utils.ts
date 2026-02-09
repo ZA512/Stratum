@@ -30,3 +30,10 @@ export function ensureDatabaseUrlEnv(): string {
   }
   return url;
 }
+
+export function buildPrismaClientOptions() {
+  ensureDatabaseUrlEnv();
+  return {
+    log: [],
+  };
+}

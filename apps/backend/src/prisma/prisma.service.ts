@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import type { MetricsService } from '../modules/metrics/metrics.service';
-import { ensureDatabaseUrlEnv } from './prisma.utils';
+import { buildPrismaClientOptions } from './prisma.utils';
 
 @Injectable()
 export class PrismaService
@@ -18,8 +18,7 @@ export class PrismaService
   private metricsEnabled = false;
 
   constructor(@Optional() private readonly metricsService?: MetricsService) {
-    ensureDatabaseUrlEnv();
-    super();
+    super(buildPrismaClientOptions());
     this.metricsEnabled = process.env.METRICS_ENABLED === 'true';
     // plus de wrapper local: utilisation directe via metricsService.recordPrisma
     this.installMiddleware();
