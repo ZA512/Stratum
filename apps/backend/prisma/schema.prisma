@@ -13,6 +13,8 @@ enum MembershipStatus {
   INVITED
   ACTIVE
   SUSPENDED
+
+  @@schema("stratum")
 }
 
 
@@ -22,6 +24,8 @@ enum ColumnBehaviorKey {
   BLOCKED
   DONE
   CUSTOM
+
+  @@schema("stratum")
 }
 
 enum Priority {
@@ -31,6 +35,8 @@ enum Priority {
   MEDIUM
   LOW
   LOWEST
+
+  @@schema("stratum")
 }
 
 enum Effort {
@@ -41,6 +47,8 @@ enum Effort {
   L
   XL
   XXL
+
+  @@schema("stratum")
 }
 
 enum ActivityType {
@@ -79,12 +87,16 @@ enum ActivityType {
   PROGRESS_UPDATED
   BLOCKED_STATUS_CHANGED
   RACI_UPDATED
+
+  @@schema("stratum")
 }
 
 enum QuickNoteType {
   NOTE
   DONE
   WAITING
+
+  @@schema("stratum")
 }
 
 model User {
@@ -343,6 +355,8 @@ enum InvitationStatus {
   ACCEPTED
   DECLINED
   EXPIRED
+
+  @@schema("stratum")
 }
 
 enum NodeShareInvitationStatus {
@@ -350,6 +364,8 @@ enum NodeShareInvitationStatus {
   ACCEPTED
   DECLINED
   EXPIRED
+
+  @@schema("stratum")
 }
 
 model RefreshToken {
