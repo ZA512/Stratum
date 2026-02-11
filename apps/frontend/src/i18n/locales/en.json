@@ -1098,8 +1098,52 @@
     "viewToggle": {
       "kanban": "Kanban",
       "kanbanHint": "Switch back to the Kanban workflow view",
+      "list": "List",
+      "listHint": "Open the global list view",
       "gantt": "Timeline",
       "ganttHint": "Open the lightweight Gantt timeline"
+    },
+    "dueList": {
+      "title": "View due tasks",
+      "aria": "Open the due tasks list"
+    },
+    "listView": {
+      "mode": {
+        "all": "All",
+        "due": "Due"
+      },
+      "filters": {
+        "overdue": "Overdue",
+        "upcoming": "Due soon",
+        "includeDone": "Include done"
+      },
+      "range": {
+        "today": "Today",
+        "week": "Week"
+      },
+      "summary": {
+        "all": "{total} tasks",
+        "due": "{total} tasks · {overdue} overdue · {upcoming} due soon"
+      },
+      "columns": {
+        "due": "Due",
+        "status": "Status",
+        "context": "Context"
+      },
+      "actions": {
+        "openChild": "Open child board"
+      },
+      "due": {
+        "none": "No due date",
+        "today": "Today",
+        "inDays": "In {count} d",
+        "overdue": "{count} d late"
+      },
+      "loading": "Loading list view…",
+      "empty": "No tasks match the filters.",
+      "errors": {
+        "hierarchy": "Unable to load the task hierarchy."
+      }
     },
     "gantt": {
       "subtitle": "Plan the timeline for this board",

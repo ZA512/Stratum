@@ -1097,8 +1097,52 @@
     "viewToggle": {
       "kanban": "Kanban",
       "kanbanHint": "Revenir à la vue Kanban quotidienne",
+      "list": "Liste",
+      "listHint": "Ouvrir la vue liste globale",
       "gantt": "Timeline",
       "ganttHint": "Ouvrir la timeline légère"
+    },
+    "dueList": {
+      "title": "Voir les échéances",
+      "aria": "Ouvrir la liste des échéances"
+    },
+    "listView": {
+      "mode": {
+        "all": "Tout",
+        "due": "Échéances"
+      },
+      "filters": {
+        "overdue": "En retard",
+        "upcoming": "À échéance",
+        "includeDone": "Inclure terminées"
+      },
+      "range": {
+        "today": "Aujourd'hui",
+        "week": "Semaine"
+      },
+      "summary": {
+        "all": "{total} tâches",
+        "due": "{total} tâches · {overdue} en retard · {upcoming} à échéance"
+      },
+      "columns": {
+        "due": "Échéance",
+        "status": "Statut",
+        "context": "Contexte"
+      },
+      "actions": {
+        "openChild": "Ouvrir sous-kanban"
+      },
+      "due": {
+        "none": "Sans échéance",
+        "today": "Aujourd'hui",
+        "inDays": "Dans {count} j",
+        "overdue": "En retard de {count} j"
+      },
+      "loading": "Chargement de la vue liste…",
+      "empty": "Aucune tâche ne correspond aux filtres.",
+      "errors": {
+        "hierarchy": "Impossible de charger la hiérarchie des tâches."
+      }
     },
     "gantt": {
       "subtitle": "Pilotez la chronologie du board",

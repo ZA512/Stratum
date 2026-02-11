@@ -15,12 +15,17 @@ import { useToast } from '@/components/toast/ToastProvider';
 import { ChevronRight, ChevronDown, Search } from 'lucide-react';
 import { useTranslation } from '@/i18n';
 
+type MoveConfirmAction = 'stay' | 'open';
+
 interface MoveCardDialogProps {
   teamId: string;
   node: BoardNode;
   currentBoardId: string;
-  onClose: () => void;
+  onClose?: () => void;
   onSuccess: (payload: { boardId: string; boardName: string }) => Promise<void> | void;
+  variant?: 'modal' | 'inline';
+  confirmActions?: Array<{ id: MoveConfirmAction; label: string }>;
+  onAction?: (payload: { boardId: string; boardName: string }, action: MoveConfirmAction) => Promise<void> | void;
 }
 
 type NodeOption = {
@@ -41,6 +46,9 @@ export function MoveCardDialog({
   currentBoardId,
   onClose,
   onSuccess,
+  variant = 'modal',
+  confirmActions,
+  onAction,
 }: MoveCardDialogProps) {
   const { accessToken } = useAuth();
   const { success, error: toastError } = useToast();
@@ -361,7 +369,7 @@ export function MoveCardDialog({
     });
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (action: MoveConfirmAction = 'stay') => {
     if (!accessToken) {
       setFormError(tBoard('moveDialog.errors.sessionInvalid'));
       return;
@@ -394,8 +402,15 @@ export function MoveCardDialog({
           detail: { nodeId: node.id, targetColumnId: selectedColumnId },
         }));
       } catch { /* no-op */ }
-      await onSuccess({ boardId: targetBoardId, boardName: nodeName });
-      onClose();
+      const payload = { boardId: targetBoardId, boardName: nodeName };
+      if (onAction) {
+        await onAction(payload, action);
+      } else {
+        await onSuccess(payload);
+      }
+      if (variant !== 'inline') {
+        onClose?.();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : tBoard('moveDialog.errors.moveFailed');
       setFormError(message);
@@ -485,107 +500,102 @@ export function MoveCardDialog({
     );
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="move-dialog-title"
-    >
-      <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">
-        <h2 id="move-dialog-title" className="text-lg font-semibold">
-          {tBoard('moveDialog.title', { title: node.title })}
-        </h2>
-        <p className="mt-2 text-sm text-muted">
-          {tBoard('moveDialog.description')}
-        </p>
+  const content = (
+    <div className={variant === 'modal' ? 'w-full max-w-4xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl' : 'rounded-2xl border border-white/10 bg-surface/70 p-6'}>
+      <h2 id="move-dialog-title" className="text-lg font-semibold">
+        {tBoard('moveDialog.title', { title: node.title })}
+      </h2>
+      <p className="mt-2 text-sm text-muted">
+        {tBoard('moveDialog.description')}
+      </p>
 
-        {nodesLoading ? (
-            <p className="mt-6 text-sm text-accent">{tBoard('moveDialog.loadingHierarchy')}</p>
-        ) : nodesError ? (
-          <p className="mt-6 text-sm text-rose-300">{nodesError}</p>
-        ) : (
-          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_minmax(0,200px)]">
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-                  <input
-                    type="text"
-                      placeholder={tBoard('moveDialog.searchPlaceholder')}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                </div>
-              </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-                {tBoard('moveDialog.availableTasks')}
-              </p>
-              <div className="max-h-96 overflow-y-auto pr-1 space-y-0.5">
-                {filteredNodes.length > 0 ? (
-                  filteredNodes.map((option) => (
-                    <NodeTreeItem key={option.nodeId} option={option} />
-                  ))
-                ) : (
-                  <p className="text-sm text-muted py-4 text-center">
-                    {searchQuery.trim()
-                      ? tBoard('moveDialog.noTasksFound')
-                      : tBoard('moveDialog.noTasksAvailable')}
-                  </p>
-                )}
+      {nodesLoading ? (
+        <p className="mt-6 text-sm text-accent">{tBoard('moveDialog.loadingHierarchy')}</p>
+      ) : nodesError ? (
+        <p className="mt-6 text-sm text-rose-300">{nodesError}</p>
+      ) : (
+        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_minmax(0,200px)]">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="text"
+                  placeholder={tBoard('moveDialog.searchPlaceholder')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
               </div>
             </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
-                {tBoard('moveDialog.targetColumn')}
-              </p>
-              {columnsLoading ? (
-                <p className="mt-3 text-sm text-accent">{tBoard('moveDialog.columnsLoading')}</p>
-              ) : selectedNodeId ? (
-                selectedColumns && selectedColumns.length > 0 ? (
-                  <ul className="space-y-2">
-                    {selectedColumns.map((column) => {
-                      const isSelected = column.id === selectedColumnId;
-                      return (
-                        <li key={column.id}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedColumnId(column.id)}
-                            className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-sm transition ${
-                              isSelected
-                                ? 'border-accent bg-accent/10 text-foreground'
-                                : 'border-white/10 text-muted hover:border-accent/60 hover:text-foreground'
-                            }`}
-                          >
-                            <span className="truncate text-xs">{column.name}</span>
-                            <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
-                              {tBoard(`behaviors.${column.behaviorKey}`)}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.columnsEmpty')}</p>
-                )
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+              {tBoard('moveDialog.availableTasks')}
+            </p>
+            <div className="max-h-96 overflow-y-auto pr-1 space-y-0.5">
+              {filteredNodes.length > 0 ? (
+                filteredNodes.map((option) => (
+                  <NodeTreeItem key={option.nodeId} option={option} />
+                ))
               ) : (
-                <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.selectTaskFirst')}</p>
-              )}
-              {columnsError && (
-                <p className="mt-3 text-xs text-rose-300">{columnsError}</p>
+                <p className="text-sm text-muted py-4 text-center">
+                  {searchQuery.trim()
+                    ? tBoard('moveDialog.noTasksFound')
+                    : tBoard('moveDialog.noTasksAvailable')}
+                </p>
               )}
             </div>
           </div>
-        )}
 
-        {formError && !nodesError && (
-          <p className="mt-4 text-sm text-rose-300">{formError}</p>
-        )}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+              {tBoard('moveDialog.targetColumn')}
+            </p>
+            {columnsLoading ? (
+              <p className="mt-3 text-sm text-accent">{tBoard('moveDialog.columnsLoading')}</p>
+            ) : selectedNodeId ? (
+              selectedColumns && selectedColumns.length > 0 ? (
+                <ul className="space-y-2">
+                  {selectedColumns.map((column) => {
+                    const isSelected = column.id === selectedColumnId;
+                    return (
+                      <li key={column.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedColumnId(column.id)}
+                          className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-sm transition ${
+                            isSelected
+                              ? 'border-accent bg-accent/10 text-foreground'
+                              : 'border-white/10 text-muted hover:border-accent/60 hover:text-foreground'
+                          }`}
+                        >
+                          <span className="truncate text-xs">{column.name}</span>
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
+                            {tBoard(`behaviors.${column.behaviorKey}`)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.columnsEmpty')}</p>
+              )
+            ) : (
+              <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.selectTaskFirst')}</p>
+            )}
+            {columnsError && (
+              <p className="mt-3 text-xs text-rose-300">{columnsError}</p>
+            )}
+          </div>
+        </div>
+      )}
 
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
+      {formError && !nodesError && (
+        <p className="mt-4 text-sm text-rose-300">{formError}</p>
+      )}
+
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
+        {variant === 'modal' && (
           <button
             type="button"
             onClick={onClose}
@@ -593,9 +603,27 @@ export function MoveCardDialog({
           >
             {tBoard('moveDialog.cancel')}
           </button>
+        )}
+        {confirmActions && confirmActions.length > 0 ? (
+          confirmActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              onClick={() => handleConfirm(action.id)}
+              disabled={disableConfirm}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                disableConfirm
+                  ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted'
+                  : 'border-accent/60 bg-accent/20 text-foreground hover:border-accent hover:bg-accent/30'
+              }`}
+            >
+              {submitting ? tBoard('moveDialog.confirmLoading') : action.label}
+            </button>
+          ))
+        ) : (
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={() => handleConfirm('stay')}
             disabled={disableConfirm}
             className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
               disableConfirm
@@ -605,8 +633,23 @@ export function MoveCardDialog({
           >
             {submitting ? tBoard('moveDialog.confirmLoading') : tBoard('moveDialog.confirm')}
           </button>
-        </div>
+        )}
       </div>
+    </div>
+  );
+
+  if (variant === 'inline') {
+    return content;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="move-dialog-title"
+    >
+      {content}
     </div>
   );
 }

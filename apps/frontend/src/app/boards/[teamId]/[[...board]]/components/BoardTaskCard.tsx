@@ -1,6 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useMemo, useRef, useCallback, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-card';
@@ -52,9 +51,6 @@ export function BoardTaskCard({
   childBoard,
   onOpen,
   onOpenChildBoard,
-  onRename,
-  onRequestMove,
-  onRequestDelete,
   displayOptions,
   helpMode,
 }: BoardTaskCardProps) {
@@ -73,14 +69,7 @@ export function BoardTaskCard({
     opacity: isDragging ? 0.4 : 1 
   };
 
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(node.title);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [fractalLoading, setFractalLoading] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const menuPortalRef = useRef<HTMLDivElement | null>(null);
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
 
   const setCardRef = useCallback(
@@ -91,74 +80,6 @@ export function BoardTaskCard({
     [setNodeRef],
   );
 
-  useEffect(() => { setTitle(node.title); }, [node.id, node.title]);
-
-  const save = async () => {
-    if (!editing) return;
-    const t = title.trim();
-    if (!t) { setTitle(node.title); setEditing(false); return; }
-    if (t === node.title) { setEditing(false); return; }
-    try {
-      await onRename?.(node.id, t);
-    } finally {
-      setEditing(false);
-    }
-  };
-
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (menuRef.current?.contains(target)) return;
-      if (menuButtonRef.current?.contains(target)) return;
-      closeMenu();
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeMenu();
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [menuOpen, closeMenu]);
-
-  const updateMenuPosition = useCallback(() => {
-    if (!menuOpen || !menuButtonRef.current) return;
-    const rect = menuButtonRef.current.getBoundingClientRect();
-    const menuHeight = menuPortalRef.current?.offsetHeight ?? 180;
-    const menuWidth = menuPortalRef.current?.offsetWidth ?? 200;
-    const padding = 4;
-    const availableBelow = window.innerHeight - rect.bottom;
-    const openUp = availableBelow < menuHeight + padding;
-    const top = openUp ? rect.top - menuHeight - padding : rect.bottom + padding;
-    let left = rect.left;
-    if (left + menuWidth > window.innerWidth - 8) {
-      left = window.innerWidth - menuWidth - 8;
-    }
-    if (left < 8) {
-      left = 8;
-    }
-    setMenuPosition({ top: Math.max(top, 8), left });
-  }, [menuOpen]);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) return;
-    updateMenuPosition();
-    const handleScroll = () => updateMenuPosition();
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleScroll);
-    };
-  }, [menuOpen, updateMenuPosition]);
 
   // Mapping vers TaskCard props
   const priority: TaskCardProps['priority'] = 
@@ -273,6 +194,25 @@ export function BoardTaskCard({
     }
     return undefined;
   }, [showReminderBadge, node.blockedReminderDueInDays, node.blockedReminderIntervalDays, tBoard]);
+
+  const handleOpenChildBoard = useCallback(async () => {
+    if (isDragging || fractalLoading) return;
+    if (!onOpenChildBoard) return;
+    if (childBoard) {
+      onOpenChildBoard(childBoard.boardId);
+      return;
+    }
+    if (!accessToken) return;
+    try {
+      setFractalLoading(true);
+      const boardId = await ensureChildBoard(node.id, accessToken);
+      onOpenChildBoard(boardId);
+    } catch {
+      // silent
+    } finally {
+      setFractalLoading(false);
+    }
+  }, [accessToken, childBoard, fractalLoading, isDragging, node.id, onOpenChildBoard]);
 
   const helpMessages = useMemo<CardHelpMessages>(() => {
     const messages: CardHelpMessages = {};
@@ -440,12 +380,26 @@ export function BoardTaskCard({
       style={style}
       {...attributes}
       {...listeners}
-      className="relative"
+      className="group relative"
     >
+      <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen(node.id);
+          }}
+          className="text-muted opacity-0 transition hover:text-foreground focus:outline-none focus:text-foreground group-hover:opacity-100"
+          title={tBoard('cards.menu.open')}
+          aria-label={tBoard('cards.menu.open')}
+        >
+          <span className="material-symbols-outlined text-[16px]" aria-hidden>edit</span>
+        </button>
+      </div>
       <TaskCard
         id={shortIdLabel}
         priority={priority}
-        title={editing ? '' : title}
+        title={node.title}
         description={description}
         assignees={assignees}
         assigneeTooltip={raciTooltip}
@@ -462,27 +416,9 @@ export function BoardTaskCard({
         isShared={node.isSharedRoot}
         helpMode={helpMode}
         helpMessages={helpMessages}
-        menuButtonRef={menuButtonRef}
-        onClick={() => onOpen(node.id)}
-        onFractalPathClick={async () => {
-          if (!onOpenChildBoard || fractalLoading) return;
-            // Si déjà présent
-          if (childBoard) {
-            onOpenChildBoard(childBoard.boardId);
-            return;
-          }
-          if (!accessToken) return;
-          try {
-            setFractalLoading(true);
-            const boardId = await ensureChildBoard(node.id, accessToken);
-            onOpenChildBoard(boardId);
-          } catch {
-            // TODO: brancher un toast d'erreur si disponible
-          } finally {
-            setFractalLoading(false);
-          }
-        }}
-        onMenuButtonClick={() => setMenuOpen(prev => !prev)}
+        onClick={handleOpenChildBoard}
+        onFractalPathClick={handleOpenChildBoard}
+        hideInternalMenuButton
         className={isSharedLocked ? "cursor-not-allowed opacity-70" : "cursor-grab active:cursor-grabbing"}
       />
       {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
@@ -507,81 +443,6 @@ export function BoardTaskCard({
       {fractalLoading && (
         <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 z-40">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-        </div>
-      )}
-      
-      {/* Menu contextuel overlay */}
-      {menuOpen && menuPosition && createPortal(
-          <div
-            ref={menuPortalRef}
-            role="menu"
-            className="fixed z-[10000] min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
-            style={{ top: menuPosition.top, left: menuPosition.left }}
-          >
-            <div ref={menuRef}>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onOpen(node.id);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-            >
-              ✏️ <span>{tBoard('cards.menu.open')}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                setEditing(true);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-            >
-              📝 <span>{tBoard('cards.menu.rename')}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onRequestMove(node);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10 focus:bg-white/10"
-            >
-              📦 <span>{tBoard('cards.menu.move')}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onRequestDelete(node);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-300 transition hover:bg-rose-500/20 focus:bg-rose-500/20"
-            >
-              🗑️ <span>{tBoard('cards.menu.delete')}</span>
-            </button>
-          </div>
-        </div>,
-        document.body,
-      )}
-      
-      {/* Mode édition overlay */}
-      {editing && (
-        <div className="absolute inset-4 flex items-start">
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => { 
-              if (e.key === 'Enter') { save(); } 
-              if (e.key === 'Escape') { setTitle(node.title); setEditing(false); } 
-            }}
-            className="w-full rounded border border-blue-500 bg-white dark:bg-gray-800 px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-blue-500/40"
-            autoFocus
-          />
         </div>
       )}
       

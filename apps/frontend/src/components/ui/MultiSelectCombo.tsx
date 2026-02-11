@@ -14,12 +14,14 @@ export interface MultiSelectComboProps {
   options: MultiSelectOption[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  onQueryChange?: (query: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
   noResultsMessage?: string;
   disabled?: boolean;
   className?: string;
+  maxResults?: number;
   /**
    * If true, keeps the menu open after each selection.
    * Useful for multi-select behaviours where several selections happen in a row.
@@ -37,12 +39,14 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
   options,
   selectedIds,
   onChange,
-  placeholder = 'Sélectionner…',
-  searchPlaceholder = 'Rechercher…',
+  onQueryChange,
+  placeholder = 'Selectionner...',
+  searchPlaceholder = 'Rechercher...',
   emptyMessage = 'Aucune option disponible',
-  noResultsMessage = 'Aucun résultat',
+  noResultsMessage = 'Aucun resultat',
   disabled = false,
   className,
+  maxResults,
   keepMenuOpen = true,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -65,13 +69,19 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
   }, [options]);
 
   const filteredOptions = useMemo(() => {
-    if (!normalizedQuery) return normalizedOptions;
-    return normalizedOptions.filter((option) => option._search.includes(normalizedQuery));
-  }, [normalizedOptions, normalizedQuery]);
+    const matches = normalizedQuery
+      ? normalizedOptions.filter((option) => option._search.includes(normalizedQuery))
+      : normalizedOptions;
+    if (!maxResults || maxResults <= 0) return matches;
+    return matches.slice(0, maxResults);
+  }, [normalizedOptions, normalizedQuery, maxResults]);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  const resetHighlight = useCallback(() => setHighlightedIndex(filteredOptions.length > 0 ? 0 : null), [filteredOptions.length]);
+  const resetHighlight = useCallback(
+    () => setHighlightedIndex(filteredOptions.length > 0 ? 0 : null),
+    [filteredOptions.length],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -101,12 +111,13 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
       setOpen(false);
       setHighlightedIndex(null);
       setQuery('');
+      onQueryChange?.('');
     };
     document.addEventListener('mousedown', handleClick);
     return () => {
       document.removeEventListener('mousedown', handleClick);
     };
-  }, []);
+  }, [onQueryChange]);
 
   const toggleOption = useCallback((id: string) => {
     if (selectedSet.has(id)) {
@@ -233,7 +244,7 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
               aria-label={`Retirer ${option.label}`}
               disabled={disabled}
             >
-              ×
+              x
             </button>
           </span>
         ))}
@@ -242,7 +253,9 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
           type="text"
           value={query}
           onChange={(event) => {
-            setQuery(event.target.value);
+            const next = event.target.value;
+            setQuery(next);
+            onQueryChange?.(next);
             if (!open) {
               setOpen(true);
             }

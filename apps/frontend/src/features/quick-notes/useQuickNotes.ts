@@ -13,7 +13,7 @@ import {
 } from "@/features/quick-notes/quick-notes-api";
 
 const OPEN_NOTES_KEY = ["quick-notes", "open"];
-const BOARDS_KEY = ["quick-notes", "boards"];
+const BOARDS_KEY = "quick-notes-boards";
 
 export function useQuickNotesOpen(enabled = true) {
   return useQuery({
@@ -25,10 +25,13 @@ export function useQuickNotesOpen(enabled = true) {
   });
 }
 
-export function useQuickNotesBoards(enabled = true) {
+export function useQuickNotesBoards(
+  enabled = true,
+  params?: { search?: string; limit?: number },
+) {
   return useQuery({
-    queryKey: BOARDS_KEY,
-    queryFn: fetchQuickNoteBoards,
+    queryKey: [BOARDS_KEY, params?.search ?? "", params?.limit ?? null],
+    queryFn: () => fetchQuickNoteBoards(params),
     enabled,
     staleTime: 60_000,
   });

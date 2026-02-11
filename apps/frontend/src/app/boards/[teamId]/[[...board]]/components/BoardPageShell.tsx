@@ -20,8 +20,7 @@ import {
   deleteBoardColumn,
   fetchArchivedNodes,
   type UpdateBoardColumnInput,
-  type BoardNode,
-  type ColumnBehaviorKey,
+  fetchBoardDueSummary,
   type ArchivedBoardNode,
 } from '@/features/boards/boards-api';
 import {
@@ -41,6 +40,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closest
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
+import { BoardListView, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
@@ -168,6 +168,7 @@ const EFFORT_LABELS: Record<EffortValue, string> = EFFORT_OPTIONS.reduce((acc, o
   acc[option.value] = option.label;
   return acc;
 }, {} as Record<EffortValue, string>);
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const TOKEN_REGEX = /[@#!]"[^"]*"|[@#!][^\s"]+|"[^"]+"|[^\s]+/g;
 
@@ -396,6 +397,10 @@ export function TeamBoardPage(){
   const { expertMode, setExpertMode, boardView, setBoardView } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
   const isPushing = transitionPhase === 'pushing' && transitionDirection === 'descend';
+  const [listFilters, setListFilters] = useState<BoardListFilters>(DEFAULT_LIST_FILTERS);
+  const [listFiltersHydrated, setListFiltersHydrated] = useState(false);
+  const [dueBadgeCount, setDueBadgeCount] = useState(0);
+  const [dueBadgeLoading, setDueBadgeLoading] = useState(false);
 
   // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
   // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
@@ -443,6 +448,113 @@ export function TeamBoardPage(){
   }, [accessToken]);
 
   const pendingInvitationsCount = invitations.filter(inv => inv.status === 'PENDING').length;
+  const dueBadgeCacheKey = teamId && board?.id
+    ? `stratum:team:${teamId}:due-badge:${board.id}`
+    : null;
+  const dueBadgeRangeDays = 0;
+  const dueBadgeTtlMs = 5 * 60 * 1000;
+
+  const listFiltersStorageKey = teamId ? `stratum:team:${teamId}:list-filters` : null;
+
+  useEffect(() => {
+    if (!listFiltersStorageKey) {
+      setListFilters({ ...DEFAULT_LIST_FILTERS });
+      setListFiltersHydrated(false);
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(listFiltersStorageKey);
+      if (!raw) {
+        setListFilters({ ...DEFAULT_LIST_FILTERS });
+        setListFiltersHydrated(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<BoardListFilters>;
+      setListFilters({ ...DEFAULT_LIST_FILTERS, ...parsed });
+      setListFiltersHydrated(true);
+    } catch {
+      setListFilters({ ...DEFAULT_LIST_FILTERS });
+      setListFiltersHydrated(false);
+    }
+  }, [listFiltersStorageKey]);
+
+  useEffect(() => {
+    if (!board || !accessToken || !dueBadgeCacheKey) {
+      setDueBadgeCount(0);
+      return;
+    }
+    let cancelled = false;
+    let hasFreshCache = false;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(dueBadgeCacheKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { count?: number; updatedAt?: string };
+          const updatedAt = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : null;
+          if (typeof parsed.count === 'number' && updatedAt && Date.now() - updatedAt < dueBadgeTtlMs) {
+            setDueBadgeCount(parsed.count);
+            hasFreshCache = true;
+          }
+        }
+      } catch {
+        // ignore cache errors
+      }
+    }
+
+    const refreshDueBadge = async () => {
+      setDueBadgeLoading(true);
+      try {
+        const summary = await fetchBoardDueSummary(
+          board.id,
+          { rangeDays: dueBadgeRangeDays, includeDone: false },
+          accessToken,
+        );
+        const count = summary.overdue + summary.dueSoon;
+        if (!cancelled) {
+          setDueBadgeCount(count);
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(
+                dueBadgeCacheKey,
+                JSON.stringify({ count, updatedAt: new Date().toISOString() }),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
+        }
+      } catch {
+        if (!cancelled && !hasFreshCache) {
+          setDueBadgeCount(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setDueBadgeLoading(false);
+        }
+      }
+    };
+
+    if (!hasFreshCache) {
+      void refreshDueBadge();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, board, dueBadgeCacheKey, dueBadgeRangeDays, dueBadgeTtlMs]);
+
+  const openDueListView = useCallback(() => {
+    setBoardView('list');
+    setListFilters((prev) => ({
+      ...prev,
+      mode: 'due',
+      dueRange: 'today',
+      includeOverdue: true,
+      includeUpcoming: true,
+    }));
+  }, [setBoardView, setListFilters]);
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
@@ -1888,6 +2000,20 @@ export function TeamBoardPage(){
                 </span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={openDueListView}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title={tBoard('dueList.title')}
+              aria-label={tBoard('dueList.aria')}
+            >
+              <span className="material-symbols-outlined text-[20px]">event</span>
+              {!dueBadgeLoading && dueBadgeCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-background">
+                  {dueBadgeCount}
+                </span>
+              )}
+            </button>
             <div
               data-quick-notes-anchor="header"
               className="flex items-center"
@@ -2213,6 +2339,19 @@ export function TeamBoardPage(){
                   </button>
                   <button
                     type="button"
+                    onClick={() => setBoardView('list')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'list'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'list'}
+                    title={tBoard('viewToggle.listHint')}
+                  >
+                    {tBoard('viewToggle.list')}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setBoardView('gantt')}
                     className={`rounded-full px-3 py-1 transition ${
                       boardView === 'gantt'
@@ -2304,7 +2443,7 @@ export function TeamBoardPage(){
                     )}
                   </DragOverlay>
                 </DndContext>
-              ) : (
+              ) : boardView === 'gantt' ? (
                 <BoardGanttView
                   key={`gantt-${board.id}`}
                   boardId={board.id}
@@ -2322,6 +2461,14 @@ export function TeamBoardPage(){
                   onOpenTask={handleOpenCard}
                   onOpenChildBoard={openChildBoard}
                   loading={detailLoading}
+                />
+              ) : (
+                <BoardListView
+                  rootBoard={board}
+                  filters={listFilters}
+                  onFiltersChange={setListFilters}
+                  onOpenTask={handleOpenCard}
+                  onOpenBoard={openChildBoard}
                 />
               )
             ) : (

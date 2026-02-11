@@ -197,11 +197,26 @@ export class QuickNotesService {
     return this.toDto(note);
   }
 
-  async listBoards(userId: string): Promise<QuickNoteBoardDto[]> {
+  async listBoards(
+    userId: string,
+    options?: { search?: string; limit?: number },
+  ): Promise<QuickNoteBoardDto[]> {
+    const trimmedSearch = options?.search?.trim() ?? '';
+    const limit = options?.limit
+      ? Math.min(Math.max(Math.floor(options.limit), 1), 50)
+      : 50;
     const boards = await this.prisma.board.findMany({
       where: {
         node: {
           archivedAt: null,
+          ...(trimmedSearch
+            ? {
+                title: {
+                  contains: trimmedSearch,
+                  mode: 'insensitive',
+                },
+              }
+            : {}),
           team: {
             memberships: {
               some: { userId, status: MembershipStatus.ACTIVE },
@@ -220,6 +235,7 @@ export class QuickNotesService {
         },
       },
       orderBy: { updatedAt: 'desc' },
+      take: limit,
       include: {
         node: {
           select: {

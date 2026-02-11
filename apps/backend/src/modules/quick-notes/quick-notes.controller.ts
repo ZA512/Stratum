@@ -99,11 +99,19 @@ export class QuickNotesController {
   @ApiOperation({
     summary: 'Lister les kanbans disponibles pour les notes rapides',
   })
+  @ApiQuery({ name: 'search', required: false, example: 'marketing' })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiOkResponse({ type: QuickNoteBoardDto, isArray: true })
   listBoards(
     @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
   ): Promise<QuickNoteBoardDto[]> {
-    return this.quickNotesService.listBoards(user.id);
+    const parsedLimit = limit ? Number(limit) : undefined;
+    return this.quickNotesService.listBoards(user.id, {
+      search,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
   }
 
   @Post('cleanup')

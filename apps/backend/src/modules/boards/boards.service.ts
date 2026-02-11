@@ -89,6 +89,11 @@ type ParsedWorkflowSnapshot = {
   doneArchiveScheduledAt: string | null;
 };
 
+type DueSummaryOptions = {
+  rangeDays: number;
+  includeDone: boolean;
+};
+
 @Injectable()
 export class BoardsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -756,6 +761,113 @@ export class BoardsService {
       dependencies: ganttDependencies,
     } as BoardWithNodesDto;
     return result;
+  }
+
+  async getDueSummary(
+    boardId: string,
+    userId: string,
+    options?: Partial<DueSummaryOptions>,
+  ): Promise<{
+    total: number;
+    overdue: number;
+    dueSoon: number;
+    rangeDays: number;
+    generatedAt: string;
+  }> {
+    const prisma = this.prisma;
+    const rangeDays = Math.max(0, Math.floor(options?.rangeDays ?? 0));
+    const includeDone = Boolean(options?.includeDone);
+
+    const board = await prisma.board.findUnique({
+      where: { id: boardId },
+      include: {
+        node: {
+          select: {
+            id: true,
+            path: true,
+          },
+        },
+      },
+    });
+
+    if (!board || !board.node) {
+      throw new NotFoundException('Board introuvable');
+    }
+
+    const today = new Date();
+    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const prefix = `${board.node.path}/`;
+
+    const computeDiff = (dueAt: Date | null): number | null => {
+      if (!dueAt) return null;
+      const dueDate = new Date(dueAt);
+      if (Number.isNaN(dueDate.getTime())) return null;
+      const startDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      return Math.round((startDue.getTime() - startToday.getTime()) / DAY_IN_MS);
+    };
+
+    let overdue = 0;
+    let dueSoon = 0;
+
+    if (board.isPersonal && board.ownerUserId && board.ownerUserId !== userId) {
+      const placements = await prisma.sharedNodePlacement.findMany({
+        where: {
+          userId,
+          archivedAt: null,
+          node: {
+            path: { startsWith: prefix },
+          },
+        },
+        select: {
+          node: { select: { dueAt: true } },
+          column: { select: { behavior: { select: { key: true } } } },
+        },
+      });
+
+      for (const placement of placements) {
+        const behaviorKey = placement.column?.behavior?.key ?? null;
+        if (!includeDone && behaviorKey === ColumnBehaviorKey.DONE) {
+          continue;
+        }
+        const diff = computeDiff(placement.node?.dueAt ?? null);
+        if (diff === null) continue;
+        if (diff < 0) overdue += 1;
+        else if (diff <= rangeDays) dueSoon += 1;
+      }
+    } else {
+      const nodes = await prisma.node.findMany({
+        where: {
+          archivedAt: null,
+          dueAt: { not: null },
+          path: { startsWith: prefix },
+        },
+        select: {
+          dueAt: true,
+          column: { select: { behavior: { select: { key: true } } } },
+        },
+      });
+
+      for (const node of nodes) {
+        const behaviorKey = node.column?.behavior?.key ?? null;
+        if (!includeDone && behaviorKey === ColumnBehaviorKey.DONE) {
+          continue;
+        }
+        const diff = computeDiff(node.dueAt ?? null);
+        if (diff === null) continue;
+        if (diff < 0) overdue += 1;
+        else if (diff <= rangeDays) dueSoon += 1;
+      }
+    }
+
+    const total = overdue + dueSoon;
+
+    return {
+      total,
+      overdue,
+      dueSoon,
+      rangeDays,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   async listArchivedNodes(

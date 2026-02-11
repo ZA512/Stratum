@@ -34,6 +34,7 @@ import { CreateBoardColumnDto } from './dto/create-board-column.dto';
 import { UpdateBoardColumnDto } from './dto/update-board-column.dto';
 import { BoardsService } from './boards.service';
 import { ArchivedBoardNodeDto } from './dto/archived-board-node.dto';
+import { BoardDueSummaryDto } from './dto/board-due-summary.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TeamsService } from '../teams/teams.service';
 
@@ -98,7 +99,7 @@ export class BoardsController {
 
     // Générer un ETag basé sur le contenu
     const dataString = JSON.stringify(data);
-    const etag = `"${crypto.createHash('md5').update(dataString).digest('hex')}"`;
+    const etag = `"${crypto.createHash('sha256').update(dataString).digest('hex')}"`;
 
     // Si le client a déjà cette version, retourner 304 Not Modified
     if (ifNoneMatch === etag) {
@@ -110,6 +111,26 @@ export class BoardsController {
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache'); // Force validation avec ETag
     res.json(data);
+  }
+
+  @Get(':boardId/due-summary')
+  @ApiOperation({ summary: 'Get due task counters for a board tree' })
+  @ApiParam({ name: 'boardId', example: 'board_123' })
+  @ApiOkResponse({ type: BoardDueSummaryDto })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getDueSummary(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+    @Headers('x-range-days') rangeDaysHeader?: string,
+    @Headers('x-include-done') includeDoneHeader?: string,
+  ): Promise<BoardDueSummaryDto> {
+    const rangeDays = rangeDaysHeader ? Number(rangeDaysHeader) : 0;
+    const includeDone = includeDoneHeader === 'true';
+    return this.boardsService.getDueSummary(boardId, user.id, {
+      rangeDays: Number.isFinite(rangeDays) ? Math.max(0, Math.floor(rangeDays)) : 0,
+      includeDone,
+    });
   }
 
   @Get(':boardId/columns/:columnId/archived')

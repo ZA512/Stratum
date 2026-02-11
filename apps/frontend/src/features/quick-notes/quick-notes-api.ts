@@ -38,8 +38,19 @@ export async function fetchOpenQuickNotes(): Promise<QuickNoteList> {
   return (await response.json()) as QuickNoteList;
 }
 
-export async function fetchQuickNoteBoards(): Promise<QuickNoteBoard[]> {
-  const response = await apiGet("quick-notes/boards", {
+export async function fetchQuickNoteBoards(params?: {
+  search?: string;
+  limit?: number;
+}): Promise<QuickNoteBoard[]> {
+  const search = params?.search?.trim();
+  const limit = params?.limit;
+  const query = new URLSearchParams();
+  if (search) query.set('search', search);
+  if (typeof limit === 'number' && Number.isFinite(limit)) {
+    query.set('limit', String(limit));
+  }
+  const suffix = query.toString();
+  const response = await apiGet(`quick-notes/boards${suffix ? `?${suffix}` : ''}`, {
     cache: "no-store",
   });
 

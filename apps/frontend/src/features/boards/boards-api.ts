@@ -94,6 +94,14 @@ export type Board = {
   dependencies: BoardGanttDependency[];
 };
 
+export type BoardDueSummary = {
+  total: number;
+  overdue: number;
+  dueSoon: number;
+  rangeDays: number;
+  generatedAt: string;
+};
+
 export type NodeBreadcrumbItem = {
   id: string;
   title: string;
@@ -186,6 +194,32 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
   const payload = (await response.json()) as Board;
   boardDetailCache.set(boardId, payload);
   return payload;
+}
+
+export async function fetchBoardDueSummary(
+  boardId: string,
+  options: { rangeDays?: number; includeDone?: boolean },
+  accessToken: string,
+): Promise<BoardDueSummary> {
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${accessToken}`,
+    'x-range-days': String(Math.max(0, Math.floor(options.rangeDays ?? 0))),
+    'x-include-done': options.includeDone ? 'true' : 'false',
+  };
+
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/boards/${boardId}/due-summary`,
+    {
+      headers,
+      cache: 'no-store',
+    },
+  );
+
+  if (!response.ok) {
+    await throwApiError(response, 'Impossible de charger les échéances');
+  }
+
+  return (await response.json()) as BoardDueSummary;
 }
 
 export async function fetchRootBoard(

@@ -6,6 +6,7 @@ import { useTaskDrawer } from './TaskDrawerContext';
 import { useAuth } from '@/features/auth/auth-provider';
 import { createChildTask, toggleChildTaskDone, updateChildTask, reorderChildren } from '../../nodes/children-api';
 import { useToast } from '@/components/toast/ToastProvider';
+import { useBoardData } from '@/features/boards/board-data-provider';
 
 const FIELD_INPUT_BASE =
   'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
@@ -13,6 +14,7 @@ const FIELD_INPUT_BASE =
 export const ChildTasksSection: React.FC = () => {
   const { detail, refresh, applyDetail } = useTaskDrawer();
   const { accessToken } = useAuth();
+  const { refreshActiveBoard } = useBoardData();
   const { success } = useToast();
   const [creating, setCreating] = React.useState(false);
   const [title, setTitle] = React.useState("");
@@ -85,6 +87,7 @@ export const ChildTasksSection: React.FC = () => {
       }
       // Synchronise aussi le detail parent (header, autres sections)
       refresh?.();
+      void refreshActiveBoard();
     } catch (err) {
       rollback();
       setError((err as Error).message ?? 'Creation echouee, revert');
@@ -120,6 +123,7 @@ export const ChildTasksSection: React.FC = () => {
       } else {
         refresh?.();
       }
+      void refreshActiveBoard();
       
       // Feedback utilisateur
       try {

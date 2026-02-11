@@ -26,7 +26,12 @@ export function QuickNotesRadar() {
   const { accessToken } = useAuth();
   const pathname = usePathname();
   const { data: openNotes } = useQuickNotesOpen(Boolean(accessToken));
-  const { data: boards } = useQuickNotesBoards(Boolean(accessToken));
+  const [boardSearch, setBoardSearch] = useState('');
+  const [debouncedBoardSearch, setDebouncedBoardSearch] = useState('');
+  const { data: boards } = useQuickNotesBoards(Boolean(accessToken), {
+    search: debouncedBoardSearch,
+    limit: 10,
+  });
   const createMutation = useCreateQuickNote();
   const [headerAnchor, setHeaderAnchor] = useState<HTMLElement | null>(null);
 
@@ -36,6 +41,13 @@ export function QuickNotesRadar() {
 
   const openCount = openNotes?.count ?? 0;
   const selectedBoardId = selectedBoardIds[0] ?? null;
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedBoardSearch(boardSearch.trim());
+    }, 200);
+    return () => window.clearTimeout(handle);
+  }, [boardSearch]);
 
   const boardOptions = useMemo(() => {
     return (boards ?? []).map((board) => ({
@@ -163,11 +175,13 @@ export function QuickNotesRadar() {
                   options={boardOptions}
                   selectedIds={selectedBoardIds}
                   onChange={(ids) => setSelectedBoardIds(ids.slice(-1))}
+                  onQueryChange={setBoardSearch}
                   placeholder="À classer plus tard (Inbox)"
                   searchPlaceholder="Rechercher un kanban..."
                   emptyMessage="Aucun kanban disponible"
                   noResultsMessage="Aucun résultat"
                   keepMenuOpen={false}
+                  maxResults={10}
                 />
               </div>
 

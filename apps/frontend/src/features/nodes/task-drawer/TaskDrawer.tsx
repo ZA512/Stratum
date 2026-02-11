@@ -6,12 +6,13 @@ import { useTaskDrawer } from './TaskDrawerContext';
 import { useTaskDetail } from './useTaskDetail';
 import { ChildTasksSection } from './ChildTasksSection';
 import { CommentsSection } from './CommentsSection';
-import { updateNode, type UpdateNodeInput } from '@/features/nodes/nodes-api';
+import { updateNode, deleteNode as apiDeleteNode, type UpdateNodeInput } from '@/features/nodes/nodes-api';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import type { ColumnBehaviorKey } from '@/features/boards/boards-api';
+import { MoveCardDialog } from '@/app/boards/[teamId]/[[...board]]/components/MoveCardDialog';
 import { fetchTeamMembers, type TeamMember } from '@/features/teams/team-members-api';
 import {
   fetchNodeCollaborators,
@@ -169,7 +170,7 @@ export const TaskDrawer: React.FC = () => {
   const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
-  const { teamId, refreshActiveBoard, board } = useBoardData();
+  const { teamId, refreshActiveBoard, board, openChildBoard } = useBoardData();
 
   const formatDate = useCallback(
     (input: string | Date | null | undefined, options: Intl.DateTimeFormatOptions): string => {
@@ -419,7 +420,7 @@ export const TaskDrawer: React.FC = () => {
     }
   }, [detail, accessToken, board, refresh, success, toastError, tBoard]);
 
-  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'planning' | 'raci' | 'collaborators' | 'time' | 'move'>('details');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -429,6 +430,14 @@ export const TaskDrawer: React.FC = () => {
   const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
   const [collaboratorsError, setCollaboratorsError] = useState<string | null>(null);
+
+  const [deleteSubmitting, setDeleteSubmitting] = useState<'single' | 'recursive' | null>(null);
+
+  const hasSubtasks = useMemo(() => {
+    const counts = detail?.counts;
+    if (!counts) return false;
+    return (counts.backlog + counts.inProgress + counts.blocked + counts.done) > 0;
+  }, [detail?.counts]);
 
   const [inviteEmail, setInviteEmail] = useState('');
 
@@ -490,6 +499,26 @@ export const TaskDrawer: React.FC = () => {
   const removeBlockedEmail = useCallback((email: string) => {
     setBlockedEmails((prev) => prev.filter((value) => value !== email));
   }, []);
+
+  const handleDeleteNode = useCallback(async (recursive: boolean) => {
+    if (!detail || !accessToken) return;
+    const confirmMessage = recursive
+      ? tBoard('deleteDialog.cascadeWarning')
+      : tBoard('deleteDialog.title', { title: detail.title });
+    if (!window.confirm(confirmMessage)) return;
+    setDeleteSubmitting(recursive ? 'recursive' : 'single');
+    try {
+      await apiDeleteNode(detail.id, { recursive }, accessToken);
+      success(recursive ? tBoard('cards.notifications.deletedRecursive') : tBoard('cards.notifications.deleted'));
+      close();
+      await refreshActiveBoard();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : tBoard('alerts.unexpectedError');
+      toastError(message);
+    } finally {
+      setDeleteSubmitting(null);
+    }
+  }, [detail, accessToken, success, close, refreshActiveBoard, toastError, tBoard]);
 
   const previousNodeIdRef = useRef<string | null>(null);
   const previousBehaviorRef = useRef<string | null>(null);
@@ -1273,6 +1302,11 @@ export const TaskDrawer: React.FC = () => {
                       onClick={() => setActiveTab('collaborators')}
                       className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'collaborators' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
                     ><span className="material-symbols-outlined text-[18px]">lock</span> Accès</button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('move')}
+                      className={`flex-1 rounded px-3 py-2 font-medium transition flex items-center justify-center gap-1.5 ${activeTab === 'move' ? 'bg-emerald-600 text-white shadow-sm' : 'hover:bg-white/10 text-[color:var(--color-task-tab)]'}`}
+                    ><span className="material-symbols-outlined text-[18px]">swap_horiz</span> Déplacement</button>
                     {expertMode && (
                       <button
                         type="button"
@@ -1811,6 +1845,70 @@ export const TaskDrawer: React.FC = () => {
                           </section>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {activeTab === 'move' && (
+                    <div className="space-y-5">
+                      {detail && teamId && board ? (
+                        <MoveCardDialog
+                          teamId={teamId}
+                          node={detail}
+                          currentBoardId={board.id}
+                          variant="inline"
+                          confirmActions={[
+                            { id: 'stay', label: 'Déplacer et rester' },
+                            { id: 'open', label: 'Déplacer et ouvrir le kanban' },
+                          ]}
+                          onSuccess={async () => { /* required by signature */ }}
+                          onAction={async (payload, action) => {
+                            await refresh();
+                            await refreshActiveBoard();
+                            if (action === 'open') {
+                              close();
+                              openChildBoard(payload.boardId);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-lg border border-white/10 bg-card/60 p-4 text-sm text-muted">
+                          {tBoard('alerts.unexpectedError')}
+                        </div>
+                      )}
+
+                      <section className="space-y-3 rounded-lg border border-rose-500/20 bg-rose-500/5 p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[22px] text-rose-300">delete</span>
+                          <h3 className="text-sm font-semibold uppercase tracking-wide text-rose-200">
+                            Suppression
+                          </h3>
+                        </div>
+                        {hasSubtasks && (
+                          <p className="text-xs text-rose-200/70">
+                            {tBoard('deleteDialog.cascadeWarning')}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNode(hasSubtasks)}
+                            disabled={deleteSubmitting !== null}
+                            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                              deleteSubmitting
+                                ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted'
+                                : 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:border-rose-400 hover:bg-rose-500/20'
+                            }`}
+                          >
+                            {hasSubtasks
+                              ? deleteSubmitting === 'recursive'
+                                ? tBoard('deleteDialog.deletingRecursive')
+                                : tBoard('deleteDialog.deleteRecursive')
+                              : deleteSubmitting === 'single'
+                                ? tBoard('deleteDialog.deletingSingle')
+                                : tBoard('deleteDialog.deleteSingle')}
+                          </button>
+                        </div>
+                      </section>
                     </div>
                   )}
 
