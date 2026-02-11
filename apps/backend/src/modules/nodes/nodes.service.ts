@@ -131,6 +131,7 @@ type MailPayload = {
   text: string;
   html?: string;
   metadata?: Record<string, any> | null;
+  replyTo?: { email: string; name?: string | null } | null;
 };
 
 type ScheduleDependencyEntry = {
@@ -3045,6 +3046,7 @@ export class NodesService {
         body: params.comment.body,
         authorId: params.comment.author?.id ?? null,
         authorDisplayName: params.comment.author?.displayName ?? null,
+        authorEmail: params.comment.author?.email ?? null,
       },
       notify: {
         responsible: params.comment.notifyResponsible ?? true,
@@ -3159,6 +3161,7 @@ export class NodesService {
       text: payload.text,
       html: payload.html,
       metadata,
+      replyTo: payload.replyTo ?? null,
     });
   }
 
@@ -3172,6 +3175,7 @@ export class NodesService {
           entry.comment?.authorDisplayName?.trim() ||
           entry.comment?.authorId ||
           'Un collaborateur';
+        const authorEmail = entry.comment?.authorEmail?.trim() || null;
         const commentBody = (entry.comment?.body ?? '').trim();
         const textBody = commentBody || '(commentaire vide)';
         const formattedDate = formatDateTime(entry.timestamp);
@@ -3198,6 +3202,7 @@ export class NodesService {
             ...baseMetadata,
             commentId: entry.comment?.id ?? null,
           },
+          replyTo: authorEmail ? { email: authorEmail, name: authorName } : null,
         };
       }
       case 'backlog-review-reminder': {
@@ -3613,6 +3618,21 @@ export class NodesService {
         ActivityType.SHARE_INVITE_CREATED,
         { email, expiresAt: expiresAt.toISOString() },
       );
+
+      const inviter = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true, email: true },
+      });
+      const inviterName =
+        inviter?.displayName?.trim() || inviter?.email?.trim() || 'Un membre';
+
+      await this.sendNodeShareInvitationEmail({
+        inviteeEmail: email,
+        nodeTitle: node.title ?? 'Sans titre',
+        inviterName,
+        inviterEmail: inviter?.email ?? null,
+        expiresAt,
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -3626,6 +3646,58 @@ export class NodesService {
     }
 
     return this.buildNodeShareSummary(nodeForSummary, userId);
+  }
+
+  private async sendNodeShareInvitationEmail(params: {
+    inviteeEmail: string;
+    nodeTitle: string;
+    inviterName: string;
+    inviterEmail: string | null;
+    expiresAt: Date;
+  }): Promise<void> {
+    const formattedExpires = formatDateTime(params.expiresAt);
+    const textLines = [
+      `${params.inviterName} vous invite à collaborer sur "${params.nodeTitle}".`,
+      formattedExpires
+        ? `Cette invitation expire le ${formattedExpires}.`
+        : "Cette invitation expirera bientôt.",
+      '',
+      'Connectez-vous à Stratum pour accepter ou refuser cette invitation.',
+    ];
+
+    const htmlLines = [
+      `<p><strong>${escapeHtml(params.inviterName)}</strong> vous invite à collaborer sur <em>${escapeHtml(
+        params.nodeTitle,
+      )}</em>.</p>`,
+      formattedExpires
+        ? `<p>Cette invitation expire le <strong>${escapeHtml(
+            formattedExpires,
+          )}</strong>.</p>`
+        : '<p>Cette invitation expirera bientôt.</p>',
+      '<p>Connectez-vous à Stratum pour accepter ou refuser cette invitation.</p>',
+    ];
+
+    try {
+      await this.mailService.sendMail({
+        to: [{ email: params.inviteeEmail, displayName: params.inviteeEmail }],
+        subject: `[Stratum] Invitation à collaborer – ${params.nodeTitle}`,
+        text: textLines.join('\n'),
+        html: htmlLines.join(''),
+        metadata: {
+          type: 'node-share-invitation',
+          nodeTitle: params.nodeTitle,
+        },
+        replyTo: params.inviterEmail
+          ? { email: params.inviterEmail, name: params.inviterName }
+          : null,
+      });
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        "Impossible d'envoyer l'email d'invitation au partage",
+        err.stack ?? err.message,
+      );
+    }
   }
 
   async listIncomingNodeShareInvitations(

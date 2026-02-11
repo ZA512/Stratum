@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +13,7 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { TeamsService } from '../teams/teams.service';
+import { MailService } from '../mail/mail.service';
 import { AuthenticatedUser } from './decorators/current-user.decorator';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -27,6 +29,7 @@ interface TokenBundle {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly accessTokenTtlMs: number;
   private readonly refreshTokenTtlMs: number;
   private readonly resetTokenTtlMs: number;
@@ -35,16 +38,20 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly teamsService: TeamsService,
+    private readonly mailService: MailService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
-    configService: ConfigService,
+    private readonly configService: ConfigService,
   ) {
-    const rawAccessTtl: unknown = configService.get('JWT_ACCESS_TTL', '15m');
+    const rawAccessTtl: unknown = this.configService.get(
+      'JWT_ACCESS_TTL',
+      '15m',
+    );
     // stocker le TTL d'accès en millisecondes pour permettre des conversions sûres
     this.accessTokenTtlMs = this.parseDurationMs(rawAccessTtl, 15 * 60 * 1000);
     // On autorise: nombre (ms), string numérique, ou forme humaine ("30d", "12h", "15m", "45s").
     const DEFAULT_REFRESH_MS = 1000 * 60 * 60 * 24 * 90; // 90 jours
-    const rawRefreshTtl: unknown = configService.get(
+    const rawRefreshTtl: unknown = this.configService.get(
       'JWT_REFRESH_TTL_MS',
       DEFAULT_REFRESH_MS,
     );
@@ -54,14 +61,14 @@ export class AuthService {
     );
     // Utiliser le parseur générique pour éviter NaN si la valeur env est "1h", "30m", etc.
     const DEFAULT_RESET_MS = 1000 * 60 * 60; // 1h
-    const rawResetTtl: unknown = configService.get(
+    const rawResetTtl: unknown = this.configService.get(
       'RESET_TOKEN_TTL_MS',
       DEFAULT_RESET_MS,
     );
     this.resetTokenTtlMs = this.parseDurationMs(rawResetTtl, DEFAULT_RESET_MS);
 
     const DEFAULT_INVITATION_MS = 1000 * 60 * 60 * 24 * 7; // 7 jours
-    const rawInvitationTtl: unknown = configService.get(
+    const rawInvitationTtl: unknown = this.configService.get(
       'INVITATION_TTL_MS',
       DEFAULT_INVITATION_MS,
     );
@@ -289,11 +296,76 @@ export class AuthService {
       },
     });
 
-    // En production, on enverrait un email. Ici on retourne le token pour dev.
+    const resetUrl = this.buildResetUrl(token);
+    const formattedExpiry = expiresAt.toLocaleString('fr-FR', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    const textLines = [
+      'Vous avez demandé une réinitialisation de mot de passe.',
+      resetUrl
+        ? `Lien de réinitialisation : ${resetUrl}`
+        : `Token de réinitialisation : ${token}`,
+      `Ce lien/jeton expire le ${formattedExpiry}.`,
+      '',
+      "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
+    ];
+    const htmlLines = [
+      '<p>Vous avez demandé une réinitialisation de mot de passe.</p>',
+      resetUrl
+        ? `<p>Lien de réinitialisation : <a href="${resetUrl}">${resetUrl}</a></p>`
+        : `<p>Token de réinitialisation : <strong>${token}</strong></p>`,
+      `<p>Ce lien/jeton expire le <strong>${formattedExpiry}</strong>.</p>`,
+      "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>",
+    ];
+
+    if (this.mailService.isEnabled()) {
+      try {
+        await this.mailService.sendMail({
+          to: [
+            {
+              email: user.email,
+              displayName: user.displayName ?? user.email,
+            },
+          ],
+          subject: '[Stratum] Réinitialisation du mot de passe',
+          text: textLines.join('\n'),
+          html: htmlLines.join(''),
+          metadata: {
+            type: 'password-reset',
+            userId: user.id,
+          },
+        });
+      } catch (error) {
+        const err = error as Error;
+        this.logger.error(
+          'Echec envoi email de reinitialisation',
+          err.stack ?? err.message,
+        );
+        // Ne pas révéler d'erreur côté client
+        return { success: true };
+      }
+
+      return { success: true };
+    }
+
+    // Fallback dev si l'email est désactivé
     return {
       resetToken: token,
       expiresAt: expiresAt.toISOString(),
     };
+  }
+
+  private buildResetUrl(token: string): string | null {
+    const raw = this.configService.get<string>('MAIL_RESET_URL_BASE')?.trim();
+    if (!raw) return null;
+    try {
+      const url = new URL(raw);
+      url.searchParams.set('token', token);
+      return url.toString();
+    } catch {
+      return null;
+    }
   }
 
   async resetPassword(token: string, password: string) {
