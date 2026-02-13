@@ -168,8 +168,6 @@ const EFFORT_LABELS: Record<EffortValue, string> = EFFORT_OPTIONS.reduce((acc, o
   acc[option.value] = option.label;
   return acc;
 }, {} as Record<EffortValue, string>);
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
 const TOKEN_REGEX = /[@#!]"[^"]*"|[@#!][^\s"]+|"[^"]+"|[^\s]+/g;
 
 type ParsedSearchQuery = {
@@ -459,7 +457,7 @@ export function TeamBoardPage(){
   useEffect(() => {
     if (!listFiltersStorageKey) {
       setListFilters({ ...DEFAULT_LIST_FILTERS });
-      setListFiltersHydrated(false);
+      setListFiltersHydrated(true);
       return;
     }
     if (typeof window === 'undefined') return;
@@ -475,9 +473,19 @@ export function TeamBoardPage(){
       setListFiltersHydrated(true);
     } catch {
       setListFilters({ ...DEFAULT_LIST_FILTERS });
-      setListFiltersHydrated(false);
+      setListFiltersHydrated(true);
     }
   }, [listFiltersStorageKey]);
+
+  useEffect(() => {
+    if (!listFiltersStorageKey || !listFiltersHydrated) return;
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(listFiltersStorageKey, JSON.stringify(listFilters));
+    } catch {
+      // ignore storage errors
+    }
+  }, [listFilters, listFiltersHydrated, listFiltersStorageKey]);
 
   useEffect(() => {
     if (!board || !accessToken || !dueBadgeCacheKey) {
@@ -549,10 +557,21 @@ export function TeamBoardPage(){
     setBoardView('list');
     setListFilters((prev) => ({
       ...prev,
-      mode: 'due',
-      dueRange: 'today',
-      includeOverdue: true,
-      includeUpcoming: true,
+      renderMode: 'FLAT',
+      scope: 'SUBTREE',
+      includeDone: false,
+      contextMode: false,
+      chips: {
+        ...prev.chips,
+        overdue: false,
+        today: true,
+        week: false,
+      },
+      sort: {
+        field: 'priority',
+        direction: 'asc',
+      },
+      activeViewId: 'official:today',
     }));
   }, [setBoardView, setListFilters]);
 
@@ -560,7 +579,7 @@ export function TeamBoardPage(){
   const detailLoading = status==='loading' && !!board;
 
 
-  const showBoardControls = true;
+  const showBoardControls = boardView === 'kanban';
 
   // New column form state
   const [isAddingColumn,setIsAddingColumn] = useState(false);

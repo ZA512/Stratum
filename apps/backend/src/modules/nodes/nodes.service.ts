@@ -3202,7 +3202,9 @@ export class NodesService {
             ...baseMetadata,
             commentId: entry.comment?.id ?? null,
           },
-          replyTo: authorEmail ? { email: authorEmail, name: authorName } : null,
+          replyTo: authorEmail
+            ? { email: authorEmail, name: authorName }
+            : null,
         };
       }
       case 'backlog-review-reminder': {
@@ -3660,7 +3662,7 @@ export class NodesService {
       `${params.inviterName} vous invite à collaborer sur "${params.nodeTitle}".`,
       formattedExpires
         ? `Cette invitation expire le ${formattedExpires}.`
-        : "Cette invitation expirera bientôt.",
+        : 'Cette invitation expirera bientôt.',
       '',
       'Connectez-vous à Stratum pour accepter ou refuser cette invitation.',
     ];

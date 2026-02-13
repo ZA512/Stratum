@@ -52,6 +52,9 @@ export class BoardNodeDto {
   @ApiProperty({ example: '2025-01-01T12:00:00.000Z', nullable: true })
   dueAt!: string | null;
 
+  @ApiPropertyOptional({ example: '2025-01-02T09:00:00.000Z', nullable: true })
+  updatedAt?: string | null;
+
   @ApiProperty({
     example: 'S',
     enum: ['UNDER2MIN', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
@@ -156,6 +159,9 @@ export class BoardNodeDto {
 
   @ApiPropertyOptional({ example: false })
   isSnoozed?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  hasRecentComment?: boolean;
 
   @ApiPropertyOptional({
     example: false,

@@ -28,7 +28,10 @@ export function resolveDatabaseUrlFromEnv(): string {
 
 export function ensureDatabaseUrlEnv(): string {
   const url = resolveDatabaseUrlFromEnv();
-  if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim().length === 0) {
+  if (
+    !process.env.DATABASE_URL ||
+    process.env.DATABASE_URL.trim().length === 0
+  ) {
     process.env.DATABASE_URL = url;
   }
   return url;

@@ -224,6 +224,7 @@ export class BoardsService {
               parentId: true,
               path: true,
               dueAt: true,
+              updatedAt: true,
               shortId: true,
               description: true,
               effort: true,
@@ -270,6 +271,7 @@ export class BoardsService {
         position: true,
         parentId: true,
         dueAt: true,
+        updatedAt: true,
         shortId: true,
         description: true,
         effort: true,
@@ -432,6 +434,22 @@ export class BoardsService {
         }
       }
       nodes.push({ ...node, isSnoozed });
+    }
+
+    const recentCommentNodeIds = new Set<string>();
+    if (nodes.length > 0) {
+      const since = new Date(nowMs - DAY_IN_MS);
+      const recentComments = await prisma.comment.findMany({
+        where: {
+          nodeId: { in: nodes.map((node) => node.id as string) },
+          createdAt: { gte: since },
+        },
+        select: { nodeId: true },
+        distinct: ['nodeId'],
+      });
+      for (const comment of recentComments) {
+        recentCommentNodeIds.add(comment.nodeId);
+      }
     }
 
     // Pré-calculer les counts des enfants par carte (parentId = id de la carte)
@@ -657,6 +675,7 @@ export class BoardsService {
         position: node.position,
         parentId: node.parentId,
         dueAt: node.dueAt ? node.dueAt.toISOString() : null,
+        updatedAt: node.updatedAt ? node.updatedAt.toISOString() : null,
         shortId:
           typeof node.shortId === 'number'
             ? node.shortId
@@ -698,6 +717,7 @@ export class BoardsService {
         lastKnownColumnBehavior: workflow.lastKnownBehavior,
         doneArchiveScheduledAt: workflow.doneArchiveScheduledAt,
         isSnoozed: node.isSnoozed ?? false,
+        hasRecentComment: recentCommentNodeIds.has(node.id),
         isSharedRoot,
         sharedPlacementLocked: Boolean(
           (node as { sharedPlacementLocked?: boolean }).sharedPlacementLocked,
@@ -795,15 +815,25 @@ export class BoardsService {
     }
 
     const today = new Date();
-    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
     const prefix = `${board.node.path}/`;
 
     const computeDiff = (dueAt: Date | null): number | null => {
       if (!dueAt) return null;
       const dueDate = new Date(dueAt);
       if (Number.isNaN(dueDate.getTime())) return null;
-      const startDue = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-      return Math.round((startDue.getTime() - startToday.getTime()) / DAY_IN_MS);
+      const startDue = new Date(
+        dueDate.getFullYear(),
+        dueDate.getMonth(),
+        dueDate.getDate(),
+      );
+      return Math.round(
+        (startDue.getTime() - startToday.getTime()) / DAY_IN_MS,
+      );
     };
 
     let overdue = 0;

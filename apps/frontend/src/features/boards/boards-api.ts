@@ -12,6 +12,7 @@ export type BoardNode = {
   position: number;
   parentId: string | null;
   dueAt: string | null;
+  updatedAt?: string | null;
   plannedStartDate?: string | null;
   plannedEndDate?: string | null;
   scheduleMode?: 'manual' | 'asap' | null;
@@ -47,6 +48,7 @@ export type BoardNode = {
   isSnoozed?: boolean;
   isSharedRoot?: boolean;
   sharedPlacementLocked?: boolean;
+  hasRecentComment?: boolean;
   canDelete?: boolean;
 };
 

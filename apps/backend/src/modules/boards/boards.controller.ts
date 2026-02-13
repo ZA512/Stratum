@@ -128,7 +128,9 @@ export class BoardsController {
     const rangeDays = rangeDaysHeader ? Number(rangeDaysHeader) : 0;
     const includeDone = includeDoneHeader === 'true';
     return this.boardsService.getDueSummary(boardId, user.id, {
-      rangeDays: Number.isFinite(rangeDays) ? Math.max(0, Math.floor(rangeDays)) : 0,
+      rangeDays: Number.isFinite(rangeDays)
+        ? Math.max(0, Math.floor(rangeDays))
+        : 0,
       includeDone,
     });
   }

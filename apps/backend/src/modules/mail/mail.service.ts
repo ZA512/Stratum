@@ -76,7 +76,7 @@ export class MailService {
 
     const sender = this.resolveSender(options.from);
     if (!sender) {
-      this.logger.warn("Aucun expéditeur configuré, email ignoré");
+      this.logger.warn('Aucun expéditeur configuré, email ignoré');
       return;
     }
     const replyTo = this.resolveReplyTo(options.replyTo);
@@ -105,10 +105,7 @@ export class MailService {
       await this.dispatchWebhook(JSON.stringify(payload));
     } catch (error) {
       const err = error as Error;
-      this.logger.error(
-        "Echec de l'envoi de mail",
-        err.stack ?? err.message,
-      );
+      this.logger.error("Echec de l'envoi de mail", err.stack ?? err.message);
       throw error;
     }
   }
