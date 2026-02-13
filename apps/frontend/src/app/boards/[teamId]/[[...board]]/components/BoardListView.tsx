@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "@/i18n";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
@@ -15,7 +16,10 @@ import {
   type NodeBreadcrumbItem,
   type NodeChildBoard,
 } from "@/features/boards/boards-api";
+import { fetchNodeCollaborators } from "@/features/nodes/node-collaborators-api";
 import { createNode, moveChildNode, updateNode } from "@/features/nodes/nodes-api";
+import { type ActivityLog, fetchNodeActivity } from "@/features/activity/activity-api";
+import { formatActivityMessage } from "@/features/activity/activity-formatter";
 
 type ListScope = "CURRENT" | "SUBTREE" | "ROOT";
 type ListRenderMode = "TREE" | "FLAT";
@@ -23,11 +27,14 @@ type SortField = "deadline" | "priority" | "updatedAt" | "status" | "assignee" |
 type SortDirection = "asc" | "desc";
 type UpdatedWithinDays = 1 | 3 | 7 | 14 | 30 | null;
 type PriorityValue = NonNullable<BoardNode["priority"]>;
+type EffortValue = NonNullable<BoardNode["effort"]>;
 type BoolFilter = "ANY" | "YES" | "NO";
 type ListColumnKey =
   | "title"
   | "status"
   | "priority"
+  | "progress"
+  | "effort"
   | "assignee"
   | "deadline"
   | "updatedAt"
@@ -98,6 +105,8 @@ const TREE_COLUMNS_DEFAULT: ListColumnKey[] = [
   "title",
   "status",
   "priority",
+  "progress",
+  "effort",
   "assignee",
   "deadline",
   "updatedAt",
@@ -109,6 +118,8 @@ const FLAT_COLUMNS_DEFAULT: ListColumnKey[] = [
   "title",
   "status",
   "priority",
+  "progress",
+  "effort",
   "assignee",
   "deadline",
   "updatedAt",
@@ -164,6 +175,8 @@ type ListRow = {
   assigneeIds: string[];
   assignees: string[];
   priority: PriorityValue;
+  progress: number | null;
+  effort: EffortValue | null;
   dueAt: string | null;
   updatedAt: string | null;
   pathLabel: string;
@@ -348,10 +361,30 @@ const SORT_FIELDS: Array<{ id: SortField; label: string }> = [
   { id: "title", label: "Titre" },
 ];
 
+const SCOPE_OPTIONS: Array<{ value: ListScope; label: string; helper: string }> = [
+  {
+    value: "CURRENT",
+    label: "Niveau de la position",
+    helper: "Affiche uniquement les cartes du kanban selectionne",
+  },
+  {
+    value: "SUBTREE",
+    label: "Position + descendants",
+    helper: "Affiche le sous-arbre complet a partir de la position",
+  },
+  {
+    value: "ROOT",
+    label: "Projet complet",
+    helper: "Affiche toutes les cartes du projet racine",
+  },
+];
+
 const COLUMN_LABELS: Record<ListColumnKey, string> = {
   title: "Titre",
   status: "Statut",
   priority: "Priorite",
+  progress: "Progression",
+  effort: "Effort",
   assignee: "Assignee",
   deadline: "Deadline",
   updatedAt: "Derniere activite",
@@ -455,6 +488,8 @@ const normalizeFilters = (input: BoardListFilters, rootBoardId: string): BoardLi
       key === "title" ||
       key === "status" ||
       key === "priority" ||
+      key === "progress" ||
+      key === "effort" ||
       key === "assignee" ||
       key === "deadline" ||
       key === "updatedAt" ||
@@ -487,7 +522,10 @@ const normalizeFilters = (input: BoardListFilters, rootBoardId: string): BoardLi
       overdue: Boolean(input.chips?.overdue),
       today: Boolean(input.chips?.today),
       week: Boolean(input.chips?.week),
-      blocked: Boolean(input.chips?.blocked),
+      blocked:
+        advanced.behaviors.length > 0
+          ? advanced.behaviors.includes("BLOCKED")
+          : Boolean(input.chips?.blocked),
       updatedWithinDays,
     },
     advanced,
@@ -576,6 +614,7 @@ export function BoardListView({
 }: BoardListViewProps) {
   const { accessToken, user } = useAuth();
   const { t: tBoard, locale } = useTranslation("board");
+  const { t: tActivity } = useTranslation("activity");
 
   const normalizedFilters = useMemo(() => normalizeFilters(filters, rootBoard.id), [filters, rootBoard.id]);
 
@@ -588,6 +627,12 @@ export function BoardListView({
   const [positionEntry, setPositionEntry] = useState<BoardHierarchyEntry | null>(null);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [savingRowIds, setSavingRowIds] = useState<string[]>([]);
+  const [collaboratorsByNodeId, setCollaboratorsByNodeId] = useState<
+    Map<string, Array<{ id: string; label: string }>>
+  >(new Map());
+  const [collaboratorsLoadingIds, setCollaboratorsLoadingIds] = useState<string[]>([]);
+  const [activityByNodeId, setActivityByNodeId] = useState<Map<string, ActivityLog[]>>(new Map());
+  const [activityLoadingIds, setActivityLoadingIds] = useState<string[]>([]);
 
   const [positionSelectorOpen, setPositionSelectorOpen] = useState(false);
   const [positionSearch, setPositionSearch] = useState("");
@@ -597,32 +642,87 @@ export function BoardListView({
   const [manageViewsOpen, setManageViewsOpen] = useState(false);
 
   const [personalViews, setPersonalViews] = useState<PersonalView[]>([]);
+  const [viewsHydrated, setViewsHydrated] = useState(false);
 
-  const viewsStorageKey = "stratum:list-personal-views:v1";
+  const rootBoardRef = useRef(rootBoard);
+  const rowsRef = useRef<ListRow[]>([]);
+  const positionMenuRef = useRef<HTMLDivElement | null>(null);
+  const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const viewsMenuRef = useRef<HTMLDivElement | null>(null);
+  const viewsStorageKey = "stratum:list-personal-views:v2";
+
+  useEffect(() => {
+    rootBoardRef.current = rootBoard;
+  }, [rootBoard]);
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(viewsStorageKey);
-      if (!raw) return;
+      const raw = window.localStorage.getItem(viewsStorageKey) ?? window.localStorage.getItem("stratum:list-personal-views:v1");
+      if (!raw) {
+        setViewsHydrated(true);
+        return;
+      }
       const parsed = JSON.parse(raw) as PersonalView[];
-      if (!Array.isArray(parsed)) return;
+      if (!Array.isArray(parsed)) {
+        setViewsHydrated(true);
+        return;
+      }
       setPersonalViews(
         parsed.filter((entry) => entry && typeof entry.id === "string" && typeof entry.name === "string"),
       );
     } catch {
       // ignore invalid local data
+    } finally {
+      setViewsHydrated(true);
     }
-  }, []);
+  }, [viewsStorageKey]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !viewsHydrated) return;
     try {
       window.localStorage.setItem(viewsStorageKey, JSON.stringify(personalViews));
     } catch {
       // ignore localStorage failures
     }
-  }, [personalViews]);
+  }, [personalViews, viewsHydrated, viewsStorageKey]);
+
+  const closeMenus = useCallback(() => {
+    setPositionSelectorOpen(false);
+    setColumnsMenuOpen(false);
+    setViewsMenuOpen(false);
+    setManageViewsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const insidePosition = positionMenuRef.current?.contains(target) ?? false;
+      const insideColumns = columnsMenuRef.current?.contains(target) ?? false;
+      const insideViews = viewsMenuRef.current?.contains(target) ?? false;
+      if (!insidePosition && !insideColumns && !insideViews) {
+        closeMenus();
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenus();
+        setFiltersDrawerOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closeMenus]);
 
   const setFilters = useCallback(
     (next: Partial<BoardListFilters>) => {
@@ -656,13 +756,86 @@ export function BoardListView({
   }, []);
 
   const isRowSaving = useCallback((rowId: string) => savingRowIds.includes(rowId), [savingRowIds]);
+  const isCollaboratorsLoading = useCallback(
+    (rowId: string) => collaboratorsLoadingIds.includes(rowId),
+    [collaboratorsLoadingIds],
+  );
+  const isActivityLoading = useCallback((rowId: string) => activityLoadingIds.includes(rowId), [activityLoadingIds]);
+
+  const getAssigneeOptionsForRow = useCallback(
+    (row: ListRow): Array<{ id: string; label: string }> => {
+      const cache = collaboratorsByNodeId.get(row.id) ?? [];
+      const merged = new Map<string, string>();
+      if (user?.id) {
+        merged.set(user.id, "Moi");
+      }
+      for (const entry of cache) {
+        merged.set(entry.id, entry.label);
+      }
+      row.assigneeIds.forEach((id, index) => {
+        const name = row.assignees[index] ?? id;
+        if (!merged.has(id)) merged.set(id, name);
+      });
+      return Array.from(merged.entries()).map(([id, label]) => ({ id, label }));
+    },
+    [collaboratorsByNodeId, user?.id],
+  );
+
+  const ensureCollaboratorsForNode = useCallback(
+    async (row: ListRow) => {
+      if (!accessToken) return;
+      if (collaboratorsByNodeId.has(row.id)) return;
+      if (isCollaboratorsLoading(row.id)) return;
+
+      setCollaboratorsLoadingIds((prev) => [...prev, row.id]);
+      try {
+        const response = await fetchNodeCollaborators(row.id, accessToken);
+        const options = response.collaborators
+          .map((entry) => ({ id: entry.userId, label: entry.displayName || entry.email }))
+          .filter((entry, index, arr) => arr.findIndex((item) => item.id === entry.id) === index);
+        setCollaboratorsByNodeId((prev) => {
+          const next = new Map(prev);
+          next.set(row.id, options);
+          return next;
+        });
+      } catch {
+        // ignore collaborator fetch issues to keep editing flow non blocking
+      } finally {
+        setCollaboratorsLoadingIds((prev) => prev.filter((entry) => entry !== row.id));
+      }
+    },
+    [accessToken, collaboratorsByNodeId, isCollaboratorsLoading],
+  );
+
+  const ensureActivityForNode = useCallback(
+    async (rowId: string) => {
+      if (!accessToken) return;
+      if (activityByNodeId.has(rowId)) return;
+      if (isActivityLoading(rowId)) return;
+
+      setActivityLoadingIds((prev) => [...prev, rowId]);
+      try {
+        const logs = await fetchNodeActivity(rowId, accessToken);
+        setActivityByNodeId((prev) => {
+          const next = new Map(prev);
+          next.set(rowId, logs);
+          return next;
+        });
+      } catch {
+        // ignore activity fetch issues in tooltip
+      } finally {
+        setActivityLoadingIds((prev) => prev.filter((entry) => entry !== rowId));
+      }
+    },
+    [accessToken, activityByNodeId, isActivityLoading],
+  );
 
   const loadHierarchy = useCallback(async () => {
     if (!accessToken) return;
 
     const fetchEntry = async (boardId: string): Promise<BoardHierarchyEntry | null> => {
       try {
-        const detail = boardId === rootBoard.id ? rootBoard : await fetchBoardDetail(boardId, accessToken);
+        const detail = (await fetchBoardDetail(boardId, accessToken)) ?? (boardId === rootBoardRef.current.id ? rootBoardRef.current : null);
         if (!detail) return null;
         const [breadcrumb, childBoards] = await Promise.all([
           fetchNodeBreadcrumb(detail.nodeId, accessToken),
@@ -702,7 +875,7 @@ export function BoardListView({
       return output;
     };
 
-    setLoading(true);
+    setLoading(rowsRef.current.length === 0);
     setError(null);
 
     try {
@@ -776,6 +949,8 @@ export function BoardListView({
               assigneeIds: (node.assignees ?? []).map((assignee) => assignee.id),
               assignees: (node.assignees ?? []).map((assignee) => assignee.displayName),
               priority: node.priority ?? "NONE",
+              progress: typeof node.progress === "number" ? Math.max(0, Math.min(100, node.progress)) : null,
+              effort: node.effort ?? null,
               dueAt: node.dueAt ?? null,
               updatedAt: node.updatedAt ?? null,
               pathLabel: pathPrefix,
@@ -790,15 +965,21 @@ export function BoardListView({
         }
       }
 
+      const parentIdsWithChildren = new Set<string>();
+      for (const row of nextRows) {
+        if (row.parentId) parentIdsWithChildren.add(row.parentId);
+      }
+
       setHierarchy(entries);
       setRows(withRecomputedCounters(nextRows));
+      setExpandedIds(Array.from(parentIdsWithChildren));
       setDataRootBoardId(scopeRootBoardId);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Impossible de charger la vue liste.");
     } finally {
       setLoading(false);
     }
-  }, [accessToken, normalizedFilters.positionBoardId, normalizedFilters.scope, rootBoard]);
+  }, [accessToken, normalizedFilters.positionBoardId, normalizedFilters.scope, rootBoard.id]);
 
   useEffect(() => {
     if (!normalizedFilters.positionBoardId) {
@@ -822,15 +1003,28 @@ export function BoardListView({
   }, [hierarchy, positionEntry]);
 
   const boardOptions = useMemo<BoardOption[]>(() => {
-    const options: BoardOption[] = [];
+    const optionsById = new Map<string, BoardOption>();
     for (const entry of boardById.values()) {
       const path = [...entry.breadcrumb.map((item) => item.title), entry.board.name].filter(Boolean).join(" > ");
-      options.push({ boardId: entry.board.id, label: entry.board.name, path });
+      optionsById.set(entry.board.id, { boardId: entry.board.id, label: entry.board.name, path });
     }
 
+    const ancestorTrail = positionEntry?.breadcrumb ?? [];
+    for (let index = 0; index < ancestorTrail.length; index += 1) {
+      const item = ancestorTrail[index];
+      if (!item.boardId) continue;
+      const path = ancestorTrail.slice(0, index + 1).map((entry) => entry.title).join(" > ");
+      optionsById.set(item.boardId, {
+        boardId: item.boardId,
+        label: item.title,
+        path,
+      });
+    }
+
+    const options = Array.from(optionsById.values());
     options.sort((a, b) => a.path.localeCompare(b.path, locale));
     return options;
-  }, [boardById, locale]);
+  }, [boardById, locale, positionEntry?.breadcrumb]);
 
   const visibleBoardOptions = useMemo(() => {
     const search = normalizeText(positionSearch.trim());
@@ -855,27 +1049,21 @@ export function BoardListView({
       .sort((a, b) => a.label.localeCompare(b.label, locale));
   }, [locale, rows]);
 
-  const allColumns = useMemo(() => {
-    const map = new Map<string, { id: string; label: string }>();
-    for (const entry of hierarchy) {
-      for (const column of entry.board.columns) {
-        map.set(column.id, { id: column.id, label: `${entry.board.name} / ${column.name}` });
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [hierarchy, locale]);
-
   const queryTokens = useMemo(() => parseQueryTokens(normalizedFilters.query.trim()), [normalizedFilters.query]);
 
   const hasActiveCriteria = useMemo(() => {
     const adv = normalizedFilters.advanced;
+    const mineFromAdvanced = Boolean(user?.id && adv.assigneeIds.includes(user.id));
+    const blockedFromAdvanced = adv.behaviors.includes("BLOCKED");
     return (
       normalizedFilters.query.trim().length > 0 ||
       normalizedFilters.chips.mine ||
+      mineFromAdvanced ||
       normalizedFilters.chips.overdue ||
       normalizedFilters.chips.today ||
       normalizedFilters.chips.week ||
       normalizedFilters.chips.blocked ||
+      blockedFromAdvanced ||
       normalizedFilters.chips.updatedWithinDays !== null ||
       adv.title.trim().length > 0 ||
       adv.description.trim().length > 0 ||
@@ -883,7 +1071,6 @@ export function BoardListView({
       adv.assigneeIds.length > 0 ||
       adv.priorities.length > 0 ||
       adv.behaviors.length > 0 ||
-      adv.statusColumnIds.length > 0 ||
       adv.deadlineFrom.length > 0 ||
       adv.deadlineTo.length > 0 ||
       adv.updatedFrom.length > 0 ||
@@ -891,7 +1078,7 @@ export function BoardListView({
       adv.hasRecentComment !== "ANY" ||
       adv.hasChildren !== "ANY"
     );
-  }, [normalizedFilters]);
+  }, [normalizedFilters, user?.id]);
 
   const rowsById = useMemo(() => {
     const map = new Map<string, ListRow>();
@@ -964,6 +1151,8 @@ export function BoardListView({
           row.pathLabel,
           row.columnName,
           String(row.shortId ?? ""),
+          row.effort ?? "",
+          row.progress !== null ? String(row.progress) : "",
           ...row.assignees,
           row.priority,
         ]
@@ -1007,10 +1196,6 @@ export function BoardListView({
         return false;
       }
 
-      if (adv.statusColumnIds.length > 0 && !adv.statusColumnIds.includes(row.columnId)) {
-        return false;
-      }
-
       if ((adv.deadlineFrom || adv.deadlineTo) && !matchesDateRange(row.dueAt, adv.deadlineFrom, adv.deadlineTo)) {
         return false;
       }
@@ -1031,7 +1216,14 @@ export function BoardListView({
     };
 
     const matchesQuickChips = (row: ListRow): boolean => {
-      if (normalizedFilters.chips.mine) {
+      const mineQuickActive = Boolean(
+        normalizedFilters.chips.mine || (user?.id ? normalizedFilters.advanced.assigneeIds.includes(user.id) : false),
+      );
+      const blockedQuickActive = Boolean(
+        normalizedFilters.chips.blocked || normalizedFilters.advanced.behaviors.includes("BLOCKED"),
+      );
+
+      if (mineQuickActive) {
         if (!user?.id || !row.assigneeIds.includes(user.id)) return false;
       }
 
@@ -1049,7 +1241,7 @@ export function BoardListView({
         if (dueDiff === null || dueDiff < 0 || dueDiff > endOfWeekDiff || row.columnBehavior === "DONE") return false;
       }
 
-      if (normalizedFilters.chips.blocked) {
+      if (blockedQuickActive) {
         const blocked = row.columnBehavior === "BLOCKED" || Boolean(row.blockedSince);
         if (!blocked) return false;
       }
@@ -1111,7 +1303,9 @@ export function BoardListView({
   ]);
 
   const treeRows = useMemo(() => {
-    if (normalizedFilters.renderMode !== "TREE") return [] as Array<{ row: ListRow; depth: number; isContext: boolean }>;
+    if (normalizedFilters.renderMode !== "TREE") {
+      return [] as Array<{ row: ListRow; depth: number; isContext: boolean; isExpanded: boolean }>;
+    }
 
     const visibleIds = new Set<string>();
 
@@ -1139,19 +1333,8 @@ export function BoardListView({
         return a.title.localeCompare(b.title, locale);
       });
 
-    const autoExpanded = new Set<string>();
-    for (const row of filteredRows) {
-      let cursor = row.parentId;
-      while (cursor) {
-        const parent = rowsById.get(cursor);
-        if (!parent) break;
-        autoExpanded.add(parent.id);
-        cursor = parent.parentId;
-      }
-    }
-
     const expanded = new Set(expandedIds);
-    const result: Array<{ row: ListRow; depth: number; isContext: boolean }> = [];
+    const result: Array<{ row: ListRow; depth: number; isContext: boolean; isExpanded: boolean }> = [];
 
     const rootRows = visibleRows.filter((row) => {
       if (row.parentId === treeRootParentId) return true;
@@ -1159,12 +1342,10 @@ export function BoardListView({
     });
 
     const visit = (row: ListRow, depth: number) => {
-      result.push({ row, depth, isContext: contextRows.has(row.id) });
-
       const children = sortSiblings(childrenByParent.get(row.id) ?? []);
+      const shouldExpand = expanded.has(row.id);
+      result.push({ row, depth, isContext: contextRows.has(row.id), isExpanded: children.length > 0 && shouldExpand });
       if (children.length === 0) return;
-
-      const shouldExpand = expanded.has(row.id) || autoExpanded.has(row.id);
       if (!shouldExpand) return;
 
       for (const child of children) {
@@ -1184,7 +1365,6 @@ export function BoardListView({
     locale,
     normalizedFilters.renderMode,
     rows,
-    rowsById,
     treeRootParentId,
   ]);
 
@@ -1264,6 +1444,14 @@ export function BoardListView({
     return map;
   }, [treeRows]);
 
+  const expandedById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const entry of treeRows) {
+      map.set(entry.row.id, entry.isExpanded);
+    }
+    return map;
+  }, [treeRows]);
+
   const activeViewLabel = useMemo(() => {
     if (!normalizedFilters.activeViewId) return "Vue libre";
     if (normalizedFilters.activeViewId.startsWith("official:")) {
@@ -1276,6 +1464,63 @@ export function BoardListView({
     }
     return "Vue";
   }, [normalizedFilters.activeViewId, personalViews]);
+
+  const selectedScope = useMemo(
+    () => SCOPE_OPTIONS.find((option) => option.value === normalizedFilters.scope) ?? SCOPE_OPTIONS[0],
+    [normalizedFilters.scope],
+  );
+
+  const resetAllFilters = useCallback(() => {
+    const next = normalizeFilters(
+      {
+        ...normalizedFilters,
+        query: "",
+        includeDone: false,
+        contextMode: true,
+        chips: DEFAULT_LIST_FILTERS.chips,
+        advanced: DEFAULT_ADVANCED_FILTERS,
+        sort: DEFAULT_LIST_FILTERS.sort,
+        activeViewId: null,
+      },
+      rootBoard.id,
+    );
+    onFiltersChange(next);
+  }, [normalizedFilters, onFiltersChange, rootBoard.id]);
+
+  const mineChipActive = Boolean(
+    normalizedFilters.chips.mine || (user?.id ? normalizedFilters.advanced.assigneeIds.includes(user.id) : false),
+  );
+  const blockedChipActive = Boolean(
+    normalizedFilters.chips.blocked || normalizedFilters.advanced.behaviors.includes("BLOCKED"),
+  );
+
+  const toggleMineChip = useCallback(() => {
+    if (!user?.id) return;
+    const willActivate = !mineChipActive;
+    setFilters({
+      chips: { ...normalizedFilters.chips, mine: willActivate },
+      advanced: {
+        ...normalizedFilters.advanced,
+        assigneeIds: willActivate ? [user.id] : [],
+      },
+    });
+  }, [mineChipActive, normalizedFilters.advanced, normalizedFilters.chips, setFilters, user?.id]);
+
+  const toggleBlockedChip = useCallback(() => {
+    const currentBehaviors = normalizedFilters.advanced.behaviors;
+    const hasBlockedBehavior = currentBehaviors.includes("BLOCKED");
+    const willActivate = !blockedChipActive;
+    const nextBehaviors = willActivate
+      ? hasBlockedBehavior
+        ? currentBehaviors
+        : [...currentBehaviors, "BLOCKED"]
+      : currentBehaviors.filter((value) => value !== "BLOCKED");
+
+    setFilters({
+      chips: { ...normalizedFilters.chips, blocked: willActivate },
+      advanced: { ...normalizedFilters.advanced, behaviors: nextBehaviors },
+    });
+  }, [blockedChipActive, normalizedFilters.advanced, normalizedFilters.chips, setFilters]);
 
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: "medium" }), [locale]);
 
@@ -1389,6 +1634,70 @@ export function BoardListView({
     }
   };
 
+  const applyEffortUpdate = async (row: ListRow, effort: EffortValue | null) => {
+    if (!accessToken) return;
+    const snapshot = row;
+
+    replaceRow(row.id, (current) => ({ ...current, effort }));
+    markRowSaving(row.id, true);
+    setNotice(null);
+
+    try {
+      await updateNode(row.id, { effort }, accessToken);
+      void onDataMutated?.();
+    } catch (updateError) {
+      replaceRow(row.id, () => snapshot);
+      setNotice(updateError instanceof Error ? updateError.message : "Impossible de mettre a jour l'effort.");
+    } finally {
+      markRowSaving(row.id, false);
+    }
+  };
+
+  const applyProgressUpdate = async (row: ListRow, progress: number) => {
+    if (!accessToken) return;
+    const normalized = Math.max(0, Math.min(100, Math.round(progress / 5) * 5));
+    const snapshot = row;
+
+    replaceRow(row.id, (current) => ({ ...current, progress: normalized }));
+    markRowSaving(row.id, true);
+    setNotice(null);
+
+    try {
+      await updateNode(row.id, { progress: normalized }, accessToken);
+      void onDataMutated?.();
+    } catch (updateError) {
+      replaceRow(row.id, () => snapshot);
+      setNotice(updateError instanceof Error ? updateError.message : "Impossible de mettre a jour la progression.");
+    } finally {
+      markRowSaving(row.id, false);
+    }
+  };
+
+  const applyAssigneeUpdate = async (row: ListRow, assigneeId: string | null) => {
+    if (!accessToken) return;
+    const snapshot = row;
+    const options = getAssigneeOptionsForRow(row);
+    const label = assigneeId ? options.find((entry) => entry.id === assigneeId)?.label ?? assigneeId : "";
+
+    replaceRow(row.id, (current) => ({
+      ...current,
+      assigneeIds: assigneeId ? [assigneeId] : [],
+      assignees: assigneeId ? [label] : [],
+    }));
+    markRowSaving(row.id, true);
+    setNotice(null);
+
+    try {
+      await updateNode(row.id, { raciResponsibleIds: assigneeId ? [assigneeId] : [] }, accessToken);
+      void onDataMutated?.();
+    } catch (updateError) {
+      replaceRow(row.id, () => snapshot);
+      setNotice(updateError instanceof Error ? updateError.message : "Impossible de mettre a jour l'assignee.");
+    } finally {
+      markRowSaving(row.id, false);
+    }
+  };
+
   const applyDeadlineUpdate = async (row: ListRow, deadlineDate: string) => {
     if (!accessToken) return;
     const dueAt = deadlineDate ? `${deadlineDate}T00:00:00.000Z` : null;
@@ -1467,8 +1776,7 @@ export function BoardListView({
     );
 
     onFiltersChange(next);
-    setViewsMenuOpen(false);
-    setManageViewsOpen(false);
+    closeMenus();
   };
 
   const applyPersonalView = (view: PersonalView) => {
@@ -1481,8 +1789,7 @@ export function BoardListView({
     );
 
     onFiltersChange(next);
-    setViewsMenuOpen(false);
-    setManageViewsOpen(false);
+    closeMenus();
   };
 
   const saveAsPersonalView = () => {
@@ -1546,16 +1853,22 @@ export function BoardListView({
     return `Retard ${Math.abs(diff)}j`;
   };
 
-  const emptyState = !loading && !error && tableRows.length === 0;
+  const showInitialLoading = loading && rows.length === 0;
+  const showRefreshing = loading && rows.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-white/10 bg-card/70 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[280px] flex-1">
+          <div ref={positionMenuRef} className="relative min-w-[280px] flex-1">
             <button
               type="button"
-              onClick={() => setPositionSelectorOpen((prev) => !prev)}
+              onClick={() => {
+                setColumnsMenuOpen(false);
+                setViewsMenuOpen(false);
+                setManageViewsOpen(false);
+                setPositionSelectorOpen((prev) => !prev);
+              }}
               className="w-full rounded-xl border border-white/15 bg-surface/70 px-3 py-2 text-left text-sm text-foreground transition hover:border-accent"
             >
               <span className="block text-[11px] uppercase tracking-wide text-muted">Position</span>
@@ -1587,16 +1900,18 @@ export function BoardListView({
               </div>
             )}
           </div>
-          <label className="min-w-[210px] text-xs text-muted">
-            Scope
+          <label className="min-w-[230px] text-xs text-muted">
+            Zone d&apos;affichage
             <select
               value={normalizedFilters.scope}
               onChange={(event) => setFilters({ scope: event.target.value as ListScope })}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent [color-scheme:dark]"
             >
-              <option value="CURRENT">Kanban courant (niveau)</option>
-              <option value="SUBTREE">Sous-arbre (descendants)</option>
-              <option value="ROOT">Projet racine (tout)</option>
+              {SCOPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -1610,6 +1925,9 @@ export function BoardListView({
             />
           </div>
         </div>
+        <p className="mt-2 text-[11px] text-muted">
+          Position active: <span className="text-foreground">{positionPathLabel}</span> · {selectedScope.helper}
+        </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
@@ -1633,10 +1951,15 @@ export function BoardListView({
             </button>
           </div>
 
-          <div className="relative">
+          <div ref={columnsMenuRef} className="relative">
             <button
               type="button"
-              onClick={() => setColumnsMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setPositionSelectorOpen(false);
+                setViewsMenuOpen(false);
+                setManageViewsOpen(false);
+                setColumnsMenuOpen((prev) => !prev);
+              }}
               className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
             >
               Colonnes
@@ -1682,10 +2005,14 @@ export function BoardListView({
             )}
           </div>
 
-          <div className="relative">
+          <div ref={viewsMenuRef} className="relative">
             <button
               type="button"
-              onClick={() => setViewsMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setPositionSelectorOpen(false);
+                setColumnsMenuOpen(false);
+                setViewsMenuOpen((prev) => !prev);
+              }}
               className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
             >
               Vues: {activeViewLabel}
@@ -1763,7 +2090,10 @@ export function BoardListView({
 
           <button
             type="button"
-            onClick={() => setFiltersDrawerOpen(true)}
+            onClick={() => {
+              closeMenus();
+              setFiltersDrawerOpen(true);
+            }}
             className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
           >
             Filtres
@@ -1781,16 +2111,27 @@ export function BoardListView({
             {normalizedFilters.includeDone ? "Inclure termine" : "Termine OFF"}
           </button>
 
+          {normalizedFilters.renderMode === "TREE" && (
+            <button
+              type="button"
+              onClick={() => setFilters({ contextMode: !normalizedFilters.contextMode })}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                normalizedFilters.contextMode
+                  ? "border-accent/60 bg-accent/10 text-foreground"
+                  : "border-white/15 text-muted hover:border-accent hover:text-foreground"
+              }`}
+              title="Affiche les parents necessaires pour comprendre le contexte"
+            >
+              Parents contexte: {normalizedFilters.contextMode ? "ON" : "OFF"}
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => setFilters({ contextMode: !normalizedFilters.contextMode })}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              normalizedFilters.contextMode
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
+            onClick={resetAllFilters}
+            className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
           >
-            Contexte: {normalizedFilters.contextMode ? "ON" : "OFF"}
+            Tout effacer
           </button>
 
           <button
@@ -1805,9 +2146,9 @@ export function BoardListView({
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <button
             type="button"
-            onClick={() => setChips({ mine: !normalizedFilters.chips.mine })}
+            onClick={toggleMineChip}
             className={`rounded-full border px-3 py-1 font-semibold transition ${
-              normalizedFilters.chips.mine
+              mineChipActive
                 ? "border-accent/60 bg-accent/10 text-foreground"
                 : "border-white/15 text-muted hover:border-accent hover:text-foreground"
             }`}
@@ -1834,7 +2175,7 @@ export function BoardListView({
                 : "border-white/15 text-muted hover:border-accent hover:text-foreground"
             }`}
           >
-            Aujourd&apos;hui
+            Deadline aujourd&apos;hui
           </button>
           <button
             type="button"
@@ -1849,9 +2190,9 @@ export function BoardListView({
           </button>
           <button
             type="button"
-            onClick={() => setChips({ blocked: !normalizedFilters.chips.blocked })}
+            onClick={toggleBlockedChip}
             className={`rounded-full border px-3 py-1 font-semibold transition ${
-              normalizedFilters.chips.blocked
+              blockedChipActive
                 ? "border-accent/60 bg-accent/10 text-foreground"
                 : "border-white/15 text-muted hover:border-accent hover:text-foreground"
             }`}
@@ -1872,7 +2213,7 @@ export function BoardListView({
                       : null,
                 });
               }}
-              className="ml-2 bg-transparent text-xs text-foreground outline-none"
+              className="ml-2 rounded bg-surface px-1 text-xs text-foreground outline-none [color-scheme:dark]"
             >
               <option value="">OFF</option>
               <option value="1">1j</option>
@@ -1925,7 +2266,7 @@ export function BoardListView({
         <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">{notice}</div>
       )}
 
-      {loading && (
+      {showInitialLoading && (
         <div className="rounded-2xl border border-white/10 bg-card/60 p-6 text-sm text-muted">Chargement de la vue liste...</div>
       )}
 
@@ -1933,38 +2274,12 @@ export function BoardListView({
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-6 text-sm text-rose-200">{error}</div>
       )}
 
-      {emptyState && (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-card/60 p-8 text-center">
-          <p className="text-sm text-muted">Aucun resultat.</p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setFilters({ includeDone: true })}
-              className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
-            >
-              Inclure termine
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilters({ scope: "ROOT" })}
-              className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
-            >
-              Elargir scope
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilters({ query: "", chips: DEFAULT_LIST_FILTERS.chips, advanced: DEFAULT_ADVANCED_FILTERS })}
-              className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
-            >
-              Reinitialiser filtres
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!loading && !error && tableRows.length > 0 && (
+      {!error && !showInitialLoading && (
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/70">
-          <div className="max-h-[70vh] overflow-auto">
+          {showRefreshing && (
+            <div className="border-b border-white/10 bg-white/5 px-3 py-1 text-[11px] text-muted">Mise a jour en cours...</div>
+          )}
+          <div className="h-[calc(100vh-310px)] min-h-[360px] overflow-auto">
             <table className="min-w-full table-fixed border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-surface/95">
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-muted">
@@ -1975,13 +2290,193 @@ export function BoardListView({
                   ))}
                   <th className="px-3 py-2 font-semibold">Actions</th>
                 </tr>
+                <tr className="border-b border-white/10 align-top text-[11px] text-muted">
+                  {visibleColumns.map((column) => {
+                    if (column === "title") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <input
+                            value={normalizedFilters.advanced.title}
+                            onChange={(event) => setAdvanced({ title: event.target.value })}
+                            placeholder="Filtrer titre..."
+                            className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent"
+                          />
+                        </th>
+                      );
+                    }
+
+                    if (column === "status") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <select
+                            value={normalizedFilters.advanced.behaviors[0] ?? ""}
+                            onChange={(event) => {
+                              const behavior = event.target.value as ColumnBehaviorKey;
+                              const hasBehavior = behavior.length > 0;
+                              setFilters({
+                                chips: {
+                                  ...normalizedFilters.chips,
+                                  blocked: hasBehavior && behavior === "BLOCKED",
+                                },
+                                advanced: {
+                                  ...normalizedFilters.advanced,
+                                  behaviors: hasBehavior ? [behavior] : [],
+                                  statusColumnIds: [],
+                                },
+                              });
+                            }}
+                            className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                          >
+                            <option value="">Tous</option>
+                            {(["BACKLOG", "IN_PROGRESS", "BLOCKED", "DONE"] as ColumnBehaviorKey[]).map((behavior) => (
+                              <option key={behavior} value={behavior}>
+                                {tBoard(`behaviors.${behavior}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </th>
+                      );
+                    }
+
+                    if (column === "priority") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <select
+                            value={normalizedFilters.advanced.priorities[0] ?? ""}
+                            onChange={(event) =>
+                              setAdvanced({
+                                priorities: event.target.value ? [event.target.value as PriorityValue] : [],
+                              })
+                            }
+                            className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                          >
+                            <option value="">Toutes</option>
+                            {(["CRITICAL", "HIGH", "MEDIUM", "LOW", "LOWEST", "NONE"] as PriorityValue[]).map((priority) => (
+                              <option key={priority} value={priority}>
+                                {tBoard(`priority.labels.${priority}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </th>
+                      );
+                    }
+
+                    if (column === "assignee") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <select
+                            value={normalizedFilters.advanced.assigneeIds[0] ?? ""}
+                            onChange={(event) =>
+                              setAdvanced({ assigneeIds: event.target.value ? [event.target.value] : [] })
+                            }
+                            className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                          >
+                            <option value="">Tous</option>
+                            {allAssignees.map((assignee) => (
+                              <option key={assignee.id} value={assignee.id}>
+                                {assignee.label}
+                              </option>
+                            ))}
+                          </select>
+                        </th>
+                      );
+                    }
+
+                    if (column === "deadline") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="date"
+                              value={normalizedFilters.advanced.deadlineFrom}
+                              onChange={(event) => setAdvanced({ deadlineFrom: event.target.value })}
+                              className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                            />
+                            <input
+                              type="date"
+                              value={normalizedFilters.advanced.deadlineTo}
+                              onChange={(event) => setAdvanced({ deadlineTo: event.target.value })}
+                              className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                            />
+                          </div>
+                        </th>
+                      );
+                    }
+
+                    if (column === "updatedAt") {
+                      return (
+                        <th key={`${column}-filter`} className="px-3 py-2 font-normal">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="date"
+                              value={normalizedFilters.advanced.updatedFrom}
+                              onChange={(event) => setAdvanced({ updatedFrom: event.target.value })}
+                              className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                            />
+                            <input
+                              type="date"
+                              value={normalizedFilters.advanced.updatedTo}
+                              onChange={(event) => setAdvanced({ updatedTo: event.target.value })}
+                              className="w-full rounded border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent [color-scheme:dark]"
+                            />
+                          </div>
+                        </th>
+                      );
+                    }
+
+                    return (
+                      <th key={`${column}-filter`} className="px-3 py-2 font-normal text-[10px] text-muted/60">
+                        -
+                      </th>
+                    );
+                  })}
+                  <th className="px-3 py-2 text-right font-normal">
+                    <button
+                      type="button"
+                      onClick={resetAllFilters}
+                      className="rounded border border-white/15 px-2 py-1 text-[10px] text-muted transition hover:border-accent hover:text-foreground"
+                    >
+                      Reset
+                    </button>
+                  </th>
+                </tr>
               </thead>
               <tbody>
+                {tableRows.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleColumns.length + 1} className="px-3 py-8 text-center">
+                      <p className="text-sm text-muted">Aucun resultat pour ces filtres.</p>
+                      <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setFilters({ includeDone: true })}
+                          className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                        >
+                          Inclure termine
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFilters({ scope: "ROOT" })}
+                          className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                        >
+                          Elargir zone
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetAllFilters}
+                          className="rounded-full border border-white/15 px-3 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                        >
+                          Tout effacer
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {tableRows.map((row) => {
                   const depth = normalizedFilters.renderMode === "TREE" ? depthById.get(row.id) ?? 0 : 0;
                   const isContextRow = normalizedFilters.renderMode === "TREE" ? Boolean(contextById.get(row.id)) : false;
                   const childrenCount = rows.filter((entry) => entry.parentId === row.id).length;
-                  const expanded = expandedIds.includes(row.id);
+                  const expanded = expandedById.get(row.id) ?? false;
                   const rowDisabled = isRowSaving(row.id);
 
                   return (
@@ -1999,14 +2494,20 @@ export function BoardListView({
                                     type="button"
                                     onClick={(event) => toggleExpand(row.id, event.shiftKey)}
                                     disabled={childrenCount === 0}
-                                    className={`mt-0.5 h-5 w-5 rounded border text-xs transition ${
+                                    className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-xs transition ${
                                       childrenCount > 0
-                                        ? "border-white/15 text-muted hover:border-accent hover:text-foreground"
-                                        : "border-white/5 text-transparent"
+                                        ? "text-muted hover:bg-white/5 hover:text-foreground"
+                                        : "cursor-default text-muted/30"
                                     }`}
                                     title={childrenCount > 0 ? "Deplier/replier (Shift: sous-arbre)" : "Pas d'enfants"}
                                   >
-                                    {childrenCount > 0 ? (expanded ? "▼" : "▶") : "•"}
+                                    {childrenCount > 0 ? (
+                                      <span className="material-symbols-outlined text-[16px] leading-none">
+                                        {expanded ? "expand_more" : "chevron_right"}
+                                      </span>
+                                    ) : (
+                                      <span className="material-symbols-outlined text-[14px] leading-none">fiber_manual_record</span>
+                                    )}
                                   </button>
                                 ) : null}
                                 <div className="min-w-0 space-y-1">
@@ -2015,6 +2516,7 @@ export function BoardListView({
                                     <button
                                       type="button"
                                       onClick={() => onOpenTask(row.id)}
+                                      title={row.description?.trim() || row.title}
                                       className="truncate text-left text-sm font-semibold text-foreground transition hover:text-accent"
                                     >
                                       {row.title}
@@ -2025,7 +2527,9 @@ export function BoardListView({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="truncate text-xs text-muted">{row.pathLabel}</div>
+                                  {normalizedFilters.renderMode === "FLAT" && (
+                                    <div className="truncate text-xs text-muted">{row.pathLabel}</div>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -2075,10 +2579,74 @@ export function BoardListView({
                           );
                         }
 
-                        if (column === "assignee") {
+                        if (column === "progress") {
+                          const progressValue = row.progress ?? 0;
                           return (
-                            <td key={column} className="px-3 py-2 text-xs text-muted">
-                              {row.assignees.length > 0 ? row.assignees.join(", ") : "-"}
+                            <td key={column} className="px-3 py-2">
+                              <select
+                                value={progressValue}
+                                onChange={(event) => void applyProgressUpdate(row, Number(event.target.value))}
+                                disabled={rowDisabled}
+                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                              >
+                                {Array.from({ length: 21 }, (_, idx) => idx * 5).map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}%
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          );
+                        }
+
+                        if (column === "effort") {
+                          return (
+                            <td key={column} className="px-3 py-2">
+                              <select
+                                value={row.effort ?? ""}
+                                onChange={(event) =>
+                                  void applyEffortUpdate(
+                                    row,
+                                    event.target.value ? (event.target.value as EffortValue) : null,
+                                  )
+                                }
+                                disabled={rowDisabled}
+                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                              >
+                                <option value="">{tBoard("filters.effort.noEffort")}</option>
+                                <option value="UNDER2MIN">{tBoard("filters.effort.options.UNDER2MIN")}</option>
+                                <option value="XS">{tBoard("filters.effort.options.XS")}</option>
+                                <option value="S">{tBoard("filters.effort.options.S")}</option>
+                                <option value="M">{tBoard("filters.effort.options.M")}</option>
+                                <option value="L">{tBoard("filters.effort.options.L")}</option>
+                                <option value="XL">{tBoard("filters.effort.options.XL")}</option>
+                                <option value="XXL">{tBoard("filters.effort.options.XXL")}</option>
+                              </select>
+                            </td>
+                          );
+                        }
+
+                        if (column === "assignee") {
+                          const assigneeOptions = getAssigneeOptionsForRow(row);
+                          return (
+                            <td key={column} className="px-3 py-2">
+                              <select
+                                value={row.assigneeIds[0] ?? ""}
+                                onFocus={() => void ensureCollaboratorsForNode(row)}
+                                onChange={(event) => void applyAssigneeUpdate(row, event.target.value || null)}
+                                disabled={rowDisabled}
+                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                              >
+                                <option value="">Non assigne</option>
+                                {assigneeOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {isCollaboratorsLoading(row.id) && (
+                                <div className="mt-1 text-[10px] text-muted">Chargement des acces...</div>
+                              )}
                             </td>
                           );
                         }
@@ -2100,9 +2668,41 @@ export function BoardListView({
                         }
 
                         if (column === "updatedAt") {
+                          const activityLogs = activityByNodeId.get(row.id) ?? [];
                           return (
                             <td key={column} className="px-3 py-2 text-xs text-muted">
-                              {row.updatedAt ? dateFormatter.format(new Date(row.updatedAt)) : "-"}
+                              <div className="group relative inline-flex items-center gap-2">
+                                <span>{row.updatedAt ? dateFormatter.format(new Date(row.updatedAt)) : "-"}</span>
+                                <button
+                                  type="button"
+                                  onMouseEnter={() => void ensureActivityForNode(row.id)}
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                                  title="Voir les logs de la carte"
+                                  aria-label="Voir les logs de la carte"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">history</span>
+                                </button>
+                                <div className="pointer-events-none invisible absolute right-0 top-full z-30 mt-1 w-[360px] rounded-lg border border-white/10 bg-surface/95 p-2 text-[11px] text-foreground opacity-0 shadow-2xl transition group-hover:visible group-hover:opacity-100">
+                                  {isActivityLoading(row.id) ? (
+                                    <p className="text-muted">Chargement des logs...</p>
+                                  ) : activityLogs.length === 0 ? (
+                                    <p className="text-muted">Aucun log recent.</p>
+                                  ) : (
+                                    <ul className="max-h-56 space-y-1 overflow-y-auto">
+                                      {activityLogs.slice(0, 8).map((log) => (
+                                        <li key={log.id} className="rounded border border-white/10 px-2 py-1">
+                                          <p className="text-[11px] text-foreground">
+                                            {formatActivityMessage(log, tActivity, tBoard)}
+                                          </p>
+                                          <p className="text-[10px] text-muted">
+                                            {dateFormatter.format(new Date(log.createdAt))}
+                                          </p>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              </div>
                             </td>
                           );
                         }
@@ -2126,9 +2726,6 @@ export function BoardListView({
                                 )}
                                 {row.hasRecentComment && (
                                   <span className="rounded-full border border-sky-400/40 px-2 py-0.5 text-sky-200">Comment {"<"}24h</span>
-                                )}
-                                {row.hasChildren && (
-                                  <span className="rounded-full border border-white/20 px-2 py-0.5">A enfants</span>
                                 )}
                               </div>
                             </td>
@@ -2155,32 +2752,40 @@ export function BoardListView({
                           <button
                             type="button"
                             onClick={() => void createChild(row)}
-                            className="rounded border border-white/15 px-2 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            title="Creer une carte enfant"
+                            aria-label="Creer une carte enfant"
                           >
-                            + Enfant
+                            <span className="material-symbols-outlined text-[15px]">subdirectory_arrow_right</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => void createSibling(row)}
-                            className="rounded border border-white/15 px-2 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            title="Creer une carte au meme niveau"
+                            aria-label="Creer une carte au meme niveau"
                           >
-                            + Sibling
+                            <span className="material-symbols-outlined text-[15px]">add</span>
                           </button>
                           {row.childBoardId && (
                             <button
                               type="button"
                               onClick={() => onOpenBoard(row.childBoardId)}
-                              className="rounded border border-white/15 px-2 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                              title="Ouvrir le sous-kanban"
+                              aria-label="Ouvrir le sous-kanban"
                             >
-                              Ouvrir sous-kanban
+                              <span className="material-symbols-outlined text-[15px]">account_tree</span>
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => onOpenTask(row.id)}
-                            className="rounded border border-white/15 px-2 py-1 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            title="Ouvrir le detail / deplacer"
+                            aria-label="Ouvrir le detail / deplacer"
                           >
-                            Deplacer...
+                            <span className="material-symbols-outlined text-[15px]">open_in_new</span>
                           </button>
                         </div>
                       </td>
@@ -2193,8 +2798,10 @@ export function BoardListView({
         </div>
       )}
 
-      {filtersDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+      {filtersDrawerOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[80] flex justify-end bg-black/40">
           <button
             type="button"
             className="absolute inset-0"
@@ -2318,8 +2925,19 @@ export function BoardListView({
                         type="button"
                         onClick={() => {
                           const current = normalizedFilters.advanced.behaviors;
-                          setAdvanced({
-                            behaviors: active ? current.filter((value) => value !== behavior) : [...current, behavior],
+                          const nextBehaviors = active
+                            ? current.filter((value) => value !== behavior)
+                            : [...current, behavior];
+                          setFilters({
+                            chips: {
+                              ...normalizedFilters.chips,
+                              blocked: nextBehaviors.includes("BLOCKED"),
+                            },
+                            advanced: {
+                              ...normalizedFilters.advanced,
+                              behaviors: nextBehaviors,
+                              statusColumnIds: [],
+                            },
                           });
                         }}
                         className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
@@ -2330,31 +2948,6 @@ export function BoardListView({
                       >
                         {tBoard(`behaviors.${behavior}`)}
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-muted">Statuts (colonnes)</p>
-                <div className="max-h-36 overflow-y-auto rounded-lg border border-white/10 p-2">
-                  {allColumns.map((column) => {
-                    const checked = normalizedFilters.advanced.statusColumnIds.includes(column.id);
-                    return (
-                      <label key={column.id} className="flex items-center gap-2 py-1 text-xs text-muted">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            const current = normalizedFilters.advanced.statusColumnIds;
-                            setAdvanced({
-                              statusColumnIds: checked
-                                ? current.filter((value) => value !== column.id)
-                                : [...current, column.id],
-                            });
-                          }}
-                        />
-                        <span>{column.label}</span>
-                      </label>
                     );
                   })}
                 </div>
@@ -2371,10 +2964,16 @@ export function BoardListView({
                           checked={checked}
                           onChange={() => {
                             const current = normalizedFilters.advanced.assigneeIds;
-                            setAdvanced({
-                              assigneeIds: checked
-                                ? current.filter((value) => value !== assignee.id)
-                                : [...current, assignee.id],
+                            const nextAssigneeIds = checked
+                              ? current.filter((value) => value !== assignee.id)
+                              : [...current, assignee.id];
+                            const mineOn = Boolean(user?.id && nextAssigneeIds.includes(user.id));
+                            setFilters({
+                              chips: { ...normalizedFilters.chips, mine: mineOn },
+                              advanced: {
+                                ...normalizedFilters.advanced,
+                                assigneeIds: nextAssigneeIds,
+                              },
                             });
                           }}
                         />
@@ -2428,8 +3027,9 @@ export function BoardListView({
               </div>
             </div>
           </aside>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

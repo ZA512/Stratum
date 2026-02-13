@@ -2,13 +2,24 @@
 
 import React from "react";
 import { BoardDataProvider, useBoardData } from "@/features/boards/board-data-provider";
-import { BoardUiSettingsProvider } from "@/features/boards/board-ui-settings";
+import { BoardUiSettingsProvider, useBoardUiSettings } from "@/features/boards/board-ui-settings";
 import { FractalBreadcrumb } from "@/components/fractal-breadcrumb";
 import { TaskDrawerProvider } from "@/features/nodes/task-drawer/TaskDrawerContext";
 import { TaskDrawer } from "@/features/nodes/task-drawer/TaskDrawer";
 
 function TeamBoardsShell({ children }: { children: React.ReactNode }) {
   const { breadcrumb, registerDescendTrigger, teamId, prefetchBoard } = useBoardData();
+  const { boardView } = useBoardUiSettings();
+
+  if (boardView === "list") {
+    return (
+      <div className="pt-[76px]">
+        <div id="board-fixed-header-root" className="fixed top-0 left-0 right-0 z-50" />
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="pt-[76px]">
       <div id="board-fixed-header-root" className="fixed top-0 left-0 right-0 z-50" />

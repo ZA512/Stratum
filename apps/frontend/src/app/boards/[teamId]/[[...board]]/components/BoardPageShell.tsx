@@ -2063,7 +2063,7 @@ export function TeamBoardPage(){
   return (
     <div className="min-h-screen bg-background text-foreground">
       {headerRoot ? createPortal(headerContent, headerRoot) : headerContent}
-      <main className="relative flex flex-col gap-6 w-full px-8 pt-6 pb-12">
+      <main className={`relative flex w-full flex-col gap-6 px-8 pb-12 ${boardView === 'list' ? 'pt-2' : 'pt-6'}`}>
         <div
           className={`transition duration-500 ease-out transform-gpu will-change-transform will-change-opacity ${
             isPushing ? '-translate-x-4 -translate-y-4 opacity-70' : 'translate-x-0 translate-y-0 opacity-100'
@@ -2293,9 +2293,10 @@ export function TeamBoardPage(){
         {error && <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-200">{error}</div>}
         {loading && <BoardSkeleton />}
         {!loading && board && (
-          <section className="space-y-4 w-full">
+          <section className={`w-full ${boardView === 'list' ? 'space-y-2' : 'space-y-4'}`}>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+              {boardView === 'kanban' ? (
+                <div className="flex items-center gap-2">
                   <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
                 <HelpTooltip
                   helpMode={helpMode}
@@ -2337,10 +2338,13 @@ export function TeamBoardPage(){
                     <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
                       <h4 className="mb-1 font-semibold text-accent">{tBoard('helpMode.tooltip.title')}</h4>
                       <p>{tBoard('helpMode.tooltip.body')}</p>
-                      <p className="mt-2 text-[10px] text-slate-400">{tBoard('helpMode.tooltip.hint')}</p>
+                    <p className="mt-2 text-[10px] text-slate-400">{tBoard('helpMode.tooltip.hint')}</p>
                   </div>
                 </button>
-              </div>
+                </div>
+              ) : (
+                <div />
+              )}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
                   <button
@@ -2383,7 +2387,8 @@ export function TeamBoardPage(){
                     {tBoard('viewToggle.gantt')}
                   </button>
                 </div>
-                <span className="text-xs uppercase tracking-wide text-muted">
+                {boardView === 'kanban' && (
+                  <span className="text-xs uppercase tracking-wide text-muted">
                     {detailLoading
                       ? tBoard('columns.header.status.refreshing')
                       : board.columns.length === 0
@@ -2391,7 +2396,8 @@ export function TeamBoardPage(){
                         : board.columns.length === 1
                           ? tBoard('columns.header.status.single')
                           : tBoard('columns.header.status.multiple', { count: board.columns.length })}
-                </span>
+                  </span>
+                )}
               </div>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
@@ -2487,7 +2493,11 @@ export function TeamBoardPage(){
                   filters={listFilters}
                   onFiltersChange={setListFilters}
                   onOpenTask={handleOpenCard}
-                  onOpenBoard={openChildBoard}
+                  onOpenBoard={(boardId) => {
+                    setBoardView('kanban');
+                    openChildBoard(boardId);
+                  }}
+                  onDataMutated={refreshActiveBoard}
                 />
               )
             ) : (
