@@ -99,6 +99,42 @@ enum QuickNoteType {
   @@schema("stratum")
 }
 
+enum WorkspaceAiLevel {
+  OFF
+  LIGHT
+  EMBEDDING
+  HEAVY
+
+  @@schema("stratum")
+}
+
+enum EventActorType {
+  USER
+  AGENT
+  SYSTEM
+
+  @@schema("stratum")
+}
+
+enum EventSource {
+  API
+  AGENT
+  SCHEDULER
+
+  @@schema("stratum")
+}
+
+enum ProposalStatus {
+  DRAFT
+  VALIDATED
+  APPROVED
+  REJECTED
+  APPLIED
+  ROLLED_BACK
+
+  @@schema("stratum")
+}
+
 model User {
   id              String        @id @default(cuid())
   email           String        @unique
@@ -529,6 +565,241 @@ model ActivityLog {
   @@index([nodeId, createdAt])
   @@index([userId])
   @@index([type])
+
+  @@schema("stratum")
+}
+
+model WorkspaceAiConfig {
+  id                  String           @id @default(cuid())
+  workspaceId         String           @unique
+  aiEnabled           Boolean          @default(false)
+  aiLevel             WorkspaceAiLevel @default(OFF)
+  llmProvider         String?
+  llmModel            String?
+  llmBaseUrl          String?
+  embeddingProvider   String?
+  embeddingModel      String?
+  temperature         Decimal?         @db.Decimal(3, 2)
+  topP                Decimal?         @db.Decimal(3, 2)
+  maxTokens           Int?
+  systemPromptVersion String?
+  maxEntitiesPerProposal Int?          @default(50)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@schema("stratum")
+}
+
+model WorkspaceAiQuota {
+  id                     String   @id @default(cuid())
+  workspaceId            String   @unique
+  monthlyTokenBudget     BigInt?
+  monthlyEmbeddingBudget BigInt?
+  maxRequestsPerMinute   Int      @default(60)
+  hardStopOnBudget       Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@schema("stratum")
+}
+
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  userId           String
+  provider         String
+  model            String
+  feature          String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  embeddingTokens  Int      @default(0)
+  estimatedCostUsd Decimal? @db.Decimal(12, 6)
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+
+  @@schema("stratum")
+}
+
+model Proposal {
+  id                  String         @id @default(cuid())
+  workspaceId         String
+  intent              String?        @db.Text
+  status              ProposalStatus @default(DRAFT)
+  confidenceScore     Decimal?       @db.Decimal(4, 3)
+  determinismScore    String?
+  expectedPreconditions Json?
+  idempotencyKey      String?
+  requestedByUserId   String?
+  approvedByUserId    String?
+  rejectedByUserId    String?
+  rejectionReason     String?        @db.Text
+  alternativesCount   Int            @default(1)
+  selectedAlternativeNo Int?
+  explanation         Json?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  appliedAt           DateTime?
+
+  actions             ProposalAction[]
+  events              EventLog[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, status, createdAt(sort: Desc)])
+
+  @@schema("stratum")
+}
+
+model ProposalAction {
+  id               String   @id @default(cuid())
+  proposalId       String
+  alternativeNo    Int      @default(1)
+  actionOrder      Int
+  actionType       String
+  targetEntityType String?
+  targetEntityId   String?
+  payload          Json
+  inversePayload   Json?
+  createdAt        DateTime @default(now())
+
+  proposal         Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, alternativeNo, actionOrder])
+  @@index([proposalId])
+
+  @@schema("stratum")
+}
+
+model EventLog {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  actorType     EventActorType
+  actorId       String?
+  source        EventSource
+  eventType     String
+  entityType    String
+  entityId      String
+  correlationId String?
+  proposalId    String?
+  payload       Json
+  createdAt     DateTime       @default(now())
+
+  proposal      Proposal?      @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([proposalId])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+
+  @@schema("stratum")
+}
+
+// ───────────────────────────────────────────────────────────────
+// AN-P1-01 — RAG schema
+// ───────────────────────────────────────────────────────────────
+
+enum RagDocumentStatus {
+  ACTIVE
+  STALE
+  DELETED
+
+  @@schema("stratum")
+}
+
+enum RagIndexJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+
+  @@schema("stratum")
+}
+
+enum RagIndexJobReason {
+  EVENT
+  REBUILD
+  REPAIR
+
+  @@schema("stratum")
+}
+
+model RagDocument {
+  id                   String            @id @default(cuid())
+  workspaceId          String
+  sourceEntityType     String
+  sourceEntityId       String
+  sourceVersionHash    String
+  flattenSchemaVersion String
+  title                String            @db.Text
+  body                 String            @db.Text
+  metadata             Json
+  status               RagDocumentStatus @default(ACTIVE)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  chunks               RagChunk[]
+
+  @@unique([workspaceId, sourceEntityType, sourceEntityId, sourceVersionHash])
+  @@index([workspaceId, sourceEntityType, sourceEntityId])
+  @@index([workspaceId, status])
+
+  @@schema("stratum")
+}
+
+model RagChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  chunkIndex  Int
+  text        String   @db.Text
+  tokenCount  Int
+  checksum    String
+  metadata    Json
+  createdAt   DateTime @default(now())
+
+  document    RagDocument        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embeddings  RagEmbeddingRecord[]
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+
+  @@schema("stratum")
+}
+
+model RagEmbeddingRecord {
+  id        String   @id @default(cuid())
+  chunkId   String
+  provider  String
+  model     String
+  dimension Int
+  vectorRef String
+  checksum  String
+  createdAt DateTime @default(now())
+
+  chunk     RagChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, provider, model])
+  @@index([chunkId])
+
+  @@schema("stratum")
+}
+
+model RagIndexJob {
+  id               String            @id @default(cuid())
+  workspaceId      String
+  reason           RagIndexJobReason
+  sourceEventId    String?
+  sourceEntityType String?
+  sourceEntityId   String?
+  status           RagIndexJobStatus @default(PENDING)
+  retryCount       Int               @default(0)
+  errorMessage     String?           @db.Text
+  generationId     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([workspaceId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt])
 
   @@schema("stratum")
 }

@@ -1,4 +1,4 @@
-# PRD — Transformation de Stratum en système Agent-Native (avec mode 100% sans IA)
+# PRD — Transformation de Stratum en système Agent-Native
 
 Version: 1.0  
 Date: 2026-02-18  

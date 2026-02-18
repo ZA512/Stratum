@@ -17,6 +17,7 @@ import { WorkflowAutomationModule } from './modules/workflow-automation/workflow
 import { ActivityModule } from './modules/activity/activity.module';
 import { TestDataModule } from './modules/test-data/test-data.module';
 import { QuickNotesModule } from './modules/quick-notes/quick-notes.module';
+import { AgentModule } from './modules/agent/agent.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { QuickNotesModule } from './modules/quick-notes/quick-notes.module';
     ActivityModule,
     TestDataModule,
     QuickNotesModule,
+    AgentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
