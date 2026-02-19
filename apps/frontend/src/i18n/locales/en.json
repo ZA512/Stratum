@@ -136,6 +136,41 @@
         "gemini": "Gemini",
         "ollama": "Ollama (local)",
         "custom": "Custom (OpenAI compatible)"
+      },
+      "catalog": {
+        "title": "AI Model Guide",
+        "description": "Choose the right model for each feature. Cost, quality, and speed vary between models.",
+        "showGuide": "Show model recommendations",
+        "hideGuide": "Hide model recommendations",
+        "feature": "Feature",
+        "recommendedModel": "Recommended",
+        "capabilities": "Required capabilities",
+        "useThisModel": "Use this model",
+        "tier": {
+          "budget": "Budget",
+          "balanced": "Balanced",
+          "premium": "Premium"
+        },
+        "costLabel": "Cost / 1M tokens",
+        "costInput": "input",
+        "costOutput": "output",
+        "costEmbedding": "embedding",
+        "costFree": "Free (local)",
+        "contextLabel": "Context window",
+        "qualityLabel": "Quality",
+        "speedLabel": "Speed",
+        "adviceLabel": "Advice",
+        "catalogVersion": "Catalog updated: {version}",
+        "loadError": "Unable to load the model catalog.",
+        "filterProvider": "Filter by provider",
+        "filterAll": "All providers",
+        "features": {
+          "proposals": "Proposals",
+          "chat": "Chat",
+          "embeddings": "Embeddings (RAG)",
+          "summarization": "Summaries",
+          "briefs": "Reports & briefs"
+        }
       }
     },
     "testData": {

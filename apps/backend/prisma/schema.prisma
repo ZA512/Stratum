@@ -99,6 +99,20 @@ enum QuickNoteType {
   @@schema("stratum")
 }
 
+enum NodeKind {
+  PROJECT
+  NEXT_ACTION
+  WAITING_FOR
+  NOTE
+  REFERENCE
+  MILESTONE
+  DECISION
+  RISK
+  BLOCKER
+
+  @@schema("stratum")
+}
+
 enum WorkspaceAiLevel {
   OFF
   LIGHT
@@ -227,6 +241,7 @@ model Node {
   startAt         DateTime?
   archivedAt      DateTime?
   createdById     String?
+  kind            NodeKind          @default(NEXT_ACTION)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -245,6 +260,7 @@ model Node {
   activityLogs    ActivityLog[]
 
   @@index([workspaceId])
+  @@index([workspaceId, kind, archivedAt])
 
   @@schema("stratum")
 }
@@ -645,6 +661,8 @@ model Proposal {
 
   actions             ProposalAction[]
   events              EventLog[]
+  feedbacks           ProposalFeedback[]
+  proposalExplanation ProposalExplanation?
 
   @@unique([workspaceId, idempotencyKey])
   @@index([workspaceId, status, createdAt(sort: Desc)])
@@ -800,6 +818,281 @@ model RagIndexJob {
 
   @@index([workspaceId, status, createdAt(sort: Desc)])
   @@index([status, createdAt])
+
+  @@schema("stratum")
+}
+
+// === AN-P2-06: Object-Oriented Memory Model ===
+
+enum GoalHorizon {
+  WEEK
+  QUARTER
+  YEAR
+
+  @@schema("stratum")
+}
+
+enum GoalStatus {
+  ACTIVE
+  PAUSED
+  DONE
+  ARCHIVED
+
+  @@schema("stratum")
+}
+
+model Goal {
+  id              String      @id @default(cuid())
+  workspaceId     String
+  description     String      @db.Text
+  horizon         GoalHorizon
+  linkedNodes     Json        @default("[]")
+  successMetric   Json        @default("{}")
+  confidenceLevel Decimal?    @db.Decimal(4, 3)
+  status          GoalStatus  @default(ACTIVE)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([workspaceId, status, horizon])
+
+  @@schema("stratum")
+}
+
+// === Dette technique: tables PRD manquantes ===
+
+enum AiPromptType {
+  PROPOSAL
+  BRIEF
+  REFACTOR
+  CHAT_SUMMARY
+
+  @@schema("stratum")
+}
+
+model AiPromptVersion {
+  id              String       @id @default(cuid())
+  workspaceId     String
+  promptType      AiPromptType
+  version         Int
+  content         String       @db.Text
+  variablesSchema Json         @default("{}")
+  isActive        Boolean      @default(false)
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+  activatedAt     DateTime?
+
+  @@unique([workspaceId, promptType, version])
+  @@index([workspaceId, promptType, isActive])
+
+  @@schema("stratum")
+}
+
+model ProposalFeedback {
+  id                   String   @id @default(cuid())
+  proposalId           String
+  proposal             Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  workspaceId          String
+  userId               String
+  accepted             Boolean
+  modifiedAfterApply   Boolean  @default(false)
+  userRating           Int?
+  rejectionReason      String?  @db.Text
+  createdAt            DateTime @default(now())
+
+  @@unique([proposalId, userId])
+  @@index([workspaceId, createdAt(sort: Desc)])
+
+  @@schema("stratum")
+}
+
+enum ConversationSessionStatus {
+  ACTIVE
+  ARCHIVED
+  RESET
+
+  @@schema("stratum")
+}
+
+model AgentConversationSession {
+  id                       String                    @id @default(cuid())
+  workspaceId              String
+  userId                   String
+  boardId                  String?
+  focusNodeId              String?
+  status                   ConversationSessionStatus @default(ACTIVE)
+  tokenBudget              Int                       @default(12000)
+  autoSummarizeThreshold   Int                       @default(8000)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  summaries                ConversationSummary[]
+
+  @@index([workspaceId, userId, updatedAt(sort: Desc)])
+
+  @@schema("stratum")
+}
+
+model ConversationSummary {
+  id                   String                    @id @default(cuid())
+  sessionId            String
+  session              AgentConversationSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  summaryVersion       Int
+  summaryText          String                    @db.Text
+  coveredMessageCount  Int
+  promptVersionId      String?
+  createdAt            DateTime                  @default(now())
+
+  @@unique([sessionId, summaryVersion])
+
+  @@schema("stratum")
+}
+
+enum BusinessRuleExecResult {
+  PASS
+  FAIL
+  ERROR
+
+  @@schema("stratum")
+}
+
+enum BusinessRuleExecSource {
+  MANUAL_API
+  PROPOSAL_APPLY
+  AGENT_PRECHECK
+  SCHEDULER
+
+  @@schema("stratum")
+}
+
+model BusinessRuleVersion {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  ruleSetName     String
+  version         Int
+  rulesJson       Json
+  isActive        Boolean  @default(false)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  activatedAt     DateTime?
+
+  executionLogs   BusinessRuleExecutionLog[]
+
+  @@unique([workspaceId, ruleSetName, version])
+  @@index([workspaceId, ruleSetName, isActive])
+
+  @@schema("stratum")
+}
+
+model BusinessRuleExecutionLog {
+  id              String                   @id @default(cuid())
+  workspaceId     String
+  ruleVersionId   String
+  ruleVersion     BusinessRuleVersion      @relation(fields: [ruleVersionId], references: [id])
+  source          BusinessRuleExecSource
+  correlationId   String?
+  entityType      String?
+  entityId        String?
+  actionType      String?
+  result          BusinessRuleExecResult
+  violations      Json?
+  durationMs      Int?
+  createdAt       DateTime                 @default(now())
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([correlationId])
+
+  @@schema("stratum")
+}
+
+model ProposalExplanation {
+  id                String   @id @default(cuid())
+  proposalId        String   @unique
+  proposal          Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  reasoningSummary  String   @db.Text
+  referencedEntities Json    @default("[]")
+  ragDocIdsUsed     Json     @default("[]")
+  confidenceScore   Decimal? @db.Decimal(4, 3)
+  createdAt         DateTime @default(now())
+
+  @@index([proposalId])
+
+  @@schema("stratum")
+}
+
+// === AN-P2-04: Webhooks sortants (persistés) ===
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+
+  @@schema("stratum")
+}
+
+model Webhook {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  url           String
+  secretHash    String
+  eventTypes    String[]
+  enabled       Boolean  @default(true)
+  description   String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deliveries    WebhookDelivery[]
+
+  @@index([workspaceId, enabled])
+
+  @@schema("stratum")
+}
+
+model WebhookDelivery {
+  id            String                @id @default(cuid())
+  webhookId     String
+  webhook       Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventId       String
+  eventType     String
+  status        WebhookDeliveryStatus @default(PENDING)
+  httpStatus    Int?
+  errorMessage  String?               @db.Text
+  attempt       Int                   @default(1)
+  nextRetryAt   DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime              @default(now())
+
+  @@index([webhookId, createdAt(sort: Desc)])
+  @@index([status, nextRetryAt])
+
+  @@schema("stratum")
+}
+
+// === AN-P2-05: Scheduler jobs (persistés) ===
+
+enum SchedulerJobType {
+  MORNING_BRIEF
+  WEEKLY_REPORT
+  STAGNATION_CHECK
+  WIP_OVERLOAD_CHECK
+
+  @@schema("stratum")
+}
+
+model SchedulerJob {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  jobType         SchedulerJobType
+  cronExpression  String
+  enabled         Boolean          @default(true)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  errorCount      Int              @default(0)
+  lastErrorMessage String?         @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([workspaceId, jobType])
+  @@index([enabled, nextRunAt])
 
   @@schema("stratum")
 }

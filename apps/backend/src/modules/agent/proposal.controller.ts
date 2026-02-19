@@ -161,9 +161,10 @@ export class ProposalController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'proposalId' })
   explain(
+    @Param('workspaceId') workspaceId: string,
     @Param('proposalId') proposalId: string,
   ) {
-    return this.explainService.get(proposalId);
+    return this.explainService.get(workspaceId, proposalId);
   }
 
   @Post(':proposalId/explain/build')
@@ -171,8 +172,9 @@ export class ProposalController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'proposalId' })
   buildExplanation(
+    @Param('workspaceId') workspaceId: string,
     @Param('proposalId') proposalId: string,
   ) {
-    return this.explainService.buildFromProposal(proposalId);
+    return this.explainService.buildFromProposal(workspaceId, proposalId);
   }
 }

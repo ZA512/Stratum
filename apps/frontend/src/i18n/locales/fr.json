@@ -126,6 +126,41 @@
         "gemini": "Gemini",
         "ollama": "Ollama (local)",
         "custom": "Custom (OpenAI compatible)"
+      },
+      "catalog": {
+        "title": "Guide des modèles IA",
+        "description": "Choisissez le bon modèle pour chaque fonctionnalité. Coût, qualité et rapidité varient selon les modèles.",
+        "showGuide": "Afficher les recommandations",
+        "hideGuide": "Masquer les recommandations",
+        "feature": "Fonctionnalité",
+        "recommendedModel": "Recommandé",
+        "capabilities": "Capacités requises",
+        "useThisModel": "Utiliser ce modèle",
+        "tier": {
+          "budget": "Économique",
+          "balanced": "Équilibré",
+          "premium": "Premium"
+        },
+        "costLabel": "Coût / 1M tokens",
+        "costInput": "entrée",
+        "costOutput": "sortie",
+        "costEmbedding": "embedding",
+        "costFree": "Gratuit (local)",
+        "contextLabel": "Fenêtre de contexte",
+        "qualityLabel": "Qualité",
+        "speedLabel": "Rapidité",
+        "adviceLabel": "Conseil",
+        "catalogVersion": "Catalogue mis à jour : {version}",
+        "loadError": "Impossible de charger le catalogue de modèles.",
+        "filterProvider": "Filtrer par provider",
+        "filterAll": "Tous les providers",
+        "features": {
+          "proposals": "Propositions",
+          "chat": "Chat",
+          "embeddings": "Embeddings (RAG)",
+          "summarization": "Résumés",
+          "briefs": "Rapports et briefs"
+        }
       }
     },
     "testData": {

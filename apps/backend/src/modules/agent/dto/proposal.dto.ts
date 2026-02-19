@@ -58,11 +58,30 @@ export class RollbackProposalDto {
 
 /* ── Réponses ── */
 
+export class ProposalActionSummaryDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() actionType!: string;
+  @ApiPropertyOptional() entityType?: string | null;
+  @ApiPropertyOptional() entityId?: string | null;
+  @ApiProperty() actionOrder!: number;
+  @ApiProperty({ type: 'object', additionalProperties: true })
+  payload!: Record<string, unknown>;
+}
+
 export class ProposalStateResponseDto {
   @ApiProperty() proposalId!: string;
+  @ApiProperty() workspaceId!: string;
   @ApiProperty() status!: string;
+  @ApiPropertyOptional() intent?: string | null;
+  @ApiPropertyOptional() confidenceScore?: number | null;
   @ApiPropertyOptional() selectedAlternativeNo?: number | null;
+  @ApiPropertyOptional({ type: ProposalActionSummaryDto, isArray: true })
+  actions?: ProposalActionSummaryDto[];
   @ApiPropertyOptional() appliedAt?: Date | null;
   @ApiPropertyOptional() rejectedAt?: Date | null;
   @ApiPropertyOptional() rejectionReason?: string | null;
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  explanation?: Record<string, unknown> | null;
+  @ApiPropertyOptional() createdAt?: Date;
+  @ApiPropertyOptional() updatedAt?: Date;
 }

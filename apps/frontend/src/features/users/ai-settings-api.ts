@@ -17,6 +17,46 @@ export type UpdateAiSettingsInput = {
   apiKey?: string | null;
 };
 
+// ── Model Catalog types ─────────────────────────────────────────────
+
+export type AiFeature =
+  | "proposals"
+  | "chat"
+  | "embeddings"
+  | "summarization"
+  | "briefs";
+
+export type ModelTier = "budget" | "balanced" | "premium";
+
+export type ModelEntry = {
+  provider: string;
+  modelId: string;
+  displayName: string;
+  tier: ModelTier;
+  costPer1MInput: number;
+  costPer1MOutput: number;
+  costPer1MEmbedding?: number;
+  contextWindow: number;
+  qualityRating: number;
+  speedRating: number;
+  recommendedFor: AiFeature[];
+  advice: string;
+};
+
+export type FeatureGuide = {
+  feature: AiFeature;
+  label: string;
+  description: string;
+  recommendedModelId: string;
+  requiredCapabilities: string[];
+};
+
+export type ModelCatalog = {
+  models: ModelEntry[];
+  featureGuides: FeatureGuide[];
+  catalogVersion: string;
+};
+
 export async function fetchAiSettings(): Promise<AiSettings> {
   const response = await apiGet("users/me/ai-settings", { cache: "no-store" });
   if (!response.ok) {
@@ -50,4 +90,17 @@ async function parseAiSettingsError(
     (err as { status?: number }).status = response.status;
     return err;
   }
+}
+
+// ── Model Catalog fetch ─────────────────────────────────────────────
+
+export async function fetchModelCatalog(): Promise<ModelCatalog> {
+  const response = await apiGet("ai/model-catalog", { cache: "no-store" });
+  if (!response.ok) {
+    throw await parseAiSettingsError(
+      response,
+      "Impossible de charger le catalogue de modèles IA",
+    );
+  }
+  return (await response.json()) as ModelCatalog;
 }

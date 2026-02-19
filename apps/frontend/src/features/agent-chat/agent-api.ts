@@ -4,18 +4,31 @@ import { apiPost } from '@/lib/api-client';
 
 export type AgentMode = 'chat' | 'command';
 
-export type AgentCommandResponse = {
-  proposalId: string;
-  intent: string;
+export type AgentCommandAlternative = {
+  alternativeNo: number;
+  summary: string;
   confidenceScore: number;
-  actionsCount: number;
-  statusMessage: string;
+  actions: Array<Record<string, unknown>>;
+};
+
+export type AgentCommandResponse = {
+  workspaceId: string;
+  correlationId: string;
+  proposalId: string;
+  proposalStatus: string;
+  mode: 'command';
+  alternatives: AgentCommandAlternative[];
+  deprecationWarning?: string;
 };
 
 export type AgentChatResponse = {
-  reply: string;
-  suggestCommand: boolean;
-  suggestedPrompt: string | null;
+  workspaceId: string;
+  correlationId: string;
+  answer: string;
+  suggestedCommandPayload?: {
+    intent: string;
+    context?: Record<string, unknown>;
+  };
 };
 
 // --- API calls ---
@@ -42,11 +55,11 @@ async function parseAgentError(
 
 export async function sendAgentCommand(
   workspaceId: string,
-  prompt: string,
+  intent: string,
 ): Promise<AgentCommandResponse> {
   const response = await apiPost(
     `workspaces/${workspaceId}/agent/command`,
-    { prompt },
+    { intent },
   );
   if (!response.ok) {
     throw await parseAgentError(response, "Impossible d'executer la commande");

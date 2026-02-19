@@ -1,10 +1,21 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { AgentController } from './agent.controller';
 import { AgentMetricsService } from './agent-metrics.service';
+import { AgentSchedulerService } from './agent-scheduler.service';
 import { AgentService } from './agent.service';
+import { AiConfigController } from './ai-config.controller';
+import { AiConfigService } from './ai-config.service';
+import { AiModelCatalogController } from './ai-model-catalog.controller';
 import { AgentContextBuilder } from './context-builder.service';
 import { BriefReportService } from './brief-report.service';
+import { ConnectorController, ConnectorRouterService } from './connectors';
+import { ConversationController } from './conversation.controller';
+import { ConversationService } from './conversation.service';
 import { DriftControlService } from './drift-control.service';
+import { EventStreamController } from './event-stream.controller';
+import { EventStreamService } from './event-stream.service';
+import { GoalController } from './goal.controller';
+import { GoalService } from './goal.service';
 import { KillSwitchService } from './kill-switch.service';
 import { ProposalController } from './proposal.controller';
 import { ProposalExplainService } from './proposal-explain.service';
@@ -27,9 +38,26 @@ import {
   TitleRequiredRule,
   WipLimitRule,
 } from './rules';
+import { PublicAgentAccessService } from './public-agent-access.service';
+import { PublicAgentController } from './public-agent.controller';
+import { PublicAgentGuard } from './public-agent.guard';
+import { WebhookController } from './webhook.controller';
+import { WebhookService } from './webhook.service';
 
 @Module({
-  controllers: [AgentController, ProposalController, RagController],
+  controllers: [
+    AgentController,
+    AiConfigController,
+    AiModelCatalogController,
+    ProposalController,
+    RagController,
+    PublicAgentController,
+    ConnectorController,
+    ConversationController,
+    EventStreamController,
+    WebhookController,
+    GoalController,
+  ],
   providers: [
     AgentService,
     ProposalService,
@@ -47,6 +75,15 @@ import {
     RagLifecycleService,
     EmbeddingCostService,
     BriefReportService,
+    PublicAgentAccessService,
+    PublicAgentGuard,
+    ConnectorRouterService,
+    EventStreamService,
+    WebhookService,
+    AgentSchedulerService,
+    GoalService,
+    AiConfigService,
+    ConversationService,
   ],
   exports: [
     ProposalService,
@@ -62,6 +99,10 @@ import {
     RagLifecycleService,
     EmbeddingCostService,
     BriefReportService,
+    EventStreamService,
+    WebhookService,
+    AgentSchedulerService,
+    GoalService,
   ],
 })
 export class AgentModule implements OnModuleInit {

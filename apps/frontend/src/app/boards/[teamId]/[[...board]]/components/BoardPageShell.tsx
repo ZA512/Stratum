@@ -47,6 +47,8 @@ import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
+import { AgentChatPanel } from '@/features/agent-chat/AgentChatPanel';
+import { ProposalPanel } from '@/features/proposals/ProposalPanel';
 
 
 type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
@@ -427,6 +429,8 @@ export function TeamBoardPage(){
 
   // 📜 État du panneau d'activité
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(false);
+  const [isAgentChatOpen, setIsAgentChatOpen] = useState(false);
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
 
   // 📬 Invitations entrantes
   const [invitations, setInvitations] = useState<NodeShareIncomingInvitation[]>([]);
@@ -2037,6 +2041,15 @@ export function TeamBoardPage(){
               data-quick-notes-anchor="header"
               className="flex items-center"
             />
+            <button
+              type="button"
+              onClick={() => setIsAgentChatOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              title="Ouvrir l'agent"
+              aria-label="Ouvrir l'agent"
+            >
+              <span className="material-symbols-outlined text-[20px]">smart_toy</span>
+            </button>
             {/* Bouton paramètres (icône seule) */}
             <Link
               href="/settings"
@@ -2647,6 +2660,25 @@ export function TeamBoardPage(){
               setInvitations(data);
             } catch { /* silent */ }
           }}
+        />
+      )}
+
+      {isAgentChatOpen && board && (
+        <AgentChatPanel
+          workspaceId={board.id}
+          onClose={() => setIsAgentChatOpen(false)}
+          onOpenProposal={(proposalId) => {
+            setActiveProposalId(proposalId);
+            setIsAgentChatOpen(false);
+          }}
+        />
+      )}
+
+      {activeProposalId && board && (
+        <ProposalPanel
+          workspaceId={board.id}
+          proposalId={activeProposalId}
+          onClose={() => setActiveProposalId(null)}
         />
       )}
     </div>

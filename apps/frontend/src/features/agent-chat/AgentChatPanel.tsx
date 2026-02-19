@@ -8,6 +8,7 @@ import {
   sendAgentCommand,
   type AgentMode,
 } from './agent-api';
+import { AgentSlaIndicator } from './AgentSlaIndicator';
 
 type ChatMessage = {
   id: string;
@@ -57,10 +58,10 @@ export function AgentChatPanel({
       const assistantMsg: ChatMessage = {
         id: nextId(),
         role: 'assistant',
-        content: response.reply,
+        content: response.answer,
         mode: 'chat',
-        suggestCommand: response.suggestCommand,
-        suggestedPrompt: response.suggestedPrompt,
+        suggestCommand: Boolean(response.suggestedCommandPayload?.intent),
+        suggestedPrompt: response.suggestedCommandPayload?.intent ?? null,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
@@ -72,12 +73,14 @@ export function AgentChatPanel({
   });
 
   const commandMutation = useMutation({
-    mutationFn: (prompt: string) => sendAgentCommand(workspaceId, prompt),
+    mutationFn: (intent: string) => sendAgentCommand(workspaceId, intent),
     onSuccess: (response) => {
+      const topAlternative = response.alternatives[0];
+      const confidence = topAlternative?.confidenceScore ?? 0;
       const assistantMsg: ChatMessage = {
         id: nextId(),
         role: 'assistant',
-        content: `Proposal creee: ${response.intent} (${response.actionsCount} action(s), confiance ${Math.round(response.confidenceScore * 100)}%)`,
+        content: `Proposal creee (${topAlternative?.actions?.length ?? 0} action(s), confiance ${Math.round(confidence * 100)}%)`,
         mode: 'command',
         proposalId: response.proposalId,
         timestamp: Date.now(),
@@ -164,14 +167,17 @@ export function AgentChatPanel({
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-1 text-muted transition hover:text-foreground"
-            aria-label="Fermer"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <AgentSlaIndicator loading={isLoading} thresholdMs={3_000} />
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-1 text-muted transition hover:text-foreground"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

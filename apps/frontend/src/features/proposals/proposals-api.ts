@@ -19,32 +19,41 @@ export type ProposalActionType =
 export type ProposalAction = {
   id: string;
   actionType: ProposalActionType;
-  entityType: string;
-  entityId: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
   payload: Record<string, unknown>;
-  ordering: number;
+  actionOrder?: number;
+  ordering?: number;
 };
 
 export type Proposal = {
-  id: string;
+  proposalId: string;
   workspaceId: string;
-  userId: string;
   status: ProposalStatus;
-  intent: string;
-  confidenceScore: number | null;
-  actions: ProposalAction[];
-  explanation: ProposalExplanation | null;
-  createdAt: string;
-  updatedAt: string;
+  intent?: string | null;
+  confidenceScore?: number | null;
+  selectedAlternativeNo?: number | null;
+  actions?: ProposalAction[];
+  appliedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  explanation?: ProposalExplanation | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ProposalExplanation = {
-  reasoning: string;
-  entitiesAffected: string[];
-  ragChunksUsed: string[];
-  confidenceFactors: string[];
+  reasoningSummary: string;
+  entitiesImpacted: Array<{
+    entityType: string;
+    entityId: string;
+    action: string;
+  }>;
+  ragChunkIds: string[];
+  confidenceScore: number;
+  confidenceLevel: string;
   ruleViolations: string[];
-  promptVersion: string | null;
+  promptVersion: string;
 };
 
 // --- API calls ---
@@ -127,10 +136,11 @@ export async function applyProposal(
 export async function rejectProposal(
   workspaceId: string,
   proposalId: string,
+  reason = 'Rejected by user',
 ): Promise<Proposal> {
   const response = await apiPost(
     `workspaces/${workspaceId}/proposals/${proposalId}/reject`,
-    {},
+    { reason },
   );
   if (!response.ok) {
     throw await parseApiError(response, 'Impossible de rejeter la proposal');

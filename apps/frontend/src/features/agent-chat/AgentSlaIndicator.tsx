@@ -49,6 +49,9 @@ export function AgentSlaIndicator({
 
   const seconds = (elapsed / 1000).toFixed(1);
   const overSla = elapsed > thresholdMs;
+  const showAnalyzing = loading && elapsed >= 800;
+  const showLightFallback = loading && elapsed >= 2_000;
+  const showCancelHint = loading && elapsed >= 4_000;
 
   return (
     <div className="inline-flex items-center gap-1.5">
@@ -73,6 +76,15 @@ export function AgentSlaIndicator({
         >
           {overSla ? 'lent' : 'OK'}
         </span>
+      )}
+      {showAnalyzing && (
+        <span className="text-[10px] text-muted">analyse en cours</span>
+      )}
+      {showLightFallback && (
+        <span className="text-[10px] text-amber-300">mode LIGHT en cours</span>
+      )}
+      {showCancelHint && (
+        <span className="text-[10px] text-rose-300">annulation conseillée</span>
       )}
     </div>
   );

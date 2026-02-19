@@ -84,23 +84,31 @@ export function ProposalPanel({
           <h3 className="text-base font-semibold text-foreground">Proposal</h3>
           <StatusBadge status={proposal.status} />
         </div>
-        <p className="mt-1 text-sm text-foreground/90">{proposal.intent}</p>
+        {proposal.intent && (
+          <p className="mt-1 text-sm text-foreground/90">{proposal.intent}</p>
+        )}
+        <p className="mt-1 text-xs text-muted">ID: {proposal.proposalId}</p>
         {proposal.confidenceScore != null && (
           <ConfidenceBar score={proposal.confidenceScore} />
+        )}
+        {proposal.rejectionReason && (
+          <p className="mt-1 text-xs text-amber-300">Motif: {proposal.rejectionReason}</p>
         )}
       </div>
 
       {/* Actions list */}
-      <div className="mt-4 space-y-2">
-        <p className="text-xs font-medium text-muted">
-          {proposal.actions.length} action(s)
-        </p>
-        {proposal.actions
-          .sort((a, b) => a.ordering - b.ordering)
-          .map((action) => (
-            <ActionCard key={action.id} action={action} />
-          ))}
-      </div>
+      {proposal.actions && proposal.actions.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-medium text-muted">
+            {proposal.actions.length} action(s)
+          </p>
+          {proposal.actions
+            .sort((a, b) => (a.actionOrder ?? a.ordering ?? 0) - (b.actionOrder ?? b.ordering ?? 0))
+            .map((action) => (
+              <ActionCard key={action.id} action={action} />
+            ))}
+        </div>
+      )}
 
       {/* Explanation toggle */}
       <div className="mt-4">
@@ -115,12 +123,14 @@ export function ProposalPanel({
           <div className="mt-2 space-y-2 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-muted">
             <p>
               <span className="font-medium text-foreground">Raisonnement:</span>{' '}
-              {explanation.reasoning}
+              {explanation.reasoningSummary}
             </p>
-            {explanation.entitiesAffected.length > 0 && (
+            {explanation.entitiesImpacted.length > 0 && (
               <p>
                 <span className="font-medium text-foreground">Entites:</span>{' '}
-                {explanation.entitiesAffected.join(', ')}
+                {explanation.entitiesImpacted
+                  .map((entity) => `${entity.entityType}:${entity.entityId}`)
+                  .join(', ')}
               </p>
             )}
             {explanation.ruleViolations.length > 0 && (
@@ -279,11 +289,11 @@ function ActionCard({ action }: { action: ProposalAction }) {
           {labels[action.actionType] ?? action.actionType}
         </span>
         <span className="text-xs text-muted">
-          {action.entityType}
+          {action.entityType ?? 'entity'}
           {action.entityId ? ` · ${action.entityId.slice(0, 8)}...` : ''}
         </span>
       </div>
-      {Object.keys(action.payload).length > 0 && (
+      {Object.keys(action.payload ?? {}).length > 0 && (
         <pre className="mt-1 overflow-x-auto text-[10px] text-muted">
           {JSON.stringify(action.payload, null, 2)}
         </pre>

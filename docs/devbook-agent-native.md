@@ -453,8 +453,8 @@ Légende statut: `TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`.
 - Dette technique restante:
 	- Tests unitaires et e2e non écrits (proposals, chat, RAG)
 	- Migrations non appliquées (pas de DATABASE_URL)
-	- Intégration frontend dans BoardPageShell non réalisée (composants créés mais pas branchés)
-	- AgentSlaIndicator non intégré dans AgentChatPanel
+	- Contrat frontend/backend proposals encore partiel (état enrichi non exposé côté backend)
+	- Rollback compensatoire `inversePayload` non implémenté (rollback d’état uniquement)
 - Risques ouverts: aucun bloquant pour démarrer P2
 - Décision de go/no-go phase suivante: **GO P2**
 
@@ -713,6 +713,65 @@ Légende statut: `TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`.
 - **Résultat: PHASE P1 COMPLÈTE — 12/12 tickets implémentés (9 backend + 3 frontend). Build OK.**
 - Prochaine action: démarrer P2 (Scale & Platform).
 
+## Entrée #020 — 2026-02-19
+- Objectif: démarrer l’implémentation de stabilisation P1 (alignement contrats + intégration Board + migration manquante).
+- Livré:
+	- alignement API frontend `agent/command` et `agent/chat` sur DTO backend (`intent`, `answer`, `suggestedCommandPayload`) ;
+	- adaptation frontend proposals au contrat backend actuel (`ProposalStateResponseDto`, `reject` avec `reason`) ;
+	- intégration UI agent dans `BoardPageShell` (ouverture `AgentChatPanel`, transition vers `ProposalPanel`) ;
+	- intégration `AgentSlaIndicator` dans `AgentChatPanel` avec seuils UX (>800ms, >2s, >4s) ;
+	- création migration Prisma `20260219101500_agent_native_p1_alignment_fields` (`WorkspaceAiConfig.maxEntitiesPerProposal`, `Proposal.explanation`).
+- Vérification: `npm run build --workspace backend` OK, `npm run build --workspace frontend` OK.
+- Blocage: aucun.
+- Prochaine action: compléter la stabilisation P1 (tests critiques + contrat proposal enrichi ou fallback UI explicite).
+
+## Entrée #021 — 2026-02-19
+- Objectif: ajouter une couverture de tests critiques Agent (unit + e2e prêt à l’emploi) sans casser l’exécution par défaut.
+- Livré:
+	- tests unitaires `confidence-gating` (HIGH/MEDIUM/LOW + null/undefined) ;
+	- tests unitaires `AgentService` (command/chat, permissions workspace personnel, propagation kill-switch + métriques d’erreur) ;
+	- suite e2e dédiée `agent-native.e2e-spec.ts` ajoutée en mode opt-in (`RUN_AGENT_E2E=1`), avec scénarios chat/command/proposal.
+- Vérification exécutée:
+	- `npm run test --workspace backend -- modules/agent/confidence-gating.spec.ts modules/agent/agent.service.spec.ts` ✅ (8 tests pass);
+	- `npm run test:e2e --workspace backend -- test/agent-native.e2e-spec.ts` ✅ (suite skip par défaut: `DATABASE_URL`/`RUN_AGENT_E2E` absents);
+	- `npm run build --workspace backend` ✅.
+- Risque ou blocage:
+	- environnement e2e non activé par défaut; l’exécution réelle des scénarios Agent nécessite `DATABASE_URL` + `RUN_AGENT_E2E=1`.
+- Prochaine action atomique:
+	- stabiliser le contrat proposal enrichi backend/frontend (actions + confidence + intent) ou adapter définitivement l’UI à l’état minimal backend.
+
+## Entrée #022 — 2026-02-19
+- Objectif: finaliser la stabilisation du contrat proposal enrichi et sécuriser l’accès aux explications par workspace.
+- Livré:
+	- enrichissement de `GET /workspaces/:workspaceId/proposals/:proposalId` avec `workspaceId`, `intent`, `confidenceScore`, `actions`, `explanation`, `createdAt`, `updatedAt` ;
+	- mapping unifié des réponses proposal dans `ProposalService` (get/validate/approve/reject/apply/rollback) ;
+	- durcissement ACL: `GET/POST .../proposals/:proposalId/explain*` désormais filtrés par `workspaceId` ;
+	- UI frontend `ProposalPanel` réalignée sur le payload enrichi (confidence bar + liste d’actions restaurées avec fallback).
+- Vérification exécutée:
+	- `npm run build --workspace backend` ✅ ;
+	- `npm run build --workspace frontend` ✅ ;
+	- `npm run test --workspace backend -- modules/agent/confidence-gating.spec.ts modules/agent/agent.service.spec.ts` ✅.
+- Blocage: aucun.
+- Prochaine action atomique:
+	- démarrer un lot P2-01 minimal (squelette Public Agent API scoped tokens + rate-limit + audit) derrière feature flag.
+
+## Entrée #023 — 2026-02-19
+- Objectif: implémenter un socle P2-01 minimal sécurisé pour l’API Agent publique.
+- Livré:
+	- nouveaux endpoints publics `POST /public/agent/command` et `POST /public/agent/chat` (controller dédié) ;
+	- garde d’accès `PublicAgentGuard` avec token Bearer scoped par workspace + scope endpoint (`agent:command` / `agent:chat`) ;
+	- service `PublicAgentAccessService` avec:
+		- feature flag runtime `AGENT_PUBLIC_API_ENABLED=true` ;
+		- parsing des tokens depuis `AGENT_PUBLIC_TOKENS` (JSON), comparaison en timing-safe hashée ;
+		- rate-limit in-memory par token (rpm configurable, défaut 60/min) ;
+	- intégration `AgentService` en mode public (`commandFromPublicToken`/`chatFromPublicToken`) avec audit `event_log` source `API` et actor `SYSTEM`.
+- Vérification exécutée:
+	- `npm run test --workspace backend -- modules/agent/public-agent-access.service.spec.ts modules/agent/agent.service.spec.ts` ✅ (9 tests pass) ;
+	- `npm run build --workspace backend` ✅.
+- Blocage: aucun.
+- Prochaine action atomique:
+	- ajouter documentation d’exploitation (`AGENT_PUBLIC_TOKENS` format, rotation token) + brancher alertes dédiées (`PUBLIC_AGENT_RATE_LIMIT_EXCEEDED`, `PUBLIC_AGENT_SCOPE_MISSING`).
+
 ---
 
 ## 11) Prochaine étape d’implémentation (Ready-to-start)
@@ -741,17 +800,77 @@ Tous les tickets AN-P1-01 à AN-P1-12 implémentés (9 backend + 3 frontend). Bu
 
 ### Pré-requis avant P2
 - Migrations non appliquées (pas de DATABASE_URL).
-- Migration additionnelle requise pour `explanation Json?` sur Proposal.
-- Intégration frontend dans BoardPageShell (composants créés mais pas branchés).
-- Tests e2e et unitaires non écrits (dette technique).
+- Migration additionnelle `20260219101500_agent_native_p1_alignment_fields` créée mais non appliquée en DB.
+- Tests critiques backend amorcés (unitaires OK), mais e2e Agent restent opt-in et non exécutés en CI par défaut.
 
-### Sprint P2 — Scale & Platform (ready-to-plan)
-1. AN-P2-01 (API publique tokens scope)
-2. AN-P2-02 (Connecteurs externes)
-3. AN-P2-03 (Event stream)
-4. AN-P2-04 (Webhooks)
-5. AN-P2-05 (Scheduler autonome)
-6. AN-P2-06 (Object-Oriented Memory Model)
+### Sprint P2 — Scale & Platform ✅
+
+1. ✅ AN-P2-01 (API publique tokens scope) — `PublicAgentGuard`, `PublicAgentAccessService`, HMAC hash, rate-limit, doc exploitation.
+2. ✅ AN-P2-02 (Connecteurs externes) — `ConnectorAdapter` abstraction, `SlackConnectorAdapter` (HMAC-SHA256, Block Kit), `EmailConnectorAdapter` (address-based routing), `ConnectorRouterService` (intent detection heuristic), `ConnectorController`.
+3. ✅ AN-P2-03 (Event stream) — `EventStreamService` (cursor-based pagination, max 200/page), `EventStreamController` (GET endpoint protégé PublicAgentGuard).
+4. ✅ AN-P2-04 (Webhooks sortants) — `WebhookService` (HMAC-SHA256 signing, retry exponentiel 5s→1h, dead-letter), `WebhookController` (CRUD).
+5. ✅ AN-P2-05 (Scheduler autonome) — `AgentSchedulerService` (job registry, polling loop, cron simplifié, 4 job types: morning_brief, weekly_report, stagnation_check, wip_overload_check, kill-switch aware).
+6. ✅ AN-P2-06 (Object-Oriented Memory) — modèle `Goal` (GoalHorizon, GoalStatus), `GoalService` (CRUD + getActiveGoals), `GoalController`.
+
+### Dette technique résolue
+
+- ✅ **Tables DB manquantes** — ajout de 8 modèles Prisma : `AiPromptVersion`, `ProposalFeedback`, `AgentConversationSession`, `ConversationSummary`, `BusinessRuleVersion`, `BusinessRuleExecutionLog`, `ProposalExplanation`, `Goal` + enums associés.
+- ✅ **Node.kind enum** — `NodeKind` (9 valeurs: PROJECT, NEXT_ACTION, WAITING_FOR, NOTE, REFERENCE, MILESTONE, DECISION, RISK, BLOCKER), champ `kind` ajouté au modèle Node avec `@default(NEXT_ACTION)`, index composite `[workspaceId, kind, archivedAt]`.
+- ✅ **AI Config endpoints** — `AiConfigService` (get/update config, usage summary avec agrégation AiUsageLog), `AiConfigController` (GET/PATCH config, GET usage).
+- ✅ **Endpoints conversation** — `ConversationService` (create session, send message, reset, summarize avec versioning), `ConversationController` (5 endpoints REST sous JwtAuthGuard par PRD §13.5).
+- ✅ **Doc exploitation P2-01** — `docs/exploitation-public-agent-api.md` (format AGENT_PUBLIC_TOKENS, rotation token, rate limiting, codes erreur, endpoints, observabilité, kill-switch).
+
+### Vérification P2
+
+- `npx prisma generate` ✅
+- `npm run build --workspace backend` ✅ (174 fichiers compilés)
+- `npm run test --workspace backend -- --testPathPatterns="modules/agent"` ✅ (13 tests, 3 suites pass)
+- `npm run build --workspace frontend` ✅
+- Tests pré-existants en échec (nodes.service.spec, dashboards.service.spec) — non impactés par les changements agent.
+
+### Fichiers créés/modifiés P2
+
+**Nouveaux fichiers :**
+- `src/modules/agent/connectors/connector.types.ts`
+- `src/modules/agent/connectors/slack-connector.adapter.ts`
+- `src/modules/agent/connectors/email-connector.adapter.ts`
+- `src/modules/agent/connectors/connector-router.service.ts`
+- `src/modules/agent/connectors/connector.controller.ts`
+- `src/modules/agent/connectors/index.ts`
+- `src/modules/agent/event-stream.service.ts`
+- `src/modules/agent/event-stream.controller.ts`
+- `src/modules/agent/dto/event-stream.dto.ts`
+- `src/modules/agent/webhook.service.ts`
+- `src/modules/agent/webhook.controller.ts`
+- `src/modules/agent/dto/webhook.dto.ts`
+- `src/modules/agent/agent-scheduler.service.ts`
+- `src/modules/agent/goal.service.ts`
+- `src/modules/agent/goal.controller.ts`
+- `src/modules/agent/dto/goal.dto.ts`
+- `src/modules/agent/ai-config.service.ts`
+- `src/modules/agent/ai-config.controller.ts`
+- `src/modules/agent/dto/ai-config.dto.ts`
+- `src/modules/agent/conversation.service.ts`
+- `src/modules/agent/conversation.controller.ts`
+- `src/modules/agent/dto/conversation.dto.ts`
+- `docs/exploitation-public-agent-api.md`
+
+**Fichiers modifiés :**
+- `apps/backend/prisma/schema.prisma` — Goal, NodeKind, 7 tables dette + Webhook, WebhookDelivery, SchedulerJob
+- `src/modules/agent/agent.module.ts` — wiring de tous les nouveaux controllers/providers
+- `src/modules/agent/webhook.service.ts` — refactoré in-memory → Prisma (Webhook + WebhookDelivery tables)
+- `src/modules/agent/webhook.controller.ts` — méthodes async pour Prisma
+- `src/modules/agent/agent-scheduler.service.ts` — refactoré in-memory → Prisma (SchedulerJob table, upsert, tick DB-driven)
+
+**Migration Prisma :**
+- `20260219150000_agent_native_p2_scale_platform` — migration consolidée P2 : 9 enums, 11 tables, 1 ALTER (Node.kind)
+
+### Prochaines étapes
+
+- Appliquer la migration en DB une fois DATABASE_URL configuré (`prisma migrate deploy`).
+- Activer e2e Agent en CI.
+- Intégrer un LLM réel dans `ConversationService.summarize()` et `AgentService.executeChat()`.
+- Monitoring: configurer alertes Prometheus/Grafana sur les métriques agent.
 
 ---
 

@@ -47,9 +47,12 @@ export class ProposalExplainService {
   }
 
   /** Recuperer l'explication d'un proposal */
-  async get(proposalId: string): Promise<ProposalExplanation | null> {
-    const proposal = await this.prisma.proposal.findUnique({
-      where: { id: proposalId },
+  async get(
+    workspaceId: string,
+    proposalId: string,
+  ): Promise<ProposalExplanation | null> {
+    const proposal = await this.prisma.proposal.findFirst({
+      where: { id: proposalId, workspaceId },
       select: { explanation: true },
     });
 
@@ -66,9 +69,12 @@ export class ProposalExplainService {
    * Construire une explication depuis les donnees existantes du proposal.
    * Utilise quand le LLM n'a pas fourni d'explication directement.
    */
-  async buildFromProposal(proposalId: string): Promise<ProposalExplanation> {
-    const proposal = await this.prisma.proposal.findUnique({
-      where: { id: proposalId },
+  async buildFromProposal(
+    workspaceId: string,
+    proposalId: string,
+  ): Promise<ProposalExplanation> {
+    const proposal = await this.prisma.proposal.findFirst({
+      where: { id: proposalId, workspaceId },
       select: {
         intent: true,
         confidenceScore: true,

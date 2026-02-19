@@ -13,7 +13,10 @@ import {
 import {
   fetchAiSettings,
   updateAiSettings,
+  fetchModelCatalog,
   type AiSettings,
+  type ModelCatalog,
+  type ModelEntry,
 } from "@/features/users/ai-settings-api";
 import { useTheme, ThemeProvider } from "@/themes/theme-provider";
 import type { ThemeDefinition } from "@/themes";
@@ -38,6 +41,10 @@ export default function SettingsPage() {
   const [aiTimeoutMs, setAiTimeoutMs] = useState("");
   const [aiApiKeyInput, setAiApiKeyInput] = useState("");
   const [aiClearApiKey, setAiClearApiKey] = useState(false);
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogFilter, setCatalogFilter] = useState<string>("all");
   const [testDataMessage, setTestDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -144,6 +151,16 @@ export default function SettingsPage() {
       })
       .finally(() => {
         if (!cancelled) setAiSettingsLoading(false);
+      });
+    fetchModelCatalog()
+      .then((data) => {
+        if (!cancelled) setCatalog(data);
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setCatalogError(
+            error instanceof Error ? error.message : t("settings.ai.catalog.loadError"),
+          );
       });
     return () => {
       cancelled = true;
@@ -539,6 +556,150 @@ export default function SettingsPage() {
                 {aiSaving ? t("settings.ai.saving") : t("settings.ai.saveButton")}
               </button>
             </div>
+
+            {/* ── Model Advisor ──────────────────────────────────── */}
+            <div className="border-t border-white/10 pt-4">
+              <button
+                type="button"
+                onClick={() => setCatalogOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 text-sm font-medium text-accent transition hover:text-foreground"
+              >
+                <span>{catalogOpen ? "▾" : "▸"}</span>
+                {catalogOpen
+                  ? t("settings.ai.catalog.hideGuide")
+                  : t("settings.ai.catalog.showGuide")}
+              </button>
+
+              {catalogOpen && (
+                <div className="mt-4 space-y-5">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {t("settings.ai.catalog.title")}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">
+                      {t("settings.ai.catalog.description")}
+                    </p>
+                  </div>
+
+                  {catalogError ? (
+                    <p className="text-sm text-red-500 dark:text-red-400">
+                      {catalogError}
+                    </p>
+                  ) : null}
+
+                  {catalog ? (
+                    <>
+                      {/* Feature guides */}
+                      <div className="space-y-3">
+                        {catalog.featureGuides.map((guide) => {
+                          const recModel = catalog.models.find(
+                            (m) => m.modelId === guide.recommendedModelId,
+                          );
+                          return (
+                            <div
+                              key={guide.feature}
+                              className="rounded-xl border border-white/10 bg-surface/60 p-4"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {t(`settings.ai.catalog.features.${guide.feature}`) || guide.label}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted">
+                                    {guide.description}
+                                  </p>
+                                </div>
+                                {recModel ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAiProvider(recModel.provider);
+                                      setAiModel(recModel.modelId);
+                                    }}
+                                    className="shrink-0 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20"
+                                  >
+                                    {t("settings.ai.catalog.useThisModel")} — {recModel.displayName}
+                                  </button>
+                                ) : null}
+                              </div>
+                              {recModel ? (
+                                <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
+                                  <span>
+                                    {t("settings.ai.catalog.costLabel")}:{" "}
+                                    {recModel.costPer1MInput === 0 && recModel.costPer1MOutput === 0 && !recModel.costPer1MEmbedding
+                                      ? t("settings.ai.catalog.costFree")
+                                      : recModel.costPer1MEmbedding != null
+                                        ? `$${recModel.costPer1MEmbedding} ${t("settings.ai.catalog.costEmbedding")}`
+                                        : `$${recModel.costPer1MInput} ${t("settings.ai.catalog.costInput")} / $${recModel.costPer1MOutput} ${t("settings.ai.catalog.costOutput")}`}
+                                  </span>
+                                  <span>
+                                    {t("settings.ai.catalog.qualityLabel")}: {"★".repeat(recModel.qualityRating)}{"☆".repeat(5 - recModel.qualityRating)}
+                                  </span>
+                                  <span>
+                                    {t("settings.ai.catalog.speedLabel")}: {"★".repeat(recModel.speedRating)}{"☆".repeat(5 - recModel.speedRating)}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Full model catalog */}
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                            {t("settings.ai.catalog.filterProvider")}
+                          </h4>
+                          <select
+                            className="rounded-lg border border-white/15 bg-surface px-3 py-1 text-xs text-foreground outline-none transition focus:border-accent"
+                            value={catalogFilter}
+                            onChange={(e) => setCatalogFilter(e.target.value)}
+                          >
+                            <option value="all">{t("settings.ai.catalog.filterAll")}</option>
+                            {[...new Set(catalog.models.map((m) => m.provider))].map(
+                              (p) => (
+                                <option key={p} value={p}>
+                                  {t(`settings.ai.providers.${p}`) || p}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {catalog.models
+                            .filter(
+                              (m) =>
+                                catalogFilter === "all" ||
+                                m.provider === catalogFilter,
+                            )
+                            .map((model) => (
+                              <ModelCard
+                                key={`${model.provider}-${model.modelId}`}
+                                model={model}
+                                t={t}
+                                onSelect={() => {
+                                  setAiProvider(model.provider);
+                                  setAiModel(model.modelId);
+                                }}
+                              />
+                            ))}
+                        </div>
+
+                        <p className="text-[10px] text-muted">
+                          {t("settings.ai.catalog.catalogVersion", {
+                            version: catalog.catalogVersion,
+                          })}
+                        </p>
+                      </div>
+                    </>
+                  ) : !catalogError ? (
+                    <p className="text-sm text-muted">{t("common.loading")}</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -664,4 +825,92 @@ export default function SettingsPage() {
     content = <ThemeProvider>{content}</ThemeProvider>;
   }
   return content;
+}
+
+// ── Helper components ──────────────────────────────────────────────
+
+const TIER_COLORS: Record<string, string> = {
+  budget: "border-emerald-500/40 text-emerald-400",
+  balanced: "border-blue-500/40 text-blue-400",
+  premium: "border-amber-500/40 text-amber-400",
+};
+
+function ModelCard({
+  model,
+  t,
+  onSelect,
+}: {
+  model: ModelEntry;
+  t: (key: string, params?: Record<string, string>) => string;
+  onSelect: () => void;
+}) {
+  const tierColor = TIER_COLORS[model.tier] ?? "border-white/15 text-muted";
+  const isEmbedding = model.costPer1MEmbedding != null;
+  const isFree =
+    model.costPer1MInput === 0 &&
+    model.costPer1MOutput === 0 &&
+    (model.costPer1MEmbedding == null || model.costPer1MEmbedding === 0);
+
+  return (
+    <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-surface/60 p-4">
+      <div>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {model.displayName}
+            </p>
+            <p className="text-[11px] text-muted">
+              {t(`settings.ai.providers.${model.provider}`) || model.provider}
+              {" · "}
+              <code className="text-[10px]">{model.modelId}</code>
+            </p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tierColor}`}
+          >
+            {t(`settings.ai.catalog.tier.${model.tier}`) || model.tier}
+          </span>
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted">
+          <span>
+            {t("settings.ai.catalog.costLabel")}:{" "}
+            {isFree
+              ? t("settings.ai.catalog.costFree")
+              : isEmbedding
+                ? `$${model.costPer1MEmbedding}`
+                : `$${model.costPer1MInput} / $${model.costPer1MOutput}`}
+          </span>
+          <span>
+            {t("settings.ai.catalog.contextLabel")}:{" "}
+            {model.contextWindow >= 1_000_000
+              ? `${(model.contextWindow / 1_000_000).toFixed(1)}M`
+              : `${Math.round(model.contextWindow / 1000)}k`}
+          </span>
+          <span>
+            {t("settings.ai.catalog.qualityLabel")}:{" "}
+            {"★".repeat(model.qualityRating)}
+            {"☆".repeat(5 - model.qualityRating)}
+          </span>
+          <span>
+            {t("settings.ai.catalog.speedLabel")}:{" "}
+            {"★".repeat(model.speedRating)}
+            {"☆".repeat(5 - model.speedRating)}
+          </span>
+        </div>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">
+          {model.advice}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onSelect}
+        className="self-start rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-accent hover:text-accent"
+      >
+        {t("settings.ai.catalog.useThisModel")}
+      </button>
+    </div>
+  );
 }

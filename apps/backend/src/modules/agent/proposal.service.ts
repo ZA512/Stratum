@@ -68,17 +68,27 @@ export class ProposalService {
         appliedAt: true,
         rejectedAt: true,
         rejectionReason: true,
+        workspaceId: true,
+        intent: true,
+        confidenceScore: true,
+        actions: {
+          orderBy: { actionOrder: 'asc' },
+          select: {
+            id: true,
+            actionType: true,
+            targetEntityType: true,
+            targetEntityId: true,
+            actionOrder: true,
+            payload: true,
+          },
+        },
+        explanation: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
     if (!proposal) throw new NotFoundException('Proposal introuvable');
-    return {
-      proposalId: proposal.id,
-      status: proposal.status,
-      selectedAlternativeNo: proposal.selectedAlternativeNo,
-      appliedAt: proposal.appliedAt,
-      rejectedAt: proposal.rejectedAt,
-      rejectionReason: proposal.rejectionReason,
-    };
+    return this.toProposalStateResponse(proposal, workspaceId);
   }
 
   /* ── VALIDATE ── */
@@ -299,14 +309,7 @@ export class ProposalService {
       return updated;
     });
 
-    return {
-      proposalId: result.id,
-      status: result.status,
-      selectedAlternativeNo: result.selectedAlternativeNo,
-      appliedAt: result.appliedAt,
-      rejectedAt: result.rejectedAt,
-      rejectionReason: result.rejectionReason,
-    };
+      return this.toProposalStateResponse(result, workspaceId);
   }
 
   /* ── ROLLBACK (compensation logique) ── */
@@ -375,14 +378,7 @@ export class ProposalService {
       return updated;
     });
 
-    return {
-      proposalId: result.id,
-      status: result.status,
-      selectedAlternativeNo: result.selectedAlternativeNo,
-      appliedAt: result.appliedAt,
-      rejectedAt: result.rejectedAt,
-      rejectionReason: result.rejectionReason,
-    };
+    return this.toProposalStateResponse(result, workspaceId);
   }
 
   /* ── Helpers internes ── */
@@ -459,16 +455,64 @@ export class ProposalService {
       return updated;
     });
 
-    return {
-      proposalId: result.id,
-      status: result.status,
-      selectedAlternativeNo: result.selectedAlternativeNo,
-      appliedAt: result.appliedAt,
-      rejectedAt: result.rejectedAt,
-      rejectionReason: result.rejectionReason,
-    };
+    return this.toProposalStateResponse(result, workspaceId);
   }
 
+  private toProposalStateResponse(
+    proposal: {
+      id: string;
+      workspaceId?: string;
+      status: ProposalStatus;
+      intent?: string | null;
+      confidenceScore?: Prisma.Decimal | number | null;
+      selectedAlternativeNo?: number | null;
+      actions?: Array<{
+        id: string;
+        actionType: string;
+        targetEntityType?: string | null;
+        targetEntityId?: string | null;
+        actionOrder: number;
+        payload: unknown;
+      }>;
+      explanation?: unknown;
+      createdAt?: Date;
+      updatedAt?: Date;
+      appliedAt?: Date | null;
+      rejectedAt?: Date | null;
+      rejectionReason?: string | null;
+    },
+    workspaceId: string,
+  ): ProposalStateResponseDto {
+    return {
+      proposalId: proposal.id,
+      workspaceId: proposal.workspaceId ?? workspaceId,
+      status: proposal.status,
+      intent: proposal.intent ?? null,
+      confidenceScore:
+        proposal.confidenceScore != null
+          ? Number(proposal.confidenceScore)
+          : null,
+      selectedAlternativeNo: proposal.selectedAlternativeNo ?? null,
+      actions:
+        proposal.actions?.map((action) => ({
+          id: action.id,
+          actionType: action.actionType,
+          entityType: action.targetEntityType ?? null,
+          entityId: action.targetEntityId ?? null,
+          actionOrder: action.actionOrder,
+          payload: (action.payload as Record<string, unknown>) ?? {},
+        })) ?? undefined,
+      explanation:
+        proposal.explanation != null
+          ? (proposal.explanation as Record<string, unknown>)
+          : null,
+      createdAt: proposal.createdAt,
+      updatedAt: proposal.updatedAt,
+      appliedAt: proposal.appliedAt ?? null,
+      rejectedAt: proposal.rejectedAt ?? null,
+      rejectionReason: proposal.rejectionReason ?? null,
+    };
+  }
   /**
    * AN-P0-05: Verifie les preconditions versionnees.
    *

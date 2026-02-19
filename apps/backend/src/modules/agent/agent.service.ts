@@ -34,10 +34,67 @@ export class AgentService {
     dto: AgentCommandRequestDto,
     options?: { deprecatedRoute?: boolean },
   ): Promise<AgentCommandResponseDto> {
+    return this.executeCommand(
+      workspaceId,
+      dto,
+      {
+        actorType: EventActorType.USER,
+        actorId: userId,
+        source: EventSource.AGENT,
+      },
+      {
+        feature: 'command',
+        deprecatedRoute: options?.deprecatedRoute,
+        ensureWorkspaceAccess: true,
+      },
+    );
+  }
+
+  async commandFromPublicToken(
+    workspaceId: string,
+    tokenId: string,
+    dto: AgentCommandRequestDto,
+  ): Promise<AgentCommandResponseDto> {
+    return this.executeCommand(
+      workspaceId,
+      dto,
+      {
+        actorType: EventActorType.SYSTEM,
+        actorId: `public_token:${tokenId}`,
+        source: EventSource.API,
+      },
+      {
+        feature: 'public.command',
+        ensureWorkspaceAccess: false,
+      },
+    );
+  }
+
+  private async executeCommand(
+    workspaceId: string,
+    dto: AgentCommandRequestDto,
+    actor: {
+      actorType: EventActorType;
+      actorId?: string;
+      source: EventSource;
+    },
+    options: {
+      feature: string;
+      deprecatedRoute?: boolean;
+      ensureWorkspaceAccess: boolean;
+    },
+  ): Promise<AgentCommandResponseDto> {
     const start = Date.now();
     try {
-      this.killSwitch.assertAgentAllowed(workspaceId, 'command');
-      await this.ensureUserCanAccessWorkspace(workspaceId, userId);
+      this.killSwitch.assertAgentAllowed(workspaceId, options.feature);
+      if (options.ensureWorkspaceAccess) {
+        if (!actor.actorId) {
+          throw new ForbiddenException('Actor id manquant pour verification ACL');
+        }
+        await this.ensureUserCanAccessWorkspace(workspaceId, actor.actorId);
+      } else {
+        await this.ensureWorkspaceExists(workspaceId);
+      }
 
     const correlationId = randomUUID();
     const intent = dto.intent.trim();
@@ -47,7 +104,8 @@ export class AgentService {
         workspaceId,
         intent,
         status: ProposalStatus.DRAFT,
-        requestedByUserId: userId,
+        requestedByUserId:
+          actor.actorType === EventActorType.USER ? actor.actorId : null,
         alternativesCount: 1,
         actions: {
           create: {
@@ -71,9 +129,9 @@ export class AgentService {
     await this.prisma.eventLog.create({
       data: {
         workspaceId,
-        actorType: EventActorType.USER,
-        actorId: userId,
-        source: EventSource.AGENT,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        source: actor.source,
         eventType: 'AGENT_COMMAND_DRAFT_CREATED',
         entityType: 'proposal',
         entityId: proposal.id,
@@ -81,7 +139,8 @@ export class AgentService {
         proposalId: proposal.id,
         payload: {
           intent,
-          deprecatedRoute: options?.deprecatedRoute === true,
+          deprecatedRoute: options.deprecatedRoute === true,
+          isPublicApi: actor.source === EventSource.API,
         },
       },
     });
@@ -102,7 +161,7 @@ export class AgentService {
           actions: [],
         },
       ],
-      ...(options?.deprecatedRoute
+      ...(options.deprecatedRoute
         ? {
             deprecationWarning:
               'Endpoint deprecated. Utilisez /workspaces/:workspaceId/agent/command.',
@@ -123,10 +182,65 @@ export class AgentService {
     userId: string,
     dto: AgentChatRequestDto,
   ): Promise<AgentChatResponseDto> {
+    return this.executeChat(
+      workspaceId,
+      dto,
+      {
+        actorType: EventActorType.USER,
+        actorId: userId,
+        source: EventSource.AGENT,
+      },
+      {
+        feature: 'chat',
+        ensureWorkspaceAccess: true,
+      },
+    );
+  }
+
+  async chatFromPublicToken(
+    workspaceId: string,
+    tokenId: string,
+    dto: AgentChatRequestDto,
+  ): Promise<AgentChatResponseDto> {
+    return this.executeChat(
+      workspaceId,
+      dto,
+      {
+        actorType: EventActorType.SYSTEM,
+        actorId: `public_token:${tokenId}`,
+        source: EventSource.API,
+      },
+      {
+        feature: 'public.chat',
+        ensureWorkspaceAccess: false,
+      },
+    );
+  }
+
+  private async executeChat(
+    workspaceId: string,
+    dto: AgentChatRequestDto,
+    actor: {
+      actorType: EventActorType;
+      actorId?: string;
+      source: EventSource;
+    },
+    options: {
+      feature: string;
+      ensureWorkspaceAccess: boolean;
+    },
+  ): Promise<AgentChatResponseDto> {
     const start = Date.now();
     try {
-      this.killSwitch.assertAgentAllowed(workspaceId, 'chat');
-      await this.ensureUserCanAccessWorkspace(workspaceId, userId);
+      this.killSwitch.assertAgentAllowed(workspaceId, options.feature);
+      if (options.ensureWorkspaceAccess) {
+        if (!actor.actorId) {
+          throw new ForbiddenException('Actor id manquant pour verification ACL');
+        }
+        await this.ensureUserCanAccessWorkspace(workspaceId, actor.actorId);
+      } else {
+        await this.ensureWorkspaceExists(workspaceId);
+      }
 
     const correlationId = randomUUID();
     const message = dto.message.trim();
@@ -142,9 +256,9 @@ export class AgentService {
     await this.prisma.eventLog.create({
       data: {
         workspaceId,
-        actorType: EventActorType.USER,
-        actorId: userId,
-        source: EventSource.AGENT,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        source: actor.source,
         eventType: 'AGENT_CHAT_RESPONSE_GENERATED',
         entityType: 'workspace',
         entityId: workspaceId,
@@ -153,6 +267,7 @@ export class AgentService {
           message,
           hasSuggestedCommandPayload: true,
           sessionId: dto.sessionId ?? null,
+          isPublicApi: actor.source === EventSource.API,
         },
       },
     });
@@ -169,6 +284,17 @@ export class AgentService {
     } catch (error) {
       this.metrics.recordChat(Date.now() - start, true);
       throw error;
+    }
+  }
+
+  private async ensureWorkspaceExists(workspaceId: string): Promise<void> {
+    const workspaceBoard = await this.prisma.board.findUnique({
+      where: { id: workspaceId },
+      select: { id: true },
+    });
+
+    if (!workspaceBoard) {
+      throw new NotFoundException('Workspace introuvable');
     }
   }
 
