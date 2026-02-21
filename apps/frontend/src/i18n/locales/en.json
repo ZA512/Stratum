@@ -1136,7 +1136,27 @@
       "list": "List",
       "listHint": "Open the global list view",
       "gantt": "Timeline",
-      "ganttHint": "Open the lightweight Gantt timeline"
+      "ganttHint": "Open the lightweight Gantt timeline",
+      "mindmap": "Mindmap",
+      "mindmapHint": "Open the hierarchical mindmap view"
+    },
+    "mindmap": {
+      "ariaLabel": "Board mindmap visualisation",
+      "toolbar": {
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "fitToContent": "Fit to content",
+        "expandAll": "Expand all",
+        "collapseAll": "Collapse all"
+      },
+      "nodeSelected": "Selected: {{title}}",
+      "priority": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low",
+        "none": "None"
+      }
     },
     "dueList": {
       "title": "View due tasks",

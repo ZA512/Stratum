@@ -1135,7 +1135,27 @@
       "list": "Liste",
       "listHint": "Ouvrir la vue liste globale",
       "gantt": "Timeline",
-      "ganttHint": "Ouvrir la timeline légère"
+      "ganttHint": "Ouvrir la timeline légère",
+      "mindmap": "Mindmap",
+      "mindmapHint": "Ouvrir la vue hiérarchique mindmap"
+    },
+    "mindmap": {
+      "ariaLabel": "Visualisation mindmap du board",
+      "toolbar": {
+        "zoomIn": "Zoom avant",
+        "zoomOut": "Zoom arrière",
+        "fitToContent": "Ajuster au contenu",
+        "expandAll": "Tout déplier",
+        "collapseAll": "Tout replier"
+      },
+      "nodeSelected": "Sélectionné : {{title}}",
+      "priority": {
+        "critical": "Critique",
+        "high": "Haute",
+        "medium": "Moyenne",
+        "low": "Basse",
+        "none": "Aucune"
+      }
     },
     "dueList": {
       "title": "Voir les échéances",

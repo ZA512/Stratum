@@ -41,6 +41,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
 import { BoardListView, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
+import BoardMindmapView from './BoardMindmapView';
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
@@ -2399,6 +2400,19 @@ export function TeamBoardPage(){
                   >
                     {tBoard('viewToggle.gantt')}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setBoardView('mindmap')}
+                    className={`rounded-full px-3 py-1 transition ${
+                      boardView === 'mindmap'
+                        ? 'bg-accent text-background shadow-sm'
+                        : 'text-muted hover:text-foreground'
+                    }`}
+                    aria-pressed={boardView === 'mindmap'}
+                    title={tBoard('viewToggle.mindmapHint')}
+                  >
+                    {tBoard('viewToggle.mindmap')}
+                  </button>
                 </div>
                 {boardView === 'kanban' && (
                   <span className="text-xs uppercase tracking-wide text-muted">
@@ -2499,6 +2513,13 @@ export function TeamBoardPage(){
                   onOpenTask={handleOpenCard}
                   onOpenChildBoard={openChildBoard}
                   loading={detailLoading}
+                />
+              ) : boardView === 'mindmap' ? (
+                <BoardMindmapView
+                  board={board}
+                  childBoards={childBoards}
+                  onOpenTask={handleOpenCard}
+                  onOpenChildBoard={openChildBoard}
                 />
               ) : (
                 <BoardListView

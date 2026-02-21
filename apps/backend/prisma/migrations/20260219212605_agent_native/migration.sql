@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "RagDocument_workspaceId_sourceEntityType_sourceEntityId_sourc_k" RENAME TO "RagDocument_workspaceId_sourceEntityType_sourceEntityId_sou_key";

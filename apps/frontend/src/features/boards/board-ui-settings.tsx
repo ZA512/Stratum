@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useBoardData } from "./board-data-provider";
 
-type BoardViewMode = "kanban" | "gantt" | "list";
+type BoardViewMode = "kanban" | "gantt" | "list" | "mindmap";
 
 interface BoardUiSettingsContextValue {
   expertMode: boolean;
@@ -45,6 +45,8 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
         setBoardViewState("gantt");
       } else if (storedView === "list") {
         setBoardViewState("list");
+      } else if (storedView === "mindmap") {
+        setBoardViewState("mindmap");
       } else {
         setBoardViewState("kanban");
       }
