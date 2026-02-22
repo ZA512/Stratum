@@ -16,10 +16,15 @@ interface MindmapNodesLayerProps {
   onSelect: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
   onOpenTask: (nodeId: string) => void;
-  onNavigateChild: (nodeId: string) => void;
+  onContextMenu: (nodeId: string, evt: Konva.KonvaEventObject<PointerEvent | MouseEvent>) => void;
   onHoverStart: (nodeId: string) => void;
   onHoverEnd: (nodeId: string) => void;
   registerRef?: (nodeId: string, ref: Konva.Group | null) => void;
+  // Bling mode
+  isBling?: boolean;
+  onBlingDragStart?: (nodeId: string) => void;
+  onBlingDragMove?: (nodeId: string, ox: number, oy: number) => void;
+  onBlingDragEnd?: (nodeId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,10 +38,14 @@ function MindmapNodesLayerInner({
   onSelect,
   onExpand,
   onOpenTask,
-  onNavigateChild,
+  onContextMenu,
   onHoverStart,
   onHoverEnd,
   registerRef,
+  isBling,
+  onBlingDragStart,
+  onBlingDragMove,
+  onBlingDragEnd,
 }: MindmapNodesLayerProps) {
   return (
     <>
@@ -49,10 +58,14 @@ function MindmapNodesLayerInner({
           onSelect={onSelect}
           onExpand={onExpand}
           onOpenTask={onOpenTask}
-          onNavigateChild={onNavigateChild}
+          onContextMenu={onContextMenu}
           onHoverStart={onHoverStart}
           onHoverEnd={onHoverEnd}
           registerRef={registerRef}
+          isBling={isBling}
+          onBlingDragStart={onBlingDragStart}
+          onBlingDragMove={onBlingDragMove}
+          onBlingDragEnd={onBlingDragEnd}
         />
       ))}
     </>

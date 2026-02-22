@@ -9,12 +9,21 @@ import type { MindmapNode, MindmapEdge } from './mindmap-types';
  * Transforms a Board + childBoards + loaded subtrees into a flat MindmapNode[]
  * suitable for radial layout.
  */
+/**
+ * @param collapsedIds – `null` means first visit: root expanded, all children collapsed.
+ */
 export function transformBoardToMindmapTree(
   board: Board,
   childBoards: Record<string, NodeChildBoard>,
   loadedSubtrees: Map<string, MindmapNode[]>,
-  collapsedIds: Set<string>,
+  collapsedIds: Set<string> | null,
 ): MindmapNode[] {
+  // When collapsedIds is null (first visit), root is expanded, all depth≥1 are collapsed.
+  const isCollapsed = (id: string, depth: number): boolean => {
+    if (collapsedIds === null) return depth > 0;
+    return collapsedIds.has(id);
+  };
+
   const rootNode: MindmapNode = {
     id: board.nodeId,
     parentId: null,
@@ -26,9 +35,12 @@ export function transformBoardToMindmapTree(
     behaviorKey: null,
     hasChildren: true,
     childrenLoaded: true,
-    collapsed: collapsedIds.has(board.nodeId),
+    collapsed: isCollapsed(board.nodeId, 0),
     assignees: [],
     dueAt: null,
+    description: null,
+    shortId: null,
+    counts: null,
     x: 0, y: 0, angle: 0, radius: 0,
   };
 
@@ -41,36 +53,88 @@ export function transformBoardToMindmapTree(
 
   if (!rootNode.collapsed) {
     for (const node of allBoardNodes) {
+      const subtreeNodes = loadedSubtrees.get(node.id);
+      const childrenLoaded = loadedSubtrees.has(node.id);
+
+      // hasRealChildren: once loaded, check actual content; before loading, trust childBoards
+      const hasRealChildren = childrenLoaded
+        ? (subtreeNodes != null && subtreeNodes.length > 0)
+        : Boolean(childBoards[node.id]);
+
+      const depth = 1;
+      const collapsed = isCollapsed(node.id, depth);
+
       const mindmapNode: MindmapNode = {
         id: node.id,
         parentId: board.nodeId,
         title: node.title,
-        depth: 1,
+        depth,
         progress: node.progress ?? 0,
         priority: node.priority ?? 'NONE',
         effort: node.effort ?? null,
         behaviorKey: node.behaviorKey,
-        hasChildren: Boolean(childBoards[node.id]),
-        childrenLoaded: loadedSubtrees.has(node.id),
-        collapsed: collapsedIds.has(node.id),
+        hasChildren: hasRealChildren,
+        childrenLoaded,
+        collapsed,
         assignees: node.assignees ?? [],
         dueAt: node.dueAt,
+        description: node.description ?? null,
+        shortId: typeof node.shortId === 'number' ? node.shortId : null,
+        counts: node.counts ?? null,
         x: 0, y: 0, angle: 0, radius: 0,
       };
       nodes.push(mindmapNode);
 
-      // Inject loaded subtree with depthOffset
-      if (!mindmapNode.collapsed && loadedSubtrees.has(node.id)) {
-        const subtreeNodes = loadedSubtrees.get(node.id)!;
-        const depthOffset = mindmapNode.depth;
-        for (const sub of subtreeNodes) {
-          nodes.push({ ...sub, depth: sub.depth + depthOffset });
-        }
+      // Recursively inject loaded subtrees
+      if (!collapsed && childrenLoaded && subtreeNodes && subtreeNodes.length > 0) {
+        injectSubtrees(nodes, depth, subtreeNodes, loadedSubtrees, isCollapsed);
       }
     }
   }
 
   return nodes;
+}
+
+/**
+ * Recursively injects loaded subtree nodes with correct depth, collapsed,
+ * childrenLoaded, and hasChildren overrides.
+ */
+function injectSubtrees(
+  nodes: MindmapNode[],
+  parentDepth: number,
+  subtreeNodes: MindmapNode[],
+  loadedSubtrees: Map<string, MindmapNode[]>,
+  isCollapsed: (id: string, depth: number) => boolean,
+): void {
+  for (const sub of subtreeNodes) {
+    const depth = sub.depth + parentDepth;
+    const collapsed = isCollapsed(sub.id, depth);
+    const childrenLoaded = loadedSubtrees.has(sub.id);
+
+    // Override hasChildren: once loaded, check actual content
+    let hasChildren = sub.hasChildren;
+    if (childrenLoaded) {
+      const childSubtree = loadedSubtrees.get(sub.id);
+      hasChildren = childSubtree != null && childSubtree.length > 0;
+    }
+
+    const adjustedNode: MindmapNode = {
+      ...sub,
+      depth,
+      collapsed,
+      childrenLoaded,
+      hasChildren,
+    };
+    nodes.push(adjustedNode);
+
+    // Recurse into this node's loaded subtree
+    if (!collapsed && hasChildren && childrenLoaded) {
+      const childSubtree = loadedSubtrees.get(sub.id);
+      if (childSubtree && childSubtree.length > 0) {
+        injectSubtrees(nodes, depth, childSubtree, loadedSubtrees, isCollapsed);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +176,9 @@ export function transformSubBoardToNodes(
       collapsed: true,
       assignees: node.assignees ?? [],
       dueAt: node.dueAt,
+      description: node.description ?? null,
+      shortId: typeof node.shortId === 'number' ? node.shortId : null,
+      counts: node.counts ?? null,
       x: 0, y: 0, angle: 0, radius: 0,
     });
   }

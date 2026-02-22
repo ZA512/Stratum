@@ -41,7 +41,9 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
 import { BoardListView, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
-import BoardMindmapView from './BoardMindmapView';
+import dynamic from 'next/dynamic';
+
+const BoardMindmapView = dynamic(() => import('./BoardMindmapView'), { ssr: false });
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
@@ -390,8 +392,8 @@ function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelP
 
 export function TeamBoardPage(){
   const { user, accessToken, logout } = useAuth();
-  const { board, status, error, refreshActiveBoard, childBoards, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
-  const { open } = useTaskDrawer();
+  const { board, status, error, refreshActiveBoard, childBoards, breadcrumb, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
+  const { open, openedNodeId } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
@@ -582,6 +584,16 @@ export function TeamBoardPage(){
 
   const loading = status==='loading' && !board;
   const detailLoading = status==='loading' && !!board;
+
+  const previousOpenedNodeIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const previous = previousOpenedNodeIdRef.current;
+    if (previous && !openedNodeId) {
+      void refreshActiveBoard();
+    }
+    previousOpenedNodeIdRef.current = openedNodeId;
+  }, [openedNodeId, refreshActiveBoard]);
 
 
   const showBoardControls = boardView === 'kanban';
@@ -2515,12 +2527,28 @@ export function TeamBoardPage(){
                   loading={detailLoading}
                 />
               ) : boardView === 'mindmap' ? (
-                <BoardMindmapView
-                  board={board}
-                  childBoards={childBoards}
-                  onOpenTask={handleOpenCard}
-                  onOpenChildBoard={openChildBoard}
-                />
+                <div className="h-[calc(100dvh-14rem)] min-h-[420px] w-full">
+                  <BoardMindmapView
+                    board={board}
+                    childBoards={childBoards}
+                    onOpenTask={handleOpenCard}
+                    onOpenChildBoard={openChildBoard}
+                    onOpenParentBoard={() => {
+                      const parent = breadcrumb[breadcrumb.length - 2];
+                      if (parent?.boardId) {
+                        openChildBoard(parent.boardId);
+                      }
+                    }}
+                    hasParentBoard={breadcrumb.length > 1}
+                    onCreateTask={async (title) => {
+                      if (!backlogColumnId) {
+                        toastError(tBoard('mindmap.errors.noBacklogColumn'));
+                        return;
+                      }
+                      await handleCreateCard(backlogColumnId, title);
+                    }}
+                  />
+                </div>
               ) : (
                 <BoardListView
                   rootBoard={board}

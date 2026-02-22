@@ -19,6 +19,9 @@ export interface MindmapNode {
   collapsed: boolean;
   assignees: Array<{ id: string; displayName: string; avatarUrl: string | null }>;
   dueAt: string | null;
+  description: string | null;
+  shortId: number | null;
+  counts: { backlog: number; inProgress: number; blocked: number; done: number } | null;
   // Computed by layout
   x: number;
   y: number;
@@ -73,13 +76,18 @@ export interface LayoutTransition {
 // ---------------------------------------------------------------------------
 
 export const LAYOUT_CONSTANTS = {
-  BASE_RADIUS: 180,
-  LEVEL_SPACING: 140,
-  MIN_NODE_DISTANCE: 60,
+  BASE_RADIUS: 240,
+  LEVEL_SPACING: 160,
+  MIN_NODE_DISTANCE: 155,
   NODE_RADIUS: 24,
   LABEL_MAX_WIDTH: 120,
   ROOT_RADIUS: 32,
   COLLAPSE_INDICATOR_SIZE: 8,
   MAX_VISIBLE_CHILDREN: 20,
   ANCHOR_BLEND: 0.4,
+  // Rectangle card dimensions
+  NODE_WIDTH: 140,
+  NODE_HEIGHT: 40,
+  ROOT_WIDTH: 180,
+  ROOT_HEIGHT: 48,
 } as const;

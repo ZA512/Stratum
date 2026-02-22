@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { Group, Circle, Arc, Text } from 'react-konva';
+import { Group, Rect, Text, Circle } from 'react-konva';
 import type Konva from 'konva';
 import type { MindmapNode } from './mindmap-types';
 import { LAYOUT_CONSTANTS } from './mindmap-types';
 
 // ---------------------------------------------------------------------------
-// Color palette per behaviorKey
+// Color palette per behaviorKey — used for left priority stripe
 // ---------------------------------------------------------------------------
 
 const BEHAVIOR_COLORS: Record<string, string> = {
@@ -20,9 +20,31 @@ const BEHAVIOR_COLORS: Record<string, string> = {
 const ROOT_COLOR = '#a78bfa'; // violet-400 accent
 const DEFAULT_COLOR = '#94a3b8';
 
+const PRIORITY_COLORS: Record<string, string> = {
+  CRITICAL: '#ef4444',
+  HIGH: '#f43f5e',
+  MEDIUM: '#f59e0b',
+  LOW: '#10b981',
+  LOWEST: '#64748b',
+  NONE: 'transparent',
+};
+
 export function getNodeColor(node: MindmapNode): string {
   if (node.depth === 0) return ROOT_COLOR;
   return BEHAVIOR_COLORS[node.behaviorKey ?? ''] ?? DEFAULT_COLOR;
+}
+
+function getPriorityColor(priority: string): string {
+  return PRIORITY_COLORS[priority] ?? 'transparent';
+}
+
+// ---------------------------------------------------------------------------
+// Text truncation helper
+// ---------------------------------------------------------------------------
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return text.substring(0, Math.max(maxChars - 1, 1)) + '…';
 }
 
 // ---------------------------------------------------------------------------
@@ -36,10 +58,15 @@ interface MindmapNodeShapeProps {
   onSelect: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
   onOpenTask: (nodeId: string) => void;
-  onNavigateChild: (nodeId: string) => void;
+  onContextMenu: (nodeId: string, evt: Konva.KonvaEventObject<PointerEvent | MouseEvent>) => void;
   onHoverStart: (nodeId: string) => void;
   onHoverEnd: (nodeId: string) => void;
   registerRef?: (nodeId: string, ref: Konva.Group | null) => void;
+  // Bling mode
+  isBling?: boolean;
+  onBlingDragStart?: (nodeId: string) => void;
+  onBlingDragMove?: (nodeId: string, ox: number, oy: number) => void;
+  onBlingDragEnd?: (nodeId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,75 +80,167 @@ function MindmapNodeShapeInner({
   onSelect,
   onExpand,
   onOpenTask,
-  onNavigateChild,
+  onContextMenu,
   onHoverStart,
   onHoverEnd,
   registerRef,
+  isBling = false,
+  onBlingDragStart,
+  onBlingDragMove,
+  onBlingDragEnd,
 }: MindmapNodeShapeProps) {
-  const nodeRadius = node.depth === 0
-    ? LAYOUT_CONSTANTS.ROOT_RADIUS
-    : LAYOUT_CONSTANTS.NODE_RADIUS;
+  const isRoot = node.depth === 0;
+  const w = isRoot ? LAYOUT_CONSTANTS.ROOT_WIDTH : LAYOUT_CONSTANTS.NODE_WIDTH;
+  const h = isRoot ? LAYOUT_CONSTANTS.ROOT_HEIGHT : LAYOUT_CONSTANTS.NODE_HEIGHT;
+  const halfW = w / 2;
+  const halfH = h / 2;
 
   const refCallback = useCallback(
     (ref: Konva.Group | null) => registerRef?.(node.id, ref),
     [registerRef, node.id],
   );
 
+  const maxTitleChars = Math.floor((w - 20) / 7);
+  const displayTitle = truncateText(node.title, maxTitleChars);
+  const priorityColor = getPriorityColor(node.priority);
+  const accentColor = getNodeColor(node);
+
   return (
-    <Group x={node.x} y={node.y} ref={refCallback}>
-      {/* Main circle */}
-      <Circle
-        radius={nodeRadius}
-        fill={getNodeColor(node)}
-        stroke={isSelected ? '#ffffff' : undefined}
-        strokeWidth={isSelected ? 2 : 0}
-        shadowBlur={isSelected ? 12 : 0}
+    <Group
+      x={node.x}
+      y={node.y}
+      ref={refCallback}
+      draggable={isBling}
+      onDragStart={isBling ? (e) => {
+        e.cancelBubble = true;
+        const stage = e.target.getStage();
+        if (stage) stage.container().style.cursor = 'grabbing';
+        onBlingDragStart?.(node.id);
+      } : undefined}
+      onDragMove={isBling ? (e) => {
+        e.cancelBubble = true;
+        const g = e.target as Konva.Group;
+        onBlingDragMove?.(node.id, g.x() - node.x, g.y() - node.y);
+      } : undefined}
+      onDragEnd={isBling ? (e) => {
+        e.cancelBubble = true;
+        const stage = e.target.getStage();
+        if (stage) stage.container().style.cursor = 'grab';
+        onBlingDragEnd?.(node.id);
+      } : undefined}
+    >
+      {/* Card background */}
+      <Rect
+        x={-halfW}
+        y={-halfH}
+        width={w}
+        height={h}
+        fill="#1a1d24"
+        stroke={isSelected ? '#ffffff' : 'rgba(255,255,255,0.1)'}
+        strokeWidth={isSelected ? 2 : 1}
+        cornerRadius={8}
+        shadowBlur={isSelected ? 10 : 0}
         shadowColor={isSelected ? '#ffffff' : undefined}
         opacity={isLoading ? 0.6 : 1}
         onClick={() => onSelect(node.id)}
-        onDblClick={() => {
-          if (node.hasChildren) {
-            onNavigateChild(node.id);
-          } else {
-            onOpenTask(node.id);
-          }
+        onDblClick={() => onOpenTask(node.id)}
+        onContextMenu={(e) => {
+          e.evt.preventDefault();
+          e.cancelBubble = true;
+          onContextMenu(node.id, e);
         }}
         onMouseEnter={(e) => {
-          e.target.to({ scaleX: 1.15, scaleY: 1.15, duration: 0.15 });
           const stage = e.target.getStage();
-          if (stage) stage.container().style.cursor = 'pointer';
+          if (stage) stage.container().style.cursor = isBling ? 'grab' : 'default';
           onHoverStart(node.id);
         }}
         onMouseLeave={(e) => {
-          e.target.to({ scaleX: 1, scaleY: 1, duration: 0.15 });
           const stage = e.target.getStage();
           if (stage) stage.container().style.cursor = 'grab';
           onHoverEnd(node.id);
         }}
       />
 
-      {/* Progress arc */}
-      {node.progress > 0 && (
-        <Arc
-          innerRadius={nodeRadius + 1}
-          outerRadius={nodeRadius + 4}
-          angle={(node.progress / 100) * 360}
-          rotation={-90}
-          fill="rgba(255, 255, 255, 0.7)"
+      {/* Left accent stripe (behavior color) */}
+      <Rect
+        x={-halfW}
+        y={-halfH + 4}
+        width={3}
+        height={h - 8}
+        fill={accentColor}
+        cornerRadius={[2, 0, 0, 2]}
+        listening={false}
+      />
+
+      {/* Priority dot */}
+      {node.priority !== 'NONE' && (
+        <Circle
+          x={-halfW + 14}
+          y={-halfH + 12}
+          radius={4}
+          fill={priorityColor}
           listening={false}
         />
       )}
 
-      {/* Expand/collapse badge — visible for ALL nodes with children */}
+      {/* Title text */}
+      <Text
+        x={-halfW + (node.priority !== 'NONE' ? 24 : 12)}
+        y={-halfH + 7}
+        width={w - (node.priority !== 'NONE' ? 36 : 24)}
+        height={h - 14}
+        text={displayTitle}
+        fontSize={isRoot ? 12 : 11}
+        fontStyle={isRoot ? 'bold' : 'normal'}
+        fill="#e5e7eb"
+        verticalAlign="middle"
+        listening={false}
+        ellipsis
+        wrap="none"
+      />
+
+      {/* Progress bar at bottom */}
+      {node.progress > 0 && (
+        <>
+          <Rect
+            x={-halfW + 4}
+            y={halfH - 4}
+            width={w - 8}
+            height={2}
+            fill="rgba(255,255,255,0.08)"
+            cornerRadius={1}
+            listening={false}
+          />
+          <Rect
+            x={-halfW + 4}
+            y={halfH - 4}
+            width={(w - 8) * Math.min(node.progress / 100, 1)}
+            height={2}
+            fill={accentColor}
+            cornerRadius={1}
+            listening={false}
+          />
+        </>
+      )}
+
+      {/* Expand/collapse badge — only if node truly has children */}
       {node.hasChildren && (
-        <Group x={nodeRadius * 0.7} y={nodeRadius * 0.7}>
-          {/* Enlarged hit-zone (14px radius) */}
+        <Group x={halfW + 2} y={0}>
+          {/* Hit zone */}
           <Circle
-            radius={14}
+            radius={12}
             fill="transparent"
             onClick={(e) => {
               e.cancelBubble = true;
               onExpand(node.id);
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'default';
             }}
           />
           {/* Visual badge */}
@@ -131,7 +250,7 @@ function MindmapNodeShapeInner({
             listening={false}
           />
           <Text
-            text={node.collapsed ? '+' : '−'}
+            text={(node.collapsed || !node.childrenLoaded) ? '+' : '−'}
             fontSize={12}
             fontStyle="bold"
             fill="#0f1117"

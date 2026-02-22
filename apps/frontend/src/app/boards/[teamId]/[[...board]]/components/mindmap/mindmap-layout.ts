@@ -114,10 +114,10 @@ export function computeRadialLayout(nodes: MindmapNode[]): MindmapLayoutResult {
     const minAnglePerNode = MIN_NODE_DISTANCE / radius;
     const requiredAngle = children.length * minAnglePerNode;
 
-    // Extend radius if needed
-    if (requiredAngle > sweepAngle && depth > 1) {
+    // Extend radius if needed (all depths)
+    if (requiredAngle > sweepAngle) {
       radius = (children.length * MIN_NODE_DISTANCE) / sweepAngle;
-      // Cap at 3× base radius
+      // Cap at 3× base radius for this depth
       const maxRadius = (BASE_RADIUS + (depth - 1) * LEVEL_SPACING) * 3;
       radius = Math.min(radius, maxRadius);
     }
@@ -161,17 +161,19 @@ export function computeRadialLayout(nodes: MindmapNode[]): MindmapLayoutResult {
   // 6. Launch layout from root
   placeChildren(root.id, -Math.PI, 2 * Math.PI, 1);
 
-  // 7. Compute bounds
-  let minX = -LABEL_MAX_WIDTH;
-  let maxX = LABEL_MAX_WIDTH;
-  let minY = -NODE_RADIUS * 2;
-  let maxY = NODE_RADIUS * 2;
+  // 7. Compute bounds (using rectangle half-widths)
+  const halfW = LAYOUT_CONSTANTS.NODE_WIDTH / 2 + 20;
+  const halfH = LAYOUT_CONSTANTS.NODE_HEIGHT / 2 + 20;
+  let minX = -halfW;
+  let maxX = halfW;
+  let minY = -halfH;
+  let maxY = halfH;
 
   for (const node of nodes) {
-    if (node.x - LABEL_MAX_WIDTH < minX) minX = node.x - LABEL_MAX_WIDTH;
-    if (node.x + LABEL_MAX_WIDTH > maxX) maxX = node.x + LABEL_MAX_WIDTH;
-    if (node.y - NODE_RADIUS * 2 < minY) minY = node.y - NODE_RADIUS * 2;
-    if (node.y + NODE_RADIUS * 2 > maxY) maxY = node.y + NODE_RADIUS * 2;
+    if (node.x - halfW < minX) minX = node.x - halfW;
+    if (node.x + halfW > maxX) maxX = node.x + halfW;
+    if (node.y - halfH < minY) minY = node.y - halfH;
+    if (node.y + halfH > maxY) maxY = node.y + halfH;
   }
 
   const edges = buildEdges(nodes);
@@ -185,7 +187,7 @@ export function computeRadialLayout(nodes: MindmapNode[]): MindmapLayoutResult {
 
 export function detectCollisions(nodes: MindmapNode[]): Array<[string, string]> {
   const collisions: Array<[string, string]> = [];
-  const minDist = NODE_RADIUS * 2 + 4;
+  const minDist = LAYOUT_CONSTANTS.NODE_WIDTH + 10;
 
   const byDepth = new Map<number, MindmapNode[]>();
   for (const node of nodes) {
@@ -230,7 +232,7 @@ export function isNodeInViewport(
 ): boolean {
   const screenX = node.x * stageScale + stagePos.x;
   const screenY = node.y * stageScale + stagePos.y;
-  const CULL_MARGIN = 150;
+  const CULL_MARGIN = LAYOUT_CONSTANTS.NODE_WIDTH;
   return (
     screenX >= -CULL_MARGIN &&
     screenX <= containerWidth + CULL_MARGIN &&

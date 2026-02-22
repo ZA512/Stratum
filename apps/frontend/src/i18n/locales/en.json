@@ -1146,10 +1146,28 @@
         "zoomIn": "Zoom in",
         "zoomOut": "Zoom out",
         "fitToContent": "Fit to content",
+        "centerRoot": "Center on root card",
+        "goToParent": "Go back to parent level",
+        "quickAdd": "Add a card",
         "expandAll": "Expand all",
-        "collapseAll": "Collapse all"
+        "collapseAll": "Collapse all",
+        "blingOn": "Organic mode (bling bling)",
+        "blingOff": "Disable organic mode"
+      },
+      "prompts": {
+        "newTask": "Title of the new card"
+      },
+      "errors": {
+        "noBacklogColumn": "No Backlog column available to create a card."
       },
       "nodeSelected": "Selected: {{title}}",
+      "contextMenu": {
+        "centerOnNode": "Center on this card",
+        "edit": "Edit",
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "openChildBoard": "Open child board"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",

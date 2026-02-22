@@ -1145,10 +1145,28 @@
         "zoomIn": "Zoom avant",
         "zoomOut": "Zoom arrière",
         "fitToContent": "Ajuster au contenu",
+        "centerRoot": "Centrer sur la carte mère",
+        "goToParent": "Revenir au niveau parent",
+        "quickAdd": "Ajouter une carte",
         "expandAll": "Tout déplier",
-        "collapseAll": "Tout replier"
+        "collapseAll": "Tout replier",
+        "blingOn": "Mode organique (bling bling)",
+        "blingOff": "Désactiver le mode organique"
+      },
+      "prompts": {
+        "newTask": "Titre de la nouvelle carte"
+      },
+      "errors": {
+        "noBacklogColumn": "Aucune colonne Backlog disponible pour créer une carte."
       },
       "nodeSelected": "Sélectionné : {{title}}",
+      "contextMenu": {
+        "centerOnNode": "Centrer sur cette carte",
+        "edit": "Modifier",
+        "expand": "Déplier",
+        "collapse": "Replier",
+        "openChildBoard": "Ouvrir le sous-kanban"
+      },
       "priority": {
         "critical": "Critique",
         "high": "Haute",
