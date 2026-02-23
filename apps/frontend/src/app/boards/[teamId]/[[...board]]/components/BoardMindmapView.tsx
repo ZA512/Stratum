@@ -19,11 +19,11 @@ import {
   type Board,
   type NodeChildBoard,
 } from '@/features/boards/boards-api';
-import type { MindmapNode, MindmapLayoutResult } from './mindmap/mindmap-types';
+import type { MindmapNode, MindmapLayoutResult, MindmapLayoutMode } from './mindmap/mindmap-types';
 import { transformBoardToMindmapTree, transformSubBoardToNodes } from './mindmap/mindmap-transform';
-import { computeRadialLayout, isNodeInViewport } from './mindmap/mindmap-layout';
+import { computeMindmapLayout, isNodeInViewport } from './mindmap/mindmap-layout';
 import { buildTransition, tickTransition } from './mindmap/mindmap-animation';
-import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus, Sparkles } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus, Sparkles, Network, GitFork } from 'lucide-react';
 import { type PhysicsNode, createPhysicsNode, tickAllPhysics, propagateDragToAncestors } from './mindmap/mindmap-physics';
 import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 
@@ -74,6 +74,20 @@ function loadMindmapViewport(boardId: string): { x: number; y: number; scale: nu
   } catch {
     return null;
   }
+}
+
+function saveLayoutMode(boardId: string, mode: MindmapLayoutMode): void {
+  try {
+    localStorage.setItem(`stratum:board:${boardId}:mindmap-layout-mode:v1`, mode);
+  } catch { /* ignore */ }
+}
+
+function loadLayoutMode(boardId: string): MindmapLayoutMode {
+  try {
+    const raw = localStorage.getItem(`stratum:board:${boardId}:mindmap-layout-mode:v1`);
+    if (raw === 'horizontal' || raw === 'radial') return raw;
+  } catch { /* ignore */ }
+  return 'radial';
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +170,7 @@ export default function BoardMindmapView({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [loadedSubtrees, setLoadedSubtrees] = useState<Map<string, MindmapNode[]>>(new Map());
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
+  const [layoutMode, setLayoutMode] = useState<MindmapLayoutMode>(() => loadLayoutMode(board.id));
   const [isBling, setIsBling] = useState(false);
 
   // --- Bling physics ---
@@ -177,6 +192,10 @@ export default function BoardMindmapView({
   useEffect(() => {
     saveMindmapViewport(board.id, stagePos, stageScale);
   }, [board.id, stagePos, stageScale]);
+
+  useEffect(() => {
+    saveLayoutMode(board.id, layoutMode);
+  }, [board.id, layoutMode]);
 
   // --- Layout (pure TS) ---
   const mindmapNodes = useMemo(
@@ -203,8 +222,8 @@ export default function BoardMindmapView({
   }, []);
 
   const layoutResult: MindmapLayoutResult = useMemo(
-    () => computeRadialLayout(mindmapNodes),
-    [mindmapNodes],
+    () => computeMindmapLayout(mindmapNodes, layoutMode),
+    [mindmapNodes, layoutMode],
   );
 
   // Keep latest layoutResult in a ref for the physics RAF loop
@@ -1010,6 +1029,29 @@ export default function BoardMindmapView({
           title={t('mindmap.toolbar.collapseAll')}
         >
           <ChevronsUpDown size={16} className="rotate-90" />
+        </button>
+        <div className="mx-1 h-4 w-px bg-white/10" />
+        <button
+          type="button"
+          onClick={() => setLayoutMode('radial')}
+          className={[
+            'rounded-full p-1.5 transition',
+            layoutMode === 'radial' ? 'text-accent' : 'text-muted hover:text-foreground',
+          ].join(' ')}
+          title={t('mindmap.toolbar.layoutRadial')}
+        >
+          <Network size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setLayoutMode('horizontal')}
+          className={[
+            'rounded-full p-1.5 transition',
+            layoutMode === 'horizontal' ? 'text-accent' : 'text-muted hover:text-foreground',
+          ].join(' ')}
+          title={t('mindmap.toolbar.layoutHorizontal')}
+        >
+          <GitFork size={16} />
         </button>
         <div className="mx-1 h-4 w-px bg-white/10" />
         <button

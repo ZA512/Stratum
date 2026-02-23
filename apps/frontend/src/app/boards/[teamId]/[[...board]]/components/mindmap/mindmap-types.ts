@@ -63,6 +63,9 @@ export interface MindmapLayoutResult {
   centerY: number;
 }
 
+/** Which layout algorithm to use */
+export type MindmapLayoutMode = 'radial' | 'horizontal';
+
 /** Transition between two layouts for animation */
 export interface LayoutTransition {
   startTime: number;
@@ -77,8 +80,8 @@ export interface LayoutTransition {
 
 export const LAYOUT_CONSTANTS = {
   BASE_RADIUS: 240,
-  LEVEL_SPACING: 160,
-  MIN_NODE_DISTANCE: 155,
+  LEVEL_SPACING: 180,
+  MIN_NODE_DISTANCE: 170,
   NODE_RADIUS: 24,
   LABEL_MAX_WIDTH: 120,
   ROOT_RADIUS: 32,

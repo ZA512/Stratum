@@ -1151,7 +1151,9 @@
         "expandAll": "Tout déplier",
         "collapseAll": "Tout replier",
         "blingOn": "Mode organique (bling bling)",
-        "blingOff": "Désactiver le mode organique"
+        "blingOff": "Désactiver le mode organique",
+        "layoutRadial": "Disposition radiale",
+        "layoutHorizontal": "Disposition horizontale"
       },
       "prompts": {
         "newTask": "Titre de la nouvelle carte"

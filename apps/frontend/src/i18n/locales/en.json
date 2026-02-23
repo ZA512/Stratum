@@ -1152,7 +1152,9 @@
         "expandAll": "Expand all",
         "collapseAll": "Collapse all",
         "blingOn": "Organic mode (bling bling)",
-        "blingOff": "Disable organic mode"
+        "blingOff": "Disable organic mode",
+        "layoutRadial": "Radial layout",
+        "layoutHorizontal": "Horizontal layout"
       },
       "prompts": {
         "newTask": "Title of the new card"
