@@ -2,15 +2,21 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateAiSettingsDto {
   @ApiPropertyOptional({
+    example: true,
+    description: "Active ou désactive l'IA pour cet utilisateur",
+  })
+  aiEnabled?: boolean;
+
+  @ApiPropertyOptional({
     example: 'openai',
     description:
-      'Provider IA (openai, anthropic, mistral, gemini, ollama, heuristic)',
+      'Provider LLM (openai, anthropic, mistral, gemini, ollama, heuristic, custom)',
   })
   provider?: string;
 
   @ApiPropertyOptional({
     example: 'gpt-4.1-mini',
-    description: 'Modèle utilisé par le provider IA',
+    description: 'Modèle LLM (chat, proposals, quick notes)',
     nullable: true,
   })
   model?: string | null;
@@ -31,13 +37,30 @@ export class UpdateAiSettingsDto {
 
   @ApiPropertyOptional({
     example: 'sk-xxxx',
-    description: 'Clé API (optionnelle, laisser vide pour conserver la valeur)',
+    description: 'Clé API LLM (laisser vide pour conserver)',
     nullable: true,
   })
   apiKey?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'openai',
+    description: 'Provider pour les embeddings RAG (openai, mistral, custom)',
+    nullable: true,
+  })
+  embeddingProvider?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'text-embedding-3-small',
+    description: 'Modèle d\'embedding pour la recherche RAG',
+    nullable: true,
+  })
+  embeddingModel?: string | null;
 }
 
 export class AiSettingsDto {
+  @ApiProperty({ example: true })
+  aiEnabled!: boolean;
+
   @ApiProperty({ example: 'openai' })
   provider!: string;
 
@@ -52,6 +75,12 @@ export class AiSettingsDto {
 
   @ApiProperty({ example: true })
   hasApiKey!: boolean;
+
+  @ApiProperty({ example: 'openai', nullable: true })
+  embeddingProvider!: string | null;
+
+  @ApiProperty({ example: 'text-embedding-3-small', nullable: true })
+  embeddingModel!: string | null;
 
   @ApiProperty({ example: '2026-02-07T12:30:00.000Z', nullable: true })
   updatedAt!: string | null;

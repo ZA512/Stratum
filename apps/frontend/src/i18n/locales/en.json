@@ -106,13 +106,44 @@
     "success": "Language updated",
     "back": "Back to the dashboard",
     "ai": {
-      "title": "AI settings",
+      "enabledLabel": "Enable AI",
+      "enabledHint": "AI is enabled — LLM calls will be used.",
+      "disabledHint": "Manual mode — no LLM calls will be made.",
+      "manualModeInfo": "AI is disabled. All features will use local heuristics (prioritization, suggestions, chat).",
+      "connection": {
+        "title": "Connection"
+      },
+      "models": {
+        "title": "Models",
+        "description": "One model per use case. The same connection (provider + key) is used for all.",
+        "chatLabel": "Chat / Agent",
+        "chatPlaceholder": "gpt-4.1-mini",
+        "chatHint": "Used for agent chat, Quick Notes and reports.",
+        "embeddingLabel": "Embedding (RAG)",
+        "embeddingPlaceholder": "text-embedding-3-small",
+        "embeddingHint": "Optional — leave empty to disable semantic search."
+      },
+      "llm": {
+        "title": "Language model (LLM)",
+        "description": "Used for agent chat, Quick Note suggestions, summaries and reports."
+      },
+      "embedding": {
+        "title": "Embedding model (optional)",
+        "description": "Used for semantic search (RAG). Leave empty to disable vector indexing.",
+        "providerLabel": "Embedding provider",
+        "providerHint": "Can differ from the LLM provider.",
+        "modelLabel": "Embedding model",
+        "modelHint": "E.g. text-embedding-3-small, nomic-embed-text…",
+        "sharedApiKeyNote": "Note: the LLM API key will be reused for the embedding provider."
+      },
+      "title": "AI Settings",
       "description": "Configure the provider used for Quick Notes suggestions. The API key is stored securely on the backend.",
       "providerLabel": "Provider",
       "providerHelp": "Choose the AI provider to use for Quick Notes.",
       "modelLabel": "Model",
       "modelHint": "Leave empty to rely on the default model for the provider.",
       "baseUrlLabel": "Base URL",
+      "baseUrlRequired": "URL required for this provider.",
       "baseUrlHint": "Required for custom or local providers (ex: Ollama).",
       "timeoutLabel": "Timeout (ms)",
       "timeoutHint": "Between 3000 and 120000 milliseconds.",

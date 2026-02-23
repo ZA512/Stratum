@@ -97,12 +97,43 @@
     "back": "Retour au tableau de bord",
     "ai": {
       "title": "Paramétrage IA",
-      "description": "Configurez le provider utilisé pour les suggestions Quick Notes. La clé API est stockée côté backend.",
+      "description": "Configurez l'IA utilisée pour le chat agent, les Quick Notes, les suggestions et l'analyse documentaire.",
+      "enabledLabel": "Activer l'IA",
+      "enabledHint": "L'IA est activée — les appels LLM seront utilisés.",
+      "disabledHint": "Mode manuel — aucun appel LLM ne sera effectué.",
+      "manualModeInfo": "L'IA est désactivée. Toutes les fonctionnalités utiliseront l'heuristique locale (priorisation, suggestions, chat).",
+      "connection": {
+        "title": "Connexion"
+      },
+      "models": {
+        "title": "Modèles",
+        "description": "Un modèle par usage. La même connexion (provider + clé) est utilisée pour tous.",
+        "chatLabel": "Chat / Agent",
+        "chatPlaceholder": "gpt-4.1-mini",
+        "chatHint": "Utilisé pour le chat agent, les Quick Notes et les rapports.",
+        "embeddingLabel": "Embedding (RAG)",
+        "embeddingPlaceholder": "text-embedding-3-small",
+        "embeddingHint": "Optionnel — laisser vide pour désactiver la recherche sémantique."
+      },
+      "llm": {
+        "title": "Modèle de langage (LLM)",
+        "description": "Utilisé pour le chat agent, les suggestions Quick Notes, les résumés et rapports."
+      },
+      "embedding": {
+        "title": "Modèle d'embedding (optionnel)",
+        "description": "Utilisé pour la recherche sémantique (RAG). Laissez vide pour désactiver l'indexation vectorielle.",
+        "providerLabel": "Provider embedding",
+        "providerHint": "Peut être différent du provider LLM.",
+        "modelLabel": "Modèle embedding",
+        "modelHint": "Ex : text-embedding-3-small, nomic-embed-text…",
+        "sharedApiKeyNote": "Note : la clé API du LLM sera réutilisée pour le provider d'embedding."
+      },
       "providerLabel": "Provider",
       "providerHelp": "Choisissez le provider IA à utiliser pour Quick Notes.",
       "modelLabel": "Modèle",
       "modelHint": "Laissez vide pour utiliser le modèle par défaut du provider.",
       "baseUrlLabel": "Base URL",
+      "baseUrlRequired": "URL obligatoire pour ce provider.",
       "baseUrlHint": "Requise pour un provider custom ou local (ex : Ollama).",
       "timeoutLabel": "Timeout (ms)",
       "timeoutHint": "Entre 3000 et 120000 millisecondes.",

@@ -118,11 +118,14 @@ export class UsersController {
   ): Promise<AiSettingsDto> {
     const settings = await this.usersService.getAiSettings(user.id);
     return {
+      aiEnabled: settings.aiEnabled,
       provider: settings.provider,
       model: settings.model,
       baseUrl: settings.baseUrl,
       timeoutMs: settings.timeoutMs,
       hasApiKey: settings.apiKeyPresent,
+      embeddingProvider: settings.embeddingProvider,
+      embeddingModel: settings.embeddingModel,
       updatedAt: settings.updatedAt,
     };
   }
@@ -136,11 +139,14 @@ export class UsersController {
   ): Promise<AiSettingsDto> {
     const settings = await this.usersService.updateAiSettings(user.id, dto);
     return {
+      aiEnabled: settings.aiEnabled,
       provider: settings.provider,
       model: settings.model,
       baseUrl: settings.baseUrl,
       timeoutMs: settings.timeoutMs,
       hasApiKey: settings.apiKeyPresent,
+      embeddingProvider: settings.embeddingProvider,
+      embeddingModel: settings.embeddingModel,
       updatedAt: settings.updatedAt,
     };
   }

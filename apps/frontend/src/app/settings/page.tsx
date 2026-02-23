@@ -35,14 +35,18 @@ export default function SettingsPage() {
   const [aiSettingsLoading, setAiSettingsLoading] = useState(false);
   const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
   const [aiSaving, setAiSaving] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [aiProvider, setAiProvider] = useState("heuristic");
   const [aiModel, setAiModel] = useState("");
   const [aiBaseUrl, setAiBaseUrl] = useState("");
   const [aiTimeoutMs, setAiTimeoutMs] = useState("");
   const [aiApiKeyInput, setAiApiKeyInput] = useState("");
   const [aiClearApiKey, setAiClearApiKey] = useState(false);
+  const [embeddingProvider, setEmbeddingProvider] = useState("");
+  const [embeddingModel, setEmbeddingModel] = useState("");
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogTarget, setCatalogTarget] = useState<"llm" | "embedding">("llm");
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogFilter, setCatalogFilter] = useState<string>("all");
   const [testDataMessage, setTestDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -134,12 +138,15 @@ export default function SettingsPage() {
       .then((settings) => {
         if (cancelled) return;
         setAiSettings(settings);
+        setAiEnabled(settings.aiEnabled ?? false);
         setAiProvider(settings.provider || "heuristic");
         setAiModel(settings.model ?? "");
         setAiBaseUrl(settings.baseUrl ?? "");
         setAiTimeoutMs(settings.timeoutMs ? String(settings.timeoutMs) : "");
         setAiApiKeyInput("");
         setAiClearApiKey(false);
+        setEmbeddingProvider(settings.embeddingProvider ?? "");
+        setEmbeddingModel(settings.embeddingModel ?? "");
       })
       .catch((error) => {
         if (cancelled) return;
@@ -270,6 +277,12 @@ export default function SettingsPage() {
     [t],
   );
 
+  // Providers disponibles quand l'IA est activée (heuristic exclu)
+  const activeProviderOptions = useMemo(
+    () => aiProviderOptions.filter((o) => o.value !== "heuristic"),
+    [aiProviderOptions],
+  );
+
   const handleAiSave = async () => {
     if (!accessToken || aiSaving) return;
     setAiSaving(true);
@@ -281,17 +294,15 @@ export default function SettingsPage() {
         setAiSettingsError(t("settings.ai.saveError"));
         return;
       }
-      const payload: {
-        provider: string;
-        model: string | null;
-        baseUrl: string | null;
-        timeoutMs: number | null;
-        apiKey?: string | null;
-      } = {
+      const payload: Parameters<typeof updateAiSettings>[0] = {
+        aiEnabled,
         provider: aiProvider,
         model: aiModel.trim() ? aiModel.trim() : null,
         baseUrl: aiBaseUrl.trim() ? aiBaseUrl.trim() : null,
         timeoutMs: timeoutValue,
+        // L'embedding utilise le même provider que le LLM (même connexion)
+        embeddingProvider: embeddingModel.trim() && aiProvider !== "heuristic" ? aiProvider : null,
+        embeddingModel: embeddingModel.trim() ? embeddingModel.trim() : null,
       };
 
       if (aiClearApiKey) {
@@ -434,112 +445,211 @@ export default function SettingsPage() {
               <p className="text-sm text-red-500 dark:text-red-400">{aiSettingsError}</p>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-sm text-muted">
-                <span className="mb-2 block font-medium text-foreground">
-                  {t("settings.ai.providerLabel")}
-                </span>
-                <select
-                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
-                  value={aiProvider}
-                  onChange={(event) => setAiProvider(event.target.value)}
-                  disabled={aiSettingsLoading}
-                >
-                  {aiProviderOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-xs text-muted">
-                  {t("settings.ai.providerHelp")}
-                </span>
-              </label>
-
-              <label className="block text-sm text-muted">
-                <span className="mb-2 block font-medium text-foreground">
-                  {t("settings.ai.modelLabel")}
-                </span>
-                <input
-                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
-                  value={aiModel}
-                  onChange={(event) => setAiModel(event.target.value)}
-                  placeholder="gpt-4.1-mini"
-                  disabled={aiSettingsLoading}
-                />
-                <span className="mt-1 block text-xs text-muted">
-                  {t("settings.ai.modelHint")}
-                </span>
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-sm text-muted">
-                <span className="mb-2 block font-medium text-foreground">
-                  {t("settings.ai.baseUrlLabel")}
-                </span>
-                <input
-                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
-                  value={aiBaseUrl}
-                  onChange={(event) => setAiBaseUrl(event.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  disabled={aiSettingsLoading}
-                />
-                <span className="mt-1 block text-xs text-muted">
-                  {t("settings.ai.baseUrlHint")}
-                </span>
-              </label>
-
-              <label className="block text-sm text-muted">
-                <span className="mb-2 block font-medium text-foreground">
-                  {t("settings.ai.timeoutLabel")}
-                </span>
-                <input
-                  type="number"
-                  min={3000}
-                  max={120000}
-                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
-                  value={aiTimeoutMs}
-                  onChange={(event) => setAiTimeoutMs(event.target.value)}
-                  placeholder="15000"
-                  disabled={aiSettingsLoading}
-                />
-                <span className="mt-1 block text-xs text-muted">
-                  {t("settings.ai.timeoutHint")}
-                </span>
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-sm text-muted">
-                <span className="mb-2 block font-medium text-foreground">
-                  {t("settings.ai.apiKeyLabel")}
-                </span>
-                <input
-                  type="password"
-                  className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
-                  value={aiApiKeyInput}
-                  onChange={(event) => setAiApiKeyInput(event.target.value)}
-                  placeholder={t("settings.ai.apiKeyPlaceholder")}
-                  disabled={aiSettingsLoading}
-                />
-                <span className="mt-1 block text-xs text-muted">
-                  {aiSettings?.hasApiKey
-                    ? t("settings.ai.apiKeySaved")
-                    : t("settings.ai.apiKeyHint")}
-                </span>
-              </label>
-
-              <label className="flex items-center gap-2 text-sm text-muted">
+            {/* ── Toggle activation IA ──────────────────────────── */}
+            <label className="flex cursor-pointer items-center gap-3">
+              <div className="relative flex-shrink-0">
                 <input
                   type="checkbox"
-                  checked={aiClearApiKey}
-                  onChange={(event) => setAiClearApiKey(event.target.checked)}
-                  disabled={aiSettingsLoading || !aiSettings?.hasApiKey}
+                  className="sr-only"
+                  checked={aiEnabled}
+                  onChange={(e) => setAiEnabled(e.target.checked)}
+                  disabled={aiSettingsLoading}
                 />
-                {t("settings.ai.apiKeyClearLabel")}
-              </label>
-            </div>
+                <div
+                  className={`h-6 w-11 rounded-full transition-colors ${aiEnabled ? "bg-accent" : "bg-white/20"}`}
+                />
+                <div
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${aiEnabled ? "translate-x-5" : "translate-x-0.5"}`}
+                />
+              </div>
+              <div>
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.ai.enabledLabel")}
+                </span>
+                <p className="text-xs text-muted">
+                  {aiEnabled ? t("settings.ai.enabledHint") : t("settings.ai.disabledHint")}
+                </p>
+              </div>
+            </label>
+
+            {!aiEnabled ? (
+              <div className="rounded-xl border border-white/10 bg-surface/40 px-4 py-3 text-sm text-muted">
+                {t("settings.ai.manualModeInfo")}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* ── Connexion ─────────────────────────────────── */}
+                <div className="space-y-4 rounded-xl border border-white/10 bg-surface/30 p-4">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t("settings.ai.connection.title")}
+                  </h3>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.providerLabel")}
+                      </span>
+                      <select
+                        className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                        value={aiProvider}
+                        onChange={(event) => setAiProvider(event.target.value)}
+                        disabled={aiSettingsLoading}
+                      >
+                        {activeProviderOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1 block text-xs text-muted">
+                        {t("settings.ai.providerHelp")}
+                      </span>
+                    </label>
+
+                    <div className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.apiKeyLabel")}
+                      </span>
+                      <input
+                        type="password"
+                        className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                        value={aiApiKeyInput}
+                        onChange={(event) => setAiApiKeyInput(event.target.value)}
+                        placeholder={t("settings.ai.apiKeyPlaceholder")}
+                        disabled={aiSettingsLoading}
+                      />
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted">
+                          {aiSettings?.hasApiKey
+                            ? t("settings.ai.apiKeySaved")
+                            : t("settings.ai.apiKeyHint")}
+                        </span>
+                        {aiSettings?.hasApiKey && (
+                          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted hover:text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={aiClearApiKey}
+                              onChange={(event) => setAiClearApiKey(event.target.checked)}
+                              disabled={aiSettingsLoading}
+                            />
+                            {t("settings.ai.apiKeyClearLabel")}
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.baseUrlLabel")}
+                      </span>
+                      <input
+                        className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                        value={aiBaseUrl}
+                        onChange={(event) => setAiBaseUrl(event.target.value)}
+                        placeholder={
+                          aiProvider === "ollama"
+                            ? "http://localhost:11434"
+                            : "https://api.openai.com/v1"
+                        }
+                        disabled={aiSettingsLoading}
+                      />
+                      <span className="mt-1 block text-xs text-muted">
+                        {aiProvider === "ollama" || aiProvider === "custom"
+                          ? t("settings.ai.baseUrlRequired")
+                          : t("settings.ai.baseUrlHint")}
+                      </span>
+                    </label>
+
+                    <label className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.timeoutLabel")}
+                      </span>
+                      <input
+                        type="number"
+                        min={3000}
+                        max={120000}
+                        className="w-full rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                        value={aiTimeoutMs}
+                        onChange={(event) => setAiTimeoutMs(event.target.value)}
+                        placeholder="15000"
+                        disabled={aiSettingsLoading}
+                      />
+                      <span className="mt-1 block text-xs text-muted">
+                        {t("settings.ai.timeoutHint")}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* ── Modèles ───────────────────────────────────── */}
+                <div className="space-y-4 rounded-xl border border-white/10 bg-surface/30 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {t("settings.ai.models.title")}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">
+                      {t("settings.ai.models.description")}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.models.chatLabel")}
+                      </span>
+                      <div className="flex gap-2">
+                        <input
+                          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                          value={aiModel}
+                          onChange={(event) => setAiModel(event.target.value)}
+                          placeholder={t("settings.ai.models.chatPlaceholder")}
+                          disabled={aiSettingsLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setCatalogTarget("llm"); setCatalogOpen(true); }}
+                          className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-xs text-muted transition hover:border-accent hover:text-accent"
+                          title={t("settings.ai.catalog.showGuide")}
+                        >
+                          ☰
+                        </button>
+                      </div>
+                      <span className="mt-1 block text-xs text-muted">
+                        {t("settings.ai.models.chatHint")}
+                      </span>
+                    </label>
+
+                    <label className="block text-sm text-muted">
+                      <span className="mb-2 block font-medium text-foreground">
+                        {t("settings.ai.models.embeddingLabel")}
+                      </span>
+                      <div className="flex gap-2">
+                        <input
+                          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-surface px-4 py-2 text-sm text-foreground outline-none transition focus:border-accent"
+                          value={embeddingModel}
+                          onChange={(event) => setEmbeddingModel(event.target.value)}
+                          placeholder={t("settings.ai.models.embeddingPlaceholder")}
+                          disabled={aiSettingsLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setCatalogTarget("embedding"); setCatalogOpen(true); }}
+                          className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-xs text-muted transition hover:border-accent hover:text-accent"
+                          title={t("settings.ai.catalog.showGuide")}
+                        >
+                          ☰
+                        </button>
+                      </div>
+                      <span className="mt-1 block text-xs text-muted">
+                        {t("settings.ai.models.embeddingHint")}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted">
@@ -557,7 +667,7 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {/* ── Model Advisor ──────────────────────────────────── */}
+            {/* ── Catalogue de modèles ───────────────────────────── */}
             <div className="border-t border-white/10 pt-4">
               <button
                 type="button"
@@ -572,13 +682,32 @@ export default function SettingsPage() {
 
               {catalogOpen && (
                 <div className="mt-4 space-y-5">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      {t("settings.ai.catalog.title")}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted">
-                      {t("settings.ai.catalog.description")}
-                    </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("settings.ai.catalog.title")}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted">
+                        {t("settings.ai.catalog.description")}
+                      </p>
+                    </div>
+                    {/* Sélecteur de cible */}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCatalogTarget("llm")}
+                        className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${catalogTarget === "llm" ? "border-accent bg-accent/10 text-accent" : "border-white/15 text-muted hover:border-accent hover:text-accent"}`}
+                      >
+                        LLM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCatalogTarget("embedding")}
+                        className={`rounded-lg border px-3 py-1 text-xs font-medium transition ${catalogTarget === "embedding" ? "border-accent bg-accent/10 text-accent" : "border-white/15 text-muted hover:border-accent hover:text-accent"}`}
+                      >
+                        Embedding
+                      </button>
+                    </div>
                   </div>
 
                   {catalogError ? (
@@ -589,63 +718,65 @@ export default function SettingsPage() {
 
                   {catalog ? (
                     <>
-                      {/* Feature guides */}
-                      <div className="space-y-3">
-                        {catalog.featureGuides.map((guide) => {
-                          const recModel = catalog.models.find(
-                            (m) => m.modelId === guide.recommendedModelId,
-                          );
-                          return (
-                            <div
-                              key={guide.feature}
-                              className="rounded-xl border border-white/10 bg-surface/60 p-4"
-                            >
-                              <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {t(`settings.ai.catalog.features.${guide.feature}`) || guide.label}
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted">
-                                    {guide.description}
-                                  </p>
+                      {/* Guides par fonctionnalité (LLM uniquement) */}
+                      {catalogTarget === "llm" && (
+                        <div className="space-y-3">
+                          {catalog.featureGuides.map((guide) => {
+                            const recModel = catalog.models.find(
+                              (m) => m.modelId === guide.recommendedModelId,
+                            );
+                            return (
+                              <div
+                                key={guide.feature}
+                                className="rounded-xl border border-white/10 bg-surface/60 p-4"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {t(`settings.ai.catalog.features.${guide.feature}`) || guide.label}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted">
+                                      {guide.description}
+                                    </p>
+                                  </div>
+                                  {recModel ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAiProvider(recModel.provider);
+                                        setAiModel(recModel.modelId);
+                                      }}
+                                      className="shrink-0 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20"
+                                    >
+                                      {t("settings.ai.catalog.useThisModel")} — {recModel.displayName}
+                                    </button>
+                                  ) : null}
                                 </div>
                                 {recModel ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setAiProvider(recModel.provider);
-                                      setAiModel(recModel.modelId);
-                                    }}
-                                    className="shrink-0 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20"
-                                  >
-                                    {t("settings.ai.catalog.useThisModel")} — {recModel.displayName}
-                                  </button>
+                                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
+                                    <span>
+                                      {t("settings.ai.catalog.costLabel")}:{" "}
+                                      {recModel.costPer1MInput === 0 && recModel.costPer1MOutput === 0 && !recModel.costPer1MEmbedding
+                                        ? t("settings.ai.catalog.costFree")
+                                        : recModel.costPer1MEmbedding != null
+                                          ? `$${recModel.costPer1MEmbedding} ${t("settings.ai.catalog.costEmbedding")}`
+                                          : `$${recModel.costPer1MInput} ${t("settings.ai.catalog.costInput")} / $${recModel.costPer1MOutput} ${t("settings.ai.catalog.costOutput")}`}
+                                    </span>
+                                    <span>
+                                      {t("settings.ai.catalog.qualityLabel")}: {"★".repeat(recModel.qualityRating)}{"☆".repeat(5 - recModel.qualityRating)}
+                                    </span>
+                                    <span>
+                                      {t("settings.ai.catalog.speedLabel")}: {"★".repeat(recModel.speedRating)}{"☆".repeat(5 - recModel.speedRating)}
+                                    </span>
+                                  </div>
                                 ) : null}
                               </div>
-                              {recModel ? (
-                                <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted">
-                                  <span>
-                                    {t("settings.ai.catalog.costLabel")}:{" "}
-                                    {recModel.costPer1MInput === 0 && recModel.costPer1MOutput === 0 && !recModel.costPer1MEmbedding
-                                      ? t("settings.ai.catalog.costFree")
-                                      : recModel.costPer1MEmbedding != null
-                                        ? `$${recModel.costPer1MEmbedding} ${t("settings.ai.catalog.costEmbedding")}`
-                                        : `$${recModel.costPer1MInput} ${t("settings.ai.catalog.costInput")} / $${recModel.costPer1MOutput} ${t("settings.ai.catalog.costOutput")}`}
-                                  </span>
-                                  <span>
-                                    {t("settings.ai.catalog.qualityLabel")}: {"★".repeat(recModel.qualityRating)}{"☆".repeat(5 - recModel.qualityRating)}
-                                  </span>
-                                  <span>
-                                    {t("settings.ai.catalog.speedLabel")}: {"★".repeat(recModel.speedRating)}{"☆".repeat(5 - recModel.speedRating)}
-                                  </span>
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                      {/* Full model catalog */}
+                      {/* Catalogue complet filtrable */}
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -657,31 +788,45 @@ export default function SettingsPage() {
                             onChange={(e) => setCatalogFilter(e.target.value)}
                           >
                             <option value="all">{t("settings.ai.catalog.filterAll")}</option>
-                            {[...new Set(catalog.models.map((m) => m.provider))].map(
-                              (p) => (
-                                <option key={p} value={p}>
-                                  {t(`settings.ai.providers.${p}`) || p}
-                                </option>
-                              ),
-                            )}
+                            {[...new Set(
+                              catalog.models
+                                .filter((m) =>
+                                  catalogTarget === "embedding"
+                                    ? m.recommendedFor?.includes("embeddings")
+                                    : !m.recommendedFor?.includes("embeddings") || m.recommendedFor.length > 1
+                                )
+                                .map((m) => m.provider)
+                            )].map((p) => (
+                              <option key={p} value={p}>
+                                {t(`settings.ai.providers.${p}`) || p}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
                         <div className="grid gap-3 md:grid-cols-2">
                           {catalog.models
-                            .filter(
-                              (m) =>
-                                catalogFilter === "all" ||
-                                m.provider === catalogFilter,
-                            )
+                            .filter((m) => {
+                              const providerMatch = catalogFilter === "all" || m.provider === catalogFilter;
+                              const targetMatch =
+                                catalogTarget === "embedding"
+                                  ? m.recommendedFor?.includes("embeddings")
+                                  : !m.recommendedFor?.includes("embeddings") || (m.recommendedFor?.length ?? 0) > 1;
+                              return providerMatch && targetMatch;
+                            })
                             .map((model) => (
                               <ModelCard
                                 key={`${model.provider}-${model.modelId}`}
                                 model={model}
                                 t={t}
                                 onSelect={() => {
-                                  setAiProvider(model.provider);
-                                  setAiModel(model.modelId);
+                                  if (catalogTarget === "embedding") {
+                                    setEmbeddingProvider(model.provider);
+                                    setEmbeddingModel(model.modelId);
+                                  } else {
+                                    setAiProvider(model.provider);
+                                    setAiModel(model.modelId);
+                                  }
                                 }}
                               />
                             ))}

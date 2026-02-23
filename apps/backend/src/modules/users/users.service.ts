@@ -103,16 +103,20 @@ export class UsersService {
   private normalizeAiSettings(value: unknown): AiSettingsPreference {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return {
+        aiEnabled: false,
         provider: 'heuristic',
         model: null,
         baseUrl: null,
         timeoutMs: null,
         apiKey: null,
         apiKeyPresent: false,
+        embeddingProvider: null,
+        embeddingModel: null,
         updatedAt: null,
       };
     }
     const record = value as Record<string, unknown>;
+    const aiEnabled = record.aiEnabled === true;
     const provider =
       typeof record.provider === 'string'
         ? record.provider.trim().toLowerCase()
@@ -134,10 +138,13 @@ export class UsersService {
       apiKeyIv,
       apiKeyTag,
     });
+    const embeddingProvider = this.normalizeOptionalString(record.embeddingProvider);
+    const embeddingModel = this.normalizeOptionalString(record.embeddingModel);
     const updatedAt =
       typeof record.updatedAt === 'string' ? record.updatedAt : null;
 
     return {
+      aiEnabled,
       provider: UsersService.AI_PROVIDERS.has(provider)
         ? provider
         : 'heuristic',
@@ -146,6 +153,8 @@ export class UsersService {
       timeoutMs,
       apiKey,
       apiKeyPresent,
+      embeddingProvider: embeddingProvider && UsersService.AI_PROVIDERS.has(embeddingProvider) ? embeddingProvider : null,
+      embeddingModel,
       updatedAt,
     };
   }
@@ -356,7 +365,7 @@ export class UsersService {
     input: Partial<
       Pick<
         AiSettingsPreference,
-        'provider' | 'model' | 'baseUrl' | 'timeoutMs' | 'apiKey'
+        'aiEnabled' | 'provider' | 'model' | 'baseUrl' | 'timeoutMs' | 'apiKey' | 'embeddingProvider' | 'embeddingModel'
       >
     >,
   ): Promise<AiSettingsPreference> {
@@ -364,6 +373,11 @@ export class UsersService {
     const current = this.normalizeAiSettings(prefs.aiSettings);
     const next: AiSettingsPreference = { ...current };
     let updated = false;
+
+    if (input.aiEnabled !== undefined) {
+      next.aiEnabled = Boolean(input.aiEnabled);
+      updated = true;
+    }
 
     if (input.provider !== undefined) {
       next.provider = this.normalizeAiProvider(input.provider);
@@ -402,12 +416,26 @@ export class UsersService {
       updated = true;
     }
 
+    if (input.embeddingProvider !== undefined) {
+      const ep = this.normalizeOptionalString(input.embeddingProvider);
+      next.embeddingProvider = ep && UsersService.AI_PROVIDERS.has(ep) ? ep : null;
+      updated = true;
+    }
+
+    if (input.embeddingModel !== undefined) {
+      next.embeddingModel = this.normalizeOptionalString(input.embeddingModel);
+      updated = true;
+    }
+
     if (updated) {
       const nextRecord: Record<string, unknown> = {
+        aiEnabled: next.aiEnabled,
         provider: next.provider,
         model: next.model,
         baseUrl: next.baseUrl,
         timeoutMs: next.timeoutMs,
+        embeddingProvider: next.embeddingProvider,
+        embeddingModel: next.embeddingModel,
       };
 
       if (next.apiKey) {
@@ -532,11 +560,14 @@ export type RaciTeamPreference = {
 };
 
 export type AiSettingsPreference = {
+  aiEnabled: boolean;
   provider: string;
   model: string | null;
   baseUrl: string | null;
   timeoutMs: number | null;
   apiKey: string | null;
   apiKeyPresent: boolean;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
   updatedAt: string | null;
 };

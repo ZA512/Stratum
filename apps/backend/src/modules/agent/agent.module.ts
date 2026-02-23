@@ -1,4 +1,5 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AgentController } from './agent.controller';
 import { AgentMetricsService } from './agent-metrics.service';
 import { AgentSchedulerService } from './agent-scheduler.service';
@@ -43,8 +44,10 @@ import { PublicAgentController } from './public-agent.controller';
 import { PublicAgentGuard } from './public-agent.guard';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
+import { UsersModule } from '../users/users.module';
 
 @Module({
+  imports: [ConfigModule, UsersModule],
   controllers: [
     AgentController,
     AiConfigController,

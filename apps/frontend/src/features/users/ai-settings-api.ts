@@ -1,20 +1,26 @@
 import { apiGet, apiPatch } from "@/lib/api-client";
 
 export type AiSettings = {
+  aiEnabled: boolean;
   provider: string;
   model: string | null;
   baseUrl: string | null;
   timeoutMs: number | null;
   hasApiKey: boolean;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
   updatedAt: string | null;
 };
 
 export type UpdateAiSettingsInput = {
+  aiEnabled?: boolean;
   provider?: string;
   model?: string | null;
   baseUrl?: string | null;
   timeoutMs?: number | null;
   apiKey?: string | null;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
 };
 
 // ── Model Catalog types ─────────────────────────────────────────────
