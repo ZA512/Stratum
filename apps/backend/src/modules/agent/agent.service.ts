@@ -262,8 +262,8 @@ export class AgentService {
       try {
         const llmAnswer = await this.tryCallLlmForChat(
           actor.actorId,
+          workspaceId,
           message,
-          dto.context ?? {},
         );
         if (llmAnswer) {
           answer = llmAnswer;
@@ -317,19 +317,15 @@ export class AgentService {
 
   private async tryCallLlmForChat(
     userId: string,
+    workspaceId: string,
     message: string,
-    context: Record<string, unknown>,
   ): Promise<string | null> {
     const userSettings = await this.usersService.getAiSettings(userId);
 
-    if (!userSettings.aiEnabled) {
-      return null;
-    }
+    if (!userSettings.aiEnabled) return null;
 
     const provider = userSettings.provider?.toLowerCase();
-    if (!provider || provider === 'heuristic') {
-      return null;
-    }
+    if (!provider || provider === 'heuristic') return null;
 
     const model =
       userSettings.model ??
@@ -339,14 +335,17 @@ export class AgentService {
           ? 'llama3.1'
           : 'gpt-4.1-mini');
 
+    const workspaceData = await this.loadWorkspaceContext(workspaceId);
+
     const systemPrompt = [
       "Tu es l'assistant IA intégré à Stratum, un outil de gestion de projet kanban.",
-      "Tu réponds en français, de façon concise et opérationnelle.",
-      "Tu aides à prioriser, analyser l'avancement et formuler des propositions d'action.",
-      "Si tu peux formuler une proposition d'action concrète, propose-la.",
+      "Tu réponds exclusivement en te basant sur les données du workspace fournies ci-dessous.",
+      "Ne génère JAMAIS de questions génériques ou de listes vides : réponds avec les vraies données.",
+      "Si une donnée n'existe pas dans le contexte, dis-le clairement et cite les éléments proches que tu as trouvés.",
+      "Sois concis, précis, opérationnel. Format markdown autorisé.",
     ].join(' ');
 
-    const payload = { message, context };
+    const llmPayload = { message, workspace: workspaceData };
 
     const settings = {
       provider,
@@ -357,12 +356,118 @@ export class AgentService {
     };
 
     if (provider === 'anthropic') {
-      return this.callAnthropic(model, systemPrompt, payload, settings);
+      return this.callAnthropic(model, systemPrompt, llmPayload, settings);
     } else if (provider === 'ollama') {
-      return this.callOllama(model, systemPrompt, payload, settings);
+      return this.callOllama(model, systemPrompt, llmPayload, settings);
     } else {
-      return this.callOpenAiCompatible(provider, model, systemPrompt, payload, settings);
+      return this.callOpenAiCompatible(provider, model, systemPrompt, llmPayload, settings);
     }
+  }
+
+  /**
+   * Charge les données réelles du workspace depuis la DB pour les injecter dans le prompt.
+   * Limité pour tenir dans le contexte LLM (<= ~200 tâches).
+   */
+  private async loadWorkspaceContext(workspaceId: string): Promise<Record<string, unknown>> {
+    const board = await this.prisma.board.findUnique({
+      where: { id: workspaceId },
+      select: {
+        node: { select: { title: true, description: true } },
+        columns: {
+          orderBy: { position: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            behavior: { select: { key: true } },
+            nodes: {
+              where: { archivedAt: null },
+              orderBy: [{ priority: 'asc' }, { dueAt: 'asc' }, { position: 'asc' }],
+              take: 30,
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                priority: true,
+                effort: true,
+                progress: true,
+                dueAt: true,
+                startAt: true,
+                tags: true,
+                kind: true,
+                blockedReason: true,
+                blockedSince: true,
+                createdAt: true,
+                updatedAt: true,
+                assignments: {
+                  select: {
+                    user: { select: { displayName: true, email: true } },
+                    role: true,
+                  },
+                },
+                comments: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 3,
+                  select: {
+                    body: true,
+                    createdAt: true,
+                    author: { select: { displayName: true } },
+                  },
+                },
+                children: {
+                  where: { archivedAt: null },
+                  select: { id: true, title: true, progress: true, priority: true },
+                  take: 10,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!board) return { error: 'Workspace introuvable' };
+
+    return {
+      name: board.node.title,
+      description: board.node.description ?? null,
+      columns: board.columns.map((col) => ({
+        id: col.id,
+        name: col.name,
+        behavior: col.behavior.key,
+        tasks: col.nodes.map((node) => ({
+          id: node.id,
+          title: node.title,
+          description: node.description ?? null,
+          kind: node.kind,
+          priority: node.priority,
+          effort: node.effort ?? null,
+          progress: node.progress,
+          dueAt: node.dueAt?.toISOString() ?? null,
+          startAt: node.startAt?.toISOString() ?? null,
+          tags: node.tags,
+          blocked: node.blockedReason
+            ? { reason: node.blockedReason, since: node.blockedSince?.toISOString() ?? null }
+            : null,
+          assignees: node.assignments.map((a) => ({
+            name: a.user.displayName,
+            email: a.user.email,
+            role: a.role,
+          })),
+          recentComments: node.comments.map((c) => ({
+            author: c.author.displayName,
+            body: c.body,
+            at: c.createdAt.toISOString(),
+          })),
+          subtasks: node.children.map((ch) => ({
+            title: ch.title,
+            progress: ch.progress,
+            priority: ch.priority,
+          })),
+          createdAt: node.createdAt.toISOString(),
+          updatedAt: node.updatedAt.toISOString(),
+        })),
+      })),
+    };
   }
 
   private async callOpenAiCompatible(
