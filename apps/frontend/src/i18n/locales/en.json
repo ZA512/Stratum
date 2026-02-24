@@ -105,6 +105,12 @@
     "languageHelp": "Your preference is saved on this device.",
     "success": "Language updated",
     "back": "Back to the dashboard",
+    "tabs": {
+      "appearance": "Appearance",
+      "ai": "Artificial intelligence",
+      "raciTeams": "RACI teams",
+      "data": "Data"
+    },
     "ai": {
       "enabledLabel": "Enable AI",
       "enabledHint": "AI is enabled — LLM calls will be used.",
@@ -239,7 +245,11 @@
         "solarizedLight": "Solarized daylight",
         "materialDark": "Material night",
         "nordDark": "Nord aurora",
-        "draculaDark": "Dracula midnight"
+        "draculaDark": "Dracula midnight",
+        "obsidianFlux": "Obsidian Flux",
+        "vulcanEmber": "Vulcan Ember",
+        "arcticPulse": "Arctic Pulse",
+        "solarForge": "Solar Forge"
       },
       "descriptions": {
         "midnight": "Current dark layout with teal highlights.",
@@ -251,7 +261,11 @@
         "solarizedLight": "Solarized beige canvas with ocean blue highlights for gentle focus.",
         "materialDark": "Material design dark mode blending mauve accents with soft contrast.",
         "nordDark": "Nord-inspired arctic blues offering calm contrast for long sessions.",
-        "draculaDark": "Dracula palette with neon violets over deep slate for dramatic focus."
+        "draculaDark": "Dracula palette with neon violets over deep slate for dramatic focus.",
+        "obsidianFlux": "Cold high-contrast dark mode with electric cyan on deep navy layers.",
+        "vulcanEmber": "Warm high-contrast dark mode with searing orange on volcanic charcoal.",
+        "arcticPulse": "Crisp cool light mode pairing icy blue surfaces with vivid electric accents.",
+        "solarForge": "Premium warm light mode with amber surfaces and a fiery terracotta accent."
       }
     },
     "raciTeams": {
@@ -1191,15 +1205,29 @@
         "newTask": "Title of the new card"
       },
       "errors": {
-        "noBacklogColumn": "No Backlog column available to create a card."
+        "noBacklogColumn": "No Backlog column available to create a card.",
+        "noColumnForChild": "Cannot create child card: no column found."
       },
       "nodeSelected": "Selected: {{title}}",
       "contextMenu": {
         "centerOnNode": "Center on this card",
         "edit": "Edit",
+        "createChild": "Create child card",
         "expand": "Expand",
         "collapse": "Collapse",
         "openChildBoard": "Open child board"
+      },
+      "prompts": {
+        "newTask": "Title of the new card",
+        "newChildTask": "Title of the child card"
+      },
+      "filter": {
+        "statusLabel": "Filter by status",
+        "BACKLOG": "Backlog",
+        "IN_PROGRESS": "In progress",
+        "BLOCKED": "Blocked",
+        "DONE": "Done",
+        "searchPlaceholder": "Search in cards…"
       },
       "priority": {
         "critical": "Critical",

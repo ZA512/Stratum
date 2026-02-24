@@ -20,6 +20,8 @@ interface MindmapNodesLayerProps {
   onHoverStart: (nodeId: string) => void;
   onHoverEnd: (nodeId: string) => void;
   registerRef?: (nodeId: string, ref: Konva.Group | null) => void;
+  // Search highlight
+  matchedNodeIds?: Set<string>;
   // Bling mode
   isBling?: boolean;
   onBlingDragStart?: (nodeId: string) => void;
@@ -35,6 +37,7 @@ function MindmapNodesLayerInner({
   nodes,
   selectedId,
   loadingIds,
+  matchedNodeIds,
   onSelect,
   onExpand,
   onOpenTask,
@@ -55,6 +58,7 @@ function MindmapNodesLayerInner({
           node={node}
           isSelected={node.id === selectedId}
           isLoading={loadingIds.has(node.id)}
+          isSearchMatch={matchedNodeIds != null && matchedNodeIds.size > 0 && matchedNodeIds.has(node.id)}
           onSelect={onSelect}
           onExpand={onExpand}
           onOpenTask={onOpenTask}

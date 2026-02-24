@@ -1615,6 +1615,17 @@ export function TeamBoardPage(){
     await refreshActiveBoard();
   };
 
+  const handleCreateChildCard = async (parentId: string, title: string) => {
+    if (!accessToken || !board) throw new Error(tBoard('alerts.sessionInvalid'));
+    const targetColumn = board.columns.find(c => (c.behaviorKey as string) === 'BACKLOG') ?? board.columns[0];
+    if (!targetColumn) throw new Error(tBoard('mindmap.errors.noColumnForChild'));
+    await handleApi(
+      () => createNode({ title, columnId: targetColumn.id, parentId }, accessToken),
+      { success: tBoard('cards.notifications.created') },
+    );
+    await refreshActiveBoard();
+  };
+
   const handleOpenCard = (id:string) => { open(id); };
   const handleRenameCard = async (id:string, newTitle:string) => {
     if(!accessToken) return; await handleApi(()=>updateNode(id,{ title: newTitle }, accessToken)); };
@@ -2547,6 +2558,7 @@ export function TeamBoardPage(){
                       }
                       await handleCreateCard(backlogColumnId, title);
                     }}
+                    onCreateChildTask={handleCreateChildCard}
                   />
                 </div>
               ) : (

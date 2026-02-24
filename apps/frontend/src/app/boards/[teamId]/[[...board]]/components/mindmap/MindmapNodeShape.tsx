@@ -55,6 +55,7 @@ interface MindmapNodeShapeProps {
   node: MindmapNode;
   isSelected: boolean;
   isLoading: boolean;
+  isSearchMatch?: boolean;
   onSelect: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
   onOpenTask: (nodeId: string) => void;
@@ -77,6 +78,7 @@ function MindmapNodeShapeInner({
   node,
   isSelected,
   isLoading,
+  isSearchMatch = false,
   onSelect,
   onExpand,
   onOpenTask,
@@ -136,11 +138,11 @@ function MindmapNodeShapeInner({
         width={w}
         height={h}
         fill="#1a1d24"
-        stroke={isSelected ? '#ffffff' : 'rgba(255,255,255,0.1)'}
-        strokeWidth={isSelected ? 2 : 1}
+        stroke={isSelected ? '#ffffff' : isSearchMatch ? '#fbbf24' : 'rgba(255,255,255,0.1)'}
+        strokeWidth={isSelected ? 2 : isSearchMatch ? 2 : 1}
         cornerRadius={8}
-        shadowBlur={isSelected ? 10 : 0}
-        shadowColor={isSelected ? '#ffffff' : undefined}
+        shadowBlur={isSelected ? 10 : isSearchMatch ? 14 : 0}
+        shadowColor={isSelected ? '#ffffff' : isSearchMatch ? '#fbbf24' : undefined}
         opacity={isLoading ? 0.6 : 1}
         onClick={() => onSelect(node.id)}
         onDblClick={() => onOpenTask(node.id)}
@@ -222,6 +224,48 @@ function MindmapNodeShapeInner({
           />
         </>
       )}
+
+      {/* Due date badge — top-right corner */}
+      {node.dueAt && (() => {
+        const dueDate = new Date(node.dueAt);
+        if (Number.isNaN(dueDate.getTime())) return null;
+        const today = new Date();
+        const diff = Math.round(
+          (new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime()
+            - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+          ) / 86400000,
+        );
+        const label = diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '0';
+        const badgeColor = diff < 0 ? '#ef4444' : diff <= 3 ? '#34d399' : '#0d9488';
+        const badgeW = 26;
+        const badgeH = 13;
+        return (
+          <Group x={halfW - badgeW / 2 - 4} y={-halfH + badgeH / 2 + 3} listening={false}>
+            <Rect
+              x={-badgeW / 2}
+              y={-badgeH / 2}
+              width={badgeW}
+              height={badgeH}
+              fill={badgeColor + '33'}
+              stroke={badgeColor + '80'}
+              strokeWidth={0.5}
+              cornerRadius={4}
+            />
+            <Text
+              x={-badgeW / 2}
+              y={-badgeH / 2 + 1}
+              width={badgeW}
+              height={badgeH}
+              text={label}
+              fontSize={8}
+              fontStyle="bold"
+              fill={badgeColor}
+              align="center"
+              verticalAlign="middle"
+            />
+          </Group>
+        );
+      })()}
 
       {/* Expand/collapse badge — only if node truly has children */}
       {node.hasChildren && (

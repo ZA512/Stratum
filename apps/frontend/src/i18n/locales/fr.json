@@ -95,6 +95,12 @@
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
     "back": "Retour au tableau de bord",
+    "tabs": {
+      "appearance": "Apparence",
+      "ai": "Intelligence artificielle",
+      "raciTeams": "Équipes RACI",
+      "data": "Données"
+    },
     "ai": {
       "title": "Paramétrage IA",
       "description": "Configurez l'IA utilisée pour le chat agent, les Quick Notes, les suggestions et l'analyse documentaire.",
@@ -229,7 +235,11 @@
         "solarizedLight": "Lumière Solarized",
         "materialDark": "Nuit matérielle",
         "nordDark": "Nord arctique",
-        "draculaDark": "Dracula minuit"
+        "draculaDark": "Dracula minuit",
+        "obsidianFlux": "Obsidian Flux",
+        "vulcanEmber": "Vulcan Ember",
+        "arcticPulse": "Arctic Pulse",
+        "solarForge": "Solar Forge"
       },
       "descriptions": {
         "midnight": "Thème sombre actuel souligné de turquoise.",
@@ -241,7 +251,11 @@
         "solarizedLight": "Palette Solarized claire mêlant base sable et bleus océaniques tout en douceur.",
         "materialDark": "Mode sombre Material associant mauves doux et contraste maîtrisé.",
         "nordDark": "Palette Nord aux bleus arctiques reposants pour de longues sessions.",
-        "draculaDark": "Palette Dracula avec violets néon sur ardoise profonde pour un style affirmé."
+        "draculaDark": "Palette Dracula avec violets néon sur ardoise profonde pour un style affirmé.",
+        "obsidianFlux": "Sombre froid très contrasté : cyan électrique sur couches bleu marine profondes.",
+        "vulcanEmber": "Sombre chaud très contrasté : orange brûlant sur charbon volcanique.",
+        "arcticPulse": "Mode clair froid et vif : surfaces glacées avec un accent bleu électrique intense.",
+        "solarForge": "Mode clair chaud premium : surfaces ambrées sublimées par un accent terracotta."
       }
     },
     "raciTeams": {
@@ -1190,15 +1204,29 @@
         "newTask": "Titre de la nouvelle carte"
       },
       "errors": {
-        "noBacklogColumn": "Aucune colonne Backlog disponible pour créer une carte."
+        "noBacklogColumn": "Aucune colonne Backlog disponible pour créer une carte.",
+        "noColumnForChild": "Impossible de créer une carte enfant : aucune colonne trouvée."
       },
       "nodeSelected": "Sélectionné : {{title}}",
       "contextMenu": {
         "centerOnNode": "Centrer sur cette carte",
         "edit": "Modifier",
+        "createChild": "Créer une carte enfant",
         "expand": "Déplier",
         "collapse": "Replier",
         "openChildBoard": "Ouvrir le sous-kanban"
+      },
+      "prompts": {
+        "newTask": "Titre de la nouvelle carte",
+        "newChildTask": "Titre de la carte enfant"
+      },
+      "filter": {
+        "statusLabel": "Filtrer par statut",
+        "BACKLOG": "Backlog",
+        "IN_PROGRESS": "En cours",
+        "BLOCKED": "Bloqué",
+        "DONE": "Terminé",
+        "searchPlaceholder": "Rechercher dans les cartes…"
       },
       "priority": {
         "critical": "Critique",

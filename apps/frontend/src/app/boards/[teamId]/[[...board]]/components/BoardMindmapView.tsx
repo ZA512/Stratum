@@ -87,7 +87,7 @@ function loadLayoutMode(boardId: string): MindmapLayoutMode {
     const raw = localStorage.getItem(`stratum:board:${boardId}:mindmap-layout-mode:v1`);
     if (raw === 'horizontal' || raw === 'radial') return raw;
   } catch { /* ignore */ }
-  return 'radial';
+  return 'horizontal';
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +136,7 @@ interface BoardMindmapViewProps {
   onOpenParentBoard?: () => void;
   hasParentBoard?: boolean;
   onCreateTask?: (title: string) => Promise<void>;
+  onCreateChildTask?: (parentId: string, title: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,7 @@ export default function BoardMindmapView({
   onOpenParentBoard,
   hasParentBoard = false,
   onCreateTask,
+  onCreateChildTask,
 }: BoardMindmapViewProps) {
   const { accessToken } = useAuth();
   const { t } = useTranslation('board');
@@ -171,7 +173,14 @@ export default function BoardMindmapView({
   const [loadedSubtrees, setLoadedSubtrees] = useState<Map<string, MindmapNode[]>>(new Map());
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
   const [layoutMode, setLayoutMode] = useState<MindmapLayoutMode>(() => loadLayoutMode(board.id));
-  const [isBling, setIsBling] = useState(false);
+  const [isBling, setIsBling] = useState(true);
+
+  // --- Filters ---
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    () => new Set(['BACKLOG', 'IN_PROGRESS', 'BLOCKED']),
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   // --- Bling physics ---
   const physicsRef = useRef<Map<string, PhysicsNode>>(new Map());
@@ -232,10 +241,77 @@ export default function BoardMindmapView({
 
   // --- Labels removed (text now rendered inside card shapes) ---
 
+  // --- Status + search filtering ---
+  const STATUS_KEYS = ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE'] as const;
+
+  const filteredNodeIds = useMemo(() => {
+    const allNodes = layoutResult.nodes;
+
+    // Step 1: status filter (depth-0 always passes)
+    const statusPassed = new Set(
+      allNodes
+        .filter(n => n.depth === 0 || statusFilter.has(n.behaviorKey ?? 'BACKLOG'))
+        .map(n => n.id),
+    );
+
+    // Step 2: search filter
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return statusPassed;
+
+    // Find nodes matching search
+    const matchSet = new Set(
+      allNodes
+        .filter(n =>
+          n.title.toLowerCase().includes(q) || (n.description ?? '').toLowerCase().includes(q),
+        )
+        .map(n => n.id),
+    );
+
+    // Build parent map for ancestor traversal
+    const parentMap = new Map(allNodes.map(n => [n.id, n.parentId]));
+
+    // Collect all ancestors of matching nodes
+    const ancestorSet = new Set<string>();
+    for (const id of matchSet) {
+      let cur: string | null | undefined = parentMap.get(id);
+      while (cur) {
+        ancestorSet.add(cur);
+        cur = parentMap.get(cur);
+      }
+    }
+
+    const searchPassed = new Set([...matchSet, ...ancestorSet]);
+
+    // Intersection with status filter
+    return new Set([...searchPassed].filter(id => statusPassed.has(id)));
+  }, [layoutResult.nodes, statusFilter, searchQuery]);
+
+  // Direct text matches only (no ancestors — used for highlight)
+  const matchedNodeIds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return new Set<string>();
+    return new Set(
+      layoutResult.nodes
+        .filter(n =>
+          n.title.toLowerCase().includes(q) || (n.description ?? '').toLowerCase().includes(q),
+        )
+        .map(n => n.id),
+    );
+  }, [layoutResult.nodes, searchQuery]);
+
+  const filteredEdges = useMemo(
+    () => layoutResult.edges.filter(
+      e => filteredNodeIds.has(e.sourceId) && filteredNodeIds.has(e.targetId),
+    ),
+    [layoutResult.edges, filteredNodeIds],
+  );
+
   // --- Viewport culling ---
   const visibleNodes = useMemo(
-    () => layoutResult.nodes.filter(n => isNodeInViewport(n, stagePos, stageScale, containerWidth, containerHeight)),
-    [layoutResult.nodes, stagePos, stageScale, containerWidth, containerHeight],
+    () => layoutResult.nodes.filter(
+      n => filteredNodeIds.has(n.id) && isNodeInViewport(n, stagePos, stageScale, containerWidth, containerHeight),
+    ),
+    [layoutResult.nodes, filteredNodeIds, stagePos, stageScale, containerWidth, containerHeight],
   );
 
   // --- Animation: layout transition ---
@@ -294,8 +370,8 @@ export default function BoardMindmapView({
   // Clamp menu position so it stays within viewport
   const clampedContextMenuPos = useMemo(() => {
     if (!contextMenu) return null;
-    const MENU_W = 200;
-    const MENU_H = 180;
+    const MENU_W = 220;
+    const MENU_H = 230;
     const x = Math.min(contextMenu.x, window.innerWidth - MENU_W - 8);
     const y = Math.min(contextMenu.y, window.innerHeight - MENU_H - 8);
     return { x: Math.max(8, x), y: Math.max(8, y) };
@@ -731,6 +807,17 @@ export default function BoardMindmapView({
     }
   }, [onCreateTask, fitToContent, t]);
 
+  const handleCreateChildTask = useCallback(async (parentId: string) => {
+    if (!onCreateChildTask) return;
+    const title = window.prompt(t('mindmap.prompts.newChildTask'));
+    if (!title || !title.trim()) return;
+    try {
+      await onCreateChildTask(parentId, title.trim());
+    } catch (error) {
+      console.error('Failed to create child task from mindmap:', error);
+    }
+  }, [onCreateChildTask, t]);
+
   // --- Panel data: show hovered card, fallback to selected card ---
   const hoveredNode = hoveredNodeId ? layoutResult.nodes.find(n => n.id === hoveredNodeId) : null;
   const selectedNode = selectedNodeId ? layoutResult.nodes.find(n => n.id === selectedNodeId) : null;
@@ -765,7 +852,7 @@ export default function BoardMindmapView({
           {/* Layer 1: Edges — non-interactive */}
           <Layer name="edges-layer" listening={false}>
             <MindmapEdgesLayer
-              edges={layoutResult.edges}
+              edges={filteredEdges}
               nodes={layoutResult.nodes}
               registerEdgeRef={registerEdgeRef}
             />
@@ -777,6 +864,7 @@ export default function BoardMindmapView({
               nodes={visibleNodes}
               selectedId={selectedNodeId}
               loadingIds={loadingNodeIds}
+              matchedNodeIds={matchedNodeIds}
               onSelect={setSelectedNodeId}
               onExpand={requestExpand}
               onOpenTask={onOpenTask}
@@ -827,6 +915,16 @@ export default function BoardMindmapView({
             >
               <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[12px]">✏️</span> <span>{t('mindmap.contextMenu.edit')}</span>
             </button>
+            {onCreateChildTask && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { closeContextMenu(); void handleCreateChildTask(contextMenu.nodeId); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+              >
+                <Plus size={14} /> <span>{t('mindmap.contextMenu.createChild')}</span>
+              </button>
+            )}
             {cmNode.hasChildren && (
               <button
                 type="button"
@@ -956,6 +1054,70 @@ export default function BoardMindmapView({
           </div>
         </div>
       )}
+
+      {/* Filter panel — top-left */}
+      <div className="absolute left-4 top-4 z-10 flex flex-col gap-2">
+        {/* Search input */}
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-surface/90 px-3 py-1.5 shadow-xl backdrop-blur">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-muted" aria-hidden>
+            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={t('mindmap.filter.searchPlaceholder')}
+            className="w-44 bg-transparent text-xs text-foreground placeholder-muted outline-none"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="shrink-0 text-muted transition hover:text-foreground"
+              aria-label="Effacer la recherche"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Status filter toggles */}
+        <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-surface/90 px-3 py-1.5 shadow-xl backdrop-blur">
+          {STATUS_KEYS.map(key => {
+            const checked = statusFilter.has(key);
+            const colors: Record<string, string> = {
+              BACKLOG: 'text-amber-400',
+              IN_PROGRESS: 'text-sky-400',
+              BLOCKED: 'text-rose-400',
+              DONE: 'text-emerald-400',
+            };
+            return (
+              <label key={key} className={`flex cursor-pointer items-center gap-1 text-[11px] font-medium transition ${checked ? colors[key] : 'text-muted'}`}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    setStatusFilter(prev => {
+                      const next = new Set(prev);
+                      if (checked) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    })
+                  }
+                  className="sr-only"
+                />
+                <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition ${checked ? 'border-current bg-current/20' : 'border-white/20'}`}>
+                  {checked && (
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden><path d="M1.5 4L3 5.5L6.5 2"/></svg>
+                  )}
+                </span>
+                {t(`mindmap.filter.${key}`)}
+              </label>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Toolbar (DOM) */}
       <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full border border-white/10 bg-surface/90 px-2 py-1 shadow-xl backdrop-blur">

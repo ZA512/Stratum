@@ -4,6 +4,7 @@ const themeColors = {
   background: "rgb(var(--color-background) / <alpha-value>)",
   surface: "rgb(var(--color-surface) / <alpha-value>)",
   card: "rgb(var(--color-card) / <alpha-value>)",
+  elevated: "rgb(var(--color-elevated) / <alpha-value>)",
   input: "rgb(var(--color-input) / <alpha-value>)",
   border: "rgb(var(--color-border) / <alpha-value>)",
   accent: "rgb(var(--color-accent) / <alpha-value>)",
@@ -27,6 +28,8 @@ const config: Config = {
       borderColor: {
         DEFAULT: themeColors.border,
         border: themeColors.border,
+        subtle: "rgb(var(--color-border-subtle) / <alpha-value>)",
+        strong: "rgb(var(--color-border-strong) / <alpha-value>)",
       },
       ringColor: {
         accent: themeColors.accent,
