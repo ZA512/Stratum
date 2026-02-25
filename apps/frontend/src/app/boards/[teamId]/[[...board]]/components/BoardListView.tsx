@@ -2482,53 +2482,56 @@ export function BoardListView({
                   return (
                     <tr
                       key={row.id}
-                      className={`border-b border-white/5 align-top transition hover:bg-white/[0.03] ${isContextRow ? "opacity-60" : "opacity-100"}`}
+                      className={`group border-b border-white/5 align-middle transition hover:bg-white/[0.03] ${isContextRow ? "opacity-50" : "opacity-100"}`}
                     >
                       {visibleColumns.map((column) => {
                         if (column === "title") {
                           return (
-                            <td key={column} className="px-3 py-2">
-                              <div className="flex items-start gap-2" style={{ paddingLeft: normalizedFilters.renderMode === "TREE" ? depth * 14 : 0 }}>
+                            <td key={column} className="px-3 py-0.5">
+                              <div className="flex items-center gap-1" style={{ paddingLeft: normalizedFilters.renderMode === "TREE" ? depth * 12 : 0 }}>
                                 {normalizedFilters.renderMode === "TREE" ? (
                                   <button
                                     type="button"
                                     onClick={(event) => toggleExpand(row.id, event.shiftKey)}
                                     disabled={childrenCount === 0}
-                                    className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-xs transition ${
+                                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-xs transition ${
                                       childrenCount > 0
                                         ? "text-muted hover:bg-white/5 hover:text-foreground"
-                                        : "cursor-default text-muted/30"
+                                        : "cursor-default text-muted/20"
                                     }`}
                                     title={childrenCount > 0 ? "Deplier/replier (Shift: sous-arbre)" : "Pas d'enfants"}
                                   >
                                     {childrenCount > 0 ? (
-                                      <span className="material-symbols-outlined text-[16px] leading-none">
+                                      <span className="material-symbols-outlined text-[13px] leading-none">
                                         {expanded ? "expand_more" : "chevron_right"}
                                       </span>
                                     ) : (
-                                      <span className="material-symbols-outlined text-[14px] leading-none">fiber_manual_record</span>
+                                      <span className="material-symbols-outlined text-[8px] leading-none">circle</span>
                                     )}
                                   </button>
                                 ) : null}
-                                <div className="min-w-0 space-y-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {row.shortId !== null && <span className="text-xs font-semibold text-muted">#{row.shortId}</span>}
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenTask(row.id)}
-                                      title={row.description?.trim() || row.title}
-                                      className="truncate text-left text-sm font-semibold text-foreground transition hover:text-accent"
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  {row.shortId !== null && <span className="shrink-0 text-[11px] font-semibold text-muted/60">#{row.shortId}</span>}
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenTask(row.id)}
+                                    title={row.description?.trim() || row.title}
+                                    className="min-w-0 truncate text-left text-sm font-medium text-foreground transition hover:text-accent"
+                                  >
+                                    {row.title}
+                                  </button>
+                                  {normalizedFilters.renderMode === "FLAT" && row.pathLabel && (
+                                    <span
+                                      className="hidden shrink-0 max-w-[180px] truncate text-[10px] text-muted/50 xl:inline"
+                                      title={row.pathLabel}
                                     >
-                                      {row.title}
-                                    </button>
-                                    {isContextRow && (
-                                      <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                                        Contexte
-                                      </span>
-                                    )}
-                                  </div>
-                                  {normalizedFilters.renderMode === "FLAT" && (
-                                    <div className="truncate text-xs text-muted">{row.pathLabel}</div>
+                                      {row.pathLabel.split(" › ").slice(-2).join(" › ")}
+                                    </span>
+                                  )}
+                                  {isContextRow && (
+                                    <span className="shrink-0 rounded-full border border-white/15 px-1.5 text-[9px] uppercase tracking-wide text-muted/70">
+                                      Ctx
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -2541,12 +2544,12 @@ export function BoardListView({
                           const options = board?.columns ?? [];
 
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <select
                                 value={row.columnId}
                                 onChange={(event) => void applyStatusUpdate(row, event.target.value)}
                                 disabled={rowDisabled || row.sharedPlacementLocked}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60"
+                                className="w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
                                 title={row.sharedPlacementLocked ? "Deplacement verrouille pour ce partage" : "Modifier statut"}
                               >
                                 {options.map((columnOption) => (
@@ -2561,12 +2564,12 @@ export function BoardListView({
 
                         if (column === "priority") {
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <select
                                 value={row.priority}
                                 onChange={(event) => void applyPriorityUpdate(row, event.target.value as PriorityValue)}
                                 disabled={rowDisabled}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60"
+                                className="w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
                               >
                                 <option value="CRITICAL">{tBoard("priority.labels.CRITICAL")}</option>
                                 <option value="HIGH">{tBoard("priority.labels.HIGH")}</option>
@@ -2582,12 +2585,12 @@ export function BoardListView({
                         if (column === "progress") {
                           const progressValue = row.progress ?? 0;
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <select
                                 value={progressValue}
                                 onChange={(event) => void applyProgressUpdate(row, Number(event.target.value))}
                                 disabled={rowDisabled}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                                className="w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
                               >
                                 {Array.from({ length: 21 }, (_, idx) => idx * 5).map((value) => (
                                   <option key={value} value={value}>
@@ -2601,7 +2604,7 @@ export function BoardListView({
 
                         if (column === "effort") {
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <select
                                 value={row.effort ?? ""}
                                 onChange={(event) =>
@@ -2611,7 +2614,7 @@ export function BoardListView({
                                   )
                                 }
                                 disabled={rowDisabled}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                                className="w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
                               >
                                 <option value="">{tBoard("filters.effort.noEffort")}</option>
                                 <option value="UNDER2MIN">{tBoard("filters.effort.options.UNDER2MIN")}</option>
@@ -2629,13 +2632,13 @@ export function BoardListView({
                         if (column === "assignee") {
                           const assigneeOptions = getAssigneeOptionsForRow(row);
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <select
                                 value={row.assigneeIds[0] ?? ""}
                                 onFocus={() => void ensureCollaboratorsForNode(row)}
                                 onChange={(event) => void applyAssigneeUpdate(row, event.target.value || null)}
                                 disabled={rowDisabled}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60 [color-scheme:dark]"
+                                className="w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
                               >
                                 <option value="">Non assigne</option>
                                 {assigneeOptions.map((option) => (
@@ -2654,15 +2657,20 @@ export function BoardListView({
                         if (column === "deadline") {
                           const dateValue = row.dueAt ? row.dueAt.slice(0, 10) : "";
                           return (
-                            <td key={column} className="space-y-1 px-3 py-2">
-                              <input
-                                type="date"
-                                value={dateValue}
-                                onChange={(event) => void applyDeadlineUpdate(row, event.target.value)}
-                                disabled={rowDisabled}
-                                className="w-full rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-foreground outline-none focus:border-accent disabled:opacity-60"
-                              />
-                              <div className="text-[11px] text-muted">{dueLabel(row.dueAt)}</div>
+                            <td key={column} className="px-3 py-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="date"
+                                  value={dateValue}
+                                  onChange={(event) => void applyDeadlineUpdate(row, event.target.value)}
+                                  disabled={rowDisabled}
+                                  title={dueLabel(row.dueAt) ?? undefined}
+                                  className="rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-xs text-foreground outline-none transition [color-scheme:dark] group-hover:border-white/10 group-hover:bg-surface focus:border-accent focus:bg-surface disabled:opacity-40"
+                                />
+                                {row.dueAt && (
+                                  <span className="shrink-0 text-[10px] text-muted">{dueLabel(row.dueAt)}</span>
+                                )}
+                              </div>
                             </td>
                           );
                         }
@@ -2670,13 +2678,13 @@ export function BoardListView({
                         if (column === "updatedAt") {
                           const activityLogs = activityByNodeId.get(row.id) ?? [];
                           return (
-                            <td key={column} className="px-3 py-2 text-xs text-muted">
-                              <div className="group relative inline-flex items-center gap-2">
+                            <td key={column} className="px-3 py-0.5 text-xs text-muted">
+                              <div className="group relative inline-flex items-center gap-1.5">
                                 <span>{row.updatedAt ? dateFormatter.format(new Date(row.updatedAt)) : "-"}</span>
                                 <button
                                   type="button"
                                   onMouseEnter={() => void ensureActivityForNode(row.id)}
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded border border-transparent text-muted/30 transition group-hover:border-white/10 group-hover:text-muted hover:!border-accent hover:!text-foreground"
                                   title="Voir les logs de la carte"
                                   aria-label="Voir les logs de la carte"
                                 >
@@ -2709,8 +2717,8 @@ export function BoardListView({
 
                         if (column === "counters") {
                           return (
-                            <td key={column} className="px-3 py-2">
-                              <span className="rounded border border-white/15 px-2 py-1 font-mono text-xs text-muted">
+                            <td key={column} className="px-3 py-0.5">
+                              <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[11px] text-muted/70">
                                 {row.counts.backlog}.{row.counts.inProgress}.{row.counts.blocked}.{row.counts.done}
                               </span>
                             </td>
@@ -2719,7 +2727,7 @@ export function BoardListView({
 
                         if (column === "flags") {
                           return (
-                            <td key={column} className="px-3 py-2">
+                            <td key={column} className="px-3 py-0.5">
                               <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted">
                                 {row.columnBehavior === "BLOCKED" && (
                                   <span className="rounded-full border border-rose-400/40 px-2 py-0.5 text-rose-200">Bloque</span>
@@ -2734,58 +2742,58 @@ export function BoardListView({
 
                         if (column === "path") {
                           return (
-                            <td key={column} className="max-w-[320px] px-3 py-2 text-xs text-muted" title={row.pathLabel}>
+                            <td key={column} className="max-w-[280px] px-3 py-0.5 text-[11px] text-muted/70" title={row.pathLabel}>
                               <span className="line-clamp-2">{row.pathLabel}</span>
                             </td>
                           );
                         }
 
                         return (
-                          <td key={column} className="px-3 py-2 text-xs text-muted">
+                          <td key={column} className="px-3 py-0.5 text-xs text-muted">
                             -
                           </td>
                         );
                       })}
 
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                      <td className="px-2 py-0.5">
+                        <div className="flex items-center gap-0.5 text-[11px] opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             type="button"
                             onClick={() => void createChild(row)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
                             title="Creer une carte enfant"
                             aria-label="Creer une carte enfant"
                           >
-                            <span className="material-symbols-outlined text-[15px]">subdirectory_arrow_right</span>
+                            <span className="material-symbols-outlined text-[13px]">subdirectory_arrow_right</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => void createSibling(row)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
                             title="Creer une carte au meme niveau"
                             aria-label="Creer une carte au meme niveau"
                           >
-                            <span className="material-symbols-outlined text-[15px]">add</span>
+                            <span className="material-symbols-outlined text-[13px]">add</span>
                           </button>
                           {row.childBoardId && (
                             <button
                               type="button"
                               onClick={() => onOpenBoard(row.childBoardId)}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
                               title="Ouvrir le sous-kanban"
                               aria-label="Ouvrir le sous-kanban"
                             >
-                              <span className="material-symbols-outlined text-[15px]">account_tree</span>
+                              <span className="material-symbols-outlined text-[13px]">account_tree</span>
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => onOpenTask(row.id)}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/15 text-muted transition hover:border-accent hover:text-foreground"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
                             title="Ouvrir le detail / deplacer"
                             aria-label="Ouvrir le detail / deplacer"
                           >
-                            <span className="material-symbols-outlined text-[15px]">open_in_new</span>
+                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
                           </button>
                         </div>
                       </td>
