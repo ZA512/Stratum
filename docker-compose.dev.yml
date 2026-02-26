@@ -1,5 +1,3 @@
-# Docker Compose pour développement local (sans frontend/backend)
-# Lancer frontend/backend en local avec npm
 
 services:
   postgres:

@@ -9,11 +9,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432" # exposer seulement si nécessaire (peut être retiré en prod)
+      - "${POSTGRES_PORT:-5432}:5432" # expose only if needed (can be removed in prod)
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      # Éviter CMD-SHELL (certaines images durcies n'embarquent pas /bin/sh)
+      # Avoid CMD-SHELL (some hardened images do not ship with /bin/sh)
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
@@ -23,12 +23,12 @@ services:
     image: ${REDIS_IMAGE:-redis:7-alpine}
     container_name: stratum-redis
     restart: unless-stopped
-    # Certaines images durcies (ex: DHI) activent un mode “protected” qui refuse
-    # les connexions depuis d'autres containers. On force un bind réseau explicite.
-    # Désactivation de la persistance pour éviter les erreurs MISCONF en dev
+    # Some hardened images (e.g. DHI) enable "protected" mode which refuses
+    # connections from other containers. Force explicit network bind.
+    # Disable persistence to avoid MISCONF errors in dev
     command: ["redis-server", "--bind", "0.0.0.0", "--protected-mode", "no", "--save", "", "--appendonly", "no"]
     ports:
-      # Windows a souvent un service/port réservé sur 6379. Par défaut on bind en local et on décale le port hôte.
+      # Windows often reserves port 6379. By default bind to localhost and shift the host port.
       - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-16379}:6379"
     volumes:
       - redis_data:/data

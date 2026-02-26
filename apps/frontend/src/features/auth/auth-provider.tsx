@@ -219,8 +219,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.replace(`/login?next=${next}`);
         }
       }
-    } catch (error) {
-      console.warn("Impossible de lire la session locale", error);
+    } catch {
+      // ignore local session read errors
     } finally {
       setInitializing(false);
     }

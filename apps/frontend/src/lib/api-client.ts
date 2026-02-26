@@ -113,8 +113,7 @@ export function initializeApiClient(cfg: ApiClientConfig): void {
       broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
       broadcastChannel.onmessage = handleBroadcastMessage;
     } catch {
-      // Fallback: certains navigateurs ne supportent pas BroadcastChannel
-      console.debug('BroadcastChannel non supporté, utilisation de localStorage events');
+      // Fallback: some browsers do not support BroadcastChannel
     }
   }
   
@@ -253,8 +252,7 @@ async function performTokenRefresh(): Promise<boolean> {
     });
     
     return true;
-  } catch (error) {
-    console.error('Token refresh failed:', error);
+  } catch {
     return false;
   }
 }

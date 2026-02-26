@@ -164,8 +164,7 @@ export function MoveCardDialog({
             }
 
             return option;
-          } catch (error) {
-            console.error(`Erreur lors du chargement de la hiérarchie pour ${nodeId}:`, error);
+          } catch {
             return null;
           }
         };

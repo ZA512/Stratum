@@ -10,7 +10,6 @@ import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 async function main() {
   const prisma = new PrismaClient(buildPrismaClientOptions());
   try {
-    console.log('🚩 Reset personnel: démarrage');
     // Étape 1: (optionnel) Purge des boards orphelins personnels sans owner.
     // Nettoyage léger désactivé (champ ownerUserId non reconnu dans génération Prisma actuelle)
 
@@ -99,11 +98,8 @@ async function main() {
         where: { id: rootNode.id },
         data: { statusMetadata: { boardId: board.id } as any },
       });
-      console.log('✅ Espace personnel créé pour', user.email, '-> board', board.id);
     }
-    console.log('🎉 Reset personnel terminé');
   } catch (e) {
-    console.error('❌ Reset personnel échoué', e);
     process.exitCode = 1;
   } finally {
     // eslint-disable-next-line no-console

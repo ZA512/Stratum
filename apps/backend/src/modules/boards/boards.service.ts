@@ -314,13 +314,8 @@ export class BoardsService {
 
     if (isOtherPersonalBoard) {
       // Sur le board personnel d'Alice, Bob ne voit QUE les tâches avec placement
-      console.log(
-        '[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements',
-        {
-          userId,
-          boardOwnerId: board.ownerUserId,
-          sharedPlacementsCount: sharedPlacements.length,
-        },
+      this.logger.debug(
+        `[boards.getBoardWithNodes] Loading other user personal board - showing only shared placements userId=${userId} boardOwnerId=${board.ownerUserId} sharedPlacements=${sharedPlacements.length}`,
       );
     } else {
       // Sur son propre board, l'utilisateur voit toutes les tâches du board

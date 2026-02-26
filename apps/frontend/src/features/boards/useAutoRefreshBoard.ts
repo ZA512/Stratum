@@ -68,10 +68,8 @@ export function useAutoRefreshBoard({
       try {
         await onRefresh();
         lastRefreshTimeRef.current = Date.now();
-      } catch (error) {
-        // Erreur silencieuse pour ne pas polluer la console
-        // Les erreurs critiques seront gérées par le board-data-provider
-        console.debug('Auto-refresh board error:', error);
+      } catch {
+        // Silent: critical errors are handled by the board-data-provider
       } finally {
         isRefreshingRef.current = false;
       }

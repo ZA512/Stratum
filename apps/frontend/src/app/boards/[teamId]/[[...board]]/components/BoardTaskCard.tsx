@@ -128,16 +128,6 @@ export function BoardTaskCard({
 
     const result = lines.join('\n');
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[RACI tooltip]', {
-        nodeId: node.id,
-        hasRaci: !!node.raci,
-        assigneesCount: node.assignees?.length || 0,
-        tooltip: result,
-        showOwner: displayOptions.showOwner,
-      });
-    }
-
     return result;
   }, [raciDetails, node.id, node.raci, node.assignees, displayOptions.showOwner]);
 

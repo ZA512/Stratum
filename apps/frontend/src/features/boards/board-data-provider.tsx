@@ -153,8 +153,8 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
         if (root?.id && root.id !== activeBoardId) {
           router.replace(`/boards/${teamId}/${root.id}`);
         }
-      } catch (err) {
-        console.error("[BoardDataProvider] Failed to fetch root board:", err);
+      } catch {
+        // ignore: will retry on next render cycle
       }
     })();
   }, [boardQuery.error, activeBoardId, teamId, accessToken, queryClient, router]);

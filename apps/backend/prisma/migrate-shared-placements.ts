@@ -74,7 +74,6 @@ async function getNextPosition(columnId: string): Promise<number> {
 }
 
 async function main() {
-  console.log('🚀 Migration des tâches partagées vers SharedNodePlacement...\n');
 
   // Trouver toutes les tâches avec des collaborateurs
   const sharedNodes = await prisma.node.findMany({
@@ -95,7 +94,6 @@ async function main() {
     },
   });
 
-  console.log(`✅ Trouvé ${sharedNodes.length} tâche(s) partagée(s)\n`);
 
   let totalPlacements = 0;
   let skipped = 0;
@@ -111,8 +109,6 @@ async function main() {
       continue;
     }
 
-    console.log(`📌 Tâche: "${node.title}" (${node.id})`);
-    console.log(`   Collaborateurs: ${collaborators.length}`);
 
     // Ajouter aussi le créateur si pas déjà dans les collaborateurs
     const allUserIds = new Set<string>();
@@ -134,7 +130,6 @@ async function main() {
         });
 
         if (existing) {
-          console.log(`   ⏭️  Placement existe déjà pour utilisateur ${userId}`);
           continue;
         }
 
@@ -143,13 +138,11 @@ async function main() {
         try {
           personalBoard = await getUserPersonalBoard(userId);
         } catch (err) {
-          console.log(`   ⚠️  Pas de board personnel pour ${userId}, skip`);
           skipped++;
           continue;
         }
 
         if (!personalBoard.columns || personalBoard.columns.length === 0) {
-          console.log(`   ⚠️  Pas de colonnes pour le board de ${userId}, skip`);
           skipped++;
           continue;
         }
@@ -167,29 +160,18 @@ async function main() {
           },
         });
 
-        console.log(
-          `   ✅ Placement créé pour ${userId} dans colonne "${firstColumn.name}"`,
-        );
         totalPlacements++;
       } catch (err) {
-        console.error(`   ❌ Erreur pour utilisateur ${userId}:`, err);
         errors++;
       }
     }
 
-    console.log('');
   }
 
-  console.log('\n📊 Résumé:');
-  console.log(`   ✅ Placements créés: ${totalPlacements}`);
-  console.log(`   ⏭️  Skippés: ${skipped}`);
-  console.log(`   ❌ Erreurs: ${errors}`);
-  console.log('\n🎉 Migration terminée!\n');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Erreur fatale:', e);
     process.exit(1);
   })
   .finally(async () => {

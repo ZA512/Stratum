@@ -192,7 +192,6 @@ async function seedDemoNodes(prisma: PrismaClient, rootNodeId: string, userId: s
 }
 
 async function createDeepHierarchy(prisma: PrismaClient) {
-  console.log('🔷 Création hiérarchie profonde (breadcrumb test)');
   const backlogNode = await prisma.node.findUnique({ where: { id: DEMO_IDS.nodes.backlog } });
   if (!backlogNode) return;
 
@@ -261,7 +260,6 @@ async function createDeepHierarchy(prisma: PrismaClient) {
     }
   });
 
-  console.log('✅ Hiérarchie profonde créée');
 }
 
 export async function seedDemoData(prisma: PrismaClient): Promise<void> {
@@ -276,7 +274,6 @@ if (require.main === module) {
   const prisma = new PrismaClient(buildPrismaClientOptions());
   seedDemoData(prisma)
     .catch((error) => {
-      console.error('[seed] failed', error);
       process.exitCode = 1;
     })
     .finally(async () => {

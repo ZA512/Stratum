@@ -396,9 +396,8 @@ export const TaskDrawer: React.FC = () => {
       
       close();
       refreshActiveBoard();
-    } catch (error) {
-      console.error('Erreur archivage/désarchivage carte:', error);
-  toastError(isArchived ? tBoard('taskDrawer.errors.unarchiveFailed') : tBoard('taskDrawer.errors.archiveFailed'));
+    } catch {
+      toastError(isArchived ? tBoard('taskDrawer.errors.unarchiveFailed') : tBoard('taskDrawer.errors.archiveFailed'));
     } finally {
       setSaving(false);
     }
@@ -412,9 +411,8 @@ export const TaskDrawer: React.FC = () => {
       await resetBacklogArchiveCounter(board.id, detail.id, accessToken);
   success(tBoard('taskDrawer.toasts.archiveCounterReset'));
       await refresh();
-    } catch (error) {
-      console.error('Erreur reset compteur archive:', error);
-  toastError(tBoard('taskDrawer.errors.archiveCounterFailed'));
+    } catch {
+      toastError(tBoard('taskDrawer.errors.archiveCounterFailed'));
     } finally {
       setResettingArchiveCounter(false);
     }
@@ -691,7 +689,6 @@ export const TaskDrawer: React.FC = () => {
       blockedEta !== '' ||
       isBlockResolved
     )) {
-      console.log('🧹 Clearing blocked fields - not in BLOCKED column anymore');
       setBlockedReason('');
       setBlockedEmails([]);
       setBlockedEmailInput('');

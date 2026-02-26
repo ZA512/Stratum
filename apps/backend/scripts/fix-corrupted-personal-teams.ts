@@ -22,7 +22,6 @@ import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 const prisma = new PrismaClient(buildPrismaClientOptions());
 
 async function main() {
-  console.log('🔍 Recherche des teams personnelles corrompues...\n');
 
   // Trouver toutes les teams personnelles
   const personalTeams = await prisma.team.findMany({
@@ -47,41 +46,27 @@ async function main() {
     },
   });
 
-  console.log(`📊 Trouvé ${personalTeams.length} team(s) personnelle(s)\n`);
 
   const corruptedTeams = personalTeams.filter(t => t.memberships.length > 1);
 
   if (corruptedTeams.length === 0) {
-    console.log('✅ Aucune team personnelle corrompue détectée !\n');
     return;
   }
 
-  console.log(`🚨 ${corruptedTeams.length} team(s) personnelle(s) corrompue(s) détectée(s) !\n`);
 
   for (const team of corruptedTeams) {
-    console.log(`❌ Team: ${team.name} (${team.id})`);
-    console.log(`   Membres (${team.memberships.length}):`, team.memberships.map(m => m.user.email).join(', '));
-    console.log(`   Node(s) racine: ${team.nodes.length}`);
     
     if (team.nodes.length > 0) {
       const rootNode = team.nodes[0];
-      console.log(`   Board owner: ${rootNode.board?.ownerUserId ?? 'NULL'}`);
     }
-    console.log('');
   }
 
   if (!process.argv.includes('--fix')) {
-    console.log('\n💡 Pour réparer ces teams corrompues, exécutez:');
-    console.log('   npx tsx scripts/fix-corrupted-personal-teams.ts --fix\n');
-    console.log('⚠️  ATTENTION: Cette opération va créer de nouvelles teams pour chaque utilisateur');
-    console.log('   et migrer les données appropriées. Assurez-vous d\'avoir une sauvegarde !\n');
     return;
   }
 
-  console.log('🔧 Début de la réparation...\n');
 
   for (const corruptedTeam of corruptedTeams) {
-    console.log(`\n🔨 Réparation de la team "${corruptedTeam.name}" (${corruptedTeam.id})...\n`);
 
     // Identifier le "vrai" propriétaire (celui qui correspond au board owner si disponible)
     const rootNode = corruptedTeam.nodes[0];
@@ -96,13 +81,11 @@ async function main() {
       )[0];
     }
 
-    console.log(`   👤 Propriétaire légitime identifié: ${originalOwner.user.email}`);
 
     // Pour chaque autre membre, créer sa propre team personnelle
     const intruders = corruptedTeam.memberships.filter(m => m.userId !== originalOwner.userId);
 
     for (const intruder of intruders) {
-      console.log(`   🚚 Migration de ${intruder.user.email} vers une nouvelle team...`);
 
       try {
         // Créer une nouvelle team personnelle pour l'intrus
@@ -196,21 +179,16 @@ async function main() {
           where: { id: intruder.id },
         });
 
-        console.log(`   ✅ ${intruder.user.email} migré vers sa propre team (${newTeam.id})`);
       } catch (error) {
-        console.error(`   ❌ Erreur lors de la migration de ${intruder.user.email}:`, error);
       }
     }
 
-    console.log(`   ✅ Team "${corruptedTeam.name}" réparée ! Propriétaire: ${originalOwner.user.email}\n`);
   }
 
-  console.log('\n✅ Réparation terminée !');
 }
 
 main()
   .catch((error) => {
-    console.error('❌ Erreur fatale:', error);
     process.exit(1);
   })
   .finally(async () => {

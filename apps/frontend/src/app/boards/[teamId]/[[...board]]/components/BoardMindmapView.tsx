@@ -476,7 +476,6 @@ export default function BoardMindmapView({
       return subtreeNodes;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return [];
-      console.error(`Failed to load subtree for node ${nodeId}:`, err);
       return [];
     } finally {
       expandControllersRef.current.delete(nodeId);
@@ -815,8 +814,8 @@ export default function BoardMindmapView({
     try {
       await onCreateTask(title.trim());
       fitToContent();
-    } catch (error) {
-      console.error('Failed to create task from mindmap:', error);
+    } catch {
+      // task creation errors are handled by the caller
     }
   }, [onCreateTask, fitToContent, t]);
 
@@ -826,8 +825,8 @@ export default function BoardMindmapView({
     if (!title || !title.trim()) return;
     try {
       await onCreateChildTask(parentId, title.trim());
-    } catch (error) {
-      console.error('Failed to create child task from mindmap:', error);
+    } catch {
+      // task creation errors are handled by the caller
     }
   }, [onCreateChildTask, t]);
 

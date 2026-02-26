@@ -200,10 +200,7 @@ export class TeamsService {
           });
         }
       } catch (err) {
-        console.warn(
-          '[teams.bootstrapForUser] personal board repair skipped',
-          err,
-        );
+        this.logger.warn(`[teams.bootstrapForUser] personal board repair skipped: ${err}`);
       }
 
       return {

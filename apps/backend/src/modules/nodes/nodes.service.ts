@@ -2988,7 +2988,7 @@ export class NodesService {
       });
     } catch (error) {
       // Le logging des mails ne doit jamais bloquer la création du commentaire
-      console.error("Erreur lors de la simulation d'envoi de mail", error);
+      this.logger.error(`Erreur lors de la simulation d'envoi de mail: ${error}`);
     }
   }
 

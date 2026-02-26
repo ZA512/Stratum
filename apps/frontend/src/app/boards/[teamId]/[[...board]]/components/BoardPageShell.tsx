@@ -331,17 +331,6 @@ function TeamBoardPageInner(){
   // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
   const shouldPoll = board?.isShared ?? true; // Default true (safe) si indéterminé
   
-  // Debug: vérifier le comportement du polling
-  useEffect(() => {
-    if (board && activeBoardId) {
-      console.debug('[BoardPageShell] Polling status:', {
-        boardId: activeBoardId,
-        isShared: board.isShared,
-        shouldPoll,
-      });
-    }
-  }, [board, shouldPoll, activeBoardId]);
-  
   useAutoRefreshBoard({
     intervalMs: 15000, // 15 secondes
     onRefresh: refreshActiveBoard,
@@ -1148,8 +1137,8 @@ function TeamBoardPageInner(){
       if (archivedColumnIdRef.current === columnId) {
         setArchivedNodes(items);
       }
-    } catch (err) {
-      console.error('Erreur rafraîchissement tâches archivées:', err);
+    } catch {
+      // silently ignore archived tasks refresh errors
     }
   }, [board, accessToken]);
 
@@ -1697,19 +1686,6 @@ function TeamBoardPageInner(){
     const sourceCol = currentCols.find(c=>c.id===activeColId);
     const finalTargetCol = currentCols.find(c=>c.id===overColId);
     
-    if (process.env.NODE_ENV !== 'production') {
-      // Debug drag columns
-      console.debug('[DnD] dragEnd', {
-        movingCardId: activeId,
-        activeColId,
-        overRawId: overId,
-        overData,
-        derivedOverColId: overColId,
-        sourceCol: sourceCol ? { id: sourceCol.id, name: sourceCol.name } : null,
-        finalTargetCol: finalTargetCol ? { id: finalTargetCol.id, name: finalTargetCol.name } : null,
-        allColumns: currentCols.map(c => ({ id: c.id, name: c.name, behaviorKey: c.behaviorKey })),
-      });
-    }
     if(!sourceCol || !finalTargetCol){
       setDraggingCard(null);
       return;

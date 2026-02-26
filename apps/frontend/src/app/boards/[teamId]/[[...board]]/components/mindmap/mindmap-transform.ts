@@ -183,17 +183,6 @@ export function transformSubBoardToNodes(
     });
   }
 
-  // Dev-only coherence assertion
-  if (process.env.NODE_ENV === 'development') {
-    const idSet = new Set(nodes.map(n => n.id));
-    for (const node of nodes) {
-      if (node.parentId !== parentNodeId && !idSet.has(node.parentId!)) {
-        console.error(
-          `[transformSubBoardToNodes] orphan parentId: node ${node.id} has parentId=${node.parentId} not present in subtree`,
-        );
-      }
-    }
-  }
 
   return nodes;
 }
