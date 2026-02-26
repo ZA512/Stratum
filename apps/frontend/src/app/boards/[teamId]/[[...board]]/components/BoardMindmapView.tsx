@@ -29,6 +29,7 @@ import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 
 import { MindmapEdgesLayer } from './mindmap/MindmapEdgesLayer';
 import { MindmapNodesLayer } from './mindmap/MindmapNodesLayer';
+import { useBoardFilters } from '../context/BoardFilterContext';
 
 // ---------------------------------------------------------------------------
 // localStorage helpers (versioned keys)
@@ -137,6 +138,9 @@ interface BoardMindmapViewProps {
   hasParentBoard?: boolean;
   onCreateTask?: (title: string) => Promise<void>;
   onCreateChildTask?: (parentId: string, title: string) => Promise<void>;
+  /** Filtre de statut controlé depuis l'extérieur (rightSlot du BoardFilterBar) */
+  statusFilter?: Set<string>;
+  onStatusFilterChange?: (filter: Set<string>) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +156,8 @@ export default function BoardMindmapView({
   hasParentBoard = false,
   onCreateTask,
   onCreateChildTask,
+  statusFilter: externalStatusFilter,
+  onStatusFilterChange,
 }: BoardMindmapViewProps) {
   const { accessToken } = useAuth();
   const { t } = useTranslation('board');
@@ -179,8 +185,15 @@ export default function BoardMindmapView({
   const [statusFilter, setStatusFilter] = useState<Set<string>>(
     () => new Set(['BACKLOG', 'IN_PROGRESS', 'BLOCKED']),
   );
-  const [searchQuery, setSearchQuery] = useState('');
+  // searchQuery est piloté par le contexte partagé (BoardFilterBar) ;
+  // le champ local du mindmap sert également de shortcut et reste en sync.
+  const { filters: sharedFilters, setSearchQuery } = useBoardFilters();
+  const searchQuery = sharedFilters.searchQuery;
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // Si le statusFilter est contrôlé de l'extérieur, utiliser la valeur externe
+  const effectiveStatusFilter = externalStatusFilter ?? statusFilter;
+  const effectiveSetStatusFilter = onStatusFilterChange ?? setStatusFilter;
 
   // --- Bling physics ---
   const physicsRef = useRef<Map<string, PhysicsNode>>(new Map());
@@ -250,7 +263,7 @@ export default function BoardMindmapView({
     // Step 1: status filter (depth-0 always passes)
     const statusPassed = new Set(
       allNodes
-        .filter(n => n.depth === 0 || statusFilter.has(n.behaviorKey ?? 'BACKLOG'))
+        .filter(n => n.depth === 0 || effectiveStatusFilter.has(n.behaviorKey ?? 'BACKLOG'))
         .map(n => n.id),
     );
 
@@ -284,7 +297,7 @@ export default function BoardMindmapView({
 
     // Intersection with status filter
     return new Set([...searchPassed].filter(id => statusPassed.has(id)));
-  }, [layoutResult.nodes, statusFilter, searchQuery]);
+  }, [layoutResult.nodes, effectiveStatusFilter, searchQuery]);
 
   // Direct text matches only (no ancestors — used for highlight)
   const matchedNodeIds = useMemo(() => {
@@ -1055,69 +1068,7 @@ export default function BoardMindmapView({
         </div>
       )}
 
-      {/* Filter panel — top-left */}
-      <div className="absolute left-4 top-4 z-10 flex flex-col gap-2">
-        {/* Search input */}
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-surface/90 px-3 py-1.5 shadow-xl backdrop-blur">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0 text-muted" aria-hidden>
-            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder={t('mindmap.filter.searchPlaceholder')}
-            className="w-44 bg-transparent text-xs text-foreground placeholder-muted outline-none"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="shrink-0 text-muted transition hover:text-foreground"
-              aria-label="Effacer la recherche"
-            >
-              ×
-            </button>
-          )}
-        </div>
-
-        {/* Status filter toggles */}
-        <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-surface/90 px-3 py-1.5 shadow-xl backdrop-blur">
-          {STATUS_KEYS.map(key => {
-            const checked = statusFilter.has(key);
-            const colors: Record<string, string> = {
-              BACKLOG: 'text-amber-400',
-              IN_PROGRESS: 'text-sky-400',
-              BLOCKED: 'text-rose-400',
-              DONE: 'text-emerald-400',
-            };
-            return (
-              <label key={key} className={`flex cursor-pointer items-center gap-1 text-[11px] font-medium transition ${checked ? colors[key] : 'text-muted'}`}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() =>
-                    setStatusFilter(prev => {
-                      const next = new Set(prev);
-                      if (checked) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    })
-                  }
-                  className="sr-only"
-                />
-                <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition ${checked ? 'border-current bg-current/20' : 'border-white/20'}`}>
-                  {checked && (
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden><path d="M1.5 4L3 5.5L6.5 2"/></svg>
-                  )}
-                </span>
-                {t(`mindmap.filter.${key}`)}
-              </label>
-            );
-          })}
-        </div>
-      </div>
+      {/* Filter panel — supprimé : la recherche est dans BoardFilterBar, les statuts dans le rightSlot */}
 
       {/* Toolbar (DOM) */}
       <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full border border-white/10 bg-surface/90 px-2 py-1 shadow-xl backdrop-blur">

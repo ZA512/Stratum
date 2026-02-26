@@ -12,8 +12,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const { t } = useTranslation();
-  const [email, setEmail] = useState("alice@stratum.dev");
-  const [password, setPassword] = useState("stratum");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,7 +54,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
-              placeholder="alice@stratum.dev"
+              placeholder="votre@email.com"
               autoComplete="email"
               required
             />

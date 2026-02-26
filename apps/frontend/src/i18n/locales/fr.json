@@ -497,6 +497,37 @@
         "empty": "Aucun utilisateur trouvé"
       }
     },
+    "sharedFilter": {
+      "search": {
+        "placeholder": "Rechercher… (@nom, !priorité, #id)",
+        "aria": "Recherche universelle avec filtres avancés"
+      },
+      "bar": {
+        "task": "tâche",
+        "tasks": "tâches",
+        "openDrawer": "Filtres"
+      },
+      "chips": {
+        "mine": "Mes tâches",
+        "hideDone": "Sans terminées"
+      },
+      "drawer": {
+        "title": "Filtres",
+        "subtitle": "Appliqués à toutes les vues",
+        "sections": {
+          "quick": "Accès rapide"
+        },
+        "onlyMine": {
+          "label": "Mes tâches",
+          "description": "N'afficher que les tâches qui vous sont assignées"
+        },
+        "hideDone": {
+          "label": "Masquer les terminées",
+          "description": "Exclure les tâches dans une colonne Terminée"
+        },
+        "reset": "Réinitialiser les filtres"
+      }
+    },
     "invitationCenter": {
       "badge": "Invitations",
       "badgeAria": "Centre d'invitations, {count} en attente",

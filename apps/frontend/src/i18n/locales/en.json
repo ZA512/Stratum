@@ -507,6 +507,37 @@
         "empty": "No user found"
       }
     },
+    "sharedFilter": {
+      "search": {
+        "placeholder": "Search… (@name, !priority, #id)",
+        "aria": "Universal search with advanced filters"
+      },
+      "bar": {
+        "task": "task",
+        "tasks": "tasks",
+        "openDrawer": "Filters"
+      },
+      "chips": {
+        "mine": "My tasks",
+        "hideDone": "Hide done"
+      },
+      "drawer": {
+        "title": "Filters",
+        "subtitle": "Applied to all views",
+        "sections": {
+          "quick": "Quick access"
+        },
+        "onlyMine": {
+          "label": "My tasks",
+          "description": "Only show tasks assigned to you"
+        },
+        "hideDone": {
+          "label": "Hide done tasks",
+          "description": "Exclude tasks in a Done column"
+        },
+        "reset": "Reset filters"
+      }
+    },
     "quickFilters": {
       "mine": "My tasks",
       "sortPriority": "Sort by priority",

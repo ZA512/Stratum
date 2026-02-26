@@ -87,7 +87,7 @@ export default function RegisterPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
-              placeholder="alice@stratum.dev"
+              placeholder="votre@email.com"
               autoComplete="email"
               disabled={isSubmitting || success}
               required

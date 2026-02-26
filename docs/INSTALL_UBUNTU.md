@@ -316,7 +316,7 @@ Renouvellement automatique installé via timer systemd (vérifier: `sudo certbot
 
 1. Accéder: `https://stratum.example.com/` → page frontend.
 2. Ouvrir outils dev → network → vérifier appels `/api/v1/...` 200.
-3. Tester login avec utilisateur seed (si seed créé): `alice@stratum.dev / stratum`.
+3. Tester login avec utilisateur seed (si seed créé): `/ stratum`.
 4. Vérifier rafraîchissement token (network: refresh endpoint après ~10 min ou interaction focus).
 5. Consulter Swagger (optionnel): `https://stratum.example.com/api/v1/docs` (pensez à restreindre en prod via auth IP ou suppression route si besoin).
 

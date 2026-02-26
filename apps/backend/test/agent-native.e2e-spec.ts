@@ -21,7 +21,7 @@ function ensureString(value: unknown, context: string): string {
   return value;
 }
 
-const DEMO_EMAIL = 'alice@stratum.dev';
+const DEMO_EMAIL = 'demo@stratum.local';
 
 const describeIfDatabase: typeof describe = process.env.DATABASE_URL
   ? describe

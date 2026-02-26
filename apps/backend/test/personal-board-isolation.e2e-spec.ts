@@ -16,7 +16,7 @@ function ensureRecord(value: unknown, ctx: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-const USER_A_EMAIL = 'alice@stratum.dev'; // seed user
+const USER_A_EMAIL = 'demo@stratum.local'; // seed user
 const USER_B_EMAIL = 'bob.personal@example.com';
 const USER_B_PASSWORD = 'PersoBoard!123';
 

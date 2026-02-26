@@ -50,7 +50,7 @@ async function upsertCoreEntities(prisma: PrismaClient) {
   });
 
   const user = await prisma.user.upsert({
-    where: { email: 'alice@stratum.dev' },
+    where: { email: 'demo@stratum.local' },
     update: {
       displayName: 'Alice Rivera',
       locale: 'en-US',
@@ -58,7 +58,7 @@ async function upsertCoreEntities(prisma: PrismaClient) {
     },
     create: {
       id: DEMO_IDS.user,
-      email: 'alice@stratum.dev',
+      email: 'demo@stratum.local',
       displayName: 'Alice Rivera',
       locale: 'en-US',
       passwordHash

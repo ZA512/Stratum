@@ -1,13 +1,11 @@
 import { PrismaClient, MembershipStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { seedDemoData } from './seed';
 import { buildPrismaClientOptions } from '../src/prisma/prisma.utils';
 
 /**
  * Script de remise à zéro étendue:
  * 1. Purge toutes les données non critiques (boards personnels inconsistants).
- * 2. Lance le seed de démonstration.
- * 3. Pour chaque utilisateur existant (hors utilisateur démo), crée un espace personnel si absent.
+ * 2. Pour chaque utilisateur existant, crée un espace personnel si absent.
  */
 async function main() {
   const prisma = new PrismaClient(buildPrismaClientOptions());
@@ -16,13 +14,9 @@ async function main() {
     // Étape 1: (optionnel) Purge des boards orphelins personnels sans owner.
     // Nettoyage léger désactivé (champ ownerUserId non reconnu dans génération Prisma actuelle)
 
-    // Étape 2: Seed démo (idempotent)
-    await seedDemoData(prisma);
-
-    // Étape 3: Créer espace personnel pour utilisateurs existants hors démo
+    // Étape 2: Créer espace personnel pour tous les utilisateurs existants
     const users = await prisma.user.findMany({});
     for (const user of users) {
-      if (user.email === 'alice@stratum.dev') continue; // utilisateur démo déjà géré par seed
       // Vérifier membership existant
       const activeMembership = await prisma.membership.findFirst({
         where: { userId: user.id, status: MembershipStatus.ACTIVE },

@@ -20,6 +20,8 @@ import { fetchNodeCollaborators } from "@/features/nodes/node-collaborators-api"
 import { createNode, moveChildNode, updateNode } from "@/features/nodes/nodes-api";
 import { type ActivityLog, fetchNodeActivity } from "@/features/activity/activity-api";
 import { formatActivityMessage } from "@/features/activity/activity-formatter";
+import { useBoardFilters } from '../context/BoardFilterContext';
+import { UNASSIGNED_TOKEN } from '../types/board-filters';
 
 type ListScope = "CURRENT" | "SUBTREE" | "ROOT";
 type ListRenderMode = "TREE" | "FLAT";
@@ -205,7 +207,7 @@ type OfficialView = {
   config: Partial<BoardListFilters>;
 };
 
-type BoardOption = {
+export type BoardOption = {
   boardId: string;
   label: string;
   path: string;
@@ -218,6 +220,7 @@ type BoardListViewProps = {
   onOpenTask: (id: string) => void;
   onOpenBoard: (boardId: string) => void;
   onDataMutated?: () => Promise<void> | void;
+  onBoardOptionsChange?: (options: BoardOption[], positionPath: string) => void;
 };
 
 const PRIORITY_WEIGHT: Record<PriorityValue, number> = {
@@ -604,6 +607,285 @@ const boolFilterMatches = (filter: BoolFilter, value: boolean): boolean => {
   return !value;
 };
 
+// ─── BoardListViewQuickBar ────────────────────────────────────────────────────
+// Composant exporté utilisé comme rightSlot de BoardFilterBar dans BoardPageShell
+
+interface BoardListViewQuickBarProps {
+  filters: BoardListFilters;
+  onFiltersChange: (next: BoardListFilters) => void;
+  rootBoardId: string;
+}
+
+export function BoardListViewQuickBar({
+  filters,
+  onFiltersChange,
+  rootBoardId,
+}: BoardListViewQuickBarProps) {
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
+  const [manageViewsOpen, setManageViewsOpen] = useState(false);
+  const [personalViews, setPersonalViews] = useState<PersonalView[]>([]);
+  const [viewsHydrated, setViewsHydrated] = useState(false);
+  const viewsMenuRef = useRef<HTMLDivElement | null>(null);
+  const viewsStorageKey = "stratum:list-personal-views:v2";
+
+  useEffect(() => {
+    try {
+      const raw =
+        window.localStorage.getItem(viewsStorageKey) ??
+        window.localStorage.getItem("stratum:list-personal-views:v1");
+      if (raw) {
+        const parsed = JSON.parse(raw) as PersonalView[];
+        if (Array.isArray(parsed)) {
+          setPersonalViews(
+            parsed.filter(
+              (e) => e && typeof e.id === "string" && typeof e.name === "string",
+            ),
+          );
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setViewsHydrated(true);
+    }
+  }, [viewsStorageKey]);
+
+  useEffect(() => {
+    if (!viewsHydrated) return;
+    try {
+      window.localStorage.setItem(viewsStorageKey, JSON.stringify(personalViews));
+    } catch {
+      // ignore
+    }
+  }, [personalViews, viewsHydrated, viewsStorageKey]);
+
+  useEffect(() => {
+    if (!viewsMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (viewsMenuRef.current?.contains(event.target as Node)) return;
+      setViewsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [viewsMenuOpen]);
+
+  const activeViewLabel = useMemo(() => {
+    if (!filters.activeViewId) return "Vue libre";
+    if (filters.activeViewId.startsWith("official:")) {
+      return (
+        OFFICIAL_VIEWS.find((v) => `official:${v.id}` === filters.activeViewId)?.name ?? "Vue officielle"
+      );
+    }
+    if (filters.activeViewId.startsWith("personal:")) {
+      return (
+        personalViews.find((v) => `personal:${v.id}` === filters.activeViewId)?.name ?? "Vue perso"
+      );
+    }
+    return "Vue";
+  }, [filters.activeViewId, personalViews]);
+
+  const applyOfficialView = useCallback(
+    (view: OfficialView) => {
+      onFiltersChange({
+        ...DEFAULT_LIST_FILTERS,
+        ...view.config,
+        positionBoardId: filters.positionBoardId ?? rootBoardId,
+        activeViewId: `official:${view.id}`,
+        initialized: true,
+      });
+      setViewsMenuOpen(false);
+    },
+    [filters.positionBoardId, onFiltersChange, rootBoardId],
+  );
+
+  const applyPersonalView = useCallback(
+    (view: PersonalView) => {
+      onFiltersChange({
+        ...DEFAULT_LIST_FILTERS,
+        ...view.config,
+        activeViewId: `personal:${view.id}`,
+        initialized: true,
+      });
+      setViewsMenuOpen(false);
+    },
+    [onFiltersChange],
+  );
+
+  const saveAsPersonalView = useCallback(() => {
+    const name = window.prompt("Nom de la vue", "Nouvelle vue")?.trim();
+    if (!name) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const entry: PersonalView = {
+      id,
+      name,
+      config: { ...filters, activeViewId: `personal:${id}` },
+    };
+    setPersonalViews((prev) => [...prev, entry]);
+    onFiltersChange({ ...entry.config });
+  }, [filters, onFiltersChange]);
+
+  const savePersonalView = useCallback(() => {
+    if (!filters.activeViewId?.startsWith("personal:")) {
+      saveAsPersonalView();
+      return;
+    }
+    const personalId = filters.activeViewId.replace("personal:", "");
+    setPersonalViews((prev) =>
+      prev.map((e) =>
+        e.id === personalId
+          ? { ...e, config: { ...filters, activeViewId: `personal:${personalId}` } }
+          : e,
+      ),
+    );
+  }, [filters, saveAsPersonalView]);
+
+  const deletePersonalView = useCallback(
+    (id: string) => {
+      setPersonalViews((prev) => prev.filter((e) => e.id !== id));
+      if (filters.activeViewId === `personal:${id}`) {
+        applyOfficialView(OFFICIAL_VIEWS[2]);
+      }
+    },
+    [filters.activeViewId, applyOfficialView],
+  );
+
+  const currentRenderMode: ListRenderMode = isRenderMode(filters.renderMode ?? "")
+    ? (filters.renderMode as ListRenderMode)
+    : "FLAT";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {/* Arbre / À plat */}
+      <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() =>
+            onFiltersChange({ ...filters, renderMode: "TREE", visibleColumns: TREE_COLUMNS_DEFAULT })
+          }
+          className={`rounded-full px-2.5 py-0.5 transition ${
+            currentRenderMode === "TREE" ? "bg-accent text-background" : "text-muted hover:text-foreground"
+          }`}
+        >
+          Arbre
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onFiltersChange({ ...filters, renderMode: "FLAT", visibleColumns: FLAT_COLUMNS_DEFAULT })
+          }
+          className={`rounded-full px-2.5 py-0.5 transition ${
+            currentRenderMode === "FLAT" ? "bg-accent text-background" : "text-muted hover:text-foreground"
+          }`}
+        >
+          À plat
+        </button>
+      </div>
+
+      {/* Vues */}
+      <div ref={viewsMenuRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setViewsMenuOpen((prev) => !prev)}
+          className="flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-0.5 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <path
+              d="M2 4h12M4 8h8M6 12h4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+          {activeViewLabel}
+        </button>
+        {viewsMenuOpen && (
+          <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/70">
+              Officielles
+            </p>
+            <div className="mt-2 space-y-0.5">
+              {OFFICIAL_VIEWS.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  onClick={() => applyOfficialView(view)}
+                  className={`w-full rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${
+                    filters.activeViewId === `official:${view.id}`
+                      ? "font-semibold text-foreground"
+                      : "text-muted"
+                  }`}
+                >
+                  {view.name}
+                </button>
+              ))}
+            </div>
+            {personalViews.length > 0 && (
+              <>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-muted/70">
+                  Personnelles
+                </p>
+                <div className="mt-2 space-y-0.5">
+                  {personalViews.map((view) => (
+                    <div key={view.id} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => applyPersonalView(view)}
+                        className={`flex-1 rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${
+                          filters.activeViewId === `personal:${view.id}`
+                            ? "font-semibold text-foreground"
+                            : "text-muted"
+                        }`}
+                      >
+                        {view.name}
+                      </button>
+                      {manageViewsOpen && (
+                        <button
+                          type="button"
+                          onClick={() => deletePersonalView(view.id)}
+                          className="rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 transition hover:border-rose-300"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
+              <button
+                type="button"
+                onClick={savePersonalView}
+                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
+              >
+                Sauvegarder
+              </button>
+              <button
+                type="button"
+                onClick={saveAsPersonalView}
+                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
+              >
+                Enr. sous…
+              </button>
+              <button
+                type="button"
+                onClick={() => setManageViewsOpen((prev) => !prev)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                  manageViewsOpen
+                    ? "border-accent/50 text-foreground"
+                    : "border-white/15 text-muted hover:border-accent hover:text-foreground"
+                }`}
+              >
+                Gérer
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function BoardListView({
   rootBoard,
   filters,
@@ -611,6 +893,7 @@ export function BoardListView({
   onOpenTask,
   onOpenBoard,
   onDataMutated,
+  onBoardOptionsChange,
 }: BoardListViewProps) {
   const { accessToken, user } = useAuth();
   const { t: tBoard, locale } = useTranslation("board");
@@ -1037,6 +1320,11 @@ export function BoardListView({
     return option?.path ?? rootBoard.name;
   }, [boardOptions, normalizedFilters.positionBoardId, rootBoard.name]);
 
+  // Expose les options de position au parent (BoardPageShell) pour le drawer
+  useEffect(() => {
+    onBoardOptionsChange?.(boardOptions, positionPathLabel);
+  }, [boardOptions, positionPathLabel, onBoardOptionsChange]);
+
   const allAssignees = useMemo(() => {
     const map = new Map<string, string>();
     for (const row of rows) {
@@ -1050,6 +1338,13 @@ export function BoardListView({
   }, [locale, rows]);
 
   const queryTokens = useMemo(() => parseQueryTokens(normalizedFilters.query.trim()), [normalizedFilters.query]);
+
+  // Filtres partagés : apportés par BoardFilterContext (search, assignees, priorities, mine, hideDone)
+  const { filters: sharedFilters } = useBoardFilters();
+  const sharedQueryTokens = useMemo(
+    () => parseQueryTokens(sharedFilters.searchQuery.trim()),
+    [sharedFilters.searchQuery],
+  );
 
   const hasActiveCriteria = useMemo(() => {
     const adv = normalizedFilters.advanced;
@@ -1265,9 +1560,56 @@ export function BoardListView({
       if (!matchesQuickChips(row)) return false;
       if (!matchesAdvanced(row)) return false;
 
+      // === Contraintes des filtres partagés (BoardFilterContext) ===
+      if (sharedFilters.hideDone && row.columnBehavior === "DONE") return false;
+
+      if (sharedFilters.onlyMine && user?.id && !row.assigneeIds.includes(user.id)) return false;
+
+      if (sharedFilters.assigneeIds.length > 0) {
+        const matched = sharedFilters.assigneeIds.some((id) =>
+          id === UNASSIGNED_TOKEN ? row.assigneeIds.length === 0 : row.assigneeIds.includes(id),
+        );
+        if (!matched) return false;
+      }
+
+      if (sharedFilters.priorities.length > 0 && !sharedFilters.priorities.includes(row.priority as PriorityValue)) {
+        return false;
+      }
+
+      if (sharedQueryTokens.length > 0) {
+        for (const tokenRaw of sharedQueryTokens) {
+          const token = tokenRaw.trim();
+          if (!token) continue;
+          if (token.startsWith("#")) {
+            const digits = token.replace(/[^0-9]/g, "");
+            if (!digits || !String(row.shortId ?? "").includes(digits)) return false;
+            continue;
+          }
+          if (token.startsWith("@")) {
+            const mention = normalizeText(token.slice(1));
+            if (!mention) return false;
+            if (!row.assignees.some((a) => normalizeText(a).includes(mention))) return false;
+            continue;
+          }
+          if (token.startsWith("!")) {
+            const wanted = normalizeText(token.slice(1));
+            const label = normalizeText(tBoard(`priority.labels.${row.priority}`));
+            const val = normalizeText(row.priority);
+            if (!label.includes(wanted) && !val.includes(wanted)) return false;
+            continue;
+          }
+          const normalized = normalizeText(token);
+          if (normalized.length < 2) continue;
+          const haystack = [row.title, row.description ?? "", row.pathLabel, ...row.assignees, row.priority]
+            .map((v) => normalizeText(v))
+            .join(" ");
+          if (!haystack.includes(normalized)) return false;
+        }
+      }
+
       return true;
     });
-  }, [normalizedFilters, queryTokens, rows, tBoard, user?.id]);
+  }, [normalizedFilters, queryTokens, sharedFilters, sharedQueryTokens, rows, tBoard, user?.id]);
 
   const filteredIdSet = useMemo(() => new Set(filteredRows.map((row) => row.id)), [filteredRows]);
 
@@ -1857,409 +2199,69 @@ export function BoardListView({
   const showRefreshing = loading && rows.length > 0;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 bg-card/70 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div ref={positionMenuRef} className="relative min-w-[280px] flex-1">
-            <button
-              type="button"
-              onClick={() => {
-                setColumnsMenuOpen(false);
-                setViewsMenuOpen(false);
-                setManageViewsOpen(false);
-                setPositionSelectorOpen((prev) => !prev);
-              }}
-              className="w-full rounded-xl border border-white/15 bg-surface/70 px-3 py-2 text-left text-sm text-foreground transition hover:border-accent"
-            >
-              <span className="block text-[11px] uppercase tracking-wide text-muted">Position</span>
-              <span className="block truncate">{positionPathLabel}</span>
-            </button>
-            {positionSelectorOpen && (
-              <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-                <input
-                  value={positionSearch}
-                  onChange={(event) => setPositionSearch(event.target.value)}
-                  placeholder="Rechercher un kanban..."
-                  className="mb-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                />
-                <div className="max-h-60 overflow-y-auto">
-                  {visibleBoardOptions.map((option) => (
-                    <button
-                      key={option.boardId}
-                      type="button"
-                      onClick={() => {
-                        setFilters({ positionBoardId: option.boardId });
-                        setPositionSelectorOpen(false);
-                      }}
-                      className="w-full rounded-lg px-2 py-2 text-left text-xs text-muted transition hover:bg-white/5 hover:text-foreground"
-                    >
-                      {option.path}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <label className="min-w-[230px] text-xs text-muted">
-            Zone d&apos;affichage
-            <select
-              value={normalizedFilters.scope}
-              onChange={(event) => setFilters({ scope: event.target.value as ListScope })}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent [color-scheme:dark]"
-            >
-              {SCOPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="relative min-w-[260px] flex-1">
-            <input
-              type="search"
-              value={normalizedFilters.query}
-              onChange={(event) => setFilters({ query: event.target.value })}
-              placeholder="Titre, description, #id, @utilisateur, priorite... (3 car. min.)"
-              className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] text-muted">
-          Position active: <span className="text-foreground">{positionPathLabel}</span> · {selectedScope.helper}
-        </p>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setFilters({ renderMode: "TREE", visibleColumns: TREE_COLUMNS_DEFAULT })}
-              className={`rounded-full px-3 py-1 transition ${
-                normalizedFilters.renderMode === "TREE" ? "bg-accent text-background" : "text-muted hover:text-foreground"
-              }`}
-            >
-              Arbre
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilters({ renderMode: "FLAT", visibleColumns: FLAT_COLUMNS_DEFAULT })}
-              className={`rounded-full px-3 py-1 transition ${
-                normalizedFilters.renderMode === "FLAT" ? "bg-accent text-background" : "text-muted hover:text-foreground"
-              }`}
-            >
-              A plat
-            </button>
-          </div>
-
-          <div ref={columnsMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setPositionSelectorOpen(false);
-                setViewsMenuOpen(false);
-                setManageViewsOpen(false);
-                setColumnsMenuOpen((prev) => !prev);
-              }}
-              className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-            >
-              Colonnes
-            </button>
-            {columnsMenuOpen && (
-              <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-                <div className="space-y-2 text-xs">
-                  {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
-                    const checked = visibleColumns.includes(column);
-                    const disabled = column === "title" || (normalizedFilters.renderMode === "FLAT" && column === "path");
-                    return (
-                      <div key={column} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2 py-1">
-                        <label className="flex items-center gap-2 text-muted">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={() => toggleColumnVisibility(column)}
-                          />
-                          <span>{COLUMN_LABELS[column]}</span>
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => moveColumnInVisibility(column, "up")}
-                            className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveColumnInVisibility(column, "down")}
-                            className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                          >
-                            ↓
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div ref={viewsMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setPositionSelectorOpen(false);
-                setColumnsMenuOpen(false);
-                setViewsMenuOpen((prev) => !prev);
-              }}
-              className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-            >
-              Vues: {activeViewLabel}
-            </button>
-            {viewsMenuOpen && (
-              <div className="absolute left-0 top-full z-30 mt-2 w-80 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Officielles</p>
-                <div className="mt-2 space-y-1">
-                  {OFFICIAL_VIEWS.map((view) => (
-                    <button
-                      key={view.id}
-                      type="button"
-                      onClick={() => applyOfficialView(view)}
-                      className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-muted transition hover:bg-white/5 hover:text-foreground"
-                    >
-                      ⭐ {view.name}
-                    </button>
-                  ))}
-                </div>
-
-                <p className="mt-3 text-[11px] uppercase tracking-wide text-muted">Mes vues</p>
-                <div className="mt-2 space-y-1">
-                  {personalViews.length === 0 ? (
-                    <p className="text-xs text-muted">Aucune vue personnelle.</p>
-                  ) : (
-                    personalViews.map((view) => (
-                      <div key={view.id} className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => applyPersonalView(view)}
-                          className="flex-1 rounded-lg px-2 py-1.5 text-left text-xs text-muted transition hover:bg-white/5 hover:text-foreground"
-                        >
-                          {view.name}
-                        </button>
-                        {manageViewsOpen && (
-                          <button
-                            type="button"
-                            onClick={() => deletePersonalView(view.id)}
-                            className="rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 transition hover:border-rose-300"
-                          >
-                            Suppr.
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={savePersonalView}
-                    className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-                  >
-                    Enregistrer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveAsPersonalView}
-                    className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-                  >
-                    Enregistrer sous...
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setManageViewsOpen((prev) => !prev)}
-                    className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-                  >
-                    Gerer...
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <div ref={columnsMenuRef} className="relative">
           <button
             type="button"
             onClick={() => {
-              closeMenus();
-              setFiltersDrawerOpen(true);
+              setPositionSelectorOpen(false);
+              setViewsMenuOpen(false);
+              setManageViewsOpen(false);
+              setColumnsMenuOpen((prev) => !prev);
             }}
             className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
           >
-            Filtres
+            Colonnes
           </button>
-
-          <button
-            type="button"
-            onClick={() => setFilters({ includeDone: !normalizedFilters.includeDone })}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              normalizedFilters.includeDone
-                ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-100"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            {normalizedFilters.includeDone ? "Inclure termine" : "Termine OFF"}
-          </button>
-
-          {normalizedFilters.renderMode === "TREE" && (
-            <button
-              type="button"
-              onClick={() => setFilters({ contextMode: !normalizedFilters.contextMode })}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                normalizedFilters.contextMode
-                  ? "border-accent/60 bg-accent/10 text-foreground"
-                  : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-              }`}
-              title="Affiche les parents necessaires pour comprendre le contexte"
-            >
-              Parents contexte: {normalizedFilters.contextMode ? "ON" : "OFF"}
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={resetAllFilters}
-            className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-          >
-            Tout effacer
-          </button>
-
-          <button
-            type="button"
-            onClick={createAtPosition}
-            className="ml-auto rounded-full bg-accent px-3 py-1 text-xs font-semibold text-background transition hover:bg-accent-strong"
-          >
-            + Carte
-          </button>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <button
-            type="button"
-            onClick={toggleMineChip}
-            className={`rounded-full border px-3 py-1 font-semibold transition ${
-              mineChipActive
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            Mes taches
-          </button>
-          <button
-            type="button"
-            onClick={() => setChips({ overdue: !normalizedFilters.chips.overdue })}
-            className={`rounded-full border px-3 py-1 font-semibold transition ${
-              normalizedFilters.chips.overdue
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            En retard
-          </button>
-          <button
-            type="button"
-            onClick={() => setChips({ today: !normalizedFilters.chips.today })}
-            className={`rounded-full border px-3 py-1 font-semibold transition ${
-              normalizedFilters.chips.today
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            Deadline aujourd&apos;hui
-          </button>
-          <button
-            type="button"
-            onClick={() => setChips({ week: !normalizedFilters.chips.week })}
-            className={`rounded-full border px-3 py-1 font-semibold transition ${
-              normalizedFilters.chips.week
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            Fin de semaine
-          </button>
-          <button
-            type="button"
-            onClick={toggleBlockedChip}
-            className={`rounded-full border px-3 py-1 font-semibold transition ${
-              blockedChipActive
-                ? "border-accent/60 bg-accent/10 text-foreground"
-                : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-            }`}
-          >
-            Bloquees
-          </button>
-          <label className="rounded-full border border-white/15 px-3 py-1 text-xs text-muted transition hover:border-accent hover:text-foreground">
-            Mis a jour {"<"} Xj
-            <select
-              value={normalizedFilters.chips.updatedWithinDays ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                const parsed = value ? Number(value) : null;
-                setChips({
-                  updatedWithinDays:
-                    parsed === 1 || parsed === 3 || parsed === 7 || parsed === 14 || parsed === 30
-                      ? (parsed as UpdatedWithinDays)
-                      : null,
-                });
-              }}
-              className="ml-2 rounded bg-surface px-1 text-xs text-foreground outline-none [color-scheme:dark]"
-            >
-              <option value="">OFF</option>
-              <option value="1">1j</option>
-              <option value="3">3j</option>
-              <option value="7">7j</option>
-              <option value="14">14j</option>
-              <option value="30">30j</option>
-            </select>
-          </label>
-          {normalizedFilters.renderMode === "FLAT" ? (
-            <div className="ml-auto flex items-center gap-2">
-              <label className="text-xs text-muted">
-                Tri
-                <select
-                  value={normalizedFilters.sort.field}
-                  onChange={(event) =>
-                    setFilters({ sort: { ...normalizedFilters.sort, field: event.target.value as SortField } })
-                  }
-                  className="ml-2 rounded border border-white/15 bg-surface px-2 py-1 text-xs text-foreground"
-                >
-                  {SORT_FIELDS.map((field) => (
-                    <option key={field.id} value={field.id}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() =>
-                  setFilters({
-                    sort: {
-                      ...normalizedFilters.sort,
-                      direction: normalizedFilters.sort.direction === "asc" ? "desc" : "asc",
-                    },
-                  })
-                }
-                className="rounded border border-white/15 px-2 py-1 text-xs text-muted transition hover:border-accent hover:text-foreground"
-              >
-                {normalizedFilters.sort.direction === "asc" ? "Asc" : "Desc"}
-              </button>
+          {columnsMenuOpen && (
+            <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
+              <div className="space-y-2 text-xs">
+                {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
+                  const checked = visibleColumns.includes(column);
+                  const disabled = column === "title" || (normalizedFilters.renderMode === "FLAT" && column === "path");
+                  return (
+                    <div key={column} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2 py-1">
+                      <label className="flex items-center gap-2 text-muted">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggleColumnVisibility(column)}
+                        />
+                        <span>{COLUMN_LABELS[column]}</span>
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveColumnInVisibility(column, "up")}
+                          className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveColumnInVisibility(column, "down")}
+                          className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ) : (
-            <span className="ml-auto text-xs text-muted">Tri global desactive en mode Arbre (tri naturel des siblings).</span>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={createAtPosition}
+          className="ml-auto rounded-full bg-accent px-3 py-1 text-xs font-semibold text-background transition hover:bg-accent-strong"
+        >
+          + Carte
+        </button>
       </div>
 
       {notice && (
@@ -2288,7 +2290,28 @@ export function BoardListView({
                       {COLUMN_LABELS[column]}
                     </th>
                   ))}
-                  <th className="px-3 py-2 font-semibold">Actions</th>
+                  <th className="px-3 py-2 font-semibold">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>Actions</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPositionSelectorOpen(false);
+                          setViewsMenuOpen(false);
+                          setColumnsMenuOpen((prev) => !prev);
+                        }}
+                        className="rounded p-0.5 text-muted transition hover:text-foreground"
+                        title="G\u00e9rer les colonnes visibles"
+                        aria-label="G\u00e9rer les colonnes visibles"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                          <rect x="1" y="3" width="4" height="10" rx="0.75" stroke="currentColor" strokeWidth="1.25"/>
+                          <rect x="6" y="3" width="4" height="10" rx="0.75" stroke="currentColor" strokeWidth="1.25"/>
+                          <rect x="11" y="3" width="4" height="10" rx="0.75" stroke="currentColor" strokeWidth="1.25"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </th>
                 </tr>
                 <tr className="border-b border-white/10 align-top text-[11px] text-muted">
                   {visibleColumns.map((column) => {

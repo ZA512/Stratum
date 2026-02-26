@@ -54,6 +54,7 @@ export default function RootLayout({
       <body
         data-theme={DEFAULT_THEME.id}
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-surface text-foreground`}
+        suppressHydrationWarning
       >
         <Providers>
           <QuickNotesRadar />

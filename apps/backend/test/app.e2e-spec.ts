@@ -29,7 +29,7 @@ function ensureArray<T = unknown>(value: unknown, context: string): T[] {
   return value as T[];
 }
 
-const DEMO_EMAIL = 'alice@stratum.dev';
+const DEMO_EMAIL = 'demo@stratum.local';
 
 const describeIfDatabase: typeof describe = process.env.DATABASE_URL
   ? describe

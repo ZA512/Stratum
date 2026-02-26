@@ -40,7 +40,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closest
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
-import { BoardListView, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
+import { BoardListView, BoardListViewQuickBar, DEFAULT_LIST_FILTERS, type BoardListFilters, type BoardOption } from './BoardListView';
 import dynamic from 'next/dynamic';
 
 const BoardMindmapView = dynamic(() => import('./BoardMindmapView'), { ssr: false });
@@ -48,16 +48,19 @@ import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
+import { BoardFilterBar } from './BoardFilterBar';
+import { DrawerSection, ToggleRow } from './BoardFilterDrawer';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { AgentChatPanel } from '@/features/agent-chat/AgentChatPanel';
 import { ProposalPanel } from '@/features/proposals/ProposalPanel';
+import { BoardFilterContextProvider, useBoardFilters } from '../context/BoardFilterContext';
+import { parseSearchTokens, normalizeText } from '../utils/search-tokens';
+import type { PriorityValue, EffortValue, EffortFilterValue } from '../types/board-filters';
+import { NO_EFFORT_TOKEN, UNASSIGNED_TOKEN as UNASSIGNED_TOKEN_IMPORT } from '../types/board-filters';
 
-
-type PriorityValue = 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
-type EffortValue = 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL';
-const NO_EFFORT_TOKEN = '__NO_EFFORT__' as const;
-type EffortFilterValue = EffortValue | typeof NO_EFFORT_TOKEN;
+// Alias interne pour conserver la compatibilité avec le code de filtrage existant
+const normalizeSearchString = normalizeText;
 
 type GanttLinkType = 'FS' | 'SS' | 'FF' | 'SF';
 type GanttLinkMode = 'ASAP' | 'FREE';
@@ -173,92 +176,8 @@ const EFFORT_LABELS: Record<EffortValue, string> = EFFORT_OPTIONS.reduce((acc, o
   acc[option.value] = option.label;
   return acc;
 }, {} as Record<EffortValue, string>);
-const TOKEN_REGEX = /[@#!]"[^"]*"|[@#!][^\s"]+|"[^"]+"|[^\s]+/g;
-
-type ParsedSearchQuery = {
-  hasQuery: boolean;
-  textTerms: string[];
-  mentionTerms: string[];
-  priorityValues: PriorityValue[];
-  shortIdTerms: string[];
-};
-
-const normalizeSearchString = (value: string) =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-const parseSearchQuery = (raw: string, priorityLabels: Record<PriorityValue, string>): ParsedSearchQuery => {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return { hasQuery: false, textTerms: [], mentionTerms: [], priorityValues: [], shortIdTerms: [] };
-  }
-
-  const tokens = trimmed.match(TOKEN_REGEX) ?? [];
-  const textTerms: string[] = [];
-  const mentionTerms: string[] = [];
-  const priorityValues = new Set<PriorityValue>();
-  const shortIdTerms: string[] = [];
-
-  for (const token of tokens) {
-    if (!token) continue;
-    let prefix: '@' | '!' | '#' | null = null;
-    let content = token;
-    if (content.startsWith('@') || content.startsWith('!') || content.startsWith('#')) {
-      prefix = content[0] as '@' | '!' | '#';
-      content = content.slice(1);
-    }
-
-    if (content.startsWith('"') && content.endsWith('"') && content.length >= 2) {
-      content = content.slice(1, -1);
-    }
-
-    const normalizedContent = normalizeSearchString(content);
-
-    if (prefix === '@') {
-      if (normalizedContent) {
-        mentionTerms.push(normalizedContent);
-      }
-      continue;
-    }
-
-    if (prefix === '!') {
-      if (!normalizedContent) continue;
-      const matches = PRIORITY_DEFINITIONS.filter(({ value }) => {
-        const normalizedLabel = normalizeSearchString(priorityLabels[value] ?? '');
-        const normalizedValue = normalizeSearchString(value);
-        return normalizedLabel.includes(normalizedContent) || normalizedValue.includes(normalizedContent);
-      });
-      if (matches.length > 0) {
-        matches.forEach((match) => priorityValues.add(match.value));
-        continue;
-      }
-      // if nothing matched, treat as general text token
-    }
-
-    if (prefix === '#') {
-      const digits = content.replace(/[^0-9]/g, '');
-      if (digits) {
-        shortIdTerms.push(digits);
-        continue;
-      }
-      // fallback to text token if no digits
-    }
-
-    if (!normalizedContent) continue;
-    if (normalizedContent.length < 3) continue;
-    textTerms.push(normalizedContent);
-  }
-
-  return {
-    hasQuery: textTerms.length > 0 || mentionTerms.length > 0 || priorityValues.size > 0 || shortIdTerms.length > 0,
-    textTerms,
-    mentionTerms,
-    priorityValues: Array.from(priorityValues),
-    shortIdTerms,
-  };
-};
+// parseSearchTokens et normalizeSearchString sont importés depuis utils/search-tokens.ts
+// normalizeSearchString est un alias de normalizeText défini plus haut avec les imports
 
 // ------------------------------------------------------------------
 // Composant principal (restauration d'états perdus dans refactor).
@@ -390,7 +309,8 @@ function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelP
   );
 }
 
-export function TeamBoardPage(){
+// Composant interne — suppose d'être imbriqué dans BoardFilterContextProvider
+function TeamBoardPageInner(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, breadcrumb, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
   const { open, openedNodeId } = useTaskDrawer();
@@ -402,6 +322,8 @@ export function TeamBoardPage(){
   const isPushing = transitionPhase === 'pushing' && transitionDirection === 'descend';
   const [listFilters, setListFilters] = useState<BoardListFilters>(DEFAULT_LIST_FILTERS);
   const [listFiltersHydrated, setListFiltersHydrated] = useState(false);
+  const [listBoardOptions, setListBoardOptions] = useState<BoardOption[]>([]);
+  const [listPositionPath, setListPositionPath] = useState('');
   const [dueBadgeCount, setDueBadgeCount] = useState(0);
   const [dueBadgeLoading, setDueBadgeLoading] = useState(false);
 
@@ -621,24 +543,39 @@ export function TeamBoardPage(){
   const sensors = useSensors(useSensor(PointerSensor,{ activationConstraint:{ distance:5 }}));
   const [optimisticColumns,setOptimisticColumns] = useState<BoardColumnWithNodes[] | null>(null);
   const [draggingCard,setDraggingCard] = useState<{ id:string; title:string } | null>(null);
-  const UNASSIGNED_TOKEN = '__UNASSIGNED__';
-  const [hideDone,setHideDone] = useState(false);
+  const UNASSIGNED_TOKEN = UNASSIGNED_TOKEN_IMPORT;
+
+  // Filtres partagés — lus depuis BoardFilterContext (persistance et état gérés par le contexte)
+  const {
+    filters: sharedFilters,
+    setAssigneeIds,
+    setPriorities: setSelectedPrioritiesCtx,
+    setEfforts: setSelectedEffortsCtx,
+    setHideDone: setHideDoneCtx,
+    setOnlyMine,
+    togglePriority: ctxTogglePriority,
+    toggleEffort: ctxToggleEffort,
+    resetFilters: resetSharedFilters,
+  } = useBoardFilters();
+
+  // Aliases pour compatibilité avec le code existant (displayedColumns useMemo, etc.)
+  const hideDone = sharedFilters.hideDone;
+  const selectedAssignees = sharedFilters.assigneeIds;
+  const selectedPriorities = sharedFilters.priorities;
+  const selectedEfforts = sharedFilters.efforts;
+  const filterMine = sharedFilters.onlyMine;
+  const searchQuery = sharedFilters.searchQuery;
+
   const [displayOptions, setDisplayOptions] = useState<CardDisplayOptions>(() => ({ ...CARD_DISPLAY_DEFAULTS }));
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const [selectedPriorities, setSelectedPriorities] = useState<PriorityValue[]>([]);
-  const [selectedEfforts, setSelectedEfforts] = useState<EffortFilterValue[]>([]);
-  const [filterMine, setFilterMine] = useState(false);
   const [filterHasChildren, setFilterHasChildren] = useState(false);
   const [sortPriority, setSortPriority] = useState(false);
   const [sortDueDate, setSortDueDate] = useState(false);
-  // États de recherche / panneau avancé restaurés
-  const [searchDraft, setSearchDraft] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [mindmapStatusFilter, setMindmapStatusFilter] = useState<Set<string>>(
+    () => new Set(['BACKLOG', 'IN_PROGRESS', 'BLOCKED']),
+  );
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   // états déjà uniques (pas de doublon plus haut désormais)
   const [filtersHydrated, setFiltersHydrated] = useState(false);
-  const searchBlurTimeout = useRef<number | null>(null);
   const archivedColumnIdRef = useRef<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BoardNode | null>(null);
   const [moveTarget, setMoveTarget] = useState<BoardNode | null>(null);
@@ -659,6 +596,7 @@ export function TeamBoardPage(){
   const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
   const [scheduleSavingIds, setScheduleSavingIds] = useState<string[]>([]);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
+  // Filtres actifs dans le panneau Kanban (affecte le point rouge sur le bouton)
   const advancedFiltersActive =
     selectedAssignees.length > 0 ||
     selectedPriorities.length > 0 ||
@@ -673,30 +611,7 @@ export function TeamBoardPage(){
     return rawColumns.filter(c=>c.behaviorKey !== 'DONE');
   }, [rawColumns, hideDone]);
 
-  useEffect(() => {
-    return () => {
-      if (searchBlurTimeout.current !== null) {
-        window.clearTimeout(searchBlurTimeout.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      const trimmed = searchDraft.trim();
-      if (!trimmed) {
-        setSearchQuery('');
-        return;
-      }
-      const containsSpecialToken = /[@#!]/.test(trimmed);
-      if (trimmed.length >= 3 || containsSpecialToken) {
-        setSearchQuery(trimmed);
-      } else {
-        setSearchQuery('');
-      }
-    }, 300);
-    return () => window.clearTimeout(handle);
-  }, [searchDraft]);
+  // Note : le debounce de la recherche et la gestion du blur sont gérés dans BoardFilterBar.
 
   useEffect(() => {
     if (!storageKey) {
@@ -705,35 +620,22 @@ export function TeamBoardPage(){
     }
     if (typeof window === 'undefined') return;
 
-    setSelectedAssignees([]);
-    setSelectedPriorities([]);
-    setSelectedEfforts([]);
-    setFilterMine(false);
+    // Reset uniquement les états Kanban-spécifiques (les filtres partagés sont gérés par le contexte)
     setFilterHasChildren(false);
     setSortPriority(false);
     setSortDueDate(false);
-    setSearchDraft('');
-    setSearchQuery('');
-    setHideDone(false);
     setDisplayOptions({ ...CARD_DISPLAY_DEFAULTS });
 
     const raw = window.localStorage.getItem(storageKey);
     if (raw && raw.trim()) {
       try {
         const parsed = JSON.parse(raw) as {
-          hideDone?: unknown;
           showDescriptions?: unknown;
           displayOptions?: unknown;
-          selectedAssignees?: unknown;
-          selectedPriorities?: unknown;
-          selectedEfforts?: unknown;
-          filterMine?: unknown;
           filterHasChildren?: unknown;
           sortPriority?: unknown;
           sortDueDate?: unknown;
-          search?: unknown;
         };
-        if (typeof parsed.hideDone === 'boolean') setHideDone(parsed.hideDone);
         if (parsed.displayOptions && typeof parsed.displayOptions === 'object') {
           const nextDisplay = { ...CARD_DISPLAY_DEFAULTS };
           for (const key of Object.keys(nextDisplay) as Array<keyof CardDisplayOptions>) {
@@ -750,51 +652,10 @@ export function TeamBoardPage(){
         } else if (typeof parsed.showDescriptions === 'boolean') {
           setDisplayOptions((prev) => ({ ...prev, showDescription: parsed.showDescriptions as boolean }));
         }
-        if (Array.isArray(parsed.selectedAssignees) && parsed.selectedAssignees.every((value) => typeof value === 'string'))
-          setSelectedAssignees(parsed.selectedAssignees);
-        if (
-          Array.isArray(parsed.selectedPriorities) &&
-          parsed.selectedPriorities.every((value) =>
-            value === 'NONE' ||
-            value === 'CRITICAL' ||
-            value === 'HIGH' ||
-            value === 'MEDIUM' ||
-            value === 'LOW' ||
-            value === 'LOWEST'
-          )
-        )
-          setSelectedPriorities(parsed.selectedPriorities);
-        if (
-          Array.isArray(parsed.selectedEfforts) &&
-          parsed.selectedEfforts.every(
-            (value) =>
-              value === NO_EFFORT_TOKEN ||
-              value === 'UNDER2MIN' ||
-              value === 'XS' ||
-              value === 'S' ||
-              value === 'M' ||
-              value === 'L' ||
-              value === 'XL' ||
-              value === 'XXL'
-          )
-        )
-          setSelectedEfforts(parsed.selectedEfforts);
-        if (typeof parsed.filterMine === 'boolean') setFilterMine(parsed.filterMine);
         if (typeof parsed.filterHasChildren === 'boolean')
           setFilterHasChildren(parsed.filterHasChildren);
         if (typeof parsed.sortPriority === 'boolean') setSortPriority(parsed.sortPriority);
         if (typeof parsed.sortDueDate === 'boolean') setSortDueDate(parsed.sortDueDate);
-        if (typeof parsed.search === 'string') {
-          setSearchDraft(parsed.search);
-          const trimmed = parsed.search.trim();
-          if (!trimmed) {
-            setSearchQuery('');
-          } else if (trimmed.length >= 3 || /[@#!]/.test(trimmed)) {
-            setSearchQuery(trimmed);
-          } else {
-            setSearchQuery('');
-          }
-        }
       } catch {
         // Ignore corrupted payloads; defaults already applied.
       }
@@ -805,25 +666,22 @@ export function TeamBoardPage(){
   useEffect(() => {
     if (!storageKey || !filtersHydrated) return;
     if (typeof window === 'undefined') return;
+    // Seuls les états Kanban-spécifiques sont persistés ici. Les filtres partagés
+    // (assignees, priorities, efforts, hideDone, onlyMine, search) sont persistés
+    // par BoardFilterContext dans une clé de stockage séparée.
     const payload = {
-      hideDone,
       displayOptions,
       showDescriptions: displayOptions.showDescription,
-      selectedAssignees,
-      selectedPriorities,
-      selectedEfforts,
-      filterMine,
       filterHasChildren,
       sortPriority,
       sortDueDate,
-      search: searchDraft,
     };
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch {
       // Storage may be unavailable (quota, private mode); fail silently.
     }
-  }, [storageKey, filtersHydrated, hideDone, displayOptions, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, filterHasChildren, sortPriority, sortDueDate, searchDraft]);
+  }, [storageKey, filtersHydrated, displayOptions, filterHasChildren, sortPriority, sortDueDate]);
 
   const allAssignees = useMemo(() => {
     const map = new Map<string, { id: string; displayName: string }>();
@@ -875,38 +733,7 @@ export function TeamBoardPage(){
     return map;
   }, [priorityOptions]);
 
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery, priorityLabelMap), [searchQuery, priorityLabelMap]);
-
-  const mentionContext = useMemo(() => {
-    if (!searchFocused) return null;
-    const match = searchDraft.match(/(?:^|\s)(@(?:"[^"]*|[^\s@]*))$/);
-    if (!match) return null;
-    const token = match[1];
-    const base = searchDraft.slice(0, searchDraft.length - token.length);
-    let query = token.slice(1);
-    if (query.startsWith('"')) {
-      query = query.slice(1);
-    }
-    query = query.replace(/"$/g, '');
-    return { base, query };
-  }, [searchDraft, searchFocused]);
-
-  const mentionSuggestions = useMemo(() => {
-    if (!mentionContext) return [] as Array<{ id: string; displayName: string }>;
-    const normalizedQuery = normalizeSearchString(mentionContext.query);
-    if (!normalizedQuery) return allAssignees;
-    return allAssignees.filter((assignee) =>
-      normalizeSearchString(assignee.displayName).includes(normalizedQuery)
-    );
-  }, [mentionContext, allAssignees]);
-
-  const handleMentionSelect = (displayName: string) => {
-    if (!mentionContext) return;
-    const baseNeedsSpace = mentionContext.base.length > 0 && !/\s$/.test(mentionContext.base);
-    const prefix = baseNeedsSpace ? `${mentionContext.base} ` : mentionContext.base;
-    const nextDraft = `${prefix}@"${displayName}" `;
-    setSearchDraft(nextDraft);
-  };
+  const parsedSearch = useMemo(() => parseSearchTokens(searchQuery, priorityLabelMap), [searchQuery, priorityLabelMap]);
 
   useEffect(() => {
     if (!filtersExpanded) return;
@@ -1746,13 +1573,8 @@ export function TeamBoardPage(){
     }
   };
 
-  const togglePriority = (value: PriorityValue) => {
-    setSelectedPriorities((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
-  };
-
-  const toggleEffort = (value: EffortFilterValue) => {
-    setSelectedEfforts((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
-  };
+  const togglePriority = ctxTogglePriority;
+  const toggleEffort = ctxToggleEffort;
 
   const toggleDisplayOption = (key: keyof CardDisplayOptions) => {
     setDisplayOptions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1777,16 +1599,10 @@ export function TeamBoardPage(){
     displayTweaksActive;
 
   const resetFilters = () => {
-    setSelectedAssignees([]);
-    setSelectedPriorities([]);
-    setSelectedEfforts([]);
-    setFilterMine(false);
+    resetSharedFilters();
     setFilterHasChildren(false);
     setSortPriority(false);
     setSortDueDate(false);
-    setSearchDraft('');
-    setSearchQuery('');
-    setHideDone(false);
     setDisplayOptions({ ...CARD_DISPLAY_DEFAULTS });
   };
 
@@ -2106,180 +1922,206 @@ export function TeamBoardPage(){
             isPushing ? '-translate-x-4 -translate-y-4 opacity-70' : 'translate-x-0 translate-y-0 opacity-100'
           }`}
         >
-        {(showBoardControls || isAddingColumn) && (
+        <BoardFilterBar
+          tasksCount={displayedColumns?.reduce((sum, col) => sum + (col.nodes?.length ?? 0), 0)}
+          assigneeOptions={assigneeOptions}
+          allAssignees={allAssignees}
+          priorityOptions={priorityOptions}
+          effortOptions={EFFORT_OPTIONS}
+          rightSlot={
+            boardView === 'kanban' ? (
+              <>
+                <HelpTooltip
+                  title={tBoard('help.quickFilters.priority.title')}
+                  description={tBoard('help.quickFilters.priority.body')}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortPriority((prev) => !prev)}
+                    className={pillClass(sortPriority)}
+                    aria-pressed={sortPriority}
+                  >
+                    {tBoard('quickFilters.sortPriority')}
+                  </button>
+                </HelpTooltip>
+                <HelpTooltip
+                  title={tBoard('help.quickFilters.dueDate.title')}
+                  description={tBoard('help.quickFilters.dueDate.body')}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSortDueDate((prev) => !prev)}
+                    className={pillClass(sortDueDate)}
+                    aria-pressed={sortDueDate}
+                  >
+                    {tBoard('quickFilters.sortDueDate')}
+                  </button>
+                </HelpTooltip>
+                <HelpTooltip
+                  title={tBoard('help.quickFilters.expert.title')}
+                  description={tBoard('help.quickFilters.expert.body')}
+                  hint={tBoard('help.quickFilters.expert.hint')}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpertMode(!expertMode)}
+                    className={pillClass(expertMode)}
+                    aria-pressed={expertMode}
+                  >
+                    {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
+                  </button>
+                </HelpTooltip>
+              </>
+            ) : boardView === 'mindmap' ? (
+              <>
+                {(['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE'] as const).map((key) => {
+                  const colorMap: Record<string, string> = {
+                    BACKLOG: 'text-amber-400 border-amber-400/40 bg-amber-400/10',
+                    IN_PROGRESS: 'text-sky-400 border-sky-400/40 bg-sky-400/10',
+                    BLOCKED: 'text-rose-400 border-rose-400/40 bg-rose-400/10',
+                    DONE: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
+                  };
+                  const inactiveClass = 'border-white/15 text-muted hover:border-white/30 hover:text-foreground';
+                  const active = mindmapStatusFilter.has(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition ${active ? colorMap[key] : inactiveClass}`}
+                      aria-pressed={active}
+                      onClick={() =>
+                        setMindmapStatusFilter((prev) => {
+                          const next = new Set(prev);
+                          if (active) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        })
+                      }
+                    >
+                      {tBoard(`behaviors.${key}`)}
+                    </button>
+                  );
+                })}
+              </>
+            ) : boardView === 'list' ? (
+              board ? (
+                <BoardListViewQuickBar
+                  filters={listFilters}
+                  onFiltersChange={setListFilters}
+                  rootBoardId={board.id}
+                />
+              ) : null
+            ) : null
+          }
+          extraDrawerSections={
+            boardView === 'kanban' ? (
+              <>
+                <DrawerSection title={tBoard('filters.columns.title')}>
+                  <div className="flex gap-2">
+                    {(['auto', 'fixed'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setDisplayOptions((prev) => ({ ...prev, columnHeight: mode }))}
+                        className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${displayOptions.columnHeight === mode ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
+                        aria-pressed={displayOptions.columnHeight === mode}
+                      >
+                        {mode === 'auto' ? tBoard('filters.columns.auto') : tBoard('filters.columns.fixed')}
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title={tBoard('filters.display.title')}>
+                  {DISPLAY_TOGGLE_CONFIG.map(({ key, labelKey }) => (
+                    <ToggleRow
+                      key={key}
+                      label={tBoard(labelKey as Parameters<typeof tBoard>[0])}
+                      checked={displayOptions[key] as boolean}
+                      onChange={() => toggleDisplayOption(key)}
+                    />
+                  ))}
+                </DrawerSection>
+                <DrawerSection title={tBoard('filters.options.title')}>
+                  <ToggleRow
+                    label={tBoard('filters.options.withChildBoard')}
+                    checked={filterHasChildren}
+                    onChange={setFilterHasChildren}
+                  />
+                </DrawerSection>
+              </>
+            ) : boardView === 'list' ? (
+              <>
+                <DrawerSection title="Position">
+                  <p className="mb-1.5 text-[11px] text-muted/70">{listPositionPath || '—'}</p>
+                  <div className="max-h-48 overflow-y-auto space-y-0.5 rounded-lg border border-white/10 p-1">
+                    {listBoardOptions.map((opt) => (
+                      <button
+                        key={opt.boardId}
+                        type="button"
+                        onClick={() => setListFilters((prev) => ({ ...prev, positionBoardId: opt.boardId }))}
+                        className={`w-full rounded px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${listFilters.positionBoardId === opt.boardId ? 'font-semibold text-foreground' : 'text-muted'}`}
+                      >
+                        {opt.path}
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title="Zone d'affichage">
+                  <div className="space-y-0.5">
+                    {([
+                      { value: 'CURRENT', label: 'Niveau de la position', helper: 'Cartes du kanban sélectionné uniquement' },
+                      { value: 'SUBTREE', label: 'Position + descendants', helper: 'Sous-arbre complet depuis la position' },
+                      { value: 'ROOT',    label: 'Projet complet',        helper: 'Toutes les cartes du projet' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setListFilters((prev) => ({ ...prev, scope: opt.value }))}
+                        className={`w-full rounded-lg px-2 py-2 text-left text-xs transition hover:bg-white/5 ${listFilters.scope === opt.value ? 'font-semibold text-foreground' : 'text-muted'}`}
+                      >
+                        <span className="block">{opt.label}</span>
+                        <span className="block text-[10px] text-muted/60">{opt.helper}</span>
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title="Terminé">
+                  <ToggleRow
+                    label={listFilters.includeDone ? 'Inclure les terminées' : 'Masquer les terminées'}
+                    checked={listFilters.includeDone}
+                    onChange={(v) => setListFilters((prev) => ({ ...prev, includeDone: v }))}
+                  />
+                </DrawerSection>
+                <DrawerSection title="Filtres rapides">
+                  <ToggleRow
+                    label="En retard"
+                    checked={listFilters.chips.overdue}
+                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, overdue: v } }))}
+                  />
+                  <ToggleRow
+                    label="Deadline aujourd'hui"
+                    checked={listFilters.chips.today}
+                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, today: v } }))}
+                  />
+                  <ToggleRow
+                    label="Fin de semaine"
+                    checked={listFilters.chips.week}
+                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, week: v } }))}
+                  />
+                  <ToggleRow
+                    label="Bloquées"
+                    checked={listFilters.chips.blocked}
+                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, blocked: v } }))}
+                  />
+                </DrawerSection>
+              </>
+            ) : null
+          }
+        />
+        {isAddingColumn && (
           <section className="grid gap-4">
             <div className="relative rounded-xl border border-white/10 bg-card/70 px-6 py-2 w-full">
-              {showBoardControls && (
-                <>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="relative flex-1 min-w-[240px]">
-                        <HelpTooltip
-                          title={tBoard('help.search.title')}
-                          description={tBoard('help.search.body')}
-                          hint={tBoard('help.search.hint')}
-                        >
-                          <input
-                            type="search"
-                            value={searchDraft}
-                            onChange={(event) => setSearchDraft(event.target.value)}
-                            onFocus={() => {
-                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                              setSearchFocused(true);
-                            }}
-                            onBlur={() => {
-                              if (searchBlurTimeout.current !== null) window.clearTimeout(searchBlurTimeout.current);
-                              searchBlurTimeout.current = window.setTimeout(() => setSearchFocused(false), 120);
-                            }}
-                            placeholder={tBoard('search.placeholder')}
-                            className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                            aria-label={tBoard('search.aria')}
-                          />
-                        </HelpTooltip>
-                        {mentionContext && (
-                          <div className="absolute left-0 right-0 top-full z-30 mt-2 rounded-xl border border-white/10 bg-surface/95 shadow-2xl">
-                            <ul className="max-h-56 overflow-y-auto py-2 text-sm">
-                              {mentionSuggestions.length > 0 ? (
-                                mentionSuggestions.map((assignee) => (
-                                  <li key={assignee.id}>
-                                    <button
-                                      type="button"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        handleMentionSelect(assignee.displayName);
-                                      }}
-                                      className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-muted transition hover:bg-white/5 hover:text-foreground"
-                                    >
-                                      <span>{assignee.displayName}</span>
-                                    </button>
-                                  </li>
-                                ))
-                              ) : (
-                                <li className="px-4 py-2 text-xs text-muted">{tBoard('search.mentions.empty')}</li>
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <HelpTooltip
-                          title={tBoard('help.quickFilters.mine.title')}
-                          description={tBoard('help.quickFilters.mine.body')}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setFilterMine((prev) => !prev)}
-                            className={pillClass(filterMine)}
-                            aria-pressed={filterMine}
-                          >
-                            {tBoard('quickFilters.mine')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          title={tBoard('help.quickFilters.priority.title')}
-                          description={tBoard('help.quickFilters.priority.body')}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setSortPriority((prev) => !prev)}
-                            className={pillClass(sortPriority)}
-                            aria-pressed={sortPriority}
-                          >
-                            {tBoard('quickFilters.sortPriority')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          title={tBoard('help.quickFilters.dueDate.title')}
-                          description={tBoard('help.quickFilters.dueDate.body')}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setSortDueDate((prev) => !prev)}
-                            className={pillClass(sortDueDate)}
-                            aria-pressed={sortDueDate}
-                          >
-                            {tBoard('quickFilters.sortDueDate')}
-                          </button>
-                        </HelpTooltip>
-                        <HelpTooltip
-                          title={tBoard('help.quickFilters.expert.title')}
-                          description={tBoard('help.quickFilters.expert.body')}
-                          hint={tBoard('help.quickFilters.expert.hint')}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setExpertMode(!expertMode)}
-                            className={pillClass(expertMode)}
-                            aria-pressed={expertMode}
-                            aria-label={expertMode ? tBoard('quickFilters.expert.ariaDisable') : tBoard('quickFilters.expert.ariaEnable')}
-                            title={expertMode ? tBoard('quickFilters.expert.titleDisable') : tBoard('quickFilters.expert.titleEnable')}
-                          >
-                            {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
-                          </button>
-                        </HelpTooltip>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Bouton filtres avancés (seul dans la rangée pour éviter tout décalage) */}
-                        <HelpTooltip
-                          title={tBoard('help.filtersButton.title')}
-                          description={tBoard('help.filtersButton.body')}
-                          hint={tBoard('help.filtersButton.hint')}
-                        >
-                          <button
-                              type="button"
-                              onClick={() => setFiltersExpanded((prev) => !prev)}
-                              className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${filtersExpanded ? 'border-accent bg-accent/10 text-foreground' : advancedFiltersActive ? 'border-accent/60 bg-accent/5 text-foreground' : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'}`}
-                              aria-expanded={filtersExpanded}
-                              aria-label={filtersExpanded ? tBoard('filters.button.ariaClose') : tBoard('filters.button.ariaOpen')}
-                            >
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
-                              </svg>
-                              {advancedFiltersActive && !filtersExpanded && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent" />}
-                            </button>
-                        </HelpTooltip>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Bouton Réinitialiser repositionné en bas à droite pour éviter tout shift visuel */}
-                  {hasActiveFilters && (
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="pointer-events-auto absolute bottom-3 right-4 rounded-full border border-white/15 px-4 py-1 text-[11px] font-semibold tracking-wide text-muted shadow-sm transition hover:border-accent hover:text-foreground hover:bg-accent/10"
-                    >
-                      {tBoard('filters.actions.reset')}
-                    </button>
-                  )}
-                  {filtersExpanded && (
-                    <AdvancedFiltersPanel
-                      assigneeOptions={assigneeOptions}
-                      selectedAssignees={selectedAssignees}
-                      onAssigneesChange={setSelectedAssignees}
-                      priorityOptions={priorityOptions}
-                      selectedPriorities={selectedPriorities}
-                      onTogglePriority={togglePriority}
-                      effortOptions={EFFORT_OPTIONS}
-                      selectedEfforts={selectedEfforts}
-                      onToggleEffort={toggleEffort}
-                      hideDone={hideDone}
-                      onHideDoneChange={setHideDone}
-                      filterHasChildren={filterHasChildren}
-                      onFilterHasChildrenChange={setFilterHasChildren}
-                      displayOptions={displayOptions}
-                      onToggleDisplayOption={toggleDisplayOption}
-                      onColumnHeightChange={(height) => setDisplayOptions(prev => ({ ...prev, columnHeight: height }))}
-                      displayToggleConfig={DISPLAY_TOGGLE_CONFIG}
-                      hasActiveFilters={hasActiveFilters}
-                      onReset={resetFilters}
-                      onClose={() => setFiltersExpanded(false)}
-                      helpMode={helpMode}
-                    />
-                  )}
-                </>
-              )}
-              {isAddingColumn && (
-                <form onSubmit={handleSubmitColumn} className={`${showBoardControls ? 'mt-6' : ''} grid gap-4 md:grid-cols-2`}>
+              <form onSubmit={handleSubmitColumn} className="grid gap-4 md:grid-cols-2">
                   <HelpTooltip
                     helpMode={helpMode}
                     title={tBoard('help.columns.form.name.title')}
@@ -2323,7 +2165,6 @@ export function TeamBoardPage(){
                   </div>
                   {columnError && <p className="text-sm text-red-300 col-span-2">{columnError}</p>}
                 </form>
-              )}
             </div>
           </section>
         )}
@@ -2559,6 +2400,8 @@ export function TeamBoardPage(){
                       await handleCreateCard(backlogColumnId, title);
                     }}
                     onCreateChildTask={handleCreateChildCard}
+                    statusFilter={mindmapStatusFilter}
+                    onStatusFilterChange={setMindmapStatusFilter}
                   />
                 </div>
               ) : (
@@ -2572,6 +2415,10 @@ export function TeamBoardPage(){
                     openChildBoard(boardId);
                   }}
                   onDataMutated={refreshActiveBoard}
+                  onBoardOptionsChange={(opts, path) => {
+                    setListBoardOptions(opts);
+                    setListPositionPath(path);
+                  }}
                 />
               )
             ) : (
@@ -2743,6 +2590,19 @@ export function TeamBoardPage(){
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Point d'entrée public — fournit le contexte de filtres partagés puis
+ * rend le composant interne qui consomme ce contexte.
+ */
+export function TeamBoardPage() {
+  const { activeBoardId } = useBoardData();
+  return (
+    <BoardFilterContextProvider boardId={activeBoardId}>
+      <TeamBoardPageInner />
+    </BoardFilterContextProvider>
   );
 }
 

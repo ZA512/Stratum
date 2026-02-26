@@ -52,14 +52,6 @@ By default the backend exposes http://localhost:4001/api/v1 with Swagger documen
 
 REST contracts are documented via Swagger (/docs) and covered by the Jest e2e suite (npm run test:e2e).
 
-## Demo data
-
-npm run db:seed loads:
-
-- 1 team "Stratum Core"
-- user alice@stratum.dev with password "stratum"
-- 1 root board with the 4 default columns
-- sample nodes including a hierarchical structure for testing breadcrumb navigation
 
 ## Frontend notes
 

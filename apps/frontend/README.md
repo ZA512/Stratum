@@ -60,10 +60,6 @@ pm run dev:frontend pour prelever les scripts de workspace.
 
 Le frontend attend la variable NEXT_PUBLIC_API_URL (default: http://localhost:3000/api/v1). Creez un fichier .env.local a la racine de \apps/frontend si vous devez cibler un autre backend.
 
-## Authentification demo
-
-Le formulaire pre-remplit les identifiants injectes par 
-pm run db:seed dans le backend : \alice@stratum.dev / stratum.
 
 ## Etapes suivantes
 
