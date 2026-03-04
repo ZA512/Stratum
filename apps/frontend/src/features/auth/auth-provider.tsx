@@ -366,10 +366,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     let lastRefresh = Date.now();
     const MIN_INTERVAL_MS = 5 * 60 * 1000; // Minimum 5min entre chaque refresh automatique
+    // Throttle pour mousemove/scroll : éviter d'exécuter la fonction des centaines de fois/sec.
+    let lastActivityCheck = 0;
+    const ACTIVITY_THROTTLE_MS = 5_000; // vérifier au max toutes les 5 secondes
     
     function onActivity() {
       if (!session) return;
       const now = Date.now();
+      // Throttle global des vérifications (surtout utile pour mousemove)
+      if (now - lastActivityCheck < ACTIVITY_THROTTLE_MS) return;
+      lastActivityCheck = now;
       // Éviter de spammer les refresh : minimum 5min d'intervalle
       if (now - lastRefresh < MIN_INTERVAL_MS) return;
       

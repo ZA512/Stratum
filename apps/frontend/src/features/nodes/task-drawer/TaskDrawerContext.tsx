@@ -29,6 +29,22 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const { accessToken } = useAuth();
 
   const TTL = 60_000; // 60s
+  const MAX_CACHE_ENTRIES = 50;
+
+  /** Évacue les entrées expirées, puis la plus ancienne si le cache dépasse MAX_CACHE_ENTRIES. */
+  const evictCache = useCallback(() => {
+    const now = Date.now();
+    for (const [key, entry] of cacheRef.current) {
+      if (now - entry.fetchedAt > TTL) {
+        cacheRef.current.delete(key);
+      }
+    }
+    // LRU : supprimer la plus ancienne si encore trop grand
+    if (cacheRef.current.size > MAX_CACHE_ENTRIES) {
+      const oldestKey = cacheRef.current.keys().next().value;
+      if (oldestKey !== undefined) cacheRef.current.delete(oldestKey);
+    }
+  }, []);
 
   const load = useCallback(async (nodeId: string, opts: { background?: boolean } = {}) => {
     if (!accessToken) return;
@@ -45,6 +61,7 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     currentReqRef.current = nodeId;
     try {
       const data = await fetchNodeDetail(nodeId, accessToken);
+      evictCache();
       cacheRef.current.set(nodeId, { detail: data, fetchedAt: Date.now() });
       if (currentReqRef.current === nodeId) {
         if (!opts.background) setDetail(data);
@@ -61,7 +78,7 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       if (!opts.background) setLoading(false);
     }
-  }, [accessToken, openedNodeId]);
+  }, [accessToken, openedNodeId, evictCache]);
 
   const open = useCallback((nodeId: string) => {
     setOpenedNodeId(nodeId);

@@ -736,6 +736,12 @@ export default function BoardMindmapView({
       }
       stageRef.current?.batchDraw();
     }
+    // Cleanup : si le composant se démonte pendant que le bling est actif,
+    // arrêter la boucle RAF pour éviter la fuite mémoire.
+    return () => {
+      blingActiveRef.current = false;
+      cancelAnimationFrame(blingRafRef.current);
+    };
   }, [isBling, runBlingLoop]);
 
   // Bling drag callbacks

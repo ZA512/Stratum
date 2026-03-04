@@ -4,7 +4,7 @@
 
 ### Le Kanban fractal — chaque tâche peut devenir un projet
 
-*Décomposez infiniment. Gardez le contrôle. Pilotez par l'IA.*
+*Décomposez infiniment. Gardez le contrôle. Pilotez par l'IA, si vous le souhaitez*
 
 [![Alpha](https://img.shields.io/badge/statut-alpha-orange)](#)
 [![NestJS](https://img.shields.io/badge/backend-NestJS-red)](#)
@@ -80,7 +80,7 @@ Stratum intègre une couche IA conçue pour **agir**, pas seulement suggérer.
 
 ---
 
-## Dashboards & observabilité projet
+## Dashboards & observabilité projet [en cours de développement]
 
 Des tableaux de bord analytiques calculés en temps réel sur vos boards :
 

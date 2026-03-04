@@ -16,6 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30_000,
+            // Libérer les données des queries inactives après 2 min (défaut : 5 min).
+            // En SPA les anciens boards s'accumulent en mémoire — on réduit cette fenêtre.
+            gcTime: 2 * 60 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
           },

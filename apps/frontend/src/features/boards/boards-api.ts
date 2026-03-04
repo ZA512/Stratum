@@ -155,11 +155,24 @@ async function authFetch(url: string, options: RequestInit): Promise<Response> {
 }
 
 // Cache ETag pour optimiser les requêtes de polling
+// Limité à MAX_BOARD_CACHE_SIZE entrées (LRU simple) pour éviter une fuite mémoire en SPA.
+const MAX_BOARD_CACHE_SIZE = 10;
 const etagCache = new Map<string, string>();
 // Cache mémoire du dernier payload /boards/:id/detail pour pouvoir exploiter 304 sans perdre les données.
 // Important: le BoardDataProvider peut être démonté/remonté lors de la navigation (ex: aller-retour /settings),
 // alors que ce module reste en mémoire. Sans ce cache, un 304 renvoie `null` et l'UI se retrouve sans tâches.
 const boardDetailCache = new Map<string, Board>();
+
+/** Insère une entrée dans un Map en évictant la plus ancienne si la taille dépasse MAX_BOARD_CACHE_SIZE. */
+function setCacheEntry<V>(map: Map<string, V>, key: string, value: V): void {
+  // Mettre à jour en premier pour rafraîchir la position dans l'ordre d'insertion
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > MAX_BOARD_CACHE_SIZE) {
+    const firstKey = map.keys().next().value;
+    if (firstKey !== undefined) map.delete(firstKey);
+  }
+}
 
 export async function fetchBoardDetail(boardId: string, accessToken: string): Promise<Board | null> {
   const cachedETag = etagCache.get(boardId);
@@ -190,11 +203,11 @@ export async function fetchBoardDetail(boardId: string, accessToken: string): Pr
   // Sauvegarder le nouvel ETag pour les prochaines requêtes
   const newETag = response.headers.get('ETag');
   if (newETag) {
-    etagCache.set(boardId, newETag);
+    setCacheEntry(etagCache, boardId, newETag);
   }
 
   const payload = (await response.json()) as Board;
-  boardDetailCache.set(boardId, payload);
+  setCacheEntry(boardDetailCache, boardId, payload);
   return payload;
 }
 
