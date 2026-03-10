@@ -10,6 +10,7 @@ import { BoardColumnDto } from './dto/board-column.dto';
 import { BoardDto } from './dto/board.dto';
 import {
   BoardGanttDependencyDto,
+  BoardTreeNodeDto,
   BoardWithNodesDto,
 } from './dto/board-with-nodes.dto';
 import { BoardNodeDto } from './dto/board-node.dto';
@@ -178,6 +179,9 @@ export class BoardsService {
             id: true,
             title: true,
             teamId: true,
+            workspaceId: true,
+            path: true,
+            depth: true,
           },
         },
         columns: {
@@ -755,6 +759,8 @@ export class BoardsService {
       isShared = sharedCount > 0;
     }
 
+    const treeNodes = await this.buildBoardTreeNodes(board.id, board.node, nodes, userId);
+
     const result = {
       id: board.id,
       nodeId: board.nodeId,
@@ -774,8 +780,217 @@ export class BoardsService {
         nodes: nodesByColumn.get(column.id) ?? [],
       })),
       dependencies: ganttDependencies,
+      treeNodes,
     } as BoardWithNodesDto;
     return result;
+  }
+
+  private mapActivityTypeToFilterBucket(
+    type: string,
+  ): 'CREATION' | 'MODIFICATION' | 'COMMENT' | null {
+    if (type === 'COMMENT_ADDED') return 'COMMENT';
+    if (type === 'NODE_CREATED') return 'CREATION';
+
+    const modificationTypes = new Set([
+      'NODE_UPDATED',
+      'NODE_MOVED',
+      'NODE_DELETED',
+      'NODE_ARCHIVED',
+      'NODE_RESTORED',
+      'NODE_SNOOZED',
+      'NODE_UNSNOOZED',
+      'DESCRIPTION_UPDATED',
+      'TITLE_UPDATED',
+      'DUE_DATE_UPDATED',
+      'PRIORITY_UPDATED',
+      'EFFORT_UPDATED',
+      'TAGS_UPDATED',
+      'ASSIGNEES_UPDATED',
+      'MOVED_TO_BOARD',
+      'PROGRESS_UPDATED',
+      'BLOCKED_STATUS_CHANGED',
+      'RACI_UPDATED',
+      'COLLABORATOR_ADDED',
+      'COLLABORATOR_REMOVED',
+      'KANBAN_SOFT_DELETED',
+      'KANBAN_RESTORED',
+      'KANBAN_MOVED',
+      'KANBAN_MOVE_REFUSED',
+      'KANBAN_BECAME_SHARED',
+      'INVITATION_SENT',
+      'INVITATION_ACCEPTED',
+      'INVITATION_DECLINED',
+      'SHARE_INVITE_CREATED',
+      'SHARE_INVITE_ACCEPTED',
+      'SHARE_INVITE_DECLINED',
+      'SHARE_INVITE_EXPIRED',
+      'SHARE_LINK_REMOVED',
+    ]);
+
+    return modificationTypes.has(type) ? 'MODIFICATION' : null;
+  }
+
+  private async buildBoardTreeNodes(
+    boardId: string,
+    boardNode: {
+      id: string;
+      title: string;
+      workspaceId: string;
+      path: string;
+      depth: number;
+    },
+    currentBoardNodes: Array<{
+      id: string;
+      columnId: string | null;
+      position: number;
+      parentId: string | null;
+      title: string;
+      dueAt?: Date | string | null;
+      updatedAt?: Date | string | null;
+      shortId?: number | string | null;
+      description?: string | null;
+      effort?: string | null;
+      priority?: string | null;
+      assignments?: Array<{
+        user: { id: string; displayName: string } | null;
+      }>;
+    }>,
+    userId?: string,
+  ): Promise<BoardTreeNodeDto[]> {
+    const since = new Date(Date.now() - 30 * DAY_IN_MS);
+    const prefix = `${boardNode.path}/`;
+    const rawTreeNodes = await this.prisma.node.findMany({
+      where: {
+        archivedAt: null,
+        workspaceId: boardNode.workspaceId,
+        path: { startsWith: prefix },
+      },
+      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+      select: {
+        id: true,
+        shortId: true,
+        title: true,
+        description: true,
+        parentId: true,
+        path: true,
+        depth: true,
+        columnId: true,
+        position: true,
+        dueAt: true,
+        updatedAt: true,
+        progress: true,
+        priority: true,
+        effort: true,
+        blockedSince: true,
+        assignments: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+        column: {
+          select: {
+            id: true,
+            name: true,
+            boardId: true,
+            behavior: { select: { key: true } },
+            board: {
+              select: {
+                id: true,
+                node: { select: { title: true } },
+              },
+            },
+          },
+        },
+        board: {
+          select: {
+            id: true,
+          },
+        },
+        comments: {
+          select: {
+            body: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        activityLogs: {
+          where: { createdAt: { gte: since } },
+          select: {
+            type: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    const topLevelOverride = new Map(currentBoardNodes.map((node) => [node.id, node]));
+
+    return rawTreeNodes.map((node) => {
+      const override = topLevelOverride.get(node.id);
+      const columnId = override?.columnId ?? node.columnId;
+      const assigneeIds = (override?.assignments ?? node.assignments)
+        .map((entry) => entry.user?.id)
+        .filter((value): value is string => Boolean(value));
+      const assigneeNames = (override?.assignments ?? node.assignments)
+        .map((entry) => entry.user?.displayName)
+        .filter((value): value is string => Boolean(value));
+
+      const relativeDepth = override
+        ? 0
+        : Math.max(0, node.depth - boardNode.depth - 1);
+      const parentId = node.parentId;
+
+      return {
+        id: node.id,
+        shortId: node.shortId,
+        title: override?.title ?? node.title,
+        description: override?.description ?? node.description ?? null,
+        parentId,
+        depth: relativeDepth,
+        boardId: node.column?.board?.id ?? boardId,
+        boardName: node.column?.board?.node?.title ?? boardNode.title,
+        columnId: columnId ?? '',
+        columnName: node.column?.name ?? '',
+        columnBehaviorKey:
+          (node.column?.behavior?.key as BoardTreeNodeDto['columnBehaviorKey']) ??
+          ColumnBehaviorKey.BACKLOG,
+        position: override?.position ?? node.position,
+        childBoardId: node.board?.id ?? null,
+        dueAt: toIsoDateTime(override?.dueAt ?? node.dueAt),
+        updatedAt: toIsoDateTime(override?.updatedAt ?? node.updatedAt),
+        progress: typeof node.progress === 'number' ? node.progress : null,
+        priority: (override?.priority as BoardTreeNodeDto['priority']) ??
+          (node.priority as BoardTreeNodeDto['priority']) ??
+          'NONE',
+        effort: (override?.effort as BoardTreeNodeDto['effort']) ??
+          (node.effort as BoardTreeNodeDto['effort']) ??
+          null,
+        commentBodies: node.comments.map((comment) => comment.body).filter(Boolean),
+        hasRecentComment: node.comments.length > 0,
+        blockedSince: toIsoDateTime(node.blockedSince),
+        sharedPlacementLocked: Boolean((override as { sharedPlacementLocked?: boolean } | undefined)?.sharedPlacementLocked),
+        activities: node.activityLogs
+          .map((entry) => {
+            const type = this.mapActivityTypeToFilterBucket(entry.type);
+            if (!type) return null;
+            return {
+              type,
+              createdAt: entry.createdAt.toISOString(),
+            };
+          })
+          .filter(
+            (entry): entry is { type: 'CREATION' | 'MODIFICATION' | 'COMMENT'; createdAt: string } =>
+              entry !== null,
+          ),
+        assigneeIds,
+        assigneeNames,
+      };
+    });
   }
 
   async getDueSummary(

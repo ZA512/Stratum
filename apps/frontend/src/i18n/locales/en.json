@@ -510,16 +510,67 @@
     "sharedFilter": {
       "search": {
         "placeholder": "Search… (@name, !priority, #id)",
-        "aria": "Universal search with advanced filters"
+        "aria": "Universal search with advanced filters",
+        "includeComments": "Include comments"
       },
       "bar": {
         "task": "task",
         "tasks": "tasks",
-        "openDrawer": "Filters"
+        "openDrawer": "Filters",
+        "filteredView": "Filtered view"
+      },
+      "families": {
+        "productivity": "Productivity",
+        "owner": "Owner",
+        "status": "Status",
+        "activity": "Activity"
+      },
+      "productivity": {
+        "options": {
+          "TODAY": "Today",
+          "OVERDUE": "Overdue",
+          "THIS_WEEK": "This week",
+          "NEXT_7_DAYS": "Next 7 days",
+          "NO_DEADLINE": "No deadline"
+        }
+      },
+      "activity": {
+        "sections": {
+          "period": "Period",
+          "types": "Types"
+        },
+        "periods": {
+          "TODAY": "Today",
+          "LAST_7_DAYS": "Last 7 days",
+          "LAST_30_DAYS": "Last 30 days"
+        },
+        "types": {
+          "CREATION": "Creation",
+          "MODIFICATION": "Modification",
+          "COMMENT": "Comment"
+        },
+        "presets": {
+          "anyLast7Days": "Any activity over 7 days"
+        }
+      },
+      "presets": {
+        "button": "Presets",
+        "title": "Saved filters",
+        "promptLabel": "Preset name",
+        "defaultName": "New preset",
+        "empty": "No preset for this board.",
+        "actions": {
+          "save": "Save",
+          "update": "Update",
+          "sync": "Sync",
+          "delete": "Delete"
+        }
       },
       "chips": {
         "mine": "My tasks",
-        "hideDone": "Hide done"
+        "hideDone": "Hide done",
+        "moreAria": "Show {count} more filters",
+        "removeAria": "Remove filter {label}"
       },
       "drawer": {
         "title": "Filters",
@@ -884,6 +935,10 @@
         "restoreFailed": "Could not restore the archived card.",
         "deleteArchivedFailed": "Could not delete the archived card.",
         "moveFailed": "Could not move the card."
+      },
+      "descendants": {
+        "level": "Level {depth}",
+        "more": "+{count} more"
       }
     },
     "filters": {

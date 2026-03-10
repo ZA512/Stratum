@@ -30,6 +30,7 @@ import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 import { MindmapEdgesLayer } from './mindmap/MindmapEdgesLayer';
 import { MindmapNodesLayer } from './mindmap/MindmapNodesLayer';
 import { useBoardFilters } from '../context/BoardFilterContext';
+import { evaluateBoardTreeMatches } from '@/features/boards/board-tree-filtering';
 
 // ---------------------------------------------------------------------------
 // localStorage helpers (versioned keys)
@@ -190,6 +191,17 @@ export default function BoardMindmapView({
   const { filters: sharedFilters, setSearchQuery } = useBoardFilters();
   const searchQuery = sharedFilters.searchQuery;
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const hasFullTree = (board.treeNodes?.length ?? 0) > 0;
+  const childBoardIdByNodeId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [nodeId, entry] of Object.entries(childBoards)) {
+      map.set(nodeId, entry.boardId);
+    }
+    for (const node of board.treeNodes ?? []) {
+      if (node.childBoardId) map.set(node.id, node.childBoardId);
+    }
+    return map;
+  }, [board.treeNodes, childBoards]);
 
   // Si le statusFilter est contrôlé de l'extérieur, utiliser la valeur externe
   const effectiveStatusFilter = externalStatusFilter ?? statusFilter;
@@ -248,6 +260,30 @@ export default function BoardMindmapView({
     [mindmapNodes, layoutMode],
   );
 
+  const sharedMatchMeta = useMemo(() => {
+    if (!board.treeNodes?.length) return new Map();
+    return evaluateBoardTreeMatches(
+      board.treeNodes,
+      {
+        searchQuery: sharedFilters.searchQuery,
+        searchIncludeComments: sharedFilters.searchIncludeComments,
+        assigneeIds: sharedFilters.assigneeIds,
+        statusValues: sharedFilters.statusValues,
+        productivityPreset: sharedFilters.productivityPreset,
+        activity: {
+          period: sharedFilters.activity.period ?? undefined,
+          from: sharedFilters.activity.from,
+          to: sharedFilters.activity.to,
+          types: sharedFilters.activity.types,
+        },
+        priorities: sharedFilters.priorities,
+        efforts: sharedFilters.efforts,
+        onlyMine: sharedFilters.onlyMine,
+        hideDone: sharedFilters.hideDone,
+      },
+    );
+  }, [board.treeNodes, sharedFilters]);
+
   // Keep latest layoutResult in a ref for the physics RAF loop
   const layoutResultRef = useRef<MindmapLayoutResult | null>(null);
   layoutResultRef.current = layoutResult;
@@ -260,6 +296,12 @@ export default function BoardMindmapView({
   const filteredNodeIds = useMemo(() => {
     const allNodes = layoutResult.nodes;
 
+    const sharedPassed = new Set(
+      allNodes
+        .filter((node) => node.depth === 0 || sharedMatchMeta.get(node.id)?.visible)
+        .map((node) => node.id),
+    );
+
     // Step 1: status filter (depth-0 always passes)
     const statusPassed = new Set(
       allNodes
@@ -267,9 +309,12 @@ export default function BoardMindmapView({
         .map(n => n.id),
     );
 
-    // Step 2: search filter
+    // Step 2: shared filter intersection
+    const basePassed = new Set([...sharedPassed].filter((id) => statusPassed.has(id)));
+
+    // Step 3: legacy local search shortcut for already rendered nodes
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return statusPassed;
+    if (!q) return basePassed;
 
     // Find nodes matching search
     const matchSet = new Set(
@@ -296,21 +341,17 @@ export default function BoardMindmapView({
     const searchPassed = new Set([...matchSet, ...ancestorSet]);
 
     // Intersection with status filter
-    return new Set([...searchPassed].filter(id => statusPassed.has(id)));
-  }, [layoutResult.nodes, effectiveStatusFilter, searchQuery]);
+    return new Set([...searchPassed].filter(id => basePassed.has(id)));
+  }, [layoutResult.nodes, effectiveStatusFilter, searchQuery, sharedMatchMeta]);
 
   // Direct text matches only (no ancestors — used for highlight)
   const matchedNodeIds = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return new Set<string>();
-    return new Set(
-      layoutResult.nodes
-        .filter(n =>
-          n.title.toLowerCase().includes(q) || (n.description ?? '').toLowerCase().includes(q),
-        )
-        .map(n => n.id),
-    );
-  }, [layoutResult.nodes, searchQuery]);
+    const matched = new Set<string>();
+    for (const node of layoutResult.nodes) {
+      if (sharedMatchMeta.get(node.id)?.directMatch) matched.add(node.id);
+    }
+    return matched;
+  }, [layoutResult.nodes, sharedMatchMeta]);
 
   const filteredEdges = useMemo(
     () => layoutResult.edges.filter(
@@ -353,11 +394,11 @@ export default function BoardMindmapView({
 
   // --- Navigate child board: resolve nodeId → boardId ---
   const handleNavigateChild = useCallback((nodeId: string) => {
-    const childBoard = childBoards[nodeId];
-    if (childBoard) {
-      onOpenChildBoard(childBoard.boardId);
+    const childBoardId = childBoardIdByNodeId.get(nodeId);
+    if (childBoardId) {
+      onOpenChildBoard(childBoardId);
     }
-  }, [childBoards, onOpenChildBoard]);
+  }, [childBoardIdByNodeId, onOpenChildBoard]);
 
   // --- Context menu state ---
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
@@ -447,6 +488,7 @@ export default function BoardMindmapView({
   // Load a subtree into loadedSubtrees without changing collapse state.
   // Returns the loaded nodes (or empty array).
   const loadSubtree = useCallback(async (nodeId: string): Promise<MindmapNode[]> => {
+    if (hasFullTree) return [];
     if (!accessToken) return [];
 
     const existing = expandControllersRef.current.get(nodeId);
@@ -485,7 +527,7 @@ export default function BoardMindmapView({
         return next;
       });
     }
-  }, [accessToken]);
+  }, [accessToken, hasFullTree]);
 
   const expandNode = useCallback(async (nodeId: string) => {
     await loadSubtree(nodeId);
@@ -505,6 +547,7 @@ export default function BoardMindmapView({
   }, [board.id]);
 
   useEffect(() => {
+    if (hasFullTree) return;
     if (!accessToken) return;
     const toLoad = Object.keys(childBoards).filter(id => !preloadedIdsRef.current.has(id));
     if (toLoad.length === 0) return;
@@ -527,10 +570,22 @@ export default function BoardMindmapView({
       }
     };
     next();
-  }, [childBoards, accessToken, loadSubtree]);
+  }, [childBoards, accessToken, loadSubtree, hasFullTree]);
 
   const requestExpand = useCallback((nodeId: string) => {
     const node = mindmapNodes.find(n => n.id === nodeId);
+    if (hasFullTree) {
+      if (node?.collapsed) {
+        setCollapsedIds(prev => {
+          const next = materialize(prev);
+          next.delete(nodeId);
+          return next;
+        });
+      } else {
+        setCollapsedIds(prev => materialize(prev).add(nodeId));
+      }
+      return;
+    }
     // A node needs expansion if collapsed OR its children haven't been loaded yet
     const needsExpand = node ? (node.collapsed || !node.childrenLoaded) : true;
 
@@ -555,7 +610,7 @@ export default function BoardMindmapView({
       }
       setCollapsedIds(prev => materialize(prev).add(nodeId));
     }
-  }, [mindmapNodes, loadedSubtrees, expandNode, materialize]);
+  }, [mindmapNodes, loadedSubtrees, expandNode, materialize, hasFullTree]);
 
   // --- Toolbar actions ---
   const adjustZoom = useCallback((delta: number) => {
@@ -953,7 +1008,7 @@ export default function BoardMindmapView({
                 <ChevronsUpDown size={14} /> <span>{cmNode.collapsed ? t('mindmap.contextMenu.expand') : t('mindmap.contextMenu.collapse')}</span>
               </button>
             )}
-            {childBoards[contextMenu.nodeId] && (
+            {childBoardIdByNodeId.has(contextMenu.nodeId) && (
               <button
                 type="button"
                 role="menuitem"

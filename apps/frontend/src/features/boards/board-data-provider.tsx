@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/auth-provider";
 import {
   fetchBoardDetail,
-  fetchChildBoards,
   fetchNodeBreadcrumb,
   fetchRootBoard,
   type Board,
@@ -35,11 +34,17 @@ interface BoardDataContextValue {
 
 const BoardDataContext = createContext<BoardDataContextValue | null>(null);
 
-const childBoardsToMap = (entries: NodeChildBoard[] | undefined | null) => {
+const boardTreeToDirectChildBoards = (board: Board | null): Record<string, NodeChildBoard> => {
   const map: Record<string, NodeChildBoard> = {};
-  if (!entries) return map;
-  for (const entry of entries) {
-    map[entry.nodeId] = entry;
+  if (!board?.treeNodes) return map;
+  for (const node of board.treeNodes) {
+    if (node.depth !== 0) continue;
+    if (!node.childBoardId) continue;
+    map[node.id] = {
+      nodeId: node.id,
+      boardId: node.childBoardId,
+      name: node.title,
+    };
   }
   return map;
 };
@@ -126,13 +131,6 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     staleTime: 20_000,
   });
 
-  const childBoardsQuery = useQuery({
-    queryKey: ["child-boards", nodeId],
-    queryFn: () => fetchChildBoards(nodeId!, accessToken!),
-    enabled: Boolean(nodeId && accessToken),
-    staleTime: 20_000,
-  });
-
   useEffect(() => {
     if (!boardQuery.error) return;
     if (!activeBoardId || !teamId || !accessToken) return;
@@ -164,25 +162,25 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     [breadcrumbQuery.data],
   );
   const childBoards = useMemo(
-    () => childBoardsToMap(childBoardsQuery.data),
-    [childBoardsQuery.data],
+    () => boardTreeToDirectChildBoards(board),
+    [board],
   );
 
   const error = useMemo(() => {
-    const err = boardQuery.error ?? breadcrumbQuery.error ?? childBoardsQuery.error;
+    const err = boardQuery.error ?? breadcrumbQuery.error;
     if (err) return err instanceof Error ? err.message : String(err);
     return rootError;
-  }, [boardQuery.error, breadcrumbQuery.error, childBoardsQuery.error, rootError]);
+  }, [boardQuery.error, breadcrumbQuery.error, rootError]);
 
   const status = useMemo<"idle" | "loading" | "ready" | "error">(() => {
     if (!accessToken || initializing) return "idle";
     if (error) return "error";
-    if (boardQuery.isLoading || breadcrumbQuery.isLoading || childBoardsQuery.isLoading) return "loading";
+    if (boardQuery.isLoading || breadcrumbQuery.isLoading) return "loading";
     if (board) return "ready";
     return "idle";
-  }, [accessToken, initializing, error, boardQuery.isLoading, breadcrumbQuery.isLoading, childBoardsQuery.isLoading, board]);
+  }, [accessToken, initializing, error, boardQuery.isLoading, breadcrumbQuery.isLoading, board]);
 
-  const isFetching = boardQuery.isFetching || breadcrumbQuery.isFetching || childBoardsQuery.isFetching;
+  const isFetching = boardQuery.isFetching || breadcrumbQuery.isFetching;
 
   const prefetchBoard = useCallback(
     async (id: string) => {
@@ -199,11 +197,6 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
           queryClient.prefetchQuery({
             queryKey: ["breadcrumb", resolved.nodeId],
             queryFn: () => fetchNodeBreadcrumb(resolved.nodeId, accessToken),
-            staleTime: 20_000,
-          }),
-          queryClient.prefetchQuery({
-            queryKey: ["child-boards", resolved.nodeId],
-            queryFn: () => fetchChildBoards(resolved.nodeId, accessToken),
             staleTime: 20_000,
           }),
         ]);
@@ -231,11 +224,9 @@ export function BoardDataProvider({ children }: { children: React.ReactNode }) {
     if (current?.nodeId) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["breadcrumb", current.nodeId] }),
-        queryClient.invalidateQueries({ queryKey: ["child-boards", current.nodeId] }),
       ]);
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ["breadcrumb", current.nodeId] }),
-        queryClient.refetchQueries({ queryKey: ["child-boards", current.nodeId] }),
       ]);
     }
   }, [activeBoardId, queryClient]);

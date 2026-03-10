@@ -40,7 +40,15 @@ interface ColumnPanelProps {
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
+  onNavigateToDescendant?: (preview: {
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }) => void;
   childBoards: Record<string, NodeChildBoard>;
+  highlightedNodeId?: string | null;
   loadingCards: boolean;
   displayOptions: CardDisplayOptions;
   dragStyle?: React.CSSProperties;
@@ -60,8 +68,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
     column, cards, isEditing, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
     onDelete, onCreateCard, onOpenCard, onRenameCard,
-    onRequestMoveCard, onRequestDeleteCard,
-    childBoards, loadingCards, displayOptions, onOpenChildBoard,
+    onRequestMoveCard, onRequestDeleteCard, onNavigateToDescendant,
+    childBoards, highlightedNodeId, loadingCards, displayOptions, onOpenChildBoard,
     dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
     isColumnDragging, onShowArchived, onShowSnoozed,
     viewMode, archivedNodes, helpMode,
@@ -414,6 +422,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 onRename={onRenameCard}
                 onRequestMove={onRequestMoveCard}
                 onRequestDelete={onRequestDeleteCard}
+                onNavigateToDescendant={onNavigateToDescendant}
+                highlighted={highlightedNodeId === card.id}
                 displayOptions={displayOptions}
                 helpMode={helpMode}
               />

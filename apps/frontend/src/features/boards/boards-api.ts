@@ -50,6 +50,15 @@ export type BoardNode = {
   sharedPlacementLocked?: boolean;
   hasRecentComment?: boolean;
   canDelete?: boolean;
+  directMatch?: boolean;
+  descendantMatchCount?: number;
+  descendantPreview?: Array<{
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }>;
 };
 
 export type ArchivedBoardNode = {
@@ -87,6 +96,39 @@ export type BoardGanttDependency = {
   hardConstraint: boolean;
 };
 
+export type BoardTreeActivity = {
+  type: 'CREATION' | 'MODIFICATION' | 'COMMENT';
+  createdAt: string;
+};
+
+export type BoardTreeNode = {
+  id: string;
+  shortId: number;
+  title: string;
+  description: string | null;
+  parentId: string | null;
+  depth: number;
+  boardId: string;
+  boardName: string;
+  columnId: string;
+  columnName: string;
+  columnBehaviorKey: ColumnBehaviorKey;
+  position: number;
+  childBoardId: string | null;
+  dueAt: string | null;
+  updatedAt: string | null;
+  progress: number | null;
+  priority: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST' | null;
+  effort: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
+  commentBodies: string[];
+  hasRecentComment: boolean;
+  blockedSince: string | null;
+  sharedPlacementLocked: boolean;
+  activities: BoardTreeActivity[];
+  assigneeIds: string[];
+  assigneeNames: string[];
+};
+
 export type Board = {
   id: string;
   nodeId: string;
@@ -94,6 +136,7 @@ export type Board = {
   columns: BoardColumn[];
   isShared: boolean; // True si le board contient des tâches partagées avec d'autres utilisateurs
   dependencies: BoardGanttDependency[];
+  treeNodes: BoardTreeNode[];
 };
 
 export type BoardDueSummary = {

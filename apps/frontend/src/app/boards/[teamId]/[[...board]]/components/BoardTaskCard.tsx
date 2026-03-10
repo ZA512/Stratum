@@ -21,6 +21,14 @@ interface BoardTaskCardProps {
   onRequestDelete: (node: BoardNode) => void;
   displayOptions: CardDisplayOptions;
   helpMode?: boolean;
+  highlighted?: boolean;
+  onNavigateToDescendant?: (preview: {
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }) => void;
 }
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
@@ -53,6 +61,8 @@ export function BoardTaskCard({
   onOpenChildBoard,
   displayOptions,
   helpMode,
+  highlighted = false,
+  onNavigateToDescendant,
 }: BoardTaskCardProps) {
   const isSharedLocked = Boolean(node.sharedPlacementLocked);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ 
@@ -70,7 +80,9 @@ export function BoardTaskCard({
   };
 
   const [fractalLoading, setFractalLoading] = useState(false);
+  const [descendantsOpen, setDescendantsOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const descendantsCloseTimerRef = useRef<number | null>(null);
 
   const setCardRef = useCallback(
     (element: HTMLDivElement | null) => {
@@ -184,6 +196,28 @@ export function BoardTaskCard({
     }
     return undefined;
   }, [showReminderBadge, node.blockedReminderDueInDays, node.blockedReminderIntervalDays, tBoard]);
+
+  const hasDirectMatch = Boolean(node.directMatch);
+  const descendantMatchCount = typeof node.descendantMatchCount === 'number' ? node.descendantMatchCount : 0;
+
+  const clearDescendantsCloseTimer = useCallback(() => {
+    if (descendantsCloseTimerRef.current !== null) {
+      window.clearTimeout(descendantsCloseTimerRef.current);
+      descendantsCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const openDescendants = useCallback(() => {
+    clearDescendantsCloseTimer();
+    setDescendantsOpen(true);
+  }, [clearDescendantsCloseTimer]);
+
+  const closeDescendantsSoon = useCallback(() => {
+    clearDescendantsCloseTimer();
+    descendantsCloseTimerRef.current = window.setTimeout(() => {
+      setDescendantsOpen(false);
+    }, 120);
+  }, [clearDescendantsCloseTimer]);
 
   const handleOpenChildBoard = useCallback(async () => {
     if (isDragging || fractalLoading) return;
@@ -367,6 +401,7 @@ export function BoardTaskCard({
   return (
     <div
       ref={setCardRef}
+      data-node-id={node.id}
       style={style}
       {...attributes}
       {...listeners}
@@ -409,8 +444,60 @@ export function BoardTaskCard({
         onClick={handleOpenChildBoard}
         onFractalPathClick={handleOpenChildBoard}
         hideInternalMenuButton
-        className={isSharedLocked ? "cursor-not-allowed opacity-70" : "cursor-grab active:cursor-grabbing"}
+        className={[
+          isSharedLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab active:cursor-grabbing',
+          hasDirectMatch || highlighted ? 'ring-1 ring-accent/70 shadow-[0_0_0_3px_rgba(251,191,36,0.14)]' : '',
+        ].filter(Boolean).join(' ')}
       />
+      {descendantMatchCount > 0 && !hasDirectMatch && (
+        <div
+          className="absolute left-3 bottom-3 z-20"
+          onMouseEnter={openDescendants}
+          onMouseLeave={closeDescendantsSoon}
+        >
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm"
+            onClick={() => setDescendantsOpen((prev) => !prev)}
+          >
+            <span className="relative inline-flex h-4 w-5 items-center justify-center">
+              <span className="absolute left-0 top-[5px] h-2.5 w-3 rounded-sm border border-current bg-background/80" />
+              <span className="absolute left-[3px] top-[2px] h-2.5 w-3 rounded-sm border border-current bg-background/80" />
+              <span className="absolute left-[6px] top-0 h-2.5 w-3 rounded-sm border border-current bg-background/90" />
+            </span>
+            <span>{descendantMatchCount > 9 ? '+9' : descendantMatchCount}</span>
+          </button>
+          {descendantsOpen && node.descendantPreview && node.descendantPreview.length > 0 && (
+            <div
+              className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur"
+              onMouseEnter={openDescendants}
+              onMouseLeave={closeDescendantsSoon}
+            >
+              <div className="max-h-72 overflow-y-auto">
+                {node.descendantPreview.slice(0, 9).map((preview) => (
+                  <button
+                    key={preview.nodeId}
+                    type="button"
+                    onClick={() => {
+                      setDescendantsOpen(false);
+                      onNavigateToDescendant?.(preview);
+                    }}
+                    className="mb-1 block w-full rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
+                  >
+                    <span className="block truncate text-xs font-medium text-foreground">{preview.title}</span>
+                    <span className="block text-[10px] text-muted">{tBoard('cards.descendants.level', { depth: preview.depth })}</span>
+                  </button>
+                ))}
+                {node.descendantPreview.length > 9 && (
+                  <p className="px-3 pt-1 text-[10px] text-muted">
+                    {tBoard('cards.descendants.more', { count: node.descendantPreview.length - 9 })}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
         <div
           className="absolute left-3 top-3 z-10 flex items-center gap-0.5 rounded-full bg-cyan-400/90 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow"

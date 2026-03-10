@@ -500,16 +500,67 @@
     "sharedFilter": {
       "search": {
         "placeholder": "Rechercher… (@nom, !priorité, #id)",
-        "aria": "Recherche universelle avec filtres avancés"
+        "aria": "Recherche universelle avec filtres avancés",
+        "includeComments": "Inclure les commentaires"
       },
       "bar": {
         "task": "tâche",
         "tasks": "tâches",
-        "openDrawer": "Filtres"
+        "openDrawer": "Filtres",
+        "filteredView": "Vue filtrée"
+      },
+      "families": {
+        "productivity": "Productivité",
+        "owner": "Responsable",
+        "status": "Statut",
+        "activity": "Activité"
+      },
+      "productivity": {
+        "options": {
+          "TODAY": "Aujourd'hui",
+          "OVERDUE": "En retard",
+          "THIS_WEEK": "Cette semaine",
+          "NEXT_7_DAYS": "7 prochains jours",
+          "NO_DEADLINE": "Sans deadline"
+        }
+      },
+      "activity": {
+        "sections": {
+          "period": "Période",
+          "types": "Types"
+        },
+        "periods": {
+          "TODAY": "Aujourd'hui",
+          "LAST_7_DAYS": "7 derniers jours",
+          "LAST_30_DAYS": "30 derniers jours"
+        },
+        "types": {
+          "CREATION": "Création",
+          "MODIFICATION": "Modification",
+          "COMMENT": "Commentaire"
+        },
+        "presets": {
+          "anyLast7Days": "Toute activité sur 7 jours"
+        }
+      },
+      "presets": {
+        "button": "Presets",
+        "title": "Filtres sauvegardés",
+        "promptLabel": "Nom du preset",
+        "defaultName": "Nouveau preset",
+        "empty": "Aucun preset pour ce board.",
+        "actions": {
+          "save": "Sauvegarder",
+          "update": "Mettre à jour",
+          "sync": "Sync",
+          "delete": "Suppr."
+        }
       },
       "chips": {
         "mine": "Mes tâches",
-        "hideDone": "Sans terminées"
+        "hideDone": "Sans terminées",
+        "moreAria": "Afficher {count} filtres supplémentaires",
+        "removeAria": "Supprimer le filtre {label}"
       },
       "drawer": {
         "title": "Filtres",
@@ -886,6 +937,10 @@
         "restoreFailed": "Impossible de restaurer la carte archivée.",
         "deleteArchivedFailed": "Impossible de supprimer la carte archivée.",
         "moveFailed": "Impossible de déplacer la carte."
+      },
+      "descendants": {
+        "level": "Niveau {depth}",
+        "more": "+{count} de plus"
       }
     },
     "filters": {

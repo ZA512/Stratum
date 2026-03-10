@@ -19,7 +19,7 @@ import {
   detectMentionContext,
   completeMention,
 } from '../utils/search-tokens';
-import type { PriorityValue, EffortValue, EffortFilterValue } from '../types/board-filters';
+import type { PriorityValue, EffortValue, EffortFilterValue, SharedColumnBehavior } from '../types/board-filters';
 import { NO_EFFORT_TOKEN, UNASSIGNED_TOKEN } from '../types/board-filters';
 
 // --------------------------------------------------------------------------
@@ -29,6 +29,8 @@ import { NO_EFFORT_TOKEN, UNASSIGNED_TOKEN } from '../types/board-filters';
 export interface BoardFilterBarProps {
   /** Nombre de tâches effectivement affichées après filtrage (optionnel) */
   tasksCount?: number;
+  /** Nombre total de tâches dans le scope courant */
+  totalTasksCount?: number;
   /** Options d'assignés pour le drawer (inclut UNASSIGNED_TOKEN en premier) */
   assigneeOptions: Array<{
     id: string;
@@ -55,6 +57,7 @@ export interface BoardFilterBarProps {
 
 export function BoardFilterBar({
   tasksCount,
+  totalTasksCount,
   assigneeOptions,
   allAssignees,
   priorityOptions,
@@ -67,6 +70,8 @@ export function BoardFilterBar({
   const {
     filters,
     setSearchQuery,
+    setSearchIncludeComments,
+    setFilters,
     setAssigneeIds,
     togglePriority,
     toggleEffort,
@@ -75,12 +80,86 @@ export function BoardFilterBar({
     resetFilters,
     activeFilterCount,
     isFiltering,
+    savedPresets,
+    applyPreset,
+    createPreset,
+    updatePreset,
+    deletePreset,
   } = useBoardFilters();
 
   const [draft, setDraft] = useState(filters.searchQuery);
   const [focused, setFocused] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [familyMenu, setFamilyMenu] = useState<null | 'owner' | 'status' | 'productivity' | 'activity'>(null);
   const blurTimeoutRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const presetsRef = useRef<HTMLDivElement | null>(null);
+  const familyMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const statusOptions: Array<{ value: SharedColumnBehavior; label: string }> = useMemo(
+    () => [
+      { value: 'BACKLOG', label: tBoard('behaviors.BACKLOG') },
+      { value: 'IN_PROGRESS', label: tBoard('behaviors.IN_PROGRESS') },
+      { value: 'BLOCKED', label: tBoard('behaviors.BLOCKED') },
+      { value: 'DONE', label: tBoard('behaviors.DONE') },
+    ],
+    [tBoard],
+  );
+
+  const productivityOptions = useMemo(
+    () => [
+      { value: 'TODAY', label: tBoard('sharedFilter.productivity.options.TODAY') },
+      { value: 'OVERDUE', label: tBoard('sharedFilter.productivity.options.OVERDUE') },
+      { value: 'THIS_WEEK', label: tBoard('sharedFilter.productivity.options.THIS_WEEK') },
+      { value: 'NEXT_7_DAYS', label: tBoard('sharedFilter.productivity.options.NEXT_7_DAYS') },
+      { value: 'NO_DEADLINE', label: tBoard('sharedFilter.productivity.options.NO_DEADLINE') },
+    ] as const,
+    [tBoard],
+  );
+
+  const activityPeriodOptions = useMemo(
+    () => [
+      { value: 'TODAY', label: tBoard('sharedFilter.activity.periods.TODAY') },
+      { value: 'LAST_7_DAYS', label: tBoard('sharedFilter.activity.periods.LAST_7_DAYS') },
+      { value: 'LAST_30_DAYS', label: tBoard('sharedFilter.activity.periods.LAST_30_DAYS') },
+    ] as const,
+    [tBoard],
+  );
+
+  const activityTypeOptions = useMemo(
+    () => [
+      { value: 'CREATION', label: tBoard('sharedFilter.activity.types.CREATION') },
+      { value: 'MODIFICATION', label: tBoard('sharedFilter.activity.types.MODIFICATION') },
+      { value: 'COMMENT', label: tBoard('sharedFilter.activity.types.COMMENT') },
+    ] as const,
+    [tBoard],
+  );
+
+  const currentPreset = useMemo(() => {
+    const serialized = JSON.stringify(filters);
+    return savedPresets.find((entry) => JSON.stringify(entry.filters) === serialized) ?? null;
+  }, [filters, savedPresets]);
+
+  useEffect(() => {
+    if (!presetsOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (presetsRef.current?.contains(event.target as Node)) return;
+      setPresetsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [presetsOpen]);
+
+  useEffect(() => {
+    if (!familyMenu) return;
+    const handleClick = (event: MouseEvent) => {
+      if (familyMenuRef.current?.contains(event.target as Node)) return;
+      setFamilyMenu(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [familyMenu]);
 
   // Synchroniser le draft si le contexte change depuis l'extérieur
   // (ex: changement de boardId ou reset)
@@ -92,7 +171,7 @@ export function BoardFilterBar({
     }
   }, [filters.searchQuery]);
 
-  // Debounce 300ms vers le contexte
+  // Debounce 180ms vers le contexte
   useEffect(() => {
     const handle = window.setTimeout(() => {
       const trimmed = draft.trim();
@@ -101,7 +180,7 @@ export function BoardFilterBar({
         externalQueryRef.current = trimmed;
         setSearchQuery(trimmed);
       }
-    }, 300);
+    }, 180);
     return () => window.clearTimeout(handle);
   }, [draft, filters.searchQuery, setSearchQuery]);
 
@@ -178,11 +257,153 @@ export function BoardFilterBar({
   );
 
   const hasChips =
+    filters.searchQuery.trim().length > 0 ||
+    filters.searchIncludeComments ||
     filters.assigneeIds.length > 0 ||
+    filters.statusValues.length > 0 ||
+    Boolean(filters.productivityPreset) ||
+    Boolean(filters.activity.period) ||
+    filters.activity.types.length > 0 ||
     filters.priorities.length > 0 ||
     filters.efforts.length > 0 ||
     filters.onlyMine ||
     filters.hideDone;
+
+  const chipItems = useMemo(() => {
+    const items: Array<{
+      key: string;
+      label: string;
+      onRemove: () => void;
+      onClick?: () => void;
+      colorClass?: string;
+    }> = [];
+
+    if (filters.searchQuery.trim().length > 0 || filters.searchIncludeComments) {
+      items.push({
+        key: 'search',
+        label: filters.searchQuery.trim().length > 0
+          ? `search: ${filters.searchQuery}${filters.searchIncludeComments ? ' + comments' : ''}`
+          : 'search: comments',
+        onRemove: () => {
+          setDraft('');
+          setSearchQuery('');
+          setSearchIncludeComments(false);
+        },
+        onClick: () => inputRef.current?.focus(),
+        colorClass: 'text-emerald-300',
+      });
+    }
+
+    if (currentPreset) {
+      items.push({
+        key: `preset:${currentPreset.id}`,
+        label: `preset: ${currentPreset.name}`,
+        onRemove: () => resetFilters(),
+        onClick: () => setPresetsOpen(true),
+        colorClass: 'text-fuchsia-300',
+      });
+    }
+
+    if (filters.productivityPreset) {
+      items.push({
+        key: 'productivity',
+        label: `productivity: ${productivityOptions.find((entry) => entry.value === filters.productivityPreset)?.label ?? filters.productivityPreset}`,
+        onRemove: () => setFilters({ ...filters, productivityPreset: null }),
+        onClick: () => setFamilyMenu('productivity'),
+        colorClass: 'text-cyan-300',
+      });
+    }
+
+    if (filters.statusValues.length > 0) {
+      items.push({
+        key: 'status',
+        label: `status: ${filters.statusValues.map((value) => statusOptions.find((entry) => entry.value === value)?.label ?? value).join(', ')}`,
+        onRemove: () => setFilters({ ...filters, statusValues: [] }),
+        onClick: () => setFamilyMenu('status'),
+        colorClass: 'text-orange-300',
+      });
+    }
+
+    if (filters.activity.period || filters.activity.types.length > 0) {
+      items.push({
+        key: 'activity',
+        label: `activity: ${filters.activity.period ? activityPeriodOptions.find((entry) => entry.value === filters.activity.period)?.label ?? filters.activity.period : 'types'}${filters.activity.types.length > 0 ? ` (${filters.activity.types.length})` : ''}`,
+        onRemove: () => setFilters({ ...filters, activity: { period: null, types: [], from: null, to: null } }),
+        onClick: () => setFamilyMenu('activity'),
+        colorClass: 'text-rose-300',
+      });
+    }
+
+    if (filters.onlyMine) {
+      items.push({
+        key: 'mine',
+        label: tBoard('sharedFilter.chips.mine'),
+        onRemove: () => setOnlyMine(false),
+      });
+    }
+
+    if (filters.hideDone) {
+      items.push({
+        key: 'hide-done',
+        label: tBoard('sharedFilter.chips.hideDone'),
+        onRemove: () => setHideDone(false),
+      });
+    }
+
+    for (const id of filters.assigneeIds) {
+      items.push({
+        key: `assignee:${id}`,
+        label: id === UNASSIGNED_TOKEN
+          ? tBoard('filters.assignees.optionUnassigned.label')
+          : (assigneeLabelMap[id] ?? id),
+        onRemove: () => removeAssignee(id),
+      });
+    }
+
+    for (const p of filters.priorities) {
+      items.push({
+        key: `priority:${p}`,
+        label: priorityLabelMap[p] ?? p,
+        onRemove: () => removePriority(p),
+        colorClass: 'text-amber-300',
+      });
+    }
+
+    for (const e of filters.efforts) {
+      items.push({
+        key: `effort:${e}`,
+        label: e === NO_EFFORT_TOKEN
+          ? tBoard('filters.effort.noEffort')
+          : (effortLabelMap[e as EffortValue] ?? e),
+        onRemove: () => removeEffort(e),
+        colorClass: 'text-sky-300',
+      });
+    }
+
+    return items;
+  }, [
+    filters,
+    currentPreset,
+    productivityOptions,
+    statusOptions,
+    activityPeriodOptions,
+    setFilters,
+    setOnlyMine,
+    setHideDone,
+    setSearchQuery,
+    setSearchIncludeComments,
+    resetFilters,
+    tBoard,
+    assigneeLabelMap,
+    priorityLabelMap,
+    effortLabelMap,
+    removeAssignee,
+    removePriority,
+    removeEffort,
+  ]);
+
+  const visibleChips = chipItems.slice(0, 6);
+  const hiddenChipCount = Math.max(0, chipItems.length - visibleChips.length);
 
   // --------------------------------------------------------------------------
   // Render
@@ -200,6 +421,7 @@ export function BoardFilterBar({
             </svg>
           </div>
           <input
+            ref={inputRef}
             type="search"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -212,9 +434,19 @@ export function BoardFilterBar({
             }}
             onKeyDown={(e) => { if (e.key === 'Escape') { setDraft(''); setSearchQuery(''); } }}
             placeholder={tBoard('sharedFilter.search.placeholder')}
-            className="w-full rounded-xl border border-white/10 bg-surface py-1.5 pl-8 pr-3 text-sm text-foreground outline-none transition focus:border-accent"
+            className="w-full rounded-xl border border-white/10 bg-surface py-1.5 pl-8 pr-10 text-sm text-foreground outline-none transition focus:border-accent"
             aria-label={tBoard('sharedFilter.search.aria')}
           />
+          <button
+            type="button"
+            onClick={() => setSearchIncludeComments(!filters.searchIncludeComments)}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted transition ${filters.searchIncludeComments ? 'bg-accent/15 text-foreground' : 'hover:bg-white/5 hover:text-foreground'}`}
+            title={tBoard('sharedFilter.search.includeComments')}
+            aria-pressed={filters.searchIncludeComments}
+            aria-label={tBoard('sharedFilter.search.includeComments')}
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden>comment</span>
+          </button>
           {/* Autocomplete @mention */}
           {mentionCtx && mentionSuggestions.length > 0 && (
             <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-xl border border-white/10 bg-surface/95 shadow-2xl backdrop-blur">
@@ -238,39 +470,25 @@ export function BoardFilterBar({
         {/* --- Chips filtres actifs --- */}
         {hasChips && (
           <div className="flex flex-wrap items-center gap-1.5">
-            {filters.onlyMine && (
-              <Chip label={tBoard('sharedFilter.chips.mine')} onRemove={() => setOnlyMine(false)} />
+            {visibleChips.map((item) => (
+              <Chip
+                key={item.key}
+                label={item.label}
+                onRemove={item.onRemove}
+                onClick={item.onClick}
+                colorClass={item.colorClass}
+              />
+            ))}
+            {hiddenChipCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="inline-flex items-center rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium text-muted transition hover:border-accent hover:text-foreground"
+                aria-label={tBoard('sharedFilter.chips.moreAria', { count: hiddenChipCount })}
+              >
+                +{hiddenChipCount}
+              </button>
             )}
-            {filters.hideDone && (
-              <Chip label={tBoard('sharedFilter.chips.hideDone')} onRemove={() => setHideDone(false)} />
-            )}
-            {filters.assigneeIds.map((id) => (
-              <Chip
-                key={id}
-                label={id === UNASSIGNED_TOKEN
-                  ? tBoard('filters.assignees.optionUnassigned.label')
-                  : (assigneeLabelMap[id] ?? id)}
-                onRemove={() => removeAssignee(id)}
-              />
-            ))}
-            {filters.priorities.map((p) => (
-              <Chip
-                key={p}
-                label={priorityLabelMap[p] ?? p}
-                onRemove={() => removePriority(p)}
-                colorClass="text-amber-300"
-              />
-            ))}
-            {filters.efforts.map((e) => (
-              <Chip
-                key={e}
-                label={e === NO_EFFORT_TOKEN
-                  ? tBoard('filters.effort.noEffort')
-                  : (effortLabelMap[e as EffortValue] ?? e)}
-                onRemove={() => removeEffort(e)}
-                colorClass="text-sky-300"
-              />
-            ))}
           </div>
         )}
 
@@ -284,12 +502,265 @@ export function BoardFilterBar({
           </div>
         )}
 
+        <div ref={familyMenuRef} className="flex items-center gap-1.5">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFamilyMenu((prev) => (prev === 'productivity' ? null : 'productivity'))}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${filters.productivityPreset ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+            >
+              {tBoard('sharedFilter.families.productivity')}
+            </button>
+            {familyMenu === 'productivity' && (
+              <div className="absolute left-0 top-full z-40 mt-2 w-52 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+                {productivityOptions.map((option) => {
+                  const active = filters.productivityPreset === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFilters({ ...filters, productivityPreset: active ? null : option.value })}
+                      className={`mb-1 block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFamilyMenu((prev) => (prev === 'owner' ? null : 'owner'))}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${(filters.assigneeIds.length > 0 || filters.onlyMine) ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+            >
+              {tBoard('sharedFilter.families.owner')}
+            </button>
+            {familyMenu === 'owner' && (
+              <div className="absolute left-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() => setOnlyMine(!filters.onlyMine)}
+                  className={`mb-2 block w-full rounded-lg px-3 py-2 text-left text-xs transition ${filters.onlyMine ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                >
+                  {tBoard('sharedFilter.drawer.onlyMine.label')}
+                </button>
+                <div className="max-h-56 overflow-y-auto space-y-1">
+                  {assigneeOptions.map((option) => {
+                    const active = filters.assigneeIds.includes(option.id);
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          if (active) setAssigneeIds(filters.assigneeIds.filter((value) => value !== option.id));
+                          else setAssigneeIds([...filters.assigneeIds, option.id]);
+                        }}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFamilyMenu((prev) => (prev === 'status' ? null : 'status'))}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${filters.statusValues.length > 0 ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+            >
+              {tBoard('sharedFilter.families.status')}
+            </button>
+            {familyMenu === 'status' && (
+              <div className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+                {statusOptions.map((option) => {
+                  const active = filters.statusValues.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFilters({
+                        ...filters,
+                        statusValues: active
+                          ? filters.statusValues.filter((value) => value !== option.value)
+                          : [...filters.statusValues, option.value],
+                      })}
+                      className={`mb-1 block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFamilyMenu((prev) => (prev === 'activity' ? null : 'activity'))}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${(filters.activity.period || filters.activity.types.length > 0) ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+            >
+              {tBoard('sharedFilter.families.activity')}
+            </button>
+            {familyMenu === 'activity' && (
+              <div className="absolute left-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
+                <p className="mb-2 text-[11px] font-semibold text-foreground">{tBoard('sharedFilter.activity.sections.period')}</p>
+                <div className="mb-3 space-y-1">
+                  {activityPeriodOptions.map((option) => {
+                    const active = filters.activity.period === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFilters({
+                          ...filters,
+                          activity: {
+                            ...filters.activity,
+                            period: active ? null : option.value,
+                          },
+                        })}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mb-2 text-[11px] font-semibold text-foreground">{tBoard('sharedFilter.activity.sections.types')}</p>
+                <div className="space-y-1">
+                  {activityTypeOptions.map((option) => {
+                    const active = filters.activity.types.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFilters({
+                          ...filters,
+                          activity: {
+                            ...filters.activity,
+                            types: active
+                              ? filters.activity.types.filter((value) => value !== option.value)
+                              : [...filters.activity.types, option.value],
+                          },
+                        })}
+                        className={`block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setFilters({
+                      ...filters,
+                      activity: {
+                        ...filters.activity,
+                        period: 'LAST_7_DAYS',
+                        types: ['CREATION', 'MODIFICATION', 'COMMENT'],
+                      },
+                    })}
+                    className="mt-2 block w-full rounded-lg border border-white/10 px-3 py-2 text-left text-xs text-muted transition hover:border-accent hover:text-foreground"
+                  >
+                    {tBoard('sharedFilter.activity.presets.anyLast7Days')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* --- Compteur + Bouton Filtres + Reset --- */}
         <div className="flex items-center gap-2">
+          <div ref={presetsRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setPresetsOpen((prev) => !prev)}
+              className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
+            >
+              {tBoard('sharedFilter.presets.button')}
+            </button>
+            {presetsOpen && (
+              <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-foreground">{tBoard('sharedFilter.presets.title')}</p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = window.prompt(
+                          tBoard('sharedFilter.presets.promptLabel'),
+                          currentPreset?.name ?? tBoard('sharedFilter.presets.defaultName'),
+                        )?.trim();
+                        if (!name) return;
+                        if (currentPreset) updatePreset(currentPreset.id, name);
+                        else createPreset(name);
+                      }}
+                      className="rounded border border-white/10 px-2 py-1 text-[10px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
+                    >
+                      {currentPreset ? tBoard('sharedFilter.presets.actions.update') : tBoard('sharedFilter.presets.actions.save')}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                  {savedPresets.length === 0 ? (
+                    <p className="text-xs text-muted">{tBoard('sharedFilter.presets.empty')}</p>
+                  ) : (
+                    savedPresets.map((preset) => (
+                      <div key={preset.id} className="flex items-center gap-2 rounded-lg border border-white/10 px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applyPreset(preset.id);
+                            setPresetsOpen(false);
+                          }}
+                          className="min-w-0 flex-1 truncate text-left text-xs font-medium text-foreground"
+                          title={preset.name}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updatePreset(preset.id)}
+                          className="rounded border border-white/10 px-2 py-1 text-[10px] text-muted transition hover:border-accent hover:text-foreground"
+                        >
+                          {tBoard('sharedFilter.presets.actions.sync')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deletePreset(preset.id)}
+                          className="rounded border border-rose-400/30 px-2 py-1 text-[10px] text-rose-200 transition hover:border-rose-300"
+                        >
+                          {tBoard('sharedFilter.presets.actions.delete')}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {typeof tasksCount === 'number' && (
-            <span className="text-[11px] text-muted tabular-nums">
-              {tasksCount} {tBoard(tasksCount === 1 ? 'sharedFilter.bar.task' : 'sharedFilter.bar.tasks')}
-            </span>
+            <div className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
+              <span>
+                {typeof totalTasksCount === 'number'
+                  ? `${tasksCount} / ${totalTasksCount}`
+                  : tasksCount}{' '}
+                {tBoard(tasksCount === 1 ? 'sharedFilter.bar.task' : 'sharedFilter.bar.tasks')}
+              </span>
+              {isFiltering && (
+                <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                  {tBoard('sharedFilter.bar.filteredView')}
+                </span>
+              )}
+            </div>
           )}
 
           {isFiltering && (
@@ -346,20 +817,29 @@ export function BoardFilterBar({
 interface ChipProps {
   label: string;
   onRemove: () => void;
+  onClick?: () => void;
   colorClass?: string;
 }
 
-function Chip({ label, onRemove, colorClass }: ChipProps) {
+function Chip({ label, onRemove, onClick, colorClass }: ChipProps) {
+  const { t: tBoard } = useTranslation('board');
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium ${colorClass ?? 'text-foreground'}`}
     >
-      {label}
+      <button
+        type="button"
+        onClick={onClick}
+        className="max-w-[220px] truncate"
+        disabled={!onClick}
+      >
+        {label}
+      </button>
       <button
         type="button"
         onClick={onRemove}
         className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted transition hover:bg-white/15 hover:text-foreground"
-        aria-label={`Supprimer le filtre ${label}`}
+        aria-label={tBoard('sharedFilter.chips.removeAria', { label })}
       >
         <svg viewBox="0 0 8 8" fill="currentColor" className="h-2 w-2" aria-hidden>
           <path d="M1.5 1.5l5 5M6.5 1.5l-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

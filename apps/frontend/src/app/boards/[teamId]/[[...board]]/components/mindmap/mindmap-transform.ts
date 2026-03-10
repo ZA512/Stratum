@@ -46,6 +46,62 @@ export function transformBoardToMindmapTree(
 
   const nodes: MindmapNode[] = [rootNode];
 
+  if (board.treeNodes && board.treeNodes.length > 0) {
+    const childrenByParent = new Map<string, typeof board.treeNodes>();
+    for (const node of board.treeNodes) {
+      const key = node.parentId ?? board.nodeId;
+      const bucket = childrenByParent.get(key) ?? [];
+      bucket.push(node);
+      childrenByParent.set(key, bucket);
+    }
+
+    const inject = (parentId: string, parentDepth: number) => {
+      const children = [...(childrenByParent.get(parentId) ?? [])].sort((a, b) => a.position - b.position);
+      for (const node of children) {
+        const depth = node.depth + 1;
+        const nestedChildren = childrenByParent.get(node.id) ?? [];
+        const hasChildren = nestedChildren.length > 0 || Boolean(node.childBoardId);
+        const collapsed = isCollapsed(node.id, depth);
+        const mindmapNode: MindmapNode = {
+          id: node.id,
+          parentId,
+          title: node.title,
+          depth,
+          progress: node.progress ?? 0,
+          priority: node.priority ?? 'NONE',
+          effort: node.effort ?? null,
+          behaviorKey: node.columnBehaviorKey,
+          hasChildren,
+          childrenLoaded: true,
+          collapsed,
+          assignees: node.assigneeIds.map((assigneeId, index) => ({
+            id: assigneeId,
+            displayName: node.assigneeNames[index] ?? assigneeId,
+            avatarUrl: null,
+          })),
+          dueAt: node.dueAt,
+          description: node.description ?? null,
+          shortId: typeof node.shortId === 'number' ? node.shortId : null,
+          counts: null,
+          x: 0,
+          y: 0,
+          angle: 0,
+          radius: 0,
+        };
+        nodes.push(mindmapNode);
+        if (!collapsed && hasChildren) {
+          inject(node.id, parentDepth + 1);
+        }
+      }
+    };
+
+    if (!rootNode.collapsed) {
+      inject(board.nodeId, 0);
+    }
+
+    return nodes;
+  }
+
   // Direct children (all columns, sorted by position)
   const allBoardNodes = board.columns
     .flatMap(col => (col.nodes ?? []).map(n => ({ ...n, behaviorKey: col.behaviorKey })))

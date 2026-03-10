@@ -7,10 +7,10 @@ import { useAuth } from "@/features/auth/auth-provider";
 import {
   ensureChildBoard,
   fetchBoardDetail,
-  fetchChildBoards,
   fetchNodeBreadcrumb,
   fetchRootBoard,
   type Board,
+  type BoardTreeActivity,
   type BoardNode,
   type ColumnBehaviorKey,
   type NodeBreadcrumbItem,
@@ -181,6 +181,8 @@ type ListRow = {
   effort: EffortValue | null;
   dueAt: string | null;
   updatedAt: string | null;
+  commentBodies: string[];
+  activities: BoardTreeActivity[];
   pathLabel: string;
   childBoardId: string | null;
   hasChildren: boolean;
@@ -450,6 +452,77 @@ const getEndOfWeekDiff = (): number => {
   const day = today.getDay();
   const diffToSunday = day === 0 ? 0 : 7 - day;
   return diffToSunday;
+};
+
+const buildChildBoardsFromTree = (board: Board): NodeChildBoard[] =>
+  board.treeNodes
+    .filter((node) => node.depth === 0 && Boolean(node.childBoardId))
+    .map((node) => ({
+      nodeId: node.id,
+      boardId: node.childBoardId as string,
+      name: node.title,
+    }));
+
+const buildRowsFromBoardDetail = (
+  board: Board,
+  breadcrumb: NodeBreadcrumbItem[],
+  scope: ListScope,
+): ListRow[] => {
+  const nodesById = new Map(board.treeNodes.map((node) => [node.id, node]));
+  const pathPrefix = [...breadcrumb.map((item) => item.title), board.name].filter(Boolean);
+  const pathCache = new Map<string, string>();
+
+  const resolvePathLabel = (nodeId: string): string => {
+    const cached = pathCache.get(nodeId);
+    if (cached) return cached;
+    const parts = [...pathPrefix];
+    const lineage: string[] = [];
+    let cursor = nodesById.get(nodeId)?.parentId ?? null;
+    while (cursor && cursor !== board.nodeId) {
+      const parent = nodesById.get(cursor);
+      if (!parent) break;
+      lineage.push(parent.title);
+      cursor = parent.parentId;
+    }
+    lineage.reverse();
+    parts.push(...lineage);
+    const value = parts.join(' / ');
+    pathCache.set(nodeId, value);
+    return value;
+  };
+
+  return board.treeNodes
+    .filter((node) => (scope === 'CURRENT' ? node.depth === 0 : true))
+    .map((node) => ({
+      id: node.id,
+      shortId: typeof node.shortId === 'number' ? node.shortId : null,
+      title: node.title,
+      description: node.description ?? null,
+      boardId: node.boardId,
+      boardName: node.boardName,
+      boardNodeId: node.parentId ?? board.nodeId,
+      parentId: node.parentId,
+      position: node.position,
+      columnId: node.columnId,
+      columnName: node.columnName,
+      columnBehavior: node.columnBehaviorKey,
+      assigneeIds: node.assigneeIds,
+      assignees: node.assigneeNames,
+      priority: node.priority ?? 'NONE',
+      progress: typeof node.progress === 'number' ? Math.max(0, Math.min(100, node.progress)) : null,
+      effort: node.effort ?? null,
+      dueAt: node.dueAt ?? null,
+      updatedAt: node.updatedAt ?? null,
+      commentBodies: node.commentBodies,
+      activities: node.activities,
+      pathLabel: resolvePathLabel(node.id),
+      childBoardId: node.childBoardId ?? null,
+      hasChildren: Boolean(node.childBoardId),
+      hasRecentComment: Boolean(node.hasRecentComment),
+      blockedSince: node.blockedSince ?? null,
+      sharedPlacementLocked: Boolean(node.sharedPlacementLocked),
+      counts: { backlog: 0, inProgress: 0, blocked: 0, done: 0 },
+    }));
 };
 
 const normalizeFilters = (input: BoardListFilters, rootBoardId: string): BoardListFilters => {
@@ -1120,42 +1193,15 @@ export function BoardListView({
       try {
         const detail = (await fetchBoardDetail(boardId, accessToken)) ?? (boardId === rootBoardRef.current.id ? rootBoardRef.current : null);
         if (!detail) return null;
-        const [breadcrumb, childBoards] = await Promise.all([
-          fetchNodeBreadcrumb(detail.nodeId, accessToken),
-          fetchChildBoards(detail.nodeId, accessToken),
-        ]);
+        const breadcrumb = await fetchNodeBreadcrumb(detail.nodeId, accessToken);
         return {
           board: detail,
           breadcrumb,
-          childBoards,
+          childBoards: buildChildBoardsFromTree(detail),
         };
       } catch {
         return null;
       }
-    };
-
-    const collectSubtree = async (startBoardId: string): Promise<BoardHierarchyEntry[]> => {
-      const output: BoardHierarchyEntry[] = [];
-      const queue: string[] = [startBoardId];
-      const seen = new Set<string>();
-
-      while (queue.length > 0) {
-        const currentId = queue.shift();
-        if (!currentId || seen.has(currentId)) continue;
-        seen.add(currentId);
-
-        const entry = await fetchEntry(currentId);
-        if (!entry) continue;
-        output.push(entry);
-
-        for (const child of entry.childBoards) {
-          if (!seen.has(child.boardId)) {
-            queue.push(child.boardId);
-          }
-        }
-      }
-
-      return output;
     };
 
     setLoading(rowsRef.current.length === 0);
@@ -1171,82 +1217,19 @@ export function BoardListView({
 
       setPositionEntry(entry);
 
-      let scopeRootBoardId = entry.board.id;
+      let scopeEntry = entry;
       if (normalizedFilters.scope === "ROOT") {
-        const firstAncestorBoardId = entry.breadcrumb.find((item) => item.boardId)?.boardId;
-        if (firstAncestorBoardId) {
-          scopeRootBoardId = firstAncestorBoardId;
-        } else {
-          try {
-            const root = await fetchRootBoard(accessToken);
-            scopeRootBoardId = root.id;
-          } catch {
-            scopeRootBoardId = entry.board.id;
-          }
+        try {
+          const root = await fetchRootBoard(accessToken);
+          const rootEntry = await fetchEntry(root.id);
+          if (rootEntry) scopeEntry = rootEntry;
+        } catch {
+          scopeEntry = entry;
         }
       }
 
-      let entries: BoardHierarchyEntry[];
-
-      if (normalizedFilters.scope === "CURRENT") {
-        entries = [entry];
-      } else {
-        entries = await collectSubtree(scopeRootBoardId);
-        if (!entries.some((candidate) => candidate.board.id === entry.board.id)) {
-          entries.push(entry);
-        }
-      }
-
-      const nextRows: ListRow[] = [];
-
-      for (const boardEntry of entries) {
-        const childBoardByNodeId = new Map<string, string>();
-        for (const childBoard of boardEntry.childBoards) {
-          childBoardByNodeId.set(childBoard.nodeId, childBoard.boardId);
-        }
-
-        const pathPrefix = [...boardEntry.breadcrumb.map((item) => item.title), boardEntry.board.name]
-          .filter(Boolean)
-          .join(" / ");
-
-        for (const column of boardEntry.board.columns) {
-          for (const node of column.nodes ?? []) {
-            const counts = normalizeCounts(node.counts);
-            const childBoardId = childBoardByNodeId.get(node.id) ?? null;
-            const hasChildren =
-              childBoardId !== null || counts.backlog + counts.inProgress + counts.blocked + counts.done > 0;
-
-            nextRows.push({
-              id: node.id,
-              shortId: typeof node.shortId === "number" ? node.shortId : null,
-              title: node.title,
-              description: node.description ?? null,
-              boardId: boardEntry.board.id,
-              boardName: boardEntry.board.name,
-              boardNodeId: boardEntry.board.nodeId,
-              parentId: node.parentId ?? null,
-              position: node.position,
-              columnId: column.id,
-              columnName: column.name,
-              columnBehavior: column.behaviorKey,
-              assigneeIds: (node.assignees ?? []).map((assignee) => assignee.id),
-              assignees: (node.assignees ?? []).map((assignee) => assignee.displayName),
-              priority: node.priority ?? "NONE",
-              progress: typeof node.progress === "number" ? Math.max(0, Math.min(100, node.progress)) : null,
-              effort: node.effort ?? null,
-              dueAt: node.dueAt ?? null,
-              updatedAt: node.updatedAt ?? null,
-              pathLabel: pathPrefix,
-              childBoardId,
-              hasChildren,
-              hasRecentComment: Boolean(node.hasRecentComment),
-              blockedSince: node.blockedSince ?? null,
-              sharedPlacementLocked: Boolean(node.sharedPlacementLocked),
-              counts,
-            });
-          }
-        }
-      }
+      const entries: BoardHierarchyEntry[] = [scopeEntry];
+      const nextRows = buildRowsFromBoardDetail(scopeEntry.board, scopeEntry.breadcrumb, normalizedFilters.scope);
 
       const parentIdsWithChildren = new Set<string>();
       for (const row of nextRows) {
@@ -1256,7 +1239,7 @@ export function BoardListView({
       setHierarchy(entries);
       setRows(withRecomputedCounters(nextRows));
       setExpandedIds(Array.from(parentIdsWithChildren));
-      setDataRootBoardId(scopeRootBoardId);
+      setDataRootBoardId(scopeEntry.board.id);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Impossible de charger la vue liste.");
     } finally {
@@ -1287,9 +1270,38 @@ export function BoardListView({
 
   const boardOptions = useMemo<BoardOption[]>(() => {
     const optionsById = new Map<string, BoardOption>();
-    for (const entry of boardById.values()) {
-      const path = [...entry.breadcrumb.map((item) => item.title), entry.board.name].filter(Boolean).join(" > ");
-      optionsById.set(entry.board.id, { boardId: entry.board.id, label: entry.board.name, path });
+    const sourceEntry = hierarchy[0] ?? positionEntry;
+    if (sourceEntry) {
+      const prefix = [...sourceEntry.breadcrumb.map((item) => item.title), sourceEntry.board.name].filter(Boolean);
+      optionsById.set(sourceEntry.board.id, {
+        boardId: sourceEntry.board.id,
+        label: sourceEntry.board.name,
+        path: prefix.join(' > '),
+      });
+
+      const nodesById = new Map(sourceEntry.board.treeNodes.map((node) => [node.id, node]));
+      const resolveBoardPath = (nodeId: string): string => {
+        const parts = [...prefix];
+        const lineage: string[] = [];
+        let cursor: string | null = nodeId;
+        while (cursor) {
+          const node = nodesById.get(cursor);
+          if (!node) break;
+          lineage.push(node.title);
+          cursor = node.parentId === sourceEntry.board.nodeId ? null : node.parentId;
+        }
+        lineage.reverse();
+        return [...parts, ...lineage].join(' > ');
+      };
+
+      for (const node of sourceEntry.board.treeNodes) {
+        if (!node.childBoardId) continue;
+        optionsById.set(node.childBoardId, {
+          boardId: node.childBoardId,
+          label: node.title,
+          path: resolveBoardPath(node.id),
+        });
+      }
     }
 
     const ancestorTrail = positionEntry?.breadcrumb ?? [];
@@ -1307,7 +1319,7 @@ export function BoardListView({
     const options = Array.from(optionsById.values());
     options.sort((a, b) => a.path.localeCompare(b.path, locale));
     return options;
-  }, [boardById, locale, positionEntry?.breadcrumb]);
+  }, [hierarchy, locale, positionEntry]);
 
   const visibleBoardOptions = useMemo(() => {
     const search = normalizeText(positionSearch.trim());
@@ -1402,6 +1414,41 @@ export function BoardListView({
   const filteredRows = useMemo(() => {
     const endOfWeekDiff = getEndOfWeekDiff();
     const now = Date.now();
+
+    const matchesSharedProductivity = (row: ListRow): boolean => {
+      const preset = sharedFilters.productivityPreset;
+      if (!preset) return true;
+      const dueDiff = getDueDiff(row.dueAt);
+      if (preset === 'NO_DEADLINE') return dueDiff === null;
+      if (dueDiff === null) return false;
+      if (preset === 'TODAY') return dueDiff === 0;
+      if (preset === 'OVERDUE') return dueDiff < 0;
+      if (preset === 'NEXT_7_DAYS') return dueDiff >= 0 && dueDiff <= 7;
+      if (preset === 'THIS_WEEK') return dueDiff >= 0 && dueDiff <= endOfWeekDiff;
+      return true;
+    };
+
+    const matchesSharedActivity = (row: ListRow): boolean => {
+      const period = sharedFilters.activity.period;
+      const types = sharedFilters.activity.types;
+      if (!period && types.length === 0) return true;
+
+      const nowDate = toStartOfDay(new Date()).getTime();
+      return row.activities.some((entry) => {
+        if (!entry.createdAt) return false;
+        if (types.length > 0 && !types.includes(entry.type)) return false;
+        const date = normalizeDateValue(entry.createdAt);
+        if (!date) return false;
+        const diffDays = Math.round((nowDate - toStartOfDay(date).getTime()) / DAY_IN_MS);
+        if (period === 'TODAY') return diffDays === 0;
+        if (period === 'LAST_7_DAYS') return diffDays >= 0 && diffDays < 7;
+        if (period === 'LAST_30_DAYS') return diffDays >= 0 && diffDays < 30;
+        if (period === 'CUSTOM') {
+          return matchesDateRange(entry.createdAt, sharedFilters.activity.from ?? '', sharedFilters.activity.to ?? '');
+        }
+        return true;
+      });
+    };
 
     const matchesQuery = (row: ListRow): boolean => {
       if (queryTokens.length === 0) return true;
@@ -1576,6 +1623,13 @@ export function BoardListView({
         return false;
       }
 
+      if (sharedFilters.statusValues.length > 0 && !sharedFilters.statusValues.includes(row.columnBehavior)) {
+        return false;
+      }
+
+      if (!matchesSharedProductivity(row)) return false;
+      if (!matchesSharedActivity(row)) return false;
+
       if (sharedQueryTokens.length > 0) {
         for (const tokenRaw of sharedQueryTokens) {
           const token = tokenRaw.trim();
@@ -1601,6 +1655,7 @@ export function BoardListView({
           const normalized = normalizeText(token);
           if (normalized.length < 2) continue;
           const haystack = [row.title, row.description ?? "", row.pathLabel, ...row.assignees, row.priority]
+            .concat(sharedFilters.searchIncludeComments ? row.commentBodies : [])
             .map((v) => normalizeText(v))
             .join(" ");
           if (!haystack.includes(normalized)) return false;
@@ -1930,7 +1985,7 @@ export function BoardListView({
     if (!accessToken) return;
     if (!row.parentId) return;
 
-    const board = boardById.get(row.boardId)?.board;
+    const board = boardById.get(row.boardId)?.board ?? (await fetchBoardDetail(row.boardId, accessToken));
     const targetColumn = board?.columns.find((column) => column.id === targetColumnId);
     if (!targetColumn) return;
 

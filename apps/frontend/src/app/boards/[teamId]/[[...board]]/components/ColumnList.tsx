@@ -36,6 +36,14 @@ interface ColumnListProps {
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
+  onNavigateToDescendant?: (preview: {
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }) => void;
+  highlightedNodeId?: string | null;
   onShowArchived: (column: BoardColumnWithNodes) => void;
   onShowSnoozed: (column: BoardColumnWithNodes) => void;
   columnViewMode: Record<string, 'snoozed' | 'archived' | null>;
@@ -73,6 +81,14 @@ type ColumnListItemProps = {
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
   onRequestDeleteCard: (node: BoardNode) => void;
+  onNavigateToDescendant?: (preview: {
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }) => void;
+  highlightedNodeId?: string | null;
   onShowArchived: (column: BoardColumnWithNodes) => void;
   onShowSnoozed: (column: BoardColumnWithNodes) => void;
   viewMode: 'snoozed' | 'archived' | null;
@@ -101,6 +117,8 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   onRenameCard,
   onRequestMoveCard,
   onRequestDeleteCard,
+  onNavigateToDescendant,
+  highlightedNodeId,
   onShowArchived,
   onShowSnoozed,
   viewMode,
@@ -152,6 +170,8 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       onRenameCard={onRenameCard}
       onRequestMoveCard={onRequestMoveCard}
       onRequestDeleteCard={onRequestDeleteCard}
+      onNavigateToDescendant={onNavigateToDescendant}
+      highlightedNodeId={highlightedNodeId}
       onShowArchived={onShowArchived}
       onShowSnoozed={onShowSnoozed}
       childBoards={childBoards}
@@ -212,6 +232,8 @@ export function ColumnList(props: ColumnListProps){
               onRenameCard={props.onRenameCard}
               onRequestMoveCard={props.onRequestMoveCard}
               onRequestDeleteCard={props.onRequestDeleteCard}
+              onNavigateToDescendant={props.onNavigateToDescendant}
+              highlightedNodeId={props.highlightedNodeId}
               onShowArchived={props.onShowArchived}
               onShowSnoozed={props.onShowSnoozed}
               snoozedColumnId={props.snoozedColumnId}

@@ -46,6 +46,7 @@ import dynamic from 'next/dynamic';
 const BoardMindmapView = dynamic(() => import('./BoardMindmapView'), { ssr: false });
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
+import { evaluateBoardTreeMatches } from '@/features/boards/board-tree-filtering';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
 import { BoardFilterBar } from './BoardFilterBar';
@@ -61,6 +62,7 @@ import { NO_EFFORT_TOKEN, UNASSIGNED_TOKEN as UNASSIGNED_TOKEN_IMPORT } from '..
 
 // Alias interne pour conserver la compatibilité avec le code de filtrage existant
 const normalizeSearchString = normalizeText;
+const PENDING_DESCENDANT_NAV_KEY = 'stratum:pending-descendant-nav:v1';
 
 type GanttLinkType = 'FS' | 'SS' | 'FF' | 'SF';
 type GanttLinkMode = 'ASAP' | 'FREE';
@@ -584,6 +586,7 @@ function TeamBoardPageInner(){
   const [columnViewMode, setColumnViewMode] = useState<Record<string, 'snoozed' | 'archived' | null>>({});
   const [ganttDependencies, setGanttDependencies] = useState<GanttDependency[]>([]);
   const [scheduleSavingIds, setScheduleSavingIds] = useState<string[]>([]);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   // Filtres actifs dans le panneau Kanban (affecte le point rouge sur le bouton)
   const advancedFiltersActive =
@@ -724,6 +727,48 @@ function TeamBoardPageInner(){
 
   const parsedSearch = useMemo(() => parseSearchTokens(searchQuery, priorityLabelMap), [searchQuery, priorityLabelMap]);
 
+  const treeMatchMeta = useMemo(() => {
+    if (!board?.treeNodes?.length) return new Map();
+    return evaluateBoardTreeMatches(
+      board.treeNodes,
+      {
+        searchQuery,
+        searchIncludeComments: filters.searchIncludeComments,
+        assigneeIds: selectedAssignees,
+        statusValues: filters.statusValues,
+        productivityPreset: filters.productivityPreset,
+        activity: {
+          period: filters.activity.period ?? undefined,
+          from: filters.activity.from,
+          to: filters.activity.to,
+          types: filters.activity.types,
+        },
+        priorities: selectedPriorities,
+        efforts: selectedEfforts,
+        onlyMine: filterMine,
+        hideDone,
+      },
+      user?.id,
+    );
+  }, [board?.treeNodes, searchQuery, filters.searchIncludeComments, filters.statusValues, filters.productivityPreset, filters.activity, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, hideDone, user?.id]);
+
+  const sharedShownTaskCount = useMemo(() => {
+    if (!board?.treeNodes?.length) {
+      return board?.columns?.reduce((sum, col) => sum + (col.nodes?.length ?? 0), 0) ?? 0;
+    }
+    if (!isFiltering) return board.treeNodes.length;
+    let count = 0;
+    for (const node of board.treeNodes) {
+      if (treeMatchMeta.get(node.id)?.visible) count += 1;
+    }
+    return count;
+  }, [board?.treeNodes, board?.columns, isFiltering, treeMatchMeta]);
+
+  const sharedTotalTaskCount = useMemo(() => {
+    if (board?.treeNodes?.length) return board.treeNodes.length;
+    return board?.columns?.reduce((sum, col) => sum + (col.nodes?.length ?? 0), 0) ?? 0;
+  }, [board?.treeNodes, board?.columns]);
+
   useEffect(() => {
     if (!filtersExpanded) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -820,9 +865,22 @@ function TeamBoardPageInner(){
 
     return effectiveColumns.map((column) => {
       const baseCards = [...(column.nodes ?? [])].sort((a, b) => a.position - b.position);
-      let filtered = baseCards;
+      let filtered = baseCards
+        .map((card) => {
+          const meta = treeMatchMeta.get(card.id);
+          return {
+            ...card,
+            directMatch: meta?.directMatch ?? false,
+            descendantMatchCount: meta?.descendantMatchCount ?? 0,
+            descendantPreview: meta?.descendantPreview ?? [],
+          };
+        })
+        .filter((card) => {
+          if (!isFiltering) return true;
+          return card.directMatch || (card.descendantMatchCount ?? 0) > 0;
+        });
 
-      if (selectedAssignees.length > 0) {
+      if (selectedAssignees.length > 0 && !board?.treeNodes?.length) {
         filtered = filtered.filter((card) => {
           const assignees = card.assignees ?? [];
           const hasAssignments = assignees.length > 0;
@@ -834,11 +892,11 @@ function TeamBoardPageInner(){
         });
       }
 
-      if (selectedPriorities.length > 0) {
+      if (selectedPriorities.length > 0 && !board?.treeNodes?.length) {
         filtered = filtered.filter((card) => selectedPriorities.includes((card.priority ?? 'NONE') as PriorityValue));
       }
 
-      if (selectedEfforts.length > 0) {
+      if (selectedEfforts.length > 0 && !board?.treeNodes?.length) {
         filtered = filtered.filter((card) => {
           const effort = card.effort ?? null;
           return selectedEfforts.some((value) =>
@@ -847,7 +905,7 @@ function TeamBoardPageInner(){
         });
       }
 
-      if (filterMine && user?.id) {
+      if (filterMine && user?.id && !board?.treeNodes?.length) {
         filtered = filtered.filter((card) => (card.assignees ?? []).some((a) => a.id === user.id));
       }
 
@@ -855,7 +913,7 @@ function TeamBoardPageInner(){
         filtered = filtered.filter((card) => Boolean(childBoards[card.id]));
       }
 
-      if (parsedSearch.hasQuery) {
+      if (parsedSearch.hasQuery && !board?.treeNodes?.length) {
         filtered = filtered.filter((card) => matchesSearch(card));
       }
 
@@ -881,7 +939,7 @@ function TeamBoardPageInner(){
 
       return { ...column, nodes: filtered };
     });
-  }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate, priorityLabelMap]);
+  }, [effectiveColumns, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, user?.id, filterHasChildren, childBoards, parsedSearch, sortPriority, sortDueDate, priorityLabelMap, treeMatchMeta, isFiltering, board?.treeNodes?.length]);
 
   const scheduleSavingSet = useMemo(() => new Set(scheduleSavingIds), [scheduleSavingIds]);
 
@@ -1443,6 +1501,60 @@ function TeamBoardPageInner(){
   };
 
   const handleOpenCard = (id:string) => { open(id); };
+  const handleNavigateToDescendant = useCallback((preview: {
+    nodeId: string;
+    title: string;
+    boardId: string;
+    parentId: string | null;
+    depth: number;
+  }) => {
+    if (preview.boardId === activeBoardId) {
+      setHighlightedNodeId(preview.nodeId);
+      open(preview.nodeId);
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          document
+            .querySelector(`[data-node-id="${preview.nodeId}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        });
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(
+        PENDING_DESCENDANT_NAV_KEY,
+        JSON.stringify({ boardId: preview.boardId, nodeId: preview.nodeId, createdAt: Date.now() }),
+      );
+    }
+    openChildBoard(preview.boardId);
+  }, [activeBoardId, open, openChildBoard]);
+
+  useEffect(() => {
+    if (!activeBoardId || typeof window === 'undefined') return;
+    const raw = window.sessionStorage.getItem(PENDING_DESCENDANT_NAV_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { boardId?: string; nodeId?: string; createdAt?: number };
+      if (parsed.boardId !== activeBoardId || !parsed.nodeId) return;
+      window.sessionStorage.removeItem(PENDING_DESCENDANT_NAV_KEY);
+      setHighlightedNodeId(parsed.nodeId);
+      open(parsed.nodeId);
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-node-id="${parsed.nodeId}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      });
+    } catch {
+      window.sessionStorage.removeItem(PENDING_DESCENDANT_NAV_KEY);
+    }
+  }, [activeBoardId, open]);
+
+  useEffect(() => {
+    if (!highlightedNodeId) return;
+    const timer = window.setTimeout(() => setHighlightedNodeId(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [highlightedNodeId]);
   const handleRenameCard = async (id:string, newTitle:string) => {
     if(!accessToken) return; await handleApi(()=>updateNode(id,{ title: newTitle }, accessToken)); };
 
@@ -1899,7 +2011,8 @@ function TeamBoardPageInner(){
           }`}
         >
         <BoardFilterBar
-          tasksCount={displayedColumns?.reduce((sum, col) => sum + (col.nodes?.length ?? 0), 0)}
+          tasksCount={sharedShownTaskCount}
+          totalTasksCount={sharedTotalTaskCount}
           assigneeOptions={assigneeOptions}
           allAssignees={allAssignees}
           priorityOptions={priorityOptions}
@@ -2321,6 +2434,8 @@ function TeamBoardPageInner(){
                     onRenameCard={handleRenameCard}
                     onRequestMoveCard={handleRequestMoveCard}
                     onRequestDeleteCard={handleRequestDeleteCard}
+                    onNavigateToDescendant={handleNavigateToDescendant}
+                    highlightedNodeId={highlightedNodeId}
                     onShowArchived={handleShowArchived}
                     onShowSnoozed={handleShowSnoozed}
                     columnViewMode={columnViewMode}
