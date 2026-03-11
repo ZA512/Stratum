@@ -135,19 +135,20 @@ export function BoardFilterContextProvider({
           const parsedPresets = JSON.parse(rawPresets) as SharedBoardFilterPreset[];
           if (Array.isArray(parsedPresets)) {
             setSavedPresets(
-              parsedPresets.filter(
-                (entry) =>
-                  Boolean(entry) &&
-                  typeof entry.id === 'string' &&
-                  typeof entry.name === 'string' &&
-                  typeof entry.createdAt === 'string' &&
-                  typeof entry.updatedAt === 'string' &&
-                  typeof entry.filters === 'object',
-              ),
-              .map((entry) => ({
-                ...entry,
-                filters: normalizeSharedBoardFilters(entry.filters),
-              })),
+              parsedPresets
+                .filter(
+                  (entry) =>
+                    Boolean(entry) &&
+                    typeof entry.id === 'string' &&
+                    typeof entry.name === 'string' &&
+                    typeof entry.createdAt === 'string' &&
+                    typeof entry.updatedAt === 'string' &&
+                    typeof entry.filters === 'object',
+                )
+                .map((entry) => ({
+                  ...entry,
+                  filters: normalizeSharedBoardFilters(entry.filters),
+                })),
             );
           }
         } else {

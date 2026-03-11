@@ -236,6 +236,28 @@ const PRIORITY_WEIGHT: Record<PriorityValue, number> = {
 
 const OFFICIAL_VIEWS: OfficialView[] = [
   {
+    id: "none",
+    name: "Sans filtre",
+    config: {
+      renderMode: "FLAT",
+      scope: "SUBTREE",
+      includeDone: false,
+      contextMode: true,
+      query: "",
+      chips: {
+        mine: false,
+        overdue: false,
+        today: false,
+        week: false,
+        blocked: false,
+        updatedWithinDays: null,
+      },
+      advanced: DEFAULT_ADVANCED_FILTERS,
+      sort: { field: "priority", direction: "asc" },
+      visibleColumns: FLAT_COLUMNS_DEFAULT,
+    },
+  },
+  {
     id: "overdue",
     name: "En retard",
     config: {
@@ -816,7 +838,7 @@ export function BoardListViewQuickBar({
     (id: string) => {
       setPersonalViews((prev) => prev.filter((e) => e.id !== id));
       if (filters.activeViewId === `personal:${id}`) {
-        applyOfficialView(OFFICIAL_VIEWS[2]);
+        applyOfficialView(OFFICIAL_VIEWS[0]);
       }
     },
     [filters.activeViewId, applyOfficialView],
@@ -827,7 +849,7 @@ export function BoardListViewQuickBar({
     : "FLAT";
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="relative z-[60] flex items-center gap-1.5">
       {/* Arbre / À plat */}
       <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
         <button
@@ -872,7 +894,7 @@ export function BoardListViewQuickBar({
           {activeViewLabel}
         </button>
         {viewsMenuOpen && (
-          <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
+          <div className="absolute right-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/70">
               Officielles
             </p>
@@ -2270,7 +2292,7 @@ export function BoardListView({
             Colonnes
           </button>
           {columnsMenuOpen && (
-            <div className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
+            <div className="absolute left-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
               <div className="space-y-2 text-xs">
                 {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
                   const checked = visibleColumns.includes(column);

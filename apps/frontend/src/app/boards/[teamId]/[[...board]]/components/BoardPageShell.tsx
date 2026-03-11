@@ -547,6 +547,7 @@ function TeamBoardPageInner(){
     togglePriority: ctxTogglePriority,
     toggleEffort: ctxToggleEffort,
     resetFilters: resetSharedFilters,
+    isFiltering,
   } = useBoardFilters();
 
   // Aliases pour compatibilité avec le code existant (displayedColumns useMemo, etc.)
@@ -733,15 +734,15 @@ function TeamBoardPageInner(){
       board.treeNodes,
       {
         searchQuery,
-        searchIncludeComments: filters.searchIncludeComments,
+        searchIncludeComments: sharedFilters.searchIncludeComments,
         assigneeIds: selectedAssignees,
-        statusValues: filters.statusValues,
-        productivityPreset: filters.productivityPreset,
+        statusValues: sharedFilters.statusValues,
+        productivityPreset: sharedFilters.productivityPreset,
         activity: {
-          period: filters.activity.period ?? undefined,
-          from: filters.activity.from,
-          to: filters.activity.to,
-          types: filters.activity.types,
+          period: sharedFilters.activity.period ?? undefined,
+          from: sharedFilters.activity.from,
+          to: sharedFilters.activity.to,
+          types: sharedFilters.activity.types,
         },
         priorities: selectedPriorities,
         efforts: selectedEfforts,
@@ -750,7 +751,7 @@ function TeamBoardPageInner(){
       },
       user?.id,
     );
-  }, [board?.treeNodes, searchQuery, filters.searchIncludeComments, filters.statusValues, filters.productivityPreset, filters.activity, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, hideDone, user?.id]);
+  }, [board?.treeNodes, searchQuery, sharedFilters.searchIncludeComments, sharedFilters.statusValues, sharedFilters.productivityPreset, sharedFilters.activity, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, hideDone, user?.id]);
 
   const sharedShownTaskCount = useMemo(() => {
     if (!board?.treeNodes?.length) {

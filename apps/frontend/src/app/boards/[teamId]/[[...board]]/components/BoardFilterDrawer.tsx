@@ -11,7 +11,7 @@
  * layout Mindmap…) restent dans leurs panneaux respectifs.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '@/i18n';
 import { MultiSelectCombo } from '@/components/ui/MultiSelectCombo';
@@ -51,6 +51,7 @@ export function BoardFilterDrawer({
   extraSections,
 }: BoardFilterDrawerProps) {
   const { t: tBoard } = useTranslation('board');
+  const [isMounted, setIsMounted] = useState(false);
   const {
     filters,
     setAssigneeIds,
@@ -62,6 +63,11 @@ export function BoardFilterDrawer({
     activeFilterCount,
   } = useBoardFilters();
 
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
+
   // Fermer avec Escape
   useEffect(() => {
     if (!open) return;
@@ -70,7 +76,7 @@ export function BoardFilterDrawer({
     return () => window.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
-  if (typeof window === 'undefined') return null;
+  if (!isMounted) return null;
 
   const drawer = (
     <>

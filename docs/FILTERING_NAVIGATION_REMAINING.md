@@ -1,6 +1,6 @@
 # Filtering Navigation Remaining Work
 
-Date: 2026-03-10
+Date: 2026-03-11
 
 ## Current State
 
@@ -16,23 +16,43 @@ The core implementation is in place:
 
 ### 1. Project Validation
 
-This is the main unfinished item.
+Most validation is now done.
 
-- run frontend lint
-- run frontend tests
-- run backend build
-- run backend tests if needed for board detail contract changes
-- fix any issues found by those commands
+- frontend lint: done
+- frontend tests: done
+- backend build: done
+- backend tests: partially blocked by an existing test module wiring issue unrelated to filtering/navigation
 
-Current blocker:
+Current status:
 
-- `npm` is not installed in the current environment, so `lint` and `build` could not be executed here
+- active runtime used for successful validation: Node `v20.20.1`, npm `10.8.2`
+- workspace dependencies were installed successfully
+- Prisma client generation works with a valid `DATABASE_URL`
+
+Observed status:
+
+- `npm --prefix apps/frontend run lint`: passed with warnings only
+- `npm --prefix apps/frontend run test`: passed (`21/21` tests)
+- `npm --prefix apps/backend run build`: passed
+- `npm --prefix apps/backend run prisma:generate`: passed with a valid PostgreSQL-style `DATABASE_URL`
+- `npm --prefix apps/backend run test -- --runInBand`: still fails in `nodes.service.spec.ts` because `ActivityService` is not provided in the Nest testing module
+
+Backend test failure details:
+
+- failing file: `apps/backend/src/modules/nodes/nodes.service.spec.ts`
+- failure type: Nest dependency resolution in test setup
+- missing dependency: `ActivityService`
+- this does not point to the filtering/navigation changes directly
 
 Suggested commands once tooling is available:
 
 ```bash
+nvm use 20
+npm install
 npm --prefix apps/frontend run lint
 npm --prefix apps/frontend run test
+export DATABASE_URL='postgresql://postgres:postgres@localhost:5432/stratum_test'
+npm --prefix apps/backend run prisma:generate
 npm --prefix apps/backend run build
 npm --prefix apps/backend run test
 ```
@@ -80,7 +100,9 @@ These are not blockers, but may improve maintainability.
 The work can be considered finished when:
 
 - frontend lint passes
+- frontend tests pass
 - backend build passes
+- backend tests are either green or the unrelated `ActivityService` test wiring issue is fixed/accepted separately
 - no regression is found in the three board views
 - saved presets work reliably across reloads and board changes
 - shared filters behave consistently across all supported views

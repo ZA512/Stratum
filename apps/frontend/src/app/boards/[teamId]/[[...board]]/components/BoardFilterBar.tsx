@@ -410,7 +410,7 @@ export function BoardFilterBar({
   // --------------------------------------------------------------------------
 
   return (
-    <div className={`w-full ${className ?? ''}`}>
+    <div className={`relative z-[60] w-full ${className ?? ''}`}>
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-card/60 px-4 py-2.5 backdrop-blur">
         {/* --- Champ recherche --- */}
         <div className="relative min-w-[220px] flex-1">
@@ -449,7 +449,7 @@ export function BoardFilterBar({
           </button>
           {/* Autocomplete @mention */}
           {mentionCtx && mentionSuggestions.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-xl border border-white/10 bg-surface/95 shadow-2xl backdrop-blur">
+            <div className="absolute left-0 right-0 top-full z-[70] mt-1.5 rounded-xl border border-white/10 bg-surface/95 shadow-2xl backdrop-blur">
               <ul className="max-h-52 overflow-y-auto py-1.5 text-sm">
                 {mentionSuggestions.map((a) => (
                   <li key={a.id}>
@@ -512,7 +512,7 @@ export function BoardFilterBar({
               {tBoard('sharedFilter.families.productivity')}
             </button>
             {familyMenu === 'productivity' && (
-              <div className="absolute left-0 top-full z-40 mt-2 w-52 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+              <div className="absolute left-0 top-full z-[70] mt-2 w-52 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
                 {productivityOptions.map((option) => {
                   const active = filters.productivityPreset === option.value;
                   return (
@@ -539,7 +539,7 @@ export function BoardFilterBar({
               {tBoard('sharedFilter.families.owner')}
             </button>
             {familyMenu === 'owner' && (
-              <div className="absolute left-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+              <div className="absolute left-0 top-full z-[70] mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
                 <button
                   type="button"
                   onClick={() => setOnlyMine(!filters.onlyMine)}
@@ -578,7 +578,7 @@ export function BoardFilterBar({
               {tBoard('sharedFilter.families.status')}
             </button>
             {familyMenu === 'status' && (
-              <div className="absolute left-0 top-full z-40 mt-2 w-56 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
+              <div className="absolute left-0 top-full z-[70] mt-2 w-56 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
                 {statusOptions.map((option) => {
                   const active = filters.statusValues.includes(option.value);
                   return (
@@ -610,7 +610,7 @@ export function BoardFilterBar({
               {tBoard('sharedFilter.families.activity')}
             </button>
             {familyMenu === 'activity' && (
-              <div className="absolute left-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
+              <div className="absolute left-0 top-full z-[70] mt-2 w-64 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
                 <p className="mb-2 text-[11px] font-semibold text-foreground">{tBoard('sharedFilter.activity.sections.period')}</p>
                 <div className="mb-3 space-y-1">
                   {activityPeriodOptions.map((option) => {
@@ -687,7 +687,7 @@ export function BoardFilterBar({
               {tBoard('sharedFilter.presets.button')}
             </button>
             {presetsOpen && (
-              <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
+              <div className="absolute right-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-foreground">{tBoard('sharedFilter.presets.title')}</p>
                   <div className="flex items-center gap-1">
