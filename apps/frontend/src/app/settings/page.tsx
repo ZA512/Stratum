@@ -21,6 +21,11 @@ import {
 import { useTheme, ThemeProvider } from "@/themes/theme-provider";
 import type { ThemeDefinition } from "@/themes";
 import { exportTestData, importTestData } from "@/features/test-data/test-data-api";
+import {
+  persistBreadcrumbVariant,
+  readStoredBreadcrumbVariant,
+  type BreadcrumbVariant,
+} from "@/features/boards/breadcrumb-preferences";
 
 type SettingsTab = "appearance" | "ai" | "raciTeams" | "data";
 
@@ -56,6 +61,7 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [breadcrumbVariant, setBreadcrumbVariantState] = useState<BreadcrumbVariant>("fractal");
   const { activeThemeId, themes: availableThemes, setTheme } = useTheme();
 
   const handleThemeSelect = useCallback(
@@ -83,6 +89,10 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timeout);
   }, [feedback]);
 
+  useEffect(() => {
+    setBreadcrumbVariantState(readStoredBreadcrumbVariant());
+  }, []);
+
   const languageOptions = useMemo(
     () =>
       availableLocales.map((value) => ({
@@ -98,6 +108,15 @@ export default function SettingsPage() {
     setLocale(next);
     setFeedback(t("settings.success"));
   };
+
+  const handleBreadcrumbVariantChange = useCallback(
+    (value: BreadcrumbVariant) => {
+      setBreadcrumbVariantState(value);
+      persistBreadcrumbVariant(value);
+      setFeedback(t("settings.breadcrumb.saved"));
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (!accessToken) {
@@ -436,6 +455,69 @@ export default function SettingsPage() {
                           style={{ backgroundColor: theme.preview.accent }}
                           aria-hidden
                         />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+              <h2 className="text-lg font-semibold text-foreground">{t("settings.breadcrumb.title")}</h2>
+              <p className="mt-2 text-sm text-muted">{t("settings.breadcrumb.description")}</p>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                {(["fractal", "stacked", "inline"] as BreadcrumbVariant[]).map((variant) => {
+                  const isActive = breadcrumbVariant === variant;
+
+                  return (
+                    <button
+                      key={variant}
+                      type="button"
+                      onClick={() => handleBreadcrumbVariantChange(variant)}
+                      className={`group flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                        isActive
+                          ? "border-accent/60 bg-accent/10 text-foreground shadow-lg"
+                          : "border-white/15 bg-surface/70 text-foreground hover:border-accent/40 hover:bg-surface"
+                      }`}
+                      aria-pressed={isActive}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {t(`settings.breadcrumb.options.${variant}.title`)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {t(`settings.breadcrumb.options.${variant}.description`)}
+                          </p>
+                        </div>
+                        {isActive ? (
+                          <span className="text-[11px] font-semibold text-accent">{t("settings.theme.active")}</span>
+                        ) : null}
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-3">
+                        {variant === "fractal" ? (
+                          <div className="space-y-2 text-[11px] uppercase tracking-[0.08em] text-foreground/90">
+                            <div className="w-full border-t border-accent/40 pt-2">Projet racine</div>
+                            <div className="ml-3 w-[92%] border-t border-accent/30 pt-2">Test A</div>
+                            <div className="ml-6 w-[84%] border-t border-accent/20 pt-2">Test A1</div>
+                          </div>
+                        ) : variant === "stacked" ? (
+                          <div className="space-y-2 text-[11px] uppercase tracking-[0.08em] text-foreground/90">
+                            <div className="rounded-xl border border-accent/25 bg-accent/10 px-3 py-2">Projet racine</div>
+                            <div className="rounded-xl border border-white/10 px-3 py-2">Test A</div>
+                            <div className="rounded-xl border border-white/10 px-3 py-2">Test A1</div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-foreground/90">
+                            <span className="rounded-full bg-white/5 px-2 py-1">Projet racine</span>
+                            <span className="text-muted/80">&gt;</span>
+                            <span className="rounded-full bg-white/5 px-2 py-1">Test A</span>
+                            <span className="text-muted/80">&gt;</span>
+                            <span className="rounded-full bg-accent/10 px-2 py-1">Test A1</span>
+                          </div>
+                        )}
                       </div>
                     </button>
                   );

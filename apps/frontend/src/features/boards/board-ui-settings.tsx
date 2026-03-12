@@ -2,6 +2,11 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useBoardData } from "./board-data-provider";
+import {
+  persistBreadcrumbVariant,
+  readStoredBreadcrumbVariant,
+  type BreadcrumbVariant,
+} from "./breadcrumb-preferences";
 
 type BoardViewMode = "kanban" | "gantt" | "list" | "mindmap";
 
@@ -10,6 +15,8 @@ interface BoardUiSettingsContextValue {
   setExpertMode: (value: boolean) => void;
   boardView: BoardViewMode;
   setBoardView: (value: BoardViewMode) => void;
+  breadcrumbVariant: BreadcrumbVariant;
+  setBreadcrumbVariant: (value: BreadcrumbVariant) => void;
 }
 
 const BoardUiSettingsContext = createContext<BoardUiSettingsContextValue | null>(null);
@@ -18,6 +25,11 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
   const { teamId } = useBoardData();
   const [expertMode, setExpertModeState] = useState(false);
   const [boardView, setBoardViewState] = useState<BoardViewMode>("kanban");
+  const [breadcrumbVariant, setBreadcrumbVariantState] = useState<BreadcrumbVariant>("fractal");
+
+  useEffect(() => {
+    setBreadcrumbVariantState(readStoredBreadcrumbVariant());
+  }, []);
 
   useEffect(() => {
     if (!teamId) {
@@ -87,11 +99,18 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
     [teamId],
   );
 
+  const setBreadcrumbVariant = useCallback((value: BreadcrumbVariant) => {
+    setBreadcrumbVariantState(value);
+    persistBreadcrumbVariant(value);
+  }, []);
+
   const contextValue: BoardUiSettingsContextValue = {
     expertMode,
     setExpertMode,
     boardView,
     setBoardView,
+    breadcrumbVariant,
+    setBreadcrumbVariant,
   };
 
   return (

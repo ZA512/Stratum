@@ -105,6 +105,25 @@
     "languageHelp": "Your preference is saved on this device.",
     "success": "Language updated",
     "back": "Back to the dashboard",
+    "breadcrumb": {
+      "title": "Board breadcrumb",
+      "description": "Choose the layout used to navigate depth levels. This preference is stored on this device.",
+      "saved": "Breadcrumb layout updated",
+      "options": {
+        "fractal": {
+          "title": "Fractal",
+          "description": "The current layout with visual depth and descend animation."
+        },
+        "stacked": {
+          "title": "Left column",
+          "description": "Depth levels are stacked in a dedicated column on the left side of the board."
+        },
+        "inline": {
+          "title": "Inline",
+          "description": "A compact linear path such as Root project > Test A > Test A1."
+        }
+      }
+    },
     "tabs": {
       "appearance": "Appearance",
       "ai": "Artificial intelligence",

@@ -95,6 +95,25 @@
     "languageHelp": "Votre préférence est sauvegardée sur cet appareil.",
     "success": "Langue mise à jour",
     "back": "Retour au tableau de bord",
+    "breadcrumb": {
+      "title": "Fil d'ariane des boards",
+      "description": "Choisissez la présentation utilisée pour naviguer entre les profondeurs. Cette préférence est mémorisée sur cet appareil.",
+      "saved": "Affichage du fil d'ariane mis à jour",
+      "options": {
+        "fractal": {
+          "title": "Fractal",
+          "description": "Le rendu actuel avec profondeur visuelle et animation de descente."
+        },
+        "stacked": {
+          "title": "Colonne gauche",
+          "description": "Les niveaux sont empilés dans une colonne dédiée à gauche du board."
+        },
+        "inline": {
+          "title": "Traductionnel",
+          "description": "Un chemin linéaire compact du type Projet racine > Test A > Test A1."
+        }
+      }
+    },
     "tabs": {
       "appearance": "Apparence",
       "ai": "Intelligence artificielle",
