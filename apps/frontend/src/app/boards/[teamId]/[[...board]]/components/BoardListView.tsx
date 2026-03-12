@@ -1018,6 +1018,7 @@ export function BoardListView({
   const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
   const [manageViewsOpen, setManageViewsOpen] = useState(false);
+  const [headerActionsRoot, setHeaderActionsRoot] = useState<HTMLElement | null>(null);
 
   const [personalViews, setPersonalViews] = useState<PersonalView[]>([]);
   const [viewsHydrated, setViewsHydrated] = useState(false);
@@ -1036,6 +1037,11 @@ export function BoardListView({
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setHeaderActionsRoot(document.getElementById("board-list-header-actions-root"));
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2275,71 +2281,75 @@ export function BoardListView({
   const showInitialLoading = loading && rows.length === 0;
   const showRefreshing = loading && rows.length > 0;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <div ref={columnsMenuRef} className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              setPositionSelectorOpen(false);
-              setViewsMenuOpen(false);
-              setManageViewsOpen(false);
-              setColumnsMenuOpen((prev) => !prev);
-            }}
-            className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-          >
-            Colonnes
-          </button>
-          {columnsMenuOpen && (
-            <div className="absolute left-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-              <div className="space-y-2 text-xs">
-                {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
-                  const checked = visibleColumns.includes(column);
-                  const disabled = column === "title" || (normalizedFilters.renderMode === "FLAT" && column === "path");
-                  return (
-                    <div key={column} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2 py-1">
-                      <label className="flex items-center gap-2 text-muted">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => toggleColumnVisibility(column)}
-                        />
-                        <span>{COLUMN_LABELS[column]}</span>
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => moveColumnInVisibility(column, "up")}
-                          className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveColumnInVisibility(column, "down")}
-                          className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                        >
-                          ↓
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
+  const listHeaderActions = (
+    <div className="flex items-center gap-2">
+      <div ref={columnsMenuRef} className="relative">
         <button
           type="button"
-          onClick={createAtPosition}
-          className="ml-auto rounded-full bg-accent px-3 py-1 text-xs font-semibold text-background transition hover:bg-accent-strong"
+          onClick={() => {
+            setPositionSelectorOpen(false);
+            setViewsMenuOpen(false);
+            setManageViewsOpen(false);
+            setColumnsMenuOpen((prev) => !prev);
+          }}
+          className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
         >
-          + Carte
+          Colonnes
         </button>
+        {columnsMenuOpen && (
+          <div className="absolute left-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
+            <div className="space-y-2 text-xs">
+              {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
+                const checked = visibleColumns.includes(column);
+                const disabled = column === "title" || (normalizedFilters.renderMode === "FLAT" && column === "path");
+                return (
+                  <div key={column} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2 py-1">
+                    <label className="flex items-center gap-2 text-muted">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => toggleColumnVisibility(column)}
+                      />
+                      <span>{COLUMN_LABELS[column]}</span>
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveColumnInVisibility(column, "up")}
+                        className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveColumnInVisibility(column, "down")}
+                        className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      <button
+        type="button"
+        onClick={createAtPosition}
+        className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-background transition hover:bg-accent-strong"
+      >
+        + Carte
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {headerActionsRoot ? createPortal(listHeaderActions, headerActionsRoot) : listHeaderActions}
 
       {notice && (
         <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">{notice}</div>

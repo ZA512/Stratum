@@ -2005,7 +2005,7 @@ function TeamBoardPageInner(){
   return (
     <div className="min-h-screen bg-background text-foreground">
       {headerRoot ? createPortal(headerContent, headerRoot) : headerContent}
-      <main className={`relative flex w-full flex-col gap-6 px-8 pb-12 ${boardView === 'list' ? 'pt-2' : 'pt-6'}`}>
+      <main className="relative flex w-full flex-col gap-6 px-8 pb-12 pt-2">
         <div
           className={`transition duration-500 ease-out transform-gpu will-change-transform will-change-opacity ${
             isPushing ? '-translate-x-4 -translate-y-4 opacity-70' : 'translate-x-0 translate-y-0 opacity-100'
@@ -2310,10 +2310,15 @@ function TeamBoardPageInner(){
                   </div>
                 </button>
                 </div>
+              ) : boardView === 'list' ? (
+                <div
+                  id="board-list-header-actions-root"
+                  className="flex min-h-8 items-center gap-2"
+                />
               ) : (
-                <div />
+                <div className="min-h-8" />
               )}
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
                 <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
                   <button
                     type="button"
@@ -2368,17 +2373,6 @@ function TeamBoardPageInner(){
                     {tBoard('viewToggle.mindmap')}
                   </button>
                 </div>
-                {boardView === 'kanban' && (
-                  <span className="text-xs uppercase tracking-wide text-muted">
-                    {detailLoading
-                      ? tBoard('columns.header.status.refreshing')
-                      : board.columns.length === 0
-                        ? tBoard('columns.header.status.empty')
-                        : board.columns.length === 1
-                          ? tBoard('columns.header.status.single')
-                          : tBoard('columns.header.status.multiple', { count: board.columns.length })}
-                  </span>
-                )}
               </div>
             </div>
             {displayedColumns && displayedColumns.length>0 ? (
