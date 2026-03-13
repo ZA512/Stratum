@@ -10,6 +10,26 @@ import {
 
 type BoardViewMode = "kanban" | "gantt" | "list" | "mindmap";
 
+const EXPERT_MODE_STORAGE_KEY = "stratum:preferences:expert-mode";
+
+export function readStoredExpertMode(): boolean {
+  try {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(EXPERT_MODE_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function persistExpertMode(value: boolean): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(EXPERT_MODE_STORAGE_KEY, value ? "true" : "false");
+  } catch {
+    // ignore storage errors
+  }
+}
+
 interface BoardUiSettingsContextValue {
   expertMode: boolean;
   setExpertMode: (value: boolean) => void;
@@ -32,23 +52,10 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    setExpertModeState(readStoredExpertMode());
     if (!teamId) {
-      setExpertModeState(false);
       setBoardViewState("kanban");
       return;
-    }
-    const key = `stratum:team:${teamId}:expert-mode`;
-    try {
-      const stored = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
-      if (stored === "true") {
-        setExpertModeState(true);
-      } else if (stored === "false") {
-        setExpertModeState(false);
-      } else {
-        setExpertModeState(false);
-      }
-    } catch {
-      setExpertModeState(false);
     }
     const viewKey = `stratum:team:${teamId}:board-view`;
     try {
@@ -70,17 +77,9 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
   const setExpertMode = useCallback(
     (value: boolean) => {
       setExpertModeState(value);
-      if (!teamId) return;
-      try {
-        if (typeof window !== "undefined") {
-          const key = `stratum:team:${teamId}:expert-mode`;
-          window.localStorage.setItem(key, value ? "true" : "false");
-        }
-      } catch {
-        // ignore storage errors
-      }
+      persistExpertMode(value);
     },
-    [teamId],
+    [],
   );
 
   const setBoardView = useCallback(

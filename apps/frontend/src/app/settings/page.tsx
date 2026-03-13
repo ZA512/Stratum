@@ -26,6 +26,7 @@ import {
   readStoredBreadcrumbVariant,
   type BreadcrumbVariant,
 } from "@/features/boards/breadcrumb-preferences";
+import { persistExpertMode, readStoredExpertMode } from "@/features/boards/board-ui-settings";
 
 type SettingsTab = "appearance" | "ai" | "raciTeams" | "data";
 
@@ -62,6 +63,7 @@ export default function SettingsPage() {
   const [importing, setImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [breadcrumbVariant, setBreadcrumbVariantState] = useState<BreadcrumbVariant>("fractal");
+  const [expertMode, setExpertModeState] = useState(false);
   const { activeThemeId, themes: availableThemes, setTheme } = useTheme();
 
   const handleThemeSelect = useCallback(
@@ -91,6 +93,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setBreadcrumbVariantState(readStoredBreadcrumbVariant());
+    setExpertModeState(readStoredExpertMode());
   }, []);
 
   const languageOptions = useMemo(
@@ -114,6 +117,15 @@ export default function SettingsPage() {
       setBreadcrumbVariantState(value);
       persistBreadcrumbVariant(value);
       setFeedback(t("settings.breadcrumb.saved"));
+    },
+    [t],
+  );
+
+  const handleExpertModeChange = useCallback(
+    (value: boolean) => {
+      setExpertModeState(value);
+      persistExpertMode(value);
+      setFeedback(t("settings.expert.saved"));
     },
     [t],
   );
@@ -522,6 +534,36 @@ export default function SettingsPage() {
                     </button>
                   );
                 })}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <h2 className="text-lg font-semibold text-foreground">{t("settings.expert.title")}</h2>
+                  <p className="mt-2 text-sm text-muted">{t("settings.expert.description")}</p>
+                  <p className="mt-3 text-xs text-muted/80">{t("settings.expert.hint")}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleExpertModeChange(!expertMode)}
+                  className={`inline-flex items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    expertMode
+                      ? "border-accent/60 bg-accent/10 text-foreground"
+                      : "border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground"
+                  }`}
+                  aria-pressed={expertMode}
+                >
+                  <span>{expertMode ? t("settings.expert.enabled") : t("settings.expert.disabled")}</span>
+                  <span
+                    className={`relative h-5 w-9 rounded-full transition-colors ${expertMode ? "bg-accent" : "bg-white/15"}`}
+                    aria-hidden
+                  >
+                    <span
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform ${expertMode ? "left-[18px]" : "left-0.5"}`}
+                    />
+                  </span>
+                </button>
               </div>
             </section>
 

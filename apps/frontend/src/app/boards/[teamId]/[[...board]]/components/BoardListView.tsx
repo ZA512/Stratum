@@ -23,15 +23,15 @@ import { formatActivityMessage } from "@/features/activity/activity-formatter";
 import { useBoardFilters } from '../context/BoardFilterContext';
 import { UNASSIGNED_TOKEN } from '../types/board-filters';
 
-type ListScope = "CURRENT" | "SUBTREE" | "ROOT";
-type ListRenderMode = "TREE" | "FLAT";
+export type ListScope = "CURRENT" | "SUBTREE" | "ROOT";
+export type ListRenderMode = "TREE" | "FLAT";
 type SortField = "deadline" | "priority" | "updatedAt" | "status" | "assignee" | "title";
 type SortDirection = "asc" | "desc";
 type UpdatedWithinDays = 1 | 3 | 7 | 14 | 30 | null;
 type PriorityValue = NonNullable<BoardNode["priority"]>;
 type EffortValue = NonNullable<BoardNode["effort"]>;
 type BoolFilter = "ANY" | "YES" | "NO";
-type ListColumnKey =
+export type ListColumnKey =
   | "title"
   | "status"
   | "priority"
@@ -142,7 +142,7 @@ export const DEFAULT_LIST_FILTERS: BoardListFilters = {
     mine: false,
     overdue: false,
     today: false,
-    week: true,
+    week: false,
     blocked: false,
     updatedWithinDays: null,
   },
@@ -152,7 +152,7 @@ export const DEFAULT_LIST_FILTERS: BoardListFilters = {
     direction: "asc",
   },
   visibleColumns: FLAT_COLUMNS_DEFAULT,
-  activeViewId: "official:this-week",
+  activeViewId: null,
 };
 
 type BoardHierarchyEntry = {
@@ -166,6 +166,7 @@ type ListRow = {
   shortId: number | null;
   title: string;
   description: string | null;
+  depth: number;
   boardId: string;
   boardName: string;
   boardNodeId: string;
@@ -388,7 +389,7 @@ const SORT_FIELDS: Array<{ id: SortField; label: string }> = [
   { id: "title", label: "Titre" },
 ];
 
-const SCOPE_OPTIONS: Array<{ value: ListScope; label: string; helper: string }> = [
+export const SCOPE_OPTIONS: Array<{ value: ListScope; label: string; helper: string }> = [
   {
     value: "CURRENT",
     label: "Niveau de la position",
@@ -406,7 +407,7 @@ const SCOPE_OPTIONS: Array<{ value: ListScope; label: string; helper: string }> 
   },
 ];
 
-const COLUMN_LABELS: Record<ListColumnKey, string> = {
+export const COLUMN_LABELS: Record<ListColumnKey, string> = {
   title: "Titre",
   status: "Statut",
   priority: "Priorite",
@@ -520,6 +521,7 @@ const buildRowsFromBoardDetail = (
       shortId: typeof node.shortId === 'number' ? node.shortId : null,
       title: node.title,
       description: node.description ?? null,
+      depth: node.depth,
       boardId: node.boardId,
       boardName: node.boardName,
       boardNodeId: node.parentId ?? board.nodeId,
@@ -1589,6 +1591,7 @@ export function BoardListView({
     const result: Array<{ row: ListRow; depth: number; isContext: boolean; isExpanded: boolean }> = [];
 
     const rootRows = visibleRows.filter((row) => {
+      if (row.depth === 0) return true;
       if (row.parentId === treeRootParentId) return true;
       return !visibleIds.has(row.parentId ?? "");
     });

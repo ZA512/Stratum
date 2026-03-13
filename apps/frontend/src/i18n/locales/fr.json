@@ -114,6 +114,14 @@
         }
       }
     },
+    "expert": {
+      "title": "Mode expert",
+      "description": "Choisissez si l'interface doit afficher les options avancées dans les écrans d'édition des tâches.",
+      "hint": "À désactiver si vous voulez une interface plus légère pour l'onboarding ou les revues rapides.",
+      "enabled": "Activé",
+      "disabled": "Désactivé",
+      "saved": "Mode expert mis à jour"
+    },
     "tabs": {
       "appearance": "Apparence",
       "ai": "Intelligence artificielle",
@@ -525,7 +533,7 @@
       "bar": {
         "task": "tâche",
         "tasks": "tâches",
-        "openDrawer": "Filtres",
+        "openDrawer": "Affichage",
         "filteredView": "Vue filtrée"
       },
       "families": {
@@ -582,8 +590,9 @@
         "removeAria": "Supprimer le filtre {label}"
       },
       "drawer": {
-        "title": "Filtres",
-        "subtitle": "Appliqués à toutes les vues",
+        "title": "Affichage",
+        "subtitle": "Préférences visuelles pour la vue active",
+        "empty": "Aucune préférence visuelle supplémentaire pour cette vue.",
         "sections": {
           "quick": "Accès rapide"
         },
@@ -1291,6 +1300,14 @@
     },
     "mindmap": {
       "ariaLabel": "Visualisation mindmap du board",
+      "drawer": {
+        "layoutTitle": "Disposition du graphe",
+        "layoutHorizontal": "Horizontale",
+        "layoutRadial": "Radiale",
+        "organicTitle": "Mode organique",
+        "organicLabel": "Activer le mode organique",
+        "organicDescription": "Ajoute une légère respiration au graphe pour un rendu plus vivant et moins rigide."
+      },
       "toolbar": {
         "zoomIn": "Zoom avant",
         "zoomOut": "Zoom arrière",
@@ -1346,6 +1363,18 @@
       "aria": "Ouvrir la liste des échéances"
     },
     "listView": {
+      "drawer": {
+        "renderMode": "Mode de rendu",
+        "tree": "Arbre",
+        "flat": "À plat",
+        "position": "Position",
+        "scope": "Zone d'affichage",
+        "visibleColumns": "Colonnes visibles",
+        "context": {
+          "title": "Contexte",
+          "description": "Garder visibles les lignes parentes utiles à la lecture de l'arbre filtré"
+        }
+      },
       "mode": {
         "all": "Tout",
         "due": "Échéances"

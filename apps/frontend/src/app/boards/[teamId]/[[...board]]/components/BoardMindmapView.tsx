@@ -23,7 +23,7 @@ import type { MindmapNode, MindmapLayoutResult, MindmapLayoutMode } from './mind
 import { transformBoardToMindmapTree, transformSubBoardToNodes } from './mindmap/mindmap-transform';
 import { computeMindmapLayout, isNodeInViewport } from './mindmap/mindmap-layout';
 import { buildTransition, tickTransition } from './mindmap/mindmap-animation';
-import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus, Sparkles, Network, GitFork } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus } from 'lucide-react';
 import { type PhysicsNode, createPhysicsNode, tickAllPhysics, propagateDragToAncestors } from './mindmap/mindmap-physics';
 import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 
@@ -139,9 +139,8 @@ interface BoardMindmapViewProps {
   hasParentBoard?: boolean;
   onCreateTask?: (title: string) => Promise<void>;
   onCreateChildTask?: (parentId: string, title: string) => Promise<void>;
-  /** Filtre de statut controlé depuis l'extérieur (rightSlot du BoardFilterBar) */
-  statusFilter?: Set<string>;
-  onStatusFilterChange?: (filter: Set<string>) => void;
+  layoutMode?: MindmapLayoutMode;
+  organicMode?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,8 +156,8 @@ export default function BoardMindmapView({
   hasParentBoard = false,
   onCreateTask,
   onCreateChildTask,
-  statusFilter: externalStatusFilter,
-  onStatusFilterChange,
+  layoutMode: externalLayoutMode,
+  organicMode: externalOrganicMode,
 }: BoardMindmapViewProps) {
   const { accessToken } = useAuth();
   const { t } = useTranslation('board');
@@ -183,9 +182,6 @@ export default function BoardMindmapView({
   const [isBling, setIsBling] = useState(true);
 
   // --- Filters ---
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(
-    () => new Set(['BACKLOG', 'IN_PROGRESS', 'BLOCKED']),
-  );
   // searchQuery est piloté par le contexte partagé (BoardFilterBar) ;
   // le champ local du mindmap sert également de shortcut et reste en sync.
   const { filters: sharedFilters, setSearchQuery } = useBoardFilters();
@@ -203,9 +199,8 @@ export default function BoardMindmapView({
     return map;
   }, [board.treeNodes, childBoards]);
 
-  // Si le statusFilter est contrôlé de l'extérieur, utiliser la valeur externe
-  const effectiveStatusFilter = externalStatusFilter ?? statusFilter;
-  const effectiveSetStatusFilter = onStatusFilterChange ?? setStatusFilter;
+  const effectiveLayoutMode = externalLayoutMode ?? layoutMode;
+  const effectiveOrganicMode = externalOrganicMode ?? isBling;
 
   // --- Bling physics ---
   const physicsRef = useRef<Map<string, PhysicsNode>>(new Map());
@@ -228,8 +223,9 @@ export default function BoardMindmapView({
   }, [board.id, stagePos, stageScale]);
 
   useEffect(() => {
+    if (externalLayoutMode !== undefined) return;
     saveLayoutMode(board.id, layoutMode);
-  }, [board.id, layoutMode]);
+  }, [board.id, externalLayoutMode, layoutMode]);
 
   // --- Layout (pure TS) ---
   const mindmapNodes = useMemo(
@@ -256,8 +252,8 @@ export default function BoardMindmapView({
   }, []);
 
   const layoutResult: MindmapLayoutResult = useMemo(
-    () => computeMindmapLayout(mindmapNodes, layoutMode),
-    [mindmapNodes, layoutMode],
+    () => computeMindmapLayout(mindmapNodes, effectiveLayoutMode),
+    [mindmapNodes, effectiveLayoutMode],
   );
 
   const sharedMatchMeta = useMemo(() => {
@@ -291,8 +287,6 @@ export default function BoardMindmapView({
   // --- Labels removed (text now rendered inside card shapes) ---
 
   // --- Status + search filtering ---
-  const STATUS_KEYS = ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE'] as const;
-
   const filteredNodeIds = useMemo(() => {
     const allNodes = layoutResult.nodes;
 
@@ -302,15 +296,7 @@ export default function BoardMindmapView({
         .map((node) => node.id),
     );
 
-    // Step 1: status filter (depth-0 always passes)
-    const statusPassed = new Set(
-      allNodes
-        .filter(n => n.depth === 0 || effectiveStatusFilter.has(n.behaviorKey ?? 'BACKLOG'))
-        .map(n => n.id),
-    );
-
-    // Step 2: shared filter intersection
-    const basePassed = new Set([...sharedPassed].filter((id) => statusPassed.has(id)));
+    const basePassed = sharedPassed;
 
     // Step 3: legacy local search shortcut for already rendered nodes
     const q = searchQuery.trim().toLowerCase();
@@ -340,9 +326,8 @@ export default function BoardMindmapView({
 
     const searchPassed = new Set([...matchSet, ...ancestorSet]);
 
-    // Intersection with status filter
     return new Set([...searchPassed].filter(id => basePassed.has(id)));
-  }, [layoutResult.nodes, effectiveStatusFilter, searchQuery, sharedMatchMeta]);
+  }, [layoutResult.nodes, searchQuery, sharedMatchMeta]);
 
   // Direct text matches only (no ancestors — used for highlight)
   const matchedNodeIds = useMemo(() => {
@@ -766,8 +751,8 @@ export default function BoardMindmapView({
 
   // Start / stop bling loop when isBling changes
   useEffect(() => {
-    blingActiveRef.current = isBling;
-    if (isBling) {
+    blingActiveRef.current = effectiveOrganicMode;
+    if (effectiveOrganicMode) {
       runBlingLoop();
     } else {
       cancelAnimationFrame(blingRafRef.current);
@@ -797,7 +782,7 @@ export default function BoardMindmapView({
       blingActiveRef.current = false;
       cancelAnimationFrame(blingRafRef.current);
     };
-  }, [isBling, runBlingLoop]);
+  }, [effectiveOrganicMode, runBlingLoop]);
 
   // Bling drag callbacks
   const onBlingDragStart = useCallback((nodeId: string) => {
@@ -1204,42 +1189,6 @@ export default function BoardMindmapView({
           <ChevronsUpDown size={16} className="rotate-90" />
         </button>
         <div className="mx-1 h-4 w-px bg-white/10" />
-        <button
-          type="button"
-          onClick={() => setLayoutMode('radial')}
-          className={[
-            'rounded-full p-1.5 transition',
-            layoutMode === 'radial' ? 'text-accent' : 'text-muted hover:text-foreground',
-          ].join(' ')}
-          title={t('mindmap.toolbar.layoutRadial')}
-        >
-          <Network size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setLayoutMode('horizontal')}
-          className={[
-            'rounded-full p-1.5 transition',
-            layoutMode === 'horizontal' ? 'text-accent' : 'text-muted hover:text-foreground',
-          ].join(' ')}
-          title={t('mindmap.toolbar.layoutHorizontal')}
-        >
-          <GitFork size={16} />
-        </button>
-        <div className="mx-1 h-4 w-px bg-white/10" />
-        <button
-          type="button"
-          onClick={() => setIsBling(v => !v)}
-          className={[
-            'rounded-full p-1.5 transition',
-            isBling
-              ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]'
-              : 'text-muted hover:text-amber-400',
-          ].join(' ')}
-          title={isBling ? t('mindmap.toolbar.blingOff') : t('mindmap.toolbar.blingOn')}
-        >
-          <Sparkles size={16} />
-        </button>
       </div>
 
       {/* a11y live region */}

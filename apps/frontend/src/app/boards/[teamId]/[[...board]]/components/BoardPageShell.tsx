@@ -40,8 +40,9 @@ import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closest
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
-import { BoardListView, BoardListViewQuickBar, DEFAULT_LIST_FILTERS, type BoardListFilters, type BoardOption } from './BoardListView';
+import { BoardListView, COLUMN_LABELS, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
 import dynamic from 'next/dynamic';
+import type { MindmapLayoutMode } from './mindmap/mindmap-types';
 
 const BoardMindmapView = dynamic(() => import('./BoardMindmapView'), { ssr: false });
 import type { BoardColumnWithNodes, CardDisplayOptions } from './types';
@@ -118,6 +119,24 @@ const BACKLOG_SETTINGS_DEFAULTS = {
 
 const DONE_SETTINGS_DEFAULTS = {
   archiveAfterDays: 30,
+};
+
+const readMindmapLayoutMode = (boardId: string): MindmapLayoutMode => {
+  try {
+    const raw = window.localStorage.getItem(`stratum:board:${boardId}:mindmap-layout-mode:v1`);
+    return raw === 'radial' ? 'radial' : 'horizontal';
+  } catch {
+    return 'horizontal';
+  }
+};
+
+const readMindmapOrganicMode = (boardId: string): boolean => {
+  try {
+    const raw = window.localStorage.getItem(`stratum:board:${boardId}:mindmap-organic-mode:v1`);
+    return raw === null ? true : raw === 'true';
+  } catch {
+    return true;
+  }
 };
 
 // --- Stratégie de collision personnalisée ---
@@ -319,15 +338,15 @@ function TeamBoardPageInner(){
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
-  const { expertMode, setExpertMode, boardView, setBoardView } = useBoardUiSettings();
+  const { boardView, setBoardView } = useBoardUiSettings();
   const { helpMode, toggleHelpMode } = useHelpMode();
   const isPushing = transitionPhase === 'pushing' && transitionDirection === 'descend';
   const [listFilters, setListFilters] = useState<BoardListFilters>(DEFAULT_LIST_FILTERS);
   const [listFiltersHydrated, setListFiltersHydrated] = useState(false);
-  const [listBoardOptions, setListBoardOptions] = useState<BoardOption[]>([]);
-  const [listPositionPath, setListPositionPath] = useState('');
   const [dueBadgeCount, setDueBadgeCount] = useState(0);
   const [dueBadgeLoading, setDueBadgeLoading] = useState(false);
+  const [mindmapLayoutMode, setMindmapLayoutMode] = useState<MindmapLayoutMode>('horizontal');
+  const [mindmapOrganicMode, setMindmapOrganicMode] = useState(true);
 
   // 🔄 Auto-refresh intelligent avec polling optimisé (15 sec, ETag, visibilité onglet)
   // Polling actif uniquement si le board contient des tâches partagées avec d'autres utilisateurs
@@ -389,7 +408,26 @@ function TeamBoardPageInner(){
         return;
       }
       const parsed = JSON.parse(raw) as Partial<BoardListFilters>;
-      setListFilters({ ...DEFAULT_LIST_FILTERS, ...parsed });
+      const merged = { ...DEFAULT_LIST_FILTERS, ...parsed };
+      const looksLikeLegacyDefaultView =
+        merged.activeViewId === 'official:this-week' &&
+        merged.query === '' &&
+        merged.includeDone === false &&
+        merged.contextMode === true &&
+        Boolean(merged.chips?.week) &&
+        !merged.chips?.mine &&
+        !merged.chips?.overdue &&
+        !merged.chips?.today &&
+        !merged.chips?.blocked &&
+        merged.chips?.updatedWithinDays === null &&
+        (merged.advanced?.title ?? '') === '' &&
+        (merged.advanced?.description ?? '') === '' &&
+        (merged.advanced?.id ?? '') === '' &&
+        (merged.advanced?.assigneeIds?.length ?? 0) === 0 &&
+        (merged.advanced?.priorities?.length ?? 0) === 0 &&
+        (merged.advanced?.behaviors?.length ?? 0) === 0;
+
+      setListFilters(looksLikeLegacyDefaultView ? { ...DEFAULT_LIST_FILTERS } : merged);
       setListFiltersHydrated(true);
     } catch {
       setListFilters({ ...DEFAULT_LIST_FILTERS });
@@ -411,16 +449,42 @@ function TeamBoardPageInner(){
     if (!listFiltersHydrated) return;
     if (!activeBoardId) return;
     setListFilters((prev) => {
-      if (prev.positionBoardId === activeBoardId) {
+      if (
+        prev.positionBoardId === activeBoardId &&
+        prev.scope === 'SUBTREE' &&
+        prev.contextMode === true
+      ) {
         return prev;
       }
 
       return {
         ...prev,
         positionBoardId: activeBoardId,
+        scope: 'SUBTREE',
+        contextMode: true,
       };
     });
   }, [activeBoardId, listFiltersHydrated]);
+
+  useEffect(() => {
+    if (!board?.id || typeof window === 'undefined') {
+      setMindmapLayoutMode('horizontal');
+      setMindmapOrganicMode(true);
+      return;
+    }
+    setMindmapLayoutMode(readMindmapLayoutMode(board.id));
+    setMindmapOrganicMode(readMindmapOrganicMode(board.id));
+  }, [board?.id]);
+
+  useEffect(() => {
+    if (!board?.id || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(`stratum:board:${board.id}:mindmap-layout-mode:v1`, mindmapLayoutMode);
+      window.localStorage.setItem(`stratum:board:${board.id}:mindmap-organic-mode:v1`, mindmapOrganicMode ? 'true' : 'false');
+    } catch {
+      // ignore storage errors
+    }
+  }, [board?.id, mindmapLayoutMode, mindmapOrganicMode]);
 
   useEffect(() => {
     if (!board || !accessToken || !dueBadgeCacheKey) {
@@ -577,9 +641,6 @@ function TeamBoardPageInner(){
   const [filterHasChildren, setFilterHasChildren] = useState(false);
   const [sortPriority, setSortPriority] = useState(false);
   const [sortDueDate, setSortDueDate] = useState(false);
-  const [mindmapStatusFilter, setMindmapStatusFilter] = useState<Set<string>>(
-    () => new Set(['BACKLOG', 'IN_PROGRESS', 'BLOCKED']),
-  );
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   // états déjà uniques (pas de doublon plus haut désormais)
   const [filtersHydrated, setFiltersHydrated] = useState(false);
@@ -605,13 +666,6 @@ function TeamBoardPageInner(){
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const storageKey = board?.id ? `stratum:board:${board.id}:filters` : null;
   // Filtres actifs dans le panneau Kanban (affecte le point rouge sur le bouton)
-  const advancedFiltersActive =
-    selectedAssignees.length > 0 ||
-    selectedPriorities.length > 0 ||
-    selectedEfforts.length > 0 ||
-    hideDone ||
-    filterHasChildren;
-
   const rawColumns: BoardColumnWithNodes[] | undefined = optimisticColumns ?? (board?.columns as BoardColumnWithNodes[] | undefined);
   const effectiveColumns: BoardColumnWithNodes[] | undefined = useMemo(()=>{
     if(!rawColumns) return rawColumns;
@@ -2033,90 +2087,10 @@ function TeamBoardPageInner(){
           allAssignees={allAssignees}
           priorityOptions={priorityOptions}
           effortOptions={EFFORT_OPTIONS}
-          showActiveChips={boardView !== 'list'}
+          showActiveChips={false}
           rightSlot={
             boardView === 'kanban' ? (
-              <>
-                <HelpTooltip
-                  title={tBoard('help.quickFilters.priority.title')}
-                  description={tBoard('help.quickFilters.priority.body')}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSortPriority((prev) => !prev)}
-                    className={pillClass(sortPriority)}
-                    aria-pressed={sortPriority}
-                  >
-                    {tBoard('quickFilters.sortPriority')}
-                  </button>
-                </HelpTooltip>
-                <HelpTooltip
-                  title={tBoard('help.quickFilters.dueDate.title')}
-                  description={tBoard('help.quickFilters.dueDate.body')}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSortDueDate((prev) => !prev)}
-                    className={pillClass(sortDueDate)}
-                    aria-pressed={sortDueDate}
-                  >
-                    {tBoard('quickFilters.sortDueDate')}
-                  </button>
-                </HelpTooltip>
-                <HelpTooltip
-                  title={tBoard('help.quickFilters.expert.title')}
-                  description={tBoard('help.quickFilters.expert.body')}
-                  hint={tBoard('help.quickFilters.expert.hint')}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setExpertMode(!expertMode)}
-                    className={pillClass(expertMode)}
-                    aria-pressed={expertMode}
-                  >
-                    {expertMode ? tBoard('quickFilters.expert.onLabel') : tBoard('quickFilters.expert.offLabel')}
-                  </button>
-                </HelpTooltip>
-              </>
-            ) : boardView === 'mindmap' ? (
-              <>
-                {(['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'DONE'] as const).map((key) => {
-                  const colorMap: Record<string, string> = {
-                    BACKLOG: 'text-amber-400 border-amber-400/40 bg-amber-400/10',
-                    IN_PROGRESS: 'text-sky-400 border-sky-400/40 bg-sky-400/10',
-                    BLOCKED: 'text-rose-400 border-rose-400/40 bg-rose-400/10',
-                    DONE: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
-                  };
-                  const inactiveClass = 'border-white/15 text-muted hover:border-white/30 hover:text-foreground';
-                  const active = mindmapStatusFilter.has(key);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold tracking-wide transition ${active ? colorMap[key] : inactiveClass}`}
-                      aria-pressed={active}
-                      onClick={() =>
-                        setMindmapStatusFilter((prev) => {
-                          const next = new Set(prev);
-                          if (active) next.delete(key);
-                          else next.add(key);
-                          return next;
-                        })
-                      }
-                    >
-                      {tBoard(`behaviors.${key}`)}
-                    </button>
-                  );
-                })}
-              </>
-            ) : boardView === 'list' ? (
-              board ? (
-                <BoardListViewQuickBar
-                  filters={listFilters}
-                  onFiltersChange={setListFilters}
-                  rootBoardId={board.id}
-                />
-              ) : null
+              null
             ) : null
           }
           extraDrawerSections={
@@ -2147,77 +2121,87 @@ function TeamBoardPageInner(){
                     />
                   ))}
                 </DrawerSection>
-                <DrawerSection title={tBoard('filters.options.title')}>
-                  <ToggleRow
-                    label={tBoard('filters.options.withChildBoard')}
-                    checked={filterHasChildren}
-                    onChange={setFilterHasChildren}
-                  />
-                </DrawerSection>
               </>
             ) : boardView === 'list' ? (
               <>
-                <DrawerSection title="Position">
-                  <p className="mb-1.5 text-[11px] text-muted/70">{listPositionPath || '—'}</p>
-                  <div className="max-h-48 overflow-y-auto space-y-0.5 rounded-lg border border-white/10 p-1">
-                    {listBoardOptions.map((opt) => (
-                      <button
-                        key={opt.boardId}
-                        type="button"
-                        onClick={() => setListFilters((prev) => ({ ...prev, positionBoardId: opt.boardId }))}
-                        className={`w-full rounded px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${listFilters.positionBoardId === opt.boardId ? 'font-semibold text-foreground' : 'text-muted'}`}
-                      >
-                        {opt.path}
-                      </button>
-                    ))}
-                  </div>
-                </DrawerSection>
-                <DrawerSection title="Zone d'affichage">
-                  <div className="space-y-0.5">
+                <DrawerSection title={tBoard('listView.drawer.renderMode')}>
+                  <div className="flex gap-2">
                     {([
-                      { value: 'CURRENT', label: 'Niveau de la position', helper: 'Cartes du kanban sélectionné uniquement' },
-                      { value: 'SUBTREE', label: 'Position + descendants', helper: 'Sous-arbre complet depuis la position' },
-                      { value: 'ROOT',    label: 'Projet complet',        helper: 'Toutes les cartes du projet' },
-                    ] as const).map((opt) => (
+                      { value: 'TREE', label: tBoard('listView.drawer.tree') },
+                      { value: 'FLAT', label: tBoard('listView.drawer.flat') },
+                    ] as const).map((mode) => (
                       <button
-                        key={opt.value}
+                        key={mode.value}
                         type="button"
-                        onClick={() => setListFilters((prev) => ({ ...prev, scope: opt.value }))}
-                        className={`w-full rounded-lg px-2 py-2 text-left text-xs transition hover:bg-white/5 ${listFilters.scope === opt.value ? 'font-semibold text-foreground' : 'text-muted'}`}
+                        onClick={() => setListFilters((prev) => ({ ...prev, renderMode: mode.value }))}
+                        className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${listFilters.renderMode === mode.value ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
+                        aria-pressed={listFilters.renderMode === mode.value}
                       >
-                        <span className="block">{opt.label}</span>
-                        <span className="block text-[10px] text-muted/60">{opt.helper}</span>
+                        {mode.label}
                       </button>
                     ))}
                   </div>
                 </DrawerSection>
-                <DrawerSection title="Terminé">
-                  <ToggleRow
-                    label={listFilters.includeDone ? 'Inclure les terminées' : 'Masquer les terminées'}
-                    checked={listFilters.includeDone}
-                    onChange={(v) => setListFilters((prev) => ({ ...prev, includeDone: v }))}
-                  />
+                <DrawerSection title={tBoard('listView.drawer.visibleColumns')}>
+                  <div className="space-y-1.5">
+                    {Object.entries(COLUMN_LABELS).map(([columnKey, label]) => {
+                      const key = columnKey as keyof typeof COLUMN_LABELS;
+                      const active = listFilters.visibleColumns.includes(key);
+                      const disabled = key === 'title';
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            if (disabled) return;
+                            setListFilters((prev) => {
+                              const hasColumn = prev.visibleColumns.includes(key);
+                              return {
+                                ...prev,
+                                visibleColumns: hasColumn
+                                  ? prev.visibleColumns.filter((entry) => entry !== key)
+                                  : [...prev.visibleColumns, key],
+                              };
+                            });
+                          }}
+                          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition ${active ? 'border-accent/50 bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20 hover:text-foreground'} ${disabled ? 'cursor-default opacity-70' : ''}`}
+                          aria-pressed={active}
+                        >
+                          <span>{label}</span>
+                          <span className="text-[10px] uppercase tracking-wide">{active ? 'On' : 'Off'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </DrawerSection>
-                <DrawerSection title="Filtres rapides">
+              </>
+            ) : boardView === 'mindmap' ? (
+              <>
+                <DrawerSection title={tBoard('mindmap.drawer.layoutTitle')}>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'horizontal', label: tBoard('mindmap.drawer.layoutHorizontal') },
+                      { value: 'radial', label: tBoard('mindmap.drawer.layoutRadial') },
+                    ] as const).map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        onClick={() => setMindmapLayoutMode(mode.value)}
+                        className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${mindmapLayoutMode === mode.value ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
+                        aria-pressed={mindmapLayoutMode === mode.value}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title={tBoard('mindmap.drawer.organicTitle')}>
                   <ToggleRow
-                    label="En retard"
-                    checked={listFilters.chips.overdue}
-                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, overdue: v } }))}
-                  />
-                  <ToggleRow
-                    label="Deadline aujourd'hui"
-                    checked={listFilters.chips.today}
-                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, today: v } }))}
-                  />
-                  <ToggleRow
-                    label="Fin de semaine"
-                    checked={listFilters.chips.week}
-                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, week: v } }))}
-                  />
-                  <ToggleRow
-                    label="Bloquées"
-                    checked={listFilters.chips.blocked}
-                    onChange={(v) => setListFilters((prev) => ({ ...prev, chips: { ...prev.chips, blocked: v } }))}
+                    label={tBoard('mindmap.drawer.organicLabel')}
+                    description={tBoard('mindmap.drawer.organicDescription')}
+                    checked={mindmapOrganicMode}
+                    onChange={setMindmapOrganicMode}
                   />
                 </DrawerSection>
               </>
@@ -2278,128 +2262,127 @@ function TeamBoardPageInner(){
         {loading && <BoardSkeleton />}
         {!loading && board && (
           <section className={`w-full ${boardView === 'list' ? 'space-y-2' : 'space-y-4'}`}>
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              {boardView === 'kanban' ? (
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
-                <HelpTooltip
-                  helpMode={helpMode}
-                  title={tBoard('help.columns.add.title')}
-                  description={tBoard('help.columns.add.body')}
-                  hint={tBoard('help.columns.add.hint')}
-                  className="inline-flex"
-                >
-                  <button type="button"
-                    onClick={() => {
-                      resetColumnForm();
-                      setIsAddingColumn(true);
-                      setFiltersExpanded(false);
-                    }}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
-                      title={tBoard('columns.header.addTooltip')}
-                      aria-label={tBoard('columns.header.addTooltip')}
-                  >
-                    +
-                  </button>
-                </HelpTooltip>
-                <button
-                  type="button"
-                  onClick={toggleHelpMode}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-lg transition group relative ${
-                    helpMode
-                      ? 'border-accent bg-accent/20 text-accent'
-                      : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
-                    }`}
-                    title={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
-                    aria-label={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
-                  aria-pressed={helpMode}
-                >
-                  ?
-                  <div
-                    className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
-                    style={{ transitionDelay: '200ms' }}
-                  >
-                    <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
-                      <h4 className="mb-1 font-semibold text-accent">{tBoard('helpMode.tooltip.title')}</h4>
-                      <p>{tBoard('helpMode.tooltip.body')}</p>
-                    <p className="mt-2 text-[10px] text-slate-400">{tBoard('helpMode.tooltip.hint')}</p>
-                  </div>
-                </button>
-                </div>
-              ) : boardView === 'list' ? (
-                <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-h-8 min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                {boardView === 'list' && (
                   <div
                     id="board-list-header-actions-root"
                     className="flex min-h-8 items-center gap-2"
                   />
-                  <BoardActiveFilterChips
-                    assigneeOptions={assigneeOptions}
-                    priorityOptions={priorityOptions}
-                    effortOptions={EFFORT_OPTIONS}
-                    compact
-                    maxVisible={10}
-                  />
-                </>
-              ) : (
-                <div className="min-h-8" />
-              )}
-              <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
-                <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+                )}
+                <BoardActiveFilterChips
+                  assigneeOptions={assigneeOptions}
+                  priorityOptions={priorityOptions}
+                  effortOptions={EFFORT_OPTIONS}
+                  compact
+                  maxVisible={10}
+                />
+              </div>
+              <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setBoardView('kanban')}
+                  className={`rounded-full px-3 py-1 transition ${
+                    boardView === 'kanban'
+                      ? 'bg-accent text-background shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={boardView === 'kanban'}
+                  title={tBoard('viewToggle.kanbanHint')}
+                >
+                  {tBoard('viewToggle.kanban')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBoardView('list')}
+                  className={`rounded-full px-3 py-1 transition ${
+                    boardView === 'list'
+                      ? 'bg-accent text-background shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={boardView === 'list'}
+                  title={tBoard('viewToggle.listHint')}
+                >
+                  {tBoard('viewToggle.list')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBoardView('gantt')}
+                  className={`rounded-full px-3 py-1 transition ${
+                    boardView === 'gantt'
+                      ? 'bg-accent text-background shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={boardView === 'gantt'}
+                  title={tBoard('viewToggle.ganttHint')}
+                >
+                  {tBoard('viewToggle.gantt')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBoardView('mindmap')}
+                  className={`rounded-full px-3 py-1 transition ${
+                    boardView === 'mindmap'
+                      ? 'bg-accent text-background shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={boardView === 'mindmap'}
+                  title={tBoard('viewToggle.mindmapHint')}
+                >
+                  {tBoard('viewToggle.mindmap')}
+                </button>
+              </div>
+            </div>
+            {boardView === 'kanban' && (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold">{tBoard('columns.header.title')}</h2>
+                  <HelpTooltip
+                    helpMode={helpMode}
+                    title={tBoard('help.columns.add.title')}
+                    description={tBoard('help.columns.add.body')}
+                    hint={tBoard('help.columns.add.hint')}
+                    className="inline-flex"
+                  >
+                    <button type="button"
+                      onClick={() => {
+                        resetColumnForm();
+                        setIsAddingColumn(true);
+                        setFiltersExpanded(false);
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
+                      title={tBoard('columns.header.addTooltip')}
+                      aria-label={tBoard('columns.header.addTooltip')}
+                    >
+                      +
+                    </button>
+                  </HelpTooltip>
                   <button
                     type="button"
-                    onClick={() => setBoardView('kanban')}
-                    className={`rounded-full px-3 py-1 transition ${
-                      boardView === 'kanban'
-                        ? 'bg-accent text-background shadow-sm'
-                        : 'text-muted hover:text-foreground'
+                    onClick={toggleHelpMode}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-lg transition group relative ${
+                      helpMode
+                        ? 'border-accent bg-accent/20 text-accent'
+                        : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
                     }`}
-                    aria-pressed={boardView === 'kanban'}
-                    title={tBoard('viewToggle.kanbanHint')}
+                    title={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
+                    aria-label={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
+                    aria-pressed={helpMode}
                   >
-                    {tBoard('viewToggle.kanban')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBoardView('list')}
-                    className={`rounded-full px-3 py-1 transition ${
-                      boardView === 'list'
-                        ? 'bg-accent text-background shadow-sm'
-                        : 'text-muted hover:text-foreground'
-                    }`}
-                    aria-pressed={boardView === 'list'}
-                    title={tBoard('viewToggle.listHint')}
-                  >
-                    {tBoard('viewToggle.list')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBoardView('gantt')}
-                    className={`rounded-full px-3 py-1 transition ${
-                      boardView === 'gantt'
-                        ? 'bg-accent text-background shadow-sm'
-                        : 'text-muted hover:text-foreground'
-                    }`}
-                    aria-pressed={boardView === 'gantt'}
-                    title={tBoard('viewToggle.ganttHint')}
-                  >
-                    {tBoard('viewToggle.gantt')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBoardView('mindmap')}
-                    className={`rounded-full px-3 py-1 transition ${
-                      boardView === 'mindmap'
-                        ? 'bg-accent text-background shadow-sm'
-                        : 'text-muted hover:text-foreground'
-                    }`}
-                    aria-pressed={boardView === 'mindmap'}
-                    title={tBoard('viewToggle.mindmapHint')}
-                  >
-                    {tBoard('viewToggle.mindmap')}
+                    ?
+                    <div
+                      className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                      style={{ transitionDelay: '200ms' }}
+                    >
+                      <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                      <h4 className="mb-1 font-semibold text-accent">{tBoard('helpMode.tooltip.title')}</h4>
+                      <p>{tBoard('helpMode.tooltip.body')}</p>
+                      <p className="mt-2 text-[10px] text-slate-400">{tBoard('helpMode.tooltip.hint')}</p>
+                    </div>
                   </button>
                 </div>
               </div>
-            </div>
+            )}
             {displayedColumns && displayedColumns.length>0 ? (
               boardView === 'kanban' ? (
                 <DndContext sensors={sensors} collisionDetection={collisionDetectionStrategy} onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -2511,8 +2494,8 @@ function TeamBoardPageInner(){
                       await handleCreateCard(backlogColumnId, title);
                     }}
                     onCreateChildTask={handleCreateChildCard}
-                    statusFilter={mindmapStatusFilter}
-                    onStatusFilterChange={setMindmapStatusFilter}
+                    layoutMode={mindmapLayoutMode}
+                    organicMode={mindmapOrganicMode}
                   />
                 </div>
               ) : (
@@ -2526,10 +2509,6 @@ function TeamBoardPageInner(){
                     openChildBoard(boardId);
                   }}
                   onDataMutated={refreshActiveBoard}
-                  onBoardOptionsChange={(opts, path) => {
-                    setListBoardOptions(opts);
-                    setListPositionPath(path);
-                  }}
                 />
               )
             ) : (

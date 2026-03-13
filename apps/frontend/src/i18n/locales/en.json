@@ -124,6 +124,14 @@
         }
       }
     },
+    "expert": {
+      "title": "Expert mode",
+      "description": "Choose whether advanced options should be shown in task editing screens.",
+      "hint": "Disable it if you want a lighter interface for onboarding or quick reviews.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "saved": "Expert mode updated"
+    },
     "tabs": {
       "appearance": "Appearance",
       "ai": "Artificial intelligence",
@@ -535,7 +543,7 @@
       "bar": {
         "task": "task",
         "tasks": "tasks",
-        "openDrawer": "Filters",
+        "openDrawer": "Display",
         "filteredView": "Filtered view"
       },
       "families": {
@@ -592,8 +600,9 @@
         "removeAria": "Remove filter {label}"
       },
       "drawer": {
-        "title": "Filters",
-        "subtitle": "Applied to all views",
+        "title": "Display",
+        "subtitle": "Visual preferences for the active view",
+        "empty": "No extra visual preferences for this view.",
         "sections": {
           "quick": "Quick access"
         },
@@ -1292,6 +1301,14 @@
     },
     "mindmap": {
       "ariaLabel": "Board mindmap visualisation",
+      "drawer": {
+        "layoutTitle": "Graph layout",
+        "layoutHorizontal": "Horizontal",
+        "layoutRadial": "Radial",
+        "organicTitle": "Organic mode",
+        "organicLabel": "Enable organic mode",
+        "organicDescription": "Adds a subtle breathing motion to the graph for a more organic, less rigid rendering."
+      },
       "toolbar": {
         "zoomIn": "Zoom in",
         "zoomOut": "Zoom out",
@@ -1347,6 +1364,18 @@
       "aria": "Open the due tasks list"
     },
     "listView": {
+      "drawer": {
+        "renderMode": "Render mode",
+        "tree": "Tree",
+        "flat": "Flat",
+        "position": "Position",
+        "scope": "Display scope",
+        "visibleColumns": "Visible columns",
+        "context": {
+          "title": "Context",
+          "description": "Keep useful parent rows visible while reading the filtered tree"
+        }
+      },
       "mode": {
         "all": "All",
         "due": "Due"

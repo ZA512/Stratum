@@ -69,6 +69,7 @@ export function BoardFilterBar({
   className,
 }: BoardFilterBarProps) {
   const { t: tBoard } = useTranslation('board');
+  const [showAllChips, setShowAllChips] = useState(false);
   const {
     filters,
     setSearchQuery,
@@ -80,7 +81,6 @@ export function BoardFilterBar({
     setHideDone,
     setOnlyMine,
     resetFilters,
-    activeFilterCount,
     isFiltering,
     savedPresets,
     applyPreset,
@@ -426,8 +426,18 @@ export function BoardFilterBar({
     removeEffort,
   ]);
 
-  const visibleChips = chipItems.slice(0, 6);
-  const hiddenChipCount = Math.max(0, chipItems.length - visibleChips.length);
+  useEffect(() => {
+    if (!hasChips) {
+      setShowAllChips(false);
+      return;
+    }
+    if (chipItems.length <= 6) {
+      setShowAllChips(false);
+    }
+  }, [chipItems.length, hasChips]);
+
+  const visibleChips = showAllChips ? chipItems : chipItems.slice(0, 6);
+  const hiddenChipCount = showAllChips ? 0 : Math.max(0, chipItems.length - visibleChips.length);
 
   // --------------------------------------------------------------------------
   // Render
@@ -435,9 +445,10 @@ export function BoardFilterBar({
 
   return (
     <div className={`relative z-[60] w-full ${className ?? ''}`}>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-card/60 px-4 py-2.5 backdrop-blur">
-        {/* --- Champ recherche --- */}
-        <div className="relative min-w-[220px] flex-1">
+      <div className="rounded-xl border border-white/10 bg-card/60 px-4 py-2.5 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* --- Champ recherche --- */}
+          <div className="relative min-w-[220px] flex-1">
           <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
               <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
@@ -489,45 +500,20 @@ export function BoardFilterBar({
               </ul>
             </div>
           )}
-        </div>
-
-        {/* --- Chips filtres actifs --- */}
-        {showActiveChips && hasChips && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {visibleChips.map((item) => (
-              <Chip
-                key={item.key}
-                label={item.label}
-                onRemove={item.onRemove}
-                onClick={item.onClick}
-                colorClass={item.colorClass}
-              />
-            ))}
-            {hiddenChipCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(true)}
-                className="inline-flex items-center rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium text-muted transition hover:border-accent hover:text-foreground"
-                aria-label={tBoard('sharedFilter.chips.moreAria', { count: hiddenChipCount })}
-              >
-                +{hiddenChipCount}
-              </button>
-            )}
           </div>
-        )}
+ 
+          {/* --- Spacer --- */}
+          <div className="flex-1" />
 
-        {/* --- Spacer --- */}
-        <div className="flex-1" />
+          {/* --- Slot vue-spécifique (tri, toggles, etc.) --- */}
+          {rightSlot && (
+            <div className="flex items-center gap-1.5">
+              {rightSlot}
+            </div>
+          )}
 
-        {/* --- Slot vue-spécifique (tri, toggles, etc.) --- */}
-        {rightSlot && (
-          <div className="flex items-center gap-1.5">
-            {rightSlot}
-          </div>
-        )}
-
-        <div ref={familyMenuRef} className="flex items-center gap-1.5">
-          <div className="relative">
+          <div ref={familyMenuRef} className="flex items-center gap-1.5">
+            <div className="relative">
             <button
               type="button"
               onClick={() => setFamilyMenu((prev) => (prev === 'productivity' ? null : 'productivity'))}
@@ -702,12 +688,12 @@ export function BoardFilterBar({
                 </div>
               </div>
             )}
+            </div>
           </div>
-        </div>
 
-        {/* --- Compteur + Bouton Filtres + Reset --- */}
-        <div className="flex items-center gap-2">
-          <div ref={presetsRef} className="relative">
+          {/* --- Compteur + Bouton Affichage + Reset --- */}
+          <div className="flex items-center gap-2">
+            <div ref={presetsRef} className="relative">
             <button
               type="button"
               onClick={() => setPresetsOpen((prev) => !prev)}
@@ -774,65 +760,86 @@ export function BoardFilterBar({
                 </div>
               </div>
             )}
-          </div>
-
-          {typeof tasksCount === 'number' && (
-            <div className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
-              <span>
-                {typeof totalTasksCount === 'number'
-                  ? `${tasksCount} / ${totalTasksCount}`
-                  : tasksCount}{' '}
-                {tBoard(tasksCount === 1 ? 'sharedFilter.bar.task' : 'sharedFilter.bar.tasks')}
-              </span>
-              {isFiltering && (
-                <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-foreground">
-                  {tBoard('sharedFilter.bar.filteredView')}
-                </span>
-              )}
             </div>
-          )}
+            {typeof tasksCount === 'number' && (
+              <div className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
+                <span>
+                  {typeof totalTasksCount === 'number'
+                    ? `${tasksCount} / ${totalTasksCount}`
+                    : tasksCount}{' '}
+                  {tBoard(tasksCount === 1 ? 'sharedFilter.bar.task' : 'sharedFilter.bar.tasks')}
+                </span>
+                {isFiltering && (
+                  <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                    {tBoard('sharedFilter.bar.filteredView')}
+                  </span>
+                )}
+              </div>
+            )}
 
-          {isFiltering && (
+            {isFiltering && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
+                title={tBoard('filters.actions.reset')}
+              >
+                {tBoard('filters.actions.reset')}
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={resetFilters}
-              className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-              title={tBoard('filters.actions.reset')}
+              onClick={() => setDrawerOpen(true)}
+              className={`relative flex h-8 items-center gap-1.5 rounded-full border border-white/15 bg-surface/70 px-3 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground`}
+              aria-label={tBoard('sharedFilter.bar.openDrawer')}
             >
-              {tBoard('filters.actions.reset')}
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M4 7a3 3 0 1 1 6 0 3 3 0 0 1-6 0Zm10 0a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM7 14a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm10 0a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z" />
+              </svg>
+              {tBoard('sharedFilter.bar.openDrawer')}
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className={`relative flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition ${
-              activeFilterCount > 0
-                ? 'border-accent/60 bg-accent/10 text-foreground'
-                : 'border-white/15 bg-surface/70 text-muted hover:border-accent hover:text-foreground'
-            }`}
-            aria-label={tBoard('sharedFilter.bar.openDrawer')}
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M3.5 5A1.5 1.5 0 015 3.5h14A1.5 1.5 0 0120.5 5l-5.5 7v4.382a1.5 1.5 0 01-.83 1.342l-3 1.5A1.5 1.5 0 019 17.882V12L3.5 5z" />
-            </svg>
-            {tBoard('sharedFilter.bar.openDrawer')}
-            {activeFilterCount > 0 && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+          </div>
         </div>
+
+        {showActiveChips && hasChips && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-2">
+            {visibleChips.map((item) => (
+              <Chip
+                key={item.key}
+                label={item.label}
+                onRemove={item.onRemove}
+                onClick={item.onClick}
+                colorClass={item.colorClass}
+              />
+            ))}
+            {hiddenChipCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAllChips(true)}
+                className="inline-flex items-center rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium text-muted transition hover:border-accent hover:text-foreground"
+                aria-label={tBoard('sharedFilter.chips.moreAria', { count: hiddenChipCount })}
+              >
+                +{hiddenChipCount}
+              </button>
+            )}
+            {showAllChips && chipItems.length > 6 && (
+              <button
+                type="button"
+                onClick={() => setShowAllChips(false)}
+                className="inline-flex items-center rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium text-muted transition hover:border-accent hover:text-foreground"
+              >
+                −
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* --- Drawer filtres --- */}
+      {/* --- Drawer visuel --- */}
       <BoardFilterDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        assigneeOptions={assigneeOptions}
-        priorityOptions={priorityOptions}
-        effortOptions={effortOptions}
         extraSections={extraDrawerSections}
       />
     </div>
