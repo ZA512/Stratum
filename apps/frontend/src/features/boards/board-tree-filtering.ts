@@ -13,7 +13,7 @@ export type BoardFilterShape = {
   onlyMine?: boolean;
   hideDone?: boolean;
   statusValues?: ColumnBehaviorKey[];
-  productivityPreset?: 'TODAY' | 'OVERDUE' | 'THIS_WEEK' | 'NEXT_7_DAYS' | 'NO_DEADLINE' | null;
+  productivityPresets?: Array<'TODAY' | 'OVERDUE' | 'THIS_WEEK' | 'NEXT_7_DAYS' | 'NO_DEADLINE'>;
   activity?: {
     period?: ActivityFilterPeriod;
     from?: string | null;
@@ -43,6 +43,24 @@ const normalizeText = (value: string): string =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
+const buildGenericSearchHaystacks = (
+  node: BoardTreeNode,
+  tokenLength: number,
+  includeComments: boolean,
+): string[] => {
+  const values = [node.title];
+
+  if (tokenLength >= 2) {
+    values.push(node.description ?? '', ...node.assigneeNames);
+  }
+
+  if (includeComments && tokenLength >= 3) {
+    values.push(...node.commentBodies);
+  }
+
+  return values.map((value) => normalizeText(value));
+};
+
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 const matchesActivityPeriod = (
@@ -70,22 +88,24 @@ const matchesActivityPeriod = (
   return true;
 };
 
-const matchesProductivity = (node: BoardTreeNode, preset: BoardFilterShape['productivityPreset']): boolean => {
-  if (!preset) return true;
+const matchesProductivity = (node: BoardTreeNode, presets: BoardFilterShape['productivityPresets']): boolean => {
+  if (!presets || presets.length === 0) return true;
   const now = startOfDay(new Date()).getTime();
   const due = node.dueAt ? startOfDay(new Date(node.dueAt)).getTime() : null;
   const diffDays = due === null ? null : Math.round((due - now) / (24 * 60 * 60 * 1000));
-  if (preset === 'NO_DEADLINE') return due === null;
-  if (due === null) return false;
-  if (preset === 'TODAY') return diffDays === 0;
-  if (preset === 'OVERDUE') return diffDays < 0;
-  if (preset === 'NEXT_7_DAYS') return diffDays >= 0 && diffDays <= 7;
-  if (preset === 'THIS_WEEK') {
-    const day = new Date().getDay();
-    const diffToSunday = day === 0 ? 0 : 7 - day;
-    return diffDays >= 0 && diffDays <= diffToSunday;
-  }
-  return true;
+  return presets.some((preset) => {
+    if (preset === 'NO_DEADLINE') return due === null;
+    if (due === null) return false;
+    if (preset === 'TODAY') return diffDays === 0;
+    if (preset === 'OVERDUE') return diffDays < 0;
+    if (preset === 'NEXT_7_DAYS') return diffDays >= 0 && diffDays <= 7;
+    if (preset === 'THIS_WEEK') {
+      const day = new Date().getDay();
+      const diffToSunday = day === 0 ? 0 : 7 - day;
+      return diffDays >= 0 && diffDays <= diffToSunday;
+    }
+    return false;
+  });
 };
 
 const matchesDirect = (
@@ -122,7 +142,7 @@ const matchesDirect = (
     if (!matchesNoEffort && !matchesEffort) return false;
   }
 
-  if (!matchesProductivity(node, filters.productivityPreset ?? null)) return false;
+  if (!matchesProductivity(node, filters.productivityPresets ?? [])) return false;
 
   const activity = filters.activity;
   if (activity && (activity.period || (activity.types && activity.types.length > 0))) {
@@ -141,17 +161,11 @@ const matchesDirect = (
   const normalized = normalizeText(query);
   if (!normalized) return true;
 
-  const haystacks = [
-    normalizeText(node.title),
-    normalizeText(node.description ?? ''),
-    normalizeText(node.id),
-    normalizeText(String(node.shortId ?? '')),
-    ...node.assigneeNames.map((name) => normalizeText(name)),
-  ];
-
-  if (filters.searchIncludeComments) {
-    haystacks.push(...node.commentBodies.map((body) => normalizeText(body)));
-  }
+  const haystacks = buildGenericSearchHaystacks(
+    node,
+    normalized.length,
+    Boolean(filters.searchIncludeComments),
+  );
 
   return haystacks.some((value) => value.includes(normalized));
 };

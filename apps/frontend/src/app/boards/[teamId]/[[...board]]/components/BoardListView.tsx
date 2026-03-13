@@ -668,6 +668,18 @@ const withRecomputedCounters = (rows: ListRow[]): ListRow[] => {
   });
 };
 
+const dedupeRowsById = (rows: ListRow[]): ListRow[] => {
+  const uniqueRows = new Map<string, ListRow>();
+
+  for (const row of rows) {
+    if (!uniqueRows.has(row.id)) {
+      uniqueRows.set(row.id, row);
+    }
+  }
+
+  return Array.from(uniqueRows.values());
+};
+
 const normalizeText = (value: string) =>
   value
     .normalize("NFD")
@@ -702,6 +714,34 @@ const boolFilterMatches = (filter: BoolFilter, value: boolean): boolean => {
   return !value;
 };
 
+const buildGenericSearchHaystack = (
+  row: ListRow,
+  tokenLength: number,
+  includeComments: boolean,
+): string => {
+  const primaryFields = [row.title];
+
+  if (tokenLength >= 2) {
+    primaryFields.push(row.description ?? "", ...row.assignees);
+  }
+
+  if (tokenLength >= 3) {
+    primaryFields.push(
+      row.pathLabel,
+      row.columnName,
+      row.effort ?? "",
+      row.progress !== null ? String(row.progress) : "",
+      row.priority,
+    );
+  }
+
+  if (includeComments && tokenLength >= 3) {
+    primaryFields.push(...row.commentBodies);
+  }
+
+  return primaryFields.map((value) => normalizeText(value)).join(" ");
+};
+
 // ─── BoardListViewQuickBar ────────────────────────────────────────────────────
 // Composant exporté utilisé comme rightSlot de BoardFilterBar dans BoardPageShell
 
@@ -714,135 +754,8 @@ interface BoardListViewQuickBarProps {
 export function BoardListViewQuickBar({
   filters,
   onFiltersChange,
-  rootBoardId,
+  rootBoardId: _rootBoardId,
 }: BoardListViewQuickBarProps) {
-  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
-  const [manageViewsOpen, setManageViewsOpen] = useState(false);
-  const [personalViews, setPersonalViews] = useState<PersonalView[]>([]);
-  const [viewsHydrated, setViewsHydrated] = useState(false);
-  const viewsMenuRef = useRef<HTMLDivElement | null>(null);
-  const viewsStorageKey = "stratum:list-personal-views:v2";
-
-  useEffect(() => {
-    try {
-      const raw =
-        window.localStorage.getItem(viewsStorageKey) ??
-        window.localStorage.getItem("stratum:list-personal-views:v1");
-      if (raw) {
-        const parsed = JSON.parse(raw) as PersonalView[];
-        if (Array.isArray(parsed)) {
-          setPersonalViews(
-            parsed.filter(
-              (e) => e && typeof e.id === "string" && typeof e.name === "string",
-            ),
-          );
-        }
-      }
-    } catch {
-      // ignore
-    } finally {
-      setViewsHydrated(true);
-    }
-  }, [viewsStorageKey]);
-
-  useEffect(() => {
-    if (!viewsHydrated) return;
-    try {
-      window.localStorage.setItem(viewsStorageKey, JSON.stringify(personalViews));
-    } catch {
-      // ignore
-    }
-  }, [personalViews, viewsHydrated, viewsStorageKey]);
-
-  useEffect(() => {
-    if (!viewsMenuOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (viewsMenuRef.current?.contains(event.target as Node)) return;
-      setViewsMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [viewsMenuOpen]);
-
-  const activeViewLabel = useMemo(() => {
-    if (!filters.activeViewId) return "Vue libre";
-    if (filters.activeViewId.startsWith("official:")) {
-      return (
-        OFFICIAL_VIEWS.find((v) => `official:${v.id}` === filters.activeViewId)?.name ?? "Vue officielle"
-      );
-    }
-    if (filters.activeViewId.startsWith("personal:")) {
-      return (
-        personalViews.find((v) => `personal:${v.id}` === filters.activeViewId)?.name ?? "Vue perso"
-      );
-    }
-    return "Vue";
-  }, [filters.activeViewId, personalViews]);
-
-  const applyOfficialView = useCallback(
-    (view: OfficialView) => {
-      onFiltersChange({
-        ...DEFAULT_LIST_FILTERS,
-        ...view.config,
-        positionBoardId: filters.positionBoardId ?? rootBoardId,
-        activeViewId: `official:${view.id}`,
-        initialized: true,
-      });
-      setViewsMenuOpen(false);
-    },
-    [filters.positionBoardId, onFiltersChange, rootBoardId],
-  );
-
-  const applyPersonalView = useCallback(
-    (view: PersonalView) => {
-      onFiltersChange({
-        ...DEFAULT_LIST_FILTERS,
-        ...view.config,
-        activeViewId: `personal:${view.id}`,
-        initialized: true,
-      });
-      setViewsMenuOpen(false);
-    },
-    [onFiltersChange],
-  );
-
-  const saveAsPersonalView = useCallback(() => {
-    const name = window.prompt("Nom de la vue", "Nouvelle vue")?.trim();
-    if (!name) return;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const entry: PersonalView = {
-      id,
-      name,
-      config: { ...filters, activeViewId: `personal:${id}` },
-    };
-    setPersonalViews((prev) => [...prev, entry]);
-    onFiltersChange({ ...entry.config });
-  }, [filters, onFiltersChange]);
-
-  const savePersonalView = useCallback(() => {
-    if (!filters.activeViewId?.startsWith("personal:")) {
-      saveAsPersonalView();
-      return;
-    }
-    const personalId = filters.activeViewId.replace("personal:", "");
-    setPersonalViews((prev) =>
-      prev.map((e) =>
-        e.id === personalId
-          ? { ...e, config: { ...filters, activeViewId: `personal:${personalId}` } }
-          : e,
-      ),
-    );
-  }, [filters, saveAsPersonalView]);
-
-  const deletePersonalView = useCallback(
-    (id: string) => {
-      setPersonalViews((prev) => prev.filter((e) => e.id !== id));
-      if (filters.activeViewId === `personal:${id}`) {
-        applyOfficialView(OFFICIAL_VIEWS[0]);
-      }
-    },
-    [filters.activeViewId, applyOfficialView],
-  );
 
   const currentRenderMode: ListRenderMode = isRenderMode(filters.renderMode ?? "")
     ? (filters.renderMode as ListRenderMode)
@@ -874,108 +787,6 @@ export function BoardListViewQuickBar({
         >
           À plat
         </button>
-      </div>
-
-      {/* Vues */}
-      <div ref={viewsMenuRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setViewsMenuOpen((prev) => !prev)}
-          className="flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-0.5 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
-            <path
-              d="M2 4h12M4 8h8M6 12h4"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-          {activeViewLabel}
-        </button>
-        {viewsMenuOpen && (
-          <div className="absolute right-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/70">
-              Officielles
-            </p>
-            <div className="mt-2 space-y-0.5">
-              {OFFICIAL_VIEWS.map((view) => (
-                <button
-                  key={view.id}
-                  type="button"
-                  onClick={() => applyOfficialView(view)}
-                  className={`w-full rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${
-                    filters.activeViewId === `official:${view.id}`
-                      ? "font-semibold text-foreground"
-                      : "text-muted"
-                  }`}
-                >
-                  {view.name}
-                </button>
-              ))}
-            </div>
-            {personalViews.length > 0 && (
-              <>
-                <p className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-muted/70">
-                  Personnelles
-                </p>
-                <div className="mt-2 space-y-0.5">
-                  {personalViews.map((view) => (
-                    <div key={view.id} className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => applyPersonalView(view)}
-                        className={`flex-1 rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-white/5 ${
-                          filters.activeViewId === `personal:${view.id}`
-                            ? "font-semibold text-foreground"
-                            : "text-muted"
-                        }`}
-                      >
-                        {view.name}
-                      </button>
-                      {manageViewsOpen && (
-                        <button
-                          type="button"
-                          onClick={() => deletePersonalView(view.id)}
-                          className="rounded border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 transition hover:border-rose-300"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
-              <button
-                type="button"
-                onClick={savePersonalView}
-                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-              >
-                Sauvegarder
-              </button>
-              <button
-                type="button"
-                onClick={saveAsPersonalView}
-                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-muted transition hover:border-accent hover:text-foreground"
-              >
-                Enr. sous…
-              </button>
-              <button
-                type="button"
-                onClick={() => setManageViewsOpen((prev) => !prev)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                  manageViewsOpen
-                    ? "border-accent/50 text-foreground"
-                    : "border-white/15 text-muted hover:border-accent hover:text-foreground"
-                }`}
-              >
-                Gérer
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1256,8 +1067,15 @@ export function BoardListView({
         }
       }
 
-      const entries: BoardHierarchyEntry[] = [scopeEntry];
-      const nextRows = buildRowsFromBoardDetail(scopeEntry.board, scopeEntry.breadcrumb, normalizedFilters.scope);
+      const entries = [scopeEntry];
+
+      const nextRows = dedupeRowsById(
+        buildRowsFromBoardDetail(
+          scopeEntry.board,
+          scopeEntry.breadcrumb,
+          normalizedFilters.scope === "CURRENT" ? "CURRENT" : "SUBTREE",
+        ),
+      );
 
       const parentIdsWithChildren = new Set<string>();
       for (const row of nextRows) {
@@ -1386,7 +1204,7 @@ export function BoardListView({
     [sharedFilters.searchQuery],
   );
 
-  const hasActiveCriteria = useMemo(() => {
+  const hasLocalActiveCriteria = useMemo(() => {
     const adv = normalizedFilters.advanced;
     const mineFromAdvanced = Boolean(user?.id && adv.assigneeIds.includes(user.id));
     const blockedFromAdvanced = adv.behaviors.includes("BLOCKED");
@@ -1414,6 +1232,28 @@ export function BoardListView({
       adv.hasChildren !== "ANY"
     );
   }, [normalizedFilters, user?.id]);
+
+  const hasSharedActiveCriteria = useMemo(() => {
+    return (
+      sharedFilters.searchQuery.trim().length > 0 ||
+      sharedFilters.searchIncludeComments ||
+      sharedFilters.onlyMine ||
+      sharedFilters.hideDone ||
+      sharedFilters.assigneeIds.length > 0 ||
+      sharedFilters.priorities.length > 0 ||
+      sharedFilters.statusValues.length > 0 ||
+      sharedFilters.productivityPresets.length > 0 ||
+      sharedFilters.activity.period !== null ||
+      sharedFilters.activity.types.length > 0 ||
+      Boolean(sharedFilters.activity.from) ||
+      Boolean(sharedFilters.activity.to)
+    );
+  }, [sharedFilters]);
+
+  const shouldPreserveTreeContext = useMemo(
+    () => normalizedFilters.renderMode === "TREE" && (hasLocalActiveCriteria || hasSharedActiveCriteria),
+    [hasLocalActiveCriteria, hasSharedActiveCriteria, normalizedFilters.renderMode],
+  );
 
   const rowsById = useMemo(() => {
     const map = new Map<string, ListRow>();
@@ -1444,16 +1284,18 @@ export function BoardListView({
     const now = Date.now();
 
     const matchesSharedProductivity = (row: ListRow): boolean => {
-      const preset = sharedFilters.productivityPreset;
-      if (!preset) return true;
+      const presets = sharedFilters.productivityPresets;
+      if (presets.length === 0) return true;
       const dueDiff = getDueDiff(row.dueAt);
-      if (preset === 'NO_DEADLINE') return dueDiff === null;
-      if (dueDiff === null) return false;
-      if (preset === 'TODAY') return dueDiff === 0;
-      if (preset === 'OVERDUE') return dueDiff < 0;
-      if (preset === 'NEXT_7_DAYS') return dueDiff >= 0 && dueDiff <= 7;
-      if (preset === 'THIS_WEEK') return dueDiff >= 0 && dueDiff <= endOfWeekDiff;
-      return true;
+      return presets.some((preset) => {
+        if (preset === 'NO_DEADLINE') return dueDiff === null;
+        if (dueDiff === null) return false;
+        if (preset === 'TODAY') return dueDiff === 0;
+        if (preset === 'OVERDUE') return dueDiff < 0;
+        if (preset === 'NEXT_7_DAYS') return dueDiff >= 0 && dueDiff <= 7;
+        if (preset === 'THIS_WEEK') return dueDiff >= 0 && dueDiff <= endOfWeekDiff;
+        return false;
+      });
     };
 
     const matchesSharedActivity = (row: ListRow): boolean => {
@@ -1513,21 +1355,9 @@ export function BoardListView({
         }
 
         const normalized = normalizeText(token);
-        if (normalized.length < 3) continue;
+        if (!normalized) continue;
 
-        const haystack = [
-          row.title,
-          row.description ?? "",
-          row.pathLabel,
-          row.columnName,
-          String(row.shortId ?? ""),
-          row.effort ?? "",
-          row.progress !== null ? String(row.progress) : "",
-          ...row.assignees,
-          row.priority,
-        ]
-          .map((value) => normalizeText(value))
-          .join(" ");
+        const haystack = buildGenericSearchHaystack(row, normalized.length, false);
 
         if (!haystack.includes(normalized)) return false;
       }
@@ -1681,11 +1511,12 @@ export function BoardListView({
             continue;
           }
           const normalized = normalizeText(token);
-          if (normalized.length < 2) continue;
-          const haystack = [row.title, row.description ?? "", row.pathLabel, ...row.assignees, row.priority]
-            .concat(sharedFilters.searchIncludeComments ? row.commentBodies : [])
-            .map((v) => normalizeText(v))
-            .join(" ");
+          if (!normalized) continue;
+          const haystack = buildGenericSearchHaystack(
+            row,
+            normalized.length,
+            sharedFilters.searchIncludeComments,
+          );
           if (!haystack.includes(normalized)) return false;
         }
       }
@@ -1697,9 +1528,7 @@ export function BoardListView({
   const filteredIdSet = useMemo(() => new Set(filteredRows.map((row) => row.id)), [filteredRows]);
 
   const contextRows = useMemo(() => {
-    if (normalizedFilters.renderMode !== "TREE") return new Set<string>();
-    if (!normalizedFilters.contextMode) return new Set<string>();
-    if (!hasActiveCriteria) return new Set<string>();
+    if (!shouldPreserveTreeContext) return new Set<string>();
 
     const contextSet = new Set<string>();
 
@@ -1720,9 +1549,7 @@ export function BoardListView({
   }, [
     filteredIdSet,
     filteredRows,
-    hasActiveCriteria,
-    normalizedFilters.contextMode,
-    normalizedFilters.renderMode,
+    shouldPreserveTreeContext,
     rowsById,
     treeRootParentId,
   ]);
@@ -1876,6 +1703,14 @@ export function BoardListView({
     }
     return map;
   }, [treeRows]);
+
+  const matchedById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const row of filteredRows) {
+      map.set(row.id, true);
+    }
+    return map;
+  }, [filteredRows]);
 
   const activeViewLabel = useMemo(() => {
     if (!normalizedFilters.activeViewId) return "Vue libre";
@@ -2283,60 +2118,6 @@ export function BoardListView({
 
   const listHeaderActions = (
     <div className="flex items-center gap-2">
-      <div ref={columnsMenuRef} className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            setPositionSelectorOpen(false);
-            setViewsMenuOpen(false);
-            setManageViewsOpen(false);
-            setColumnsMenuOpen((prev) => !prev);
-          }}
-          className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent hover:text-foreground"
-        >
-          Colonnes
-        </button>
-        {columnsMenuOpen && (
-          <div className="absolute left-0 top-full z-[70] mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-2xl">
-            <div className="space-y-2 text-xs">
-              {(normalizedFilters.renderMode === "FLAT" ? FLAT_COLUMNS_DEFAULT : TREE_COLUMNS_DEFAULT).map((column) => {
-                const checked = visibleColumns.includes(column);
-                const disabled = column === "title" || (normalizedFilters.renderMode === "FLAT" && column === "path");
-                return (
-                  <div key={column} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2 py-1">
-                    <label className="flex items-center gap-2 text-muted">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={() => toggleColumnVisibility(column)}
-                      />
-                      <span>{COLUMN_LABELS[column]}</span>
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveColumnInVisibility(column, "up")}
-                        className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveColumnInVisibility(column, "down")}
-                        className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-muted hover:border-accent hover:text-foreground"
-                      >
-                        ↓
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
       <button
         type="button"
         onClick={createAtPosition}
@@ -2585,14 +2366,24 @@ export function BoardListView({
                 {tableRows.map((row) => {
                   const depth = normalizedFilters.renderMode === "TREE" ? depthById.get(row.id) ?? 0 : 0;
                   const isContextRow = normalizedFilters.renderMode === "TREE" ? Boolean(contextById.get(row.id)) : false;
+                  const isMatchedRow = normalizedFilters.renderMode === "TREE" ? Boolean(matchedById.get(row.id)) : true;
                   const childrenCount = rows.filter((entry) => entry.parentId === row.id).length;
                   const expanded = expandedById.get(row.id) ?? false;
                   const rowDisabled = isRowSaving(row.id);
+                  const isTreeFilterHighlight = shouldPreserveTreeContext && normalizedFilters.renderMode === "TREE";
 
                   return (
                     <tr
                       key={row.id}
-                      className={`group border-b border-white/5 align-middle transition hover:bg-white/[0.03] ${isContextRow ? "opacity-50" : "opacity-100"}`}
+                      className={`group border-b border-white/5 align-middle transition hover:bg-white/[0.03] ${
+                        isTreeFilterHighlight
+                          ? isMatchedRow
+                            ? "bg-accent/[0.04] opacity-100"
+                            : "bg-white/[0.015] opacity-45"
+                          : isContextRow
+                            ? "opacity-50"
+                            : "opacity-100"
+                      }`}
                     >
                       {visibleColumns.map((column) => {
                         if (column === "title") {
@@ -2626,7 +2417,9 @@ export function BoardListView({
                                     type="button"
                                     onClick={() => onOpenTask(row.id)}
                                     title={row.description?.trim() || row.title}
-                                    className="min-w-0 truncate text-left text-sm font-medium text-foreground transition hover:text-accent"
+                                    className={`min-w-0 truncate text-left text-sm font-medium transition hover:text-accent ${
+                                      isTreeFilterHighlight && isMatchedRow ? "text-accent" : "text-foreground"
+                                    }`}
                                   >
                                     {row.title}
                                   </button>
@@ -2636,6 +2429,11 @@ export function BoardListView({
                                       title={row.pathLabel}
                                     >
                                       {row.pathLabel.split(" › ").slice(-2).join(" › ")}
+                                    </span>
+                                  )}
+                                  {isTreeFilterHighlight && isMatchedRow && (
+                                    <span className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-1.5 text-[9px] uppercase tracking-wide text-accent">
+                                      Match
                                     </span>
                                   )}
                                   {isContextRow && (

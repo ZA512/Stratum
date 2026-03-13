@@ -269,7 +269,7 @@ export default function BoardMindmapView({
         searchIncludeComments: sharedFilters.searchIncludeComments,
         assigneeIds: sharedFilters.assigneeIds,
         statusValues: sharedFilters.statusValues,
-        productivityPreset: sharedFilters.productivityPreset,
+        productivityPresets: sharedFilters.productivityPresets,
         activity: {
           period: sharedFilters.activity.period ?? undefined,
           from: sharedFilters.activity.from,

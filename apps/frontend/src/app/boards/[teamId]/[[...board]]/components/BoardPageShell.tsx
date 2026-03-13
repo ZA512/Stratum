@@ -49,7 +49,7 @@ import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
 import { evaluateBoardTreeMatches } from '@/features/boards/board-tree-filtering';
 import { MoveCardDialog } from './MoveCardDialog';
 import { AdvancedFiltersPanel } from './AdvancedFiltersPanel';
-import { BoardFilterBar } from './BoardFilterBar';
+import { BoardActiveFilterChips, BoardFilterBar } from './BoardFilterBar';
 import { DrawerSection, ToggleRow } from './BoardFilterDrawer';
 import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
@@ -408,6 +408,21 @@ function TeamBoardPageInner(){
   }, [listFilters, listFiltersHydrated, listFiltersStorageKey]);
 
   useEffect(() => {
+    if (!listFiltersHydrated) return;
+    if (!activeBoardId) return;
+    setListFilters((prev) => {
+      if (prev.positionBoardId === activeBoardId) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        positionBoardId: activeBoardId,
+      };
+    });
+  }, [activeBoardId, listFiltersHydrated]);
+
+  useEffect(() => {
     if (!board || !accessToken || !dueBadgeCacheKey) {
       setDueBadgeCount(0);
       return;
@@ -737,7 +752,7 @@ function TeamBoardPageInner(){
         searchIncludeComments: sharedFilters.searchIncludeComments,
         assigneeIds: selectedAssignees,
         statusValues: sharedFilters.statusValues,
-        productivityPreset: sharedFilters.productivityPreset,
+        productivityPresets: sharedFilters.productivityPresets,
         activity: {
           period: sharedFilters.activity.period ?? undefined,
           from: sharedFilters.activity.from,
@@ -751,7 +766,7 @@ function TeamBoardPageInner(){
       },
       user?.id,
     );
-  }, [board?.treeNodes, searchQuery, sharedFilters.searchIncludeComments, sharedFilters.statusValues, sharedFilters.productivityPreset, sharedFilters.activity, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, hideDone, user?.id]);
+  }, [board?.treeNodes, searchQuery, sharedFilters.searchIncludeComments, sharedFilters.statusValues, sharedFilters.productivityPresets, sharedFilters.activity, selectedAssignees, selectedPriorities, selectedEfforts, filterMine, hideDone, user?.id]);
 
   const sharedShownTaskCount = useMemo(() => {
     if (!board?.treeNodes?.length) {
@@ -2018,6 +2033,7 @@ function TeamBoardPageInner(){
           allAssignees={allAssignees}
           priorityOptions={priorityOptions}
           effortOptions={EFFORT_OPTIONS}
+          showActiveChips={boardView !== 'list'}
           rightSlot={
             boardView === 'kanban' ? (
               <>
@@ -2311,10 +2327,19 @@ function TeamBoardPageInner(){
                 </button>
                 </div>
               ) : boardView === 'list' ? (
-                <div
-                  id="board-list-header-actions-root"
-                  className="flex min-h-8 items-center gap-2"
-                />
+                <>
+                  <div
+                    id="board-list-header-actions-root"
+                    className="flex min-h-8 items-center gap-2"
+                  />
+                  <BoardActiveFilterChips
+                    assigneeOptions={assigneeOptions}
+                    priorityOptions={priorityOptions}
+                    effortOptions={EFFORT_OPTIONS}
+                    compact
+                    maxVisible={10}
+                  />
+                </>
               ) : (
                 <div className="min-h-8" />
               )}

@@ -36,8 +36,8 @@ export interface SharedBoardFilters {
   assigneeIds: string[];
   /** Statuts sélectionnés */
   statusValues: SharedColumnBehavior[];
-  /** Filtre de productivité rapide */
-  productivityPreset: ProductivityPreset | null;
+  /** Filtres de productivité rapides (OR entre les valeurs) */
+  productivityPresets: ProductivityPreset[];
   /** Filtre d'activité */
   activity: {
     period: ActivityPeriod | null;
@@ -68,7 +68,7 @@ export const DEFAULT_SHARED_FILTERS: SharedBoardFilters = {
   searchIncludeComments: false,
   assigneeIds: [],
   statusValues: [],
-  productivityPreset: null,
+  productivityPresets: [],
   activity: {
     period: null,
     types: [],
@@ -97,14 +97,22 @@ export function normalizeSharedBoardFilters(input: Partial<SharedBoardFilters> |
             value === 'CUSTOM',
         )
       : [],
-    productivityPreset:
-      input?.productivityPreset === 'TODAY' ||
-      input?.productivityPreset === 'OVERDUE' ||
-      input?.productivityPreset === 'THIS_WEEK' ||
-      input?.productivityPreset === 'NEXT_7_DAYS' ||
-      input?.productivityPreset === 'NO_DEADLINE'
-        ? input.productivityPreset
-        : null,
+    productivityPresets: Array.isArray((input as { productivityPresets?: unknown })?.productivityPresets)
+      ? ((input as { productivityPresets?: unknown[] }).productivityPresets ?? []).filter(
+          (value): value is ProductivityPreset =>
+            value === 'TODAY' ||
+            value === 'OVERDUE' ||
+            value === 'THIS_WEEK' ||
+            value === 'NEXT_7_DAYS' ||
+            value === 'NO_DEADLINE',
+        )
+      : (input as { productivityPreset?: unknown })?.productivityPreset === 'TODAY' ||
+          (input as { productivityPreset?: unknown })?.productivityPreset === 'OVERDUE' ||
+          (input as { productivityPreset?: unknown })?.productivityPreset === 'THIS_WEEK' ||
+          (input as { productivityPreset?: unknown })?.productivityPreset === 'NEXT_7_DAYS' ||
+          (input as { productivityPreset?: unknown })?.productivityPreset === 'NO_DEADLINE'
+        ? [(input as { productivityPreset: ProductivityPreset }).productivityPreset]
+        : [],
     activity: {
       period:
         activity.period === 'TODAY' ||
@@ -155,7 +163,7 @@ export function countActiveFilters(filters: SharedBoardFilters): number {
   return (
     (filters.assigneeIds.length > 0 || filters.onlyMine ? 1 : 0) +
     (filters.statusValues.length > 0 ? 1 : 0) +
-    (filters.productivityPreset ? 1 : 0) +
+    (filters.productivityPresets.length > 0 ? 1 : 0) +
     (filters.activity.period || filters.activity.types.length > 0 ? 1 : 0) +
     (filters.priorities.length > 0 ? 1 : 0) +
     (filters.efforts.length > 0 ? 1 : 0) +

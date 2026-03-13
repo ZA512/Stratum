@@ -48,6 +48,7 @@ export interface BoardFilterBarProps {
   rightSlot?: React.ReactNode;
   /** Sections supplémentaires dans le drawer (spécifiques à la vue) */
   extraDrawerSections?: React.ReactNode;
+  showActiveChips?: boolean;
   className?: string;
 }
 
@@ -64,6 +65,7 @@ export function BoardFilterBar({
   effortOptions,
   rightSlot,
   extraDrawerSections,
+  showActiveChips = true,
   className,
 }: BoardFilterBarProps) {
   const { t: tBoard } = useTranslation('board');
@@ -261,7 +263,7 @@ export function BoardFilterBar({
     filters.searchIncludeComments ||
     filters.assigneeIds.length > 0 ||
     filters.statusValues.length > 0 ||
-    Boolean(filters.productivityPreset) ||
+    filters.productivityPresets.length > 0 ||
     Boolean(filters.activity.period) ||
     filters.activity.types.length > 0 ||
     filters.priorities.length > 0 ||
@@ -304,31 +306,53 @@ export function BoardFilterBar({
       });
     }
 
-    if (filters.productivityPreset) {
+    for (const preset of filters.productivityPresets) {
       items.push({
-        key: 'productivity',
-        label: `productivity: ${productivityOptions.find((entry) => entry.value === filters.productivityPreset)?.label ?? filters.productivityPreset}`,
-        onRemove: () => setFilters({ ...filters, productivityPreset: null }),
+        key: `productivity:${preset}`,
+        label: `productivity: ${productivityOptions.find((entry) => entry.value === preset)?.label ?? preset}`,
+        onRemove: () => setFilters({
+          ...filters,
+          productivityPresets: filters.productivityPresets.filter((entry) => entry !== preset),
+        }),
         onClick: () => setFamilyMenu('productivity'),
         colorClass: 'text-cyan-300',
       });
     }
 
-    if (filters.statusValues.length > 0) {
+    for (const statusValue of filters.statusValues) {
       items.push({
-        key: 'status',
-        label: `status: ${filters.statusValues.map((value) => statusOptions.find((entry) => entry.value === value)?.label ?? value).join(', ')}`,
-        onRemove: () => setFilters({ ...filters, statusValues: [] }),
+        key: `status:${statusValue}`,
+        label: `status: ${statusOptions.find((entry) => entry.value === statusValue)?.label ?? statusValue}`,
+        onRemove: () => setFilters({
+          ...filters,
+          statusValues: filters.statusValues.filter((value) => value !== statusValue),
+        }),
         onClick: () => setFamilyMenu('status'),
         colorClass: 'text-orange-300',
       });
     }
 
-    if (filters.activity.period || filters.activity.types.length > 0) {
+    if (filters.activity.period) {
       items.push({
-        key: 'activity',
-        label: `activity: ${filters.activity.period ? activityPeriodOptions.find((entry) => entry.value === filters.activity.period)?.label ?? filters.activity.period : 'types'}${filters.activity.types.length > 0 ? ` (${filters.activity.types.length})` : ''}`,
-        onRemove: () => setFilters({ ...filters, activity: { period: null, types: [], from: null, to: null } }),
+        key: `activity:period:${filters.activity.period}`,
+        label: `activity: ${activityPeriodOptions.find((entry) => entry.value === filters.activity.period)?.label ?? filters.activity.period}`,
+        onRemove: () => setFilters({ ...filters, activity: { ...filters.activity, period: null, from: null, to: null } }),
+        onClick: () => setFamilyMenu('activity'),
+        colorClass: 'text-rose-300',
+      });
+    }
+
+    for (const activityType of filters.activity.types) {
+      items.push({
+        key: `activity:type:${activityType}`,
+        label: `activity: ${activityTypeOptions.find((entry) => entry.value === activityType)?.label ?? activityType}`,
+        onRemove: () => setFilters({
+          ...filters,
+          activity: {
+            ...filters.activity,
+            types: filters.activity.types.filter((value) => value !== activityType),
+          },
+        }),
         onClick: () => setFamilyMenu('activity'),
         colorClass: 'text-rose-300',
       });
@@ -468,7 +492,7 @@ export function BoardFilterBar({
         </div>
 
         {/* --- Chips filtres actifs --- */}
-        {hasChips && (
+        {showActiveChips && hasChips && (
           <div className="flex flex-wrap items-center gap-1.5">
             {visibleChips.map((item) => (
               <Chip
@@ -507,19 +531,24 @@ export function BoardFilterBar({
             <button
               type="button"
               onClick={() => setFamilyMenu((prev) => (prev === 'productivity' ? null : 'productivity'))}
-              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${filters.productivityPreset ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${filters.productivityPresets.length > 0 ? 'border-accent/60 bg-accent/10 text-foreground' : 'border-white/15 text-muted hover:border-accent hover:text-foreground'}`}
             >
               {tBoard('sharedFilter.families.productivity')}
             </button>
             {familyMenu === 'productivity' && (
               <div className="absolute left-0 top-full z-[70] mt-2 w-52 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur">
                 {productivityOptions.map((option) => {
-                  const active = filters.productivityPreset === option.value;
+                  const active = filters.productivityPresets.includes(option.value);
                   return (
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setFilters({ ...filters, productivityPreset: active ? null : option.value })}
+                      onClick={() => setFilters({
+                        ...filters,
+                        productivityPresets: active
+                          ? filters.productivityPresets.filter((value) => value !== option.value)
+                          : [...filters.productivityPresets, option.value],
+                      })}
                       className={`mb-1 block w-full rounded-lg px-3 py-2 text-left text-xs transition ${active ? 'bg-accent/15 text-foreground' : 'text-muted hover:bg-white/5 hover:text-foreground'}`}
                     >
                       {option.label}
@@ -806,6 +835,209 @@ export function BoardFilterBar({
         effortOptions={effortOptions}
         extraSections={extraDrawerSections}
       />
+    </div>
+  );
+}
+
+export interface BoardActiveFilterChipsProps {
+  assigneeOptions: Array<{
+    id: string;
+    label: string;
+    searchText?: string;
+    description?: string;
+  }>;
+  priorityOptions: Array<{ value: PriorityValue; label: string }>;
+  effortOptions: Array<{ value: EffortValue; label: string }>;
+  maxVisible?: number;
+  compact?: boolean;
+}
+
+export function BoardActiveFilterChips({
+  assigneeOptions,
+  priorityOptions,
+  effortOptions,
+  maxVisible = 8,
+  compact = false,
+}: BoardActiveFilterChipsProps) {
+  const { t: tBoard } = useTranslation('board');
+  const {
+    filters,
+    setSearchQuery,
+    setSearchIncludeComments,
+    setFilters,
+    setAssigneeIds,
+    togglePriority,
+    toggleEffort,
+    setHideDone,
+    setOnlyMine,
+    resetFilters,
+    savedPresets,
+  } = useBoardFilters();
+
+  const productivityOptions = useMemo(
+    () => [
+      { value: 'TODAY', label: tBoard('sharedFilter.productivity.options.TODAY') },
+      { value: 'OVERDUE', label: tBoard('sharedFilter.productivity.options.OVERDUE') },
+      { value: 'THIS_WEEK', label: tBoard('sharedFilter.productivity.options.THIS_WEEK') },
+      { value: 'NEXT_7_DAYS', label: tBoard('sharedFilter.productivity.options.NEXT_7_DAYS') },
+      { value: 'NO_DEADLINE', label: tBoard('sharedFilter.productivity.options.NO_DEADLINE') },
+    ] as const,
+    [tBoard],
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: 'BACKLOG', label: tBoard('behaviors.BACKLOG') },
+      { value: 'IN_PROGRESS', label: tBoard('behaviors.IN_PROGRESS') },
+      { value: 'BLOCKED', label: tBoard('behaviors.BLOCKED') },
+      { value: 'DONE', label: tBoard('behaviors.DONE') },
+    ] as const,
+    [tBoard],
+  );
+
+  const activityPeriodOptions = useMemo(
+    () => [
+      { value: 'TODAY', label: tBoard('sharedFilter.activity.periods.TODAY') },
+      { value: 'LAST_7_DAYS', label: tBoard('sharedFilter.activity.periods.LAST_7_DAYS') },
+      { value: 'LAST_30_DAYS', label: tBoard('sharedFilter.activity.periods.LAST_30_DAYS') },
+    ] as const,
+    [tBoard],
+  );
+
+  const activityTypeOptions = useMemo(
+    () => [
+      { value: 'CREATION', label: tBoard('sharedFilter.activity.types.CREATION') },
+      { value: 'MODIFICATION', label: tBoard('sharedFilter.activity.types.MODIFICATION') },
+      { value: 'COMMENT', label: tBoard('sharedFilter.activity.types.COMMENT') },
+    ] as const,
+    [tBoard],
+  );
+
+  const currentPreset = useMemo(() => {
+    const serialized = JSON.stringify(filters);
+    return savedPresets.find((entry) => JSON.stringify(entry.filters) === serialized) ?? null;
+  }, [filters, savedPresets]);
+
+  const assigneeLabelMap = useMemo(() => Object.fromEntries(assigneeOptions.map((entry) => [entry.id, entry.label])), [assigneeOptions]);
+  const priorityLabelMap = useMemo(() => Object.fromEntries(priorityOptions.map((entry) => [entry.value, entry.label])), [priorityOptions]);
+  const effortLabelMap = useMemo(() => Object.fromEntries(effortOptions.map((entry) => [entry.value, entry.label])), [effortOptions]);
+
+  const chipItems = useMemo(() => {
+    const items: Array<{ key: string; label: string; onRemove: () => void; colorClass?: string }> = [];
+
+    if (filters.searchQuery.trim().length > 0 || filters.searchIncludeComments) {
+      items.push({
+        key: 'search',
+        label: filters.searchQuery.trim().length > 0
+          ? `search: ${filters.searchQuery}${filters.searchIncludeComments ? ' + comments' : ''}`
+          : 'search: comments',
+        onRemove: () => {
+          setSearchQuery('');
+          setSearchIncludeComments(false);
+        },
+        colorClass: 'text-emerald-300',
+      });
+    }
+
+    if (currentPreset) {
+      items.push({
+        key: `preset:${currentPreset.id}`,
+        label: `preset: ${currentPreset.name}`,
+        onRemove: () => resetFilters(),
+        colorClass: 'text-fuchsia-300',
+      });
+    }
+
+    for (const preset of filters.productivityPresets) {
+      items.push({
+        key: `productivity:${preset}`,
+        label: productivityOptions.find((entry) => entry.value === preset)?.label ?? preset,
+        onRemove: () => setFilters({ ...filters, productivityPresets: filters.productivityPresets.filter((entry) => entry !== preset) }),
+        colorClass: 'text-cyan-300',
+      });
+    }
+
+    for (const status of filters.statusValues) {
+      items.push({
+        key: `status:${status}`,
+        label: statusOptions.find((entry) => entry.value === status)?.label ?? status,
+        onRemove: () => setFilters({ ...filters, statusValues: filters.statusValues.filter((entry) => entry !== status) }),
+        colorClass: 'text-orange-300',
+      });
+    }
+
+    if (filters.activity.period) {
+      items.push({
+        key: `activity-period:${filters.activity.period}`,
+        label: activityPeriodOptions.find((entry) => entry.value === filters.activity.period)?.label ?? filters.activity.period,
+        onRemove: () => setFilters({ ...filters, activity: { ...filters.activity, period: null, from: null, to: null } }),
+        colorClass: 'text-rose-300',
+      });
+    }
+
+    for (const type of filters.activity.types) {
+      items.push({
+        key: `activity-type:${type}`,
+        label: activityTypeOptions.find((entry) => entry.value === type)?.label ?? type,
+        onRemove: () => setFilters({ ...filters, activity: { ...filters.activity, types: filters.activity.types.filter((entry) => entry !== type) } }),
+        colorClass: 'text-rose-300',
+      });
+    }
+
+    if (filters.onlyMine) {
+      items.push({ key: 'mine', label: tBoard('sharedFilter.chips.mine'), onRemove: () => setOnlyMine(false) });
+    }
+
+    if (filters.hideDone) {
+      items.push({ key: 'hide-done', label: tBoard('sharedFilter.chips.hideDone'), onRemove: () => setHideDone(false) });
+    }
+
+    for (const id of filters.assigneeIds) {
+      items.push({
+        key: `assignee:${id}`,
+        label: id === UNASSIGNED_TOKEN ? tBoard('filters.assignees.optionUnassigned.label') : (assigneeLabelMap[id] ?? id),
+        onRemove: () => setAssigneeIds(filters.assigneeIds.filter((entry) => entry !== id)),
+      });
+    }
+
+    for (const value of filters.priorities) {
+      items.push({
+        key: `priority:${value}`,
+        label: priorityLabelMap[value] ?? value,
+        onRemove: () => togglePriority(value),
+        colorClass: 'text-amber-300',
+      });
+    }
+
+    for (const value of filters.efforts) {
+      items.push({
+        key: `effort:${value}`,
+        label: value === NO_EFFORT_TOKEN ? tBoard('filters.effort.noEffort') : (effortLabelMap[value as EffortValue] ?? value),
+        onRemove: () => toggleEffort(value),
+        colorClass: 'text-sky-300',
+      });
+    }
+
+    return items;
+  }, [activityPeriodOptions, activityTypeOptions, assigneeLabelMap, currentPreset, effortLabelMap, filters, priorityLabelMap, productivityOptions, resetFilters, setAssigneeIds, setFilters, setHideDone, setOnlyMine, setSearchIncludeComments, setSearchQuery, statusOptions, tBoard, toggleEffort, togglePriority]);
+
+  if (chipItems.length === 0) {
+    return null;
+  }
+
+  const visibleChips = chipItems.slice(0, maxVisible);
+  const hiddenChipCount = Math.max(0, chipItems.length - visibleChips.length);
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${compact ? 'min-h-8' : ''}`}>
+      {visibleChips.map((item) => (
+        <Chip key={item.key} label={item.label} onRemove={item.onRemove} colorClass={item.colorClass} />
+      ))}
+      {hiddenChipCount > 0 && (
+        <span className="inline-flex items-center rounded-full border border-white/15 bg-surface/80 px-2.5 py-1 text-[11px] font-medium text-muted">
+          +{hiddenChipCount}
+        </span>
+      )}
     </div>
   );
 }
