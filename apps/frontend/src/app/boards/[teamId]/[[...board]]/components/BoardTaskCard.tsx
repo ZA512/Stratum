@@ -1,5 +1,6 @@
 "use client";
-import React, { useMemo, useRef, useCallback, useState } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import TaskCard, { TaskCardProps, TaskAssignee } from '@/components/task/task-card';
@@ -34,6 +35,12 @@ interface BoardTaskCardProps {
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 
 type CardHelpMessages = NonNullable<TaskCardProps['helpMessages']>;
+
+type DescendantsTooltipPosition = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
 
 function getInitials(name: string): string {
   if (!name) return '';
@@ -81,7 +88,10 @@ export function BoardTaskCard({
 
   const [fractalLoading, setFractalLoading] = useState(false);
   const [descendantsOpen, setDescendantsOpen] = useState(false);
+  const [descendantsTooltipPosition, setDescendantsTooltipPosition] = useState<DescendantsTooltipPosition | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const descendantsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const descendantsTooltipRef = useRef<HTMLDivElement | null>(null);
   const descendantsCloseTimerRef = useRef<number | null>(null);
 
   const setCardRef = useCallback(
@@ -199,6 +209,8 @@ export function BoardTaskCard({
 
   const hasDirectMatch = Boolean(node.directMatch);
   const descendantMatchCount = typeof node.descendantMatchCount === 'number' ? node.descendantMatchCount : 0;
+  const hasDescendantPreview = Boolean(node.descendantPreview && node.descendantPreview.length > 0);
+  const showDescendantMatches = descendantMatchCount > 0 && !hasDirectMatch;
 
   const clearDescendantsCloseTimer = useCallback(() => {
     if (descendantsCloseTimerRef.current !== null) {
@@ -218,6 +230,56 @@ export function BoardTaskCard({
       setDescendantsOpen(false);
     }, 120);
   }, [clearDescendantsCloseTimer]);
+
+  useEffect(() => {
+    if (!descendantsOpen || !hasDescendantPreview) {
+      setDescendantsTooltipPosition(null);
+      return;
+    }
+    if (typeof window === 'undefined') return;
+
+    const updatePosition = () => {
+      const trigger = descendantsTriggerRef.current;
+      const tooltip = descendantsTooltipRef.current;
+      if (!trigger || !tooltip) return;
+
+      const margin = 8;
+      const triggerRect = trigger.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      const availableBelow = Math.max(120, viewportHeight - triggerRect.bottom - margin * 2);
+      const availableAbove = Math.max(120, triggerRect.top - margin * 2);
+      const placeAbove = triggerRect.bottom + margin + tooltipRect.height > viewportHeight - margin && availableAbove > availableBelow;
+      const maxHeight = Math.max(120, placeAbove ? availableAbove : availableBelow);
+
+      let top = placeAbove
+        ? Math.max(margin, triggerRect.top - Math.min(tooltipRect.height, maxHeight) - margin)
+        : triggerRect.bottom + margin;
+
+      if (!placeAbove && top + tooltipRect.height > viewportHeight - margin) {
+        top = Math.max(margin, viewportHeight - tooltipRect.height - margin);
+      }
+
+      let left = triggerRect.left;
+      const maxLeft = viewportWidth - tooltipRect.width - margin;
+      if (left > maxLeft) left = maxLeft;
+      if (left < margin) left = margin;
+
+      setDescendantsTooltipPosition({ top, left, maxHeight });
+    };
+
+    const frame = window.requestAnimationFrame(updatePosition);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [descendantsOpen, hasDescendantPreview, node.descendantPreview]);
 
   const handleOpenChildBoard = useCallback(async () => {
     if (isDragging || fractalLoading) return;
@@ -449,13 +511,14 @@ export function BoardTaskCard({
           hasDirectMatch || highlighted ? 'ring-1 ring-accent/70 shadow-[0_0_0_3px_rgba(251,191,36,0.14)]' : '',
         ].filter(Boolean).join(' ')}
       />
-      {descendantMatchCount > 0 && !hasDirectMatch && (
+      {showDescendantMatches && (
         <div
           className="absolute left-3 bottom-3 z-20"
           onMouseEnter={openDescendants}
           onMouseLeave={closeDescendantsSoon}
         >
           <button
+            ref={descendantsTriggerRef}
             type="button"
             className="flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm"
             onClick={() => setDescendantsOpen((prev) => !prev)}
@@ -467,36 +530,39 @@ export function BoardTaskCard({
             </span>
             <span>{descendantMatchCount > 9 ? '+9' : descendantMatchCount}</span>
           </button>
-          {descendantsOpen && node.descendantPreview && node.descendantPreview.length > 0 && (
-            <div
-              className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur"
-              onMouseEnter={openDescendants}
-              onMouseLeave={closeDescendantsSoon}
-            >
-              <div className="max-h-72 overflow-y-auto">
-                {node.descendantPreview.slice(0, 9).map((preview) => (
-                  <button
-                    key={preview.nodeId}
-                    type="button"
-                    onClick={() => {
-                      setDescendantsOpen(false);
-                      onNavigateToDescendant?.(preview);
-                    }}
-                    className="mb-1 block w-full rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
-                  >
-                    <span className="block truncate text-xs font-medium text-foreground">{preview.title}</span>
-                    <span className="block text-[10px] text-muted">{tBoard('cards.descendants.level', { depth: preview.depth })}</span>
-                  </button>
-                ))}
-                {node.descendantPreview.length > 9 && (
-                  <p className="px-3 pt-1 text-[10px] text-muted">
-                    {tBoard('cards.descendants.more', { count: node.descendantPreview.length - 9 })}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </div>
+      )}
+      {descendantsOpen && hasDescendantPreview && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={descendantsTooltipRef}
+          className="fixed z-[10000] w-72 rounded-xl border border-white/10 bg-surface/95 p-2 shadow-2xl backdrop-blur"
+          style={descendantsTooltipPosition ?? { top: 0, left: 0, visibility: 'hidden' }}
+          onMouseEnter={openDescendants}
+          onMouseLeave={closeDescendantsSoon}
+        >
+          <div className="overflow-y-auto" style={{ maxHeight: descendantsTooltipPosition?.maxHeight ?? 288 }}>
+            {node.descendantPreview?.slice(0, 9).map((preview) => (
+              <button
+                key={preview.nodeId}
+                type="button"
+                onClick={() => {
+                  setDescendantsOpen(false);
+                  onNavigateToDescendant?.(preview);
+                }}
+                className="mb-1 block w-full rounded-lg px-3 py-2 text-left transition hover:bg-white/5"
+              >
+                <span className="block truncate text-xs font-medium text-foreground">{preview.title}</span>
+                <span className="block text-[10px] text-muted">{tBoard('cards.descendants.level', { depth: preview.depth })}</span>
+              </button>
+            ))}
+            {node.descendantPreview && node.descendantPreview.length > 9 && (
+              <p className="px-3 pt-1 text-[10px] text-muted">
+                {tBoard('cards.descendants.more', { count: node.descendantPreview.length - 9 })}
+              </p>
+            )}
+          </div>
+        </div>,
+        document.body,
       )}
       {(node as unknown as { isSnoozed?: boolean }).isSnoozed && (
         <div

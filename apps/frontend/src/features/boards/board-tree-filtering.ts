@@ -108,6 +108,24 @@ const matchesProductivity = (node: BoardTreeNode, presets: BoardFilterShape['pro
   });
 };
 
+const hasActiveBoardFilters = (filters: BoardFilterShape, currentUserId?: string | null): boolean => {
+  if (filters.hideDone) return true;
+  if ((filters.searchQuery?.trim().length ?? 0) > 0) return true;
+  if ((filters.assigneeIds?.length ?? 0) > 0) return true;
+  if ((filters.priorities?.length ?? 0) > 0) return true;
+  if ((filters.efforts?.length ?? 0) > 0) return true;
+  if ((filters.statusValues?.length ?? 0) > 0) return true;
+  if ((filters.productivityPresets?.length ?? 0) > 0) return true;
+  if (filters.onlyMine && Boolean(currentUserId)) return true;
+
+  const activity = filters.activity;
+  if (!activity) return false;
+
+  if ((activity.types?.length ?? 0) > 0) return true;
+  if (activity.from || activity.to) return true;
+  return Boolean(activity.period && activity.period !== 'ANY');
+};
+
 const matchesDirect = (
   node: BoardTreeNode,
   filters: BoardFilterShape,
@@ -175,6 +193,20 @@ export function evaluateBoardTreeMatches(
   filters: BoardFilterShape,
   currentUserId?: string | null,
 ): Map<string, TreeMatchMeta> {
+  if (!hasActiveBoardFilters(filters, currentUserId)) {
+    return new Map(
+      treeNodes.map((node) => [
+        node.id,
+        {
+          directMatch: false,
+          visible: true,
+          descendantMatchCount: 0,
+          descendantPreview: [],
+        },
+      ]),
+    );
+  }
+
   const byId = new Map<string, BoardTreeNode>();
   const childrenByParent = new Map<string | null, BoardTreeNode[]>();
   for (const node of treeNodes) {
