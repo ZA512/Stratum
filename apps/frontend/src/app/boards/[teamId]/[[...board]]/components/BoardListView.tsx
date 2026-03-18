@@ -421,6 +421,9 @@ export const COLUMN_LABELS: Record<ListColumnKey, string> = {
   path: "Chemin",
 };
 
+const TREE_GUIDE_STEP = 16;
+const TREE_TOGGLE_SIZE = 16;
+
 const sanitizeStrings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 
@@ -2374,11 +2377,18 @@ export function BoardListView({
                   const expanded = expandedById.get(row.id) ?? false;
                   const rowDisabled = isRowSaving(row.id);
                   const isTreeFilterHighlight = shouldPreserveTreeContext && normalizedFilters.renderMode === "TREE";
+                  const rowSeparatorColor = 'color-mix(in srgb, var(--color-border-subtle) 78%, transparent)';
+                  const cellSeparatorStyle: React.CSSProperties = {
+                    backgroundImage: `linear-gradient(to right, ${rowSeparatorColor}, ${rowSeparatorColor})`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'left bottom',
+                    backgroundSize: '100% 1px',
+                  };
 
                   return (
                     <tr
                       key={row.id}
-                      className={`group border-b border-white/5 align-middle transition hover:bg-white/[0.03] ${
+                      className={`group align-middle transition hover:bg-white/[0.03] ${
                         isTreeFilterHighlight
                           ? isMatchedRow
                             ? "bg-accent/[0.04] opacity-100"
@@ -2390,29 +2400,54 @@ export function BoardListView({
                     >
                       {visibleColumns.map((column) => {
                         if (column === "title") {
+                          const gutterWidth = normalizedFilters.renderMode === "TREE"
+                            ? depth * TREE_GUIDE_STEP + TREE_TOGGLE_SIZE + (depth > 0 ? 12 : 0)
+                            : 0;
+                          const titleSeparatorStyle: React.CSSProperties = {
+                            ...cellSeparatorStyle,
+                            backgroundImage: `linear-gradient(to right, transparent ${gutterWidth + 10}px, ${rowSeparatorColor} ${gutterWidth + 10}px)`,
+                          };
                           return (
-                            <td key={column} className="px-3 py-0.5">
-                              <div className="flex items-center gap-1" style={{ paddingLeft: normalizedFilters.renderMode === "TREE" ? depth * 12 : 0 }}>
+                            <td key={column} className="px-3 py-0.5" style={titleSeparatorStyle}>
+                              <div className="flex items-center gap-1">
                                 {normalizedFilters.renderMode === "TREE" ? (
-                                  <button
-                                    type="button"
-                                    onClick={(event) => toggleExpand(row.id, event.shiftKey)}
-                                    disabled={childrenCount === 0}
-                                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-xs transition ${
-                                      childrenCount > 0
-                                        ? "text-muted hover:bg-white/5 hover:text-foreground"
-                                        : "cursor-default text-muted/20"
-                                    }`}
-                                    title={childrenCount > 0 ? "Deplier/replier (Shift: sous-arbre)" : "Pas d'enfants"}
-                                  >
+                                  <div className="relative shrink-0" style={{ width: gutterWidth || TREE_TOGGLE_SIZE, height: 24 }}>
+                                    {Array.from({ length: depth }).map((_, level) => (
+                                      <span
+                                        key={`${row.id}-guide-${level}`}
+                                        aria-hidden="true"
+                                        className="absolute inset-y-[-8px] w-px"
+                                        style={{
+                                          left: level * TREE_GUIDE_STEP + TREE_TOGGLE_SIZE / 2,
+                                          background: 'color-mix(in srgb, var(--color-border-strong) 68%, transparent)',
+                                        }}
+                                      />
+                                    ))}
+                                    {depth > 0 ? (
+                                      <span
+                                        aria-hidden="true"
+                                        className="absolute top-1/2 h-px -translate-y-1/2"
+                                        style={{
+                                          left: (depth - 1) * TREE_GUIDE_STEP + TREE_TOGGLE_SIZE / 2,
+                                          width: 12,
+                                          background: 'color-mix(in srgb, var(--color-border-strong) 76%, transparent)',
+                                        }}
+                                      />
+                                    ) : null}
                                     {childrenCount > 0 ? (
-                                      <span className="material-symbols-outlined text-[13px] leading-none">
-                                        {expanded ? "expand_more" : "chevron_right"}
-                                      </span>
-                                    ) : (
-                                      <span className="material-symbols-outlined text-[8px] leading-none">circle</span>
-                                    )}
-                                  </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => toggleExpand(row.id, event.shiftKey)}
+                                        className="absolute top-1/2 inline-flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-xs text-muted transition hover:bg-white/5 hover:text-foreground"
+                                        style={{ left: depth * TREE_GUIDE_STEP }}
+                                        title="Deplier/replier (Shift: sous-arbre)"
+                                      >
+                                        <span className="material-symbols-outlined text-[13px] leading-none">
+                                          {expanded ? "expand_more" : "chevron_right"}
+                                        </span>
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 ) : null}
                                 <div className="flex min-w-0 items-center gap-1.5">
                                   {row.shortId !== null && <span className="shrink-0 text-[11px] font-semibold text-muted/60">#{row.shortId}</span>}
@@ -2455,7 +2490,7 @@ export function BoardListView({
                           const options = board?.columns ?? [];
 
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <select
                                 value={row.columnId}
                                 onChange={(event) => void applyStatusUpdate(row, event.target.value)}
@@ -2475,7 +2510,7 @@ export function BoardListView({
 
                         if (column === "priority") {
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <select
                                 value={row.priority}
                                 onChange={(event) => void applyPriorityUpdate(row, event.target.value as PriorityValue)}
@@ -2496,7 +2531,7 @@ export function BoardListView({
                         if (column === "progress") {
                           const progressValue = row.progress ?? 0;
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <select
                                 value={progressValue}
                                 onChange={(event) => void applyProgressUpdate(row, Number(event.target.value))}
@@ -2515,7 +2550,7 @@ export function BoardListView({
 
                         if (column === "effort") {
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <select
                                 value={row.effort ?? ""}
                                 onChange={(event) =>
@@ -2543,7 +2578,7 @@ export function BoardListView({
                         if (column === "assignee") {
                           const assigneeOptions = getAssigneeOptionsForRow(row);
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <select
                                 value={row.assigneeIds[0] ?? ""}
                                 onFocus={() => void ensureCollaboratorsForNode(row)}
@@ -2568,7 +2603,7 @@ export function BoardListView({
                         if (column === "deadline") {
                           const dateValue = row.dueAt ? row.dueAt.slice(0, 10) : "";
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <div className="flex items-center gap-1.5">
                                 <input
                                   type="date"
@@ -2589,7 +2624,7 @@ export function BoardListView({
                         if (column === "updatedAt") {
                           const activityLogs = activityByNodeId.get(row.id) ?? [];
                           return (
-                            <td key={column} className="px-3 py-0.5 text-xs text-muted">
+                            <td key={column} className="px-3 py-0.5 text-xs text-muted" style={cellSeparatorStyle}>
                               <div className="group relative inline-flex items-center gap-1.5">
                                 <span>{row.updatedAt ? dateFormatter.format(new Date(row.updatedAt)) : "-"}</span>
                                 <button
@@ -2628,7 +2663,7 @@ export function BoardListView({
 
                         if (column === "counters") {
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[11px] text-muted/70">
                                 {row.counts.backlog}.{row.counts.inProgress}.{row.counts.blocked}.{row.counts.done}
                               </span>
@@ -2638,7 +2673,7 @@ export function BoardListView({
 
                         if (column === "flags") {
                           return (
-                            <td key={column} className="px-3 py-0.5">
+                            <td key={column} className="px-3 py-0.5" style={cellSeparatorStyle}>
                               <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted">
                                 {row.columnBehavior === "BLOCKED" && (
                                   <span className="rounded-full border border-rose-400/40 px-2 py-0.5 text-rose-200">Bloque</span>
@@ -2653,20 +2688,20 @@ export function BoardListView({
 
                         if (column === "path") {
                           return (
-                            <td key={column} className="max-w-[280px] px-3 py-0.5 text-[11px] text-muted/70" title={row.pathLabel}>
+                            <td key={column} className="max-w-[280px] px-3 py-0.5 text-[11px] text-muted/70" title={row.pathLabel} style={cellSeparatorStyle}>
                               <span className="line-clamp-2">{row.pathLabel}</span>
                             </td>
                           );
                         }
 
                         return (
-                          <td key={column} className="px-3 py-0.5 text-xs text-muted">
+                          <td key={column} className="px-3 py-0.5 text-xs text-muted" style={cellSeparatorStyle}>
                             -
                           </td>
                         );
                       })}
 
-                      <td className="px-2 py-0.5">
+                      <td className="px-2 py-0.5" style={cellSeparatorStyle}>
                         <div className="flex items-center gap-0.5 text-[11px] opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             type="button"
