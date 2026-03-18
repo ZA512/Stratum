@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const solstice: ThemeDefinition = {
+const solstice = defineTheme({
   id: "solstice",
   tone: "light",
   nameKey: "settings.theme.names.solstice",
@@ -29,6 +29,6 @@ const solstice: ThemeDefinition = {
     card: "#fbead7",
     accent: "#d97706",
   },
-};
+});
 
 export default solstice;

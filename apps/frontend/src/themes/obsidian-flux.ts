@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const obsidianFlux: ThemeDefinition = {
+const obsidianFlux = defineTheme({
   id: "obsidian-flux",
   tone: "dark",
   nameKey: "settings.theme.names.obsidianFlux",
@@ -29,6 +29,6 @@ const obsidianFlux: ThemeDefinition = {
     card: "#182538",
     accent: "#00D4FF",
   },
-};
+});
 
 export default obsidianFlux;

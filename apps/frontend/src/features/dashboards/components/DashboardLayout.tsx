@@ -98,8 +98,8 @@ export function DashboardLayout({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-      <header className="flex flex-col gap-4 border-b border-white/10 pb-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+      <header className="app-panel-strong flex flex-col gap-4 rounded-[28px] p-5 md:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-foreground">{title}</h1>
@@ -113,7 +113,7 @@ export function DashboardLayout({
                   dateTime={formattedGeneratedAt.iso}
                   title={formattedGeneratedAt.absolute}
                   aria-label={formattedGeneratedAt.absolute}
-                  className="rounded-full bg-white/5 px-2 py-1 text-xs font-medium text-foreground"
+                  className="app-badge rounded-full px-2 py-1 text-xs font-medium text-foreground"
                 >
                   {formattedGeneratedAt.relative}
                 </time>
@@ -126,7 +126,7 @@ export function DashboardLayout({
                   dateTime={formattedDatasetRefreshedAt.iso}
                   title={formattedDatasetRefreshedAt.absolute}
                   aria-label={formattedDatasetRefreshedAt.absolute}
-                  className="rounded-full bg-white/5 px-2 py-1 text-xs font-medium text-foreground"
+                  className="app-badge rounded-full px-2 py-1 text-xs font-medium text-foreground"
                 >
                   {formattedDatasetRefreshedAt.relative}
                 </time>
@@ -142,10 +142,10 @@ export function DashboardLayout({
               <Link
                 key={item.dashboard}
                 href={item.href}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                className={`rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isActive
-                    ? "bg-accent text-background shadow"
-                    : "bg-white/5 text-muted hover:bg-white/10 hover:text-foreground"
+                    ? "app-segment-active"
+                    : "app-pill hover:border-[color:var(--color-accent)] hover:text-foreground"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -160,7 +160,7 @@ export function DashboardLayout({
               <span className="text-xs font-medium uppercase tracking-wide text-muted">
                 {t("dashboard.modes.selfLabel")}
               </span>
-              <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-foreground">
+              <span className="app-badge rounded-full px-2 py-1 text-xs text-foreground">
                 {t(`dashboard.modeLabels.${mode.toLowerCase() as "self" | "aggregated" | "comparison"}`)}
               </span>
             </div>
@@ -171,10 +171,10 @@ export function DashboardLayout({
                 aria-checked={includeDescendants}
                 onClick={handleAggregatedToggle}
                 disabled={comparisonActive}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   includeDescendants
-                    ? "border-accent bg-accent/20 text-accent"
-                    : "border-white/10 text-muted hover:border-accent/60 hover:text-foreground"
+                    ? "app-pill-active"
+                    : "app-pill hover:border-[color:var(--color-accent)] hover:text-foreground"
                 } ${comparisonActive ? "opacity-60" : ""}`}
               >
                 <span className="material-symbols-outlined text-base" aria-hidden>
@@ -189,10 +189,10 @@ export function DashboardLayout({
                 role="switch"
                 aria-checked={comparisonActive}
                 onClick={handleComparisonToggle}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   comparisonActive
-                    ? "border-accent bg-accent/20 text-accent"
-                    : "border-white/10 text-muted hover:border-accent/60 hover:text-foreground"
+                    ? "app-pill-active"
+                    : "app-pill hover:border-[color:var(--color-accent)] hover:text-foreground"
                 }`}
               >
                 <span className="material-symbols-outlined text-base" aria-hidden>
@@ -207,7 +207,7 @@ export function DashboardLayout({
               <button
                 type="button"
                 onClick={onHiddenWidgetsClick}
-                className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-muted transition hover:border-accent/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className="app-pill flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium transition hover:border-[color:var(--color-accent)] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <span className="material-symbols-outlined text-base" aria-hidden>
                   visibility_off
@@ -219,7 +219,7 @@ export function DashboardLayout({
           </div>
         </div>
       </header>
-      <main className="flex flex-col gap-6 pb-10">
+      <main className="flex flex-col gap-5 pb-10">
         {children}
       </main>
     </div>

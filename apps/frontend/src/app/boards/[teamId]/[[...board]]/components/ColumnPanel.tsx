@@ -11,6 +11,35 @@ import { readBacklogSettings, readDoneSettings } from './settings-helpers';
 import { useTranslation } from '@/i18n';
 import { HelpTooltip } from '@/components/ui/help-tooltip';
 
+function getToneStyle(tone: 'info' | 'warning' | 'danger' | 'success' | 'accent'): React.CSSProperties {
+  const variable =
+    tone === 'info'
+      ? 'var(--color-info)'
+      : tone === 'warning'
+        ? 'var(--color-warning)'
+        : tone === 'danger'
+          ? 'var(--color-danger)'
+          : tone === 'success'
+            ? 'var(--color-success)'
+            : 'var(--color-accent)';
+  const soft =
+    tone === 'info'
+      ? 'var(--color-info-soft)'
+      : tone === 'warning'
+        ? 'var(--color-warning-soft)'
+        : tone === 'danger'
+          ? 'var(--color-danger-soft)'
+          : tone === 'success'
+            ? 'var(--color-success-soft)'
+            : 'var(--color-accent-soft)';
+
+  return {
+    borderColor: `color-mix(in srgb, ${variable} 40%, var(--color-border) 60%)`,
+    background: soft,
+    color: variable,
+  };
+}
+
 const DONE_DEFAULTS = Object.freeze({
   archiveAfterDays: 30,
 });
@@ -113,10 +142,10 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
     <div
       ref={ref}
       style={dragStyle}
-      className={`w-[320px] shrink-0 rounded-2xl border border-white/10 bg-card/80 p-5 shadow-lg relative ${isColumnDragging ? 'ring-2 ring-accent/40 ring-offset-2 ring-offset-background' : ''}`}
+      className={`app-section relative w-[320px] shrink-0 rounded-[1.45rem] p-5 shadow-lg ${isColumnDragging ? 'ring-2 ring-accent/40 ring-offset-2 ring-offset-background' : ''}`}
     >
       <div className={`absolute left-0 top-0 h-1 w-full rounded-t-2xl ${colorClass}`} />
-      <header className="border-b border-white/10 pb-3">
+      <header className="border-b pb-3" style={{ borderColor: 'var(--color-border-subtle)' }}>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="truncate text-lg font-semibold" title={column.name}>{column.name}</h3>
@@ -124,7 +153,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
           <div className="flex items-center gap-2">
             <div className="group relative">
               <span
-                className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted"
+                className="app-badge flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted"
                 aria-label={typeof column.wipLimit === 'number'
                   ? tBoard('columns.wip.ariaLimited', { limit: column.wipLimit })
                   : tBoard('columns.wip.ariaUnlimited')}
@@ -135,14 +164,14 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               </span>
               {helpMode && (
                 <div
-                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                   style={{ transitionDelay: '150ms' }}
                 >
-                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
                   <p>{typeof column.wipLimit === 'number'
                     ? tBoard('columns.wip.helpLimited', { limit: column.wipLimit })
                     : tBoard('columns.wip.helpUnlimited')}</p>
-                  <p className="mt-1 text-[10px] text-slate-400">{tBoard('columns.wip.helpHint')}</p>
+                  <p className="mt-1 text-[10px] text-[color:var(--color-foreground-faint)]">{tBoard('columns.wip.helpHint')}</p>
                 </div>
               )}
             </div>
@@ -152,17 +181,17 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 ref={handleRef}
                 {...activatorAttributes}
                 {...activatorListeners}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-solid border-white/20 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 cursor-grab active:cursor-grabbing"
+                className="app-icon-button flex h-8 w-8 cursor-grab items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing"
                 aria-label={tBoard('columns.reorder.aria')}
               >
                 <GripVertical className="h-4 w-4" aria-hidden="true" />
               </button>
               {helpMode && (
                 <div
-                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-52 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-52 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                   style={{ transitionDelay: '150ms' }}
                 >
-                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
                   <p>{tBoard('columns.reorder.help')}</p>
                 </div>
               )}
@@ -171,18 +200,18 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               <button
                 type="button"
                 onClick={() => (isEditing ? onCancelEdit() : onRequestEdit(column.id))}
-                className={`flex h-8 w-8 items-center justify-center rounded-full border border-solid bg-surface/70 text-muted transition hover:border-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${isEditing ? 'border-accent text-foreground' : 'border-white/20'}`}
+                className={`app-icon-button flex h-8 w-8 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${isEditing ? 'border-accent text-foreground' : ''}`}
                 aria-label={isEditing ? tBoard('columns.settings.closeAria') : tBoard('columns.settings.openAria')}
               >
                 <Settings2 className="h-4 w-4" aria-hidden="true" />
               </button>
               {helpMode && (
                 <div
-                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-60 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                   style={{ transitionDelay: '150ms' }}
                   role="tooltip"
                 >
-                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
                   <p>{isEditing ? tBoard('columns.settings.helpClose') : tBoard('columns.settings.helpOpen')}</p>
                 </div>
               )}
@@ -192,16 +221,16 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
           <div className="flex flex-wrap items-center gap-2">
             <div className="group relative">
-              <span className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 font-medium uppercase tracking-wide" role="status">
+              <span className="app-badge flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 font-medium uppercase tracking-wide" role="status">
                 <Layers className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{behaviorLabel}</span>
               </span>
               {helpMode && (
                 <div
-                  className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
                   style={{ transitionDelay: '150ms' }}
                 >
-                  <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                  <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
                   <p className="font-semibold text-accent mb-1">{behaviorLabel}</p>
                   <p>{tBoard(`columns.behavior.${column.behaviorKey}`)}</p>
                 </div>
@@ -209,7 +238,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
             </div>
             {(column.behaviorKey === 'BACKLOG' || column.behaviorKey === 'DONE') && (
               <div className="group relative">
-                <span className="flex items-center gap-1 rounded-full border border-dashed border-white/20 bg-surface/70 px-2.5 py-1 font-medium" role="status">
+                <span className="app-badge flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 font-medium" role="status">
                   <Archive className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>
                     {column.behaviorKey === 'BACKLOG' ? backlogArchiveBadge : doneArchiveBadge}
@@ -217,19 +246,19 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 </span>
                 {helpMode && (
                   <div
-                    className="pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
+                    className="app-tooltip pointer-events-none invisible absolute top-full left-0 z-[9999] mt-2 w-72 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100"
                     style={{ transitionDelay: '150ms' }}
                   >
-                    <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-white/10 bg-slate-900/95" />
+                    <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
                     {column.behaviorKey === 'BACKLOG' ? (
                       <>
                         <p>{backlogArchiveTooltip}</p>
-                        <p className="mt-1 text-[10px] text-slate-400">{tBoard('columns.archive.backlog.hint')}</p>
+                        <p className="mt-1 text-[10px] text-[color:var(--color-foreground-faint)]">{tBoard('columns.archive.backlog.hint')}</p>
                       </>
                     ) : (
                       <>
                         <p>{tBoard('columns.archive.done.tooltip', { days: doneArchiveDelay })}</p>
-                        <p className="mt-1 text-[10px] text-slate-400">{tBoard('columns.archive.done.hint')}</p>
+                        <p className="mt-1 text-[10px] text-[color:var(--color-foreground-faint)]">{tBoard('columns.archive.done.hint')}</p>
                       </>
                     )}
                   </div>
@@ -244,11 +273,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   type="button"
                   onClick={() => onShowSnoozed?.(column)}
                   disabled={!onShowSnoozed}
-                  className={`flex items-center gap-1 rounded-full border border-solid px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    viewMode === 'snoozed'
-                      ? 'border-cyan-400 bg-cyan-500/30 text-cyan-100'
-                      : 'border-white/20 bg-surface/70 text-muted hover:border-cyan-300 hover:bg-cyan-500/10 hover:text-foreground'
-                  }`}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${viewMode === 'snoozed' ? '' : 'app-badge hover:text-foreground'}`}
+                  style={viewMode === 'snoozed' ? getToneStyle('info') : undefined}
                   aria-label={tBoard(viewMode === 'snoozed' ? 'columns.snoozed.aria.hide' : 'columns.snoozed.aria.show', {
                     count: snoozedCount,
                     name: column.name,
@@ -258,13 +284,13 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   <span>{snoozedCount}</span>
                 </button>
                 <div
-                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-cyan-500/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                   style={{ transitionDelay: '200ms' }}
                 >
-                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-cyan-500/20 bg-slate-900/95" />
-                  <h4 className="mb-1 font-semibold text-cyan-300">{tBoard('columns.snoozed.title')}</h4>
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
+                  <h4 className="mb-1 font-semibold" style={{ color: 'var(--color-info)' }}>{tBoard('columns.snoozed.title')}</h4>
                   <p>{tBoard('columns.snoozed.body')}</p>
-                  <p className="mt-1 text-[10px] italic text-slate-400">{tBoard(viewMode === 'snoozed' ? 'columns.snoozed.cta.hide' : 'columns.snoozed.cta.show')}</p>
+                  <p className="mt-1 text-[10px] italic text-[color:var(--color-foreground-faint)]">{tBoard(viewMode === 'snoozed' ? 'columns.snoozed.cta.hide' : 'columns.snoozed.cta.show')}</p>
                 </div>
               </div>
             )}
@@ -274,11 +300,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   type="button"
                   onClick={() => onShowArchived?.(column)}
                   disabled={!onShowArchived}
-                  className={`flex items-center gap-1 rounded-full border border-solid px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    viewMode === 'archived'
-                      ? 'border-amber-400 bg-amber-500/30 text-amber-100'
-                      : 'border-white/20 bg-surface/70 text-muted hover:border-amber-300 hover:text-foreground'
-                  }`}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-60 ${viewMode === 'archived' ? '' : 'app-badge hover:text-foreground'}`}
+                  style={viewMode === 'archived' ? getToneStyle('warning') : undefined}
                   aria-label={tBoard(viewMode === 'archived' ? 'columns.archived.aria.hide' : 'columns.archived.aria.show', {
                     count: archivedCount,
                     name: column.name,
@@ -288,13 +311,13 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   <span>{archivedCount}</span>
                 </button>
                 <div
-                  className="pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg border border-amber-400/20 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                  className="app-tooltip pointer-events-none invisible absolute top-full right-0 z-[9999] mt-2 w-64 rounded-lg p-3 text-xs shadow-2xl opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
                   style={{ transitionDelay: '200ms' }}
                 >
-                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t border-amber-400/20 bg-slate-900/95" />
-                  <h4 className="mb-1 font-semibold text-amber-300">{tBoard('columns.archived.title')}</h4>
+                  <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 border-l border-t" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)' }} />
+                  <h4 className="mb-1 font-semibold" style={{ color: 'var(--color-warning)' }}>{tBoard('columns.archived.title')}</h4>
                   <p>{tBoard('columns.archived.body')}</p>
-                  <p className="mt-1 text-[10px] italic text-slate-400">{tBoard(viewMode === 'archived' ? 'columns.archived.cta.hide' : 'columns.archived.cta.show')}</p>
+                  <p className="mt-1 text-[10px] italic text-[color:var(--color-foreground-faint)]">{tBoard(viewMode === 'archived' ? 'columns.archived.cta.hide' : 'columns.archived.cta.show')}</p>
                 </div>
               </div>
             )}
@@ -302,7 +325,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
         </div>
       </header>
       {isEditing && editingValues && (
-        <form onSubmit={(e)=> { e.preventDefault(); onSubmitEdit(); }} className="mt-4 space-y-3 rounded-xl border border-white/10 bg-surface/60 p-4">
+        <form onSubmit={(e)=> { e.preventDefault(); onSubmitEdit(); }} className="app-toolbar mt-4 space-y-3 rounded-xl p-4">
           <HelpTooltip
             helpMode={helpMode}
             title={tBoard('help.columns.settings.name.title')}
@@ -313,7 +336,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               <input
                 value={editingValues.name}
                 onChange={e=>onFieldChange('name', e.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
               />
             </label>
           </HelpTooltip>
@@ -328,7 +351,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 value={editingValues.wip}
                 onChange={e=>onFieldChange('wip', e.target.value)}
                 placeholder={tBoard('columns.form.wipPlaceholder')}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
               />
             </label>
           </HelpTooltip>
@@ -345,9 +368,9 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   value={editingValues.backlogArchiveAfter}
                   onChange={(e) => onFieldChange('backlogArchiveAfter', e.target.value)}
                   placeholder={tBoard('columns.form.backlogArchivePlaceholder')}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
                 />
-                <p className="mt-1 text-[11px] text-slate-500">{tBoard('columns.form.backlogArchiveHint')}</p>
+                <p className="mt-1 text-[11px] text-[color:var(--color-foreground-faint)]">{tBoard('columns.form.backlogArchiveHint')}</p>
               </label>
             </HelpTooltip>
           )}
@@ -363,17 +386,17 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 <input
                   value={editingValues.doneArchiveAfter}
                   onChange={(e) => onFieldChange('doneArchiveAfter', e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm"
                 />
               </label>
             </HelpTooltip>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button disabled={editingValues.submitting} className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-background disabled:opacity-60">{tBoard('columns.form.save')}</button>
+            <button disabled={editingValues.submitting} className="rounded-full px-4 py-1.5 text-xs font-semibold disabled:opacity-60" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}>{tBoard('columns.form.save')}</button>
             <button type="button" onClick={onCancelEdit} className="text-xs text-muted hover:text-foreground">{tBoard('columns.form.cancel')}</button>
-            <button type="button" onClick={onDelete} disabled={editingValues.submitting} className="ml-auto rounded-full border border-red-500/40 px-3 py-1 text-[11px] uppercase tracking-wide text-red-300 transition hover:border-red-200 disabled:opacity-60">{tBoard('columns.form.delete')}</button>
+            <button type="button" onClick={onDelete} disabled={editingValues.submitting} className="app-danger-panel ml-auto rounded-full px-3 py-1 text-[11px] uppercase tracking-wide transition disabled:opacity-60" style={{ color: 'var(--color-danger)' }}>{tBoard('columns.form.delete')}</button>
           </div>
-          {editingValues.error && <p className="text-xs text-red-300">{editingValues.error}</p>}
+          {editingValues.error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{editingValues.error}</p>}
         </form>
       )}
       <div className="mt-4">
@@ -392,7 +415,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                   key={node.id}
                   type="button"
                   onClick={() => onOpenCard(node.id)}
-                  className="w-full rounded-xl border border-white/10 bg-surface/80 p-3 text-left transition hover:border-accent/40 hover:bg-surface"
+                  className="app-toolbar w-full rounded-xl p-3 text-left transition hover:border-accent/40 hover:bg-surface"
                 >
                   <p className="text-sm font-semibold">{node.shortId ? `#${node.shortId} ` : ''}{node.title}</p>
                   <p className="text-xs text-muted">{node.archivedAt
@@ -402,10 +425,10 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
               ))}
             </div>
           ) : (
-            <p className="min-h-[48px] rounded-xl border border-dashed border-white/10 bg-surface/40 px-4 py-4 text-sm text-muted">{tBoard('columns.archived.empty')}</p>
+            <p className="app-toolbar min-h-[48px] rounded-xl border-dashed px-4 py-4 text-sm text-muted">{tBoard('columns.archived.empty')}</p>
           )
         ) : cards.length === 0 ? (
-          <p className={`min-h-[48px] rounded-xl border border-dashed ${isOver? 'border-accent/60 bg-accent/10':'border-white/10 bg-surface/40'} px-4 py-4 text-sm text-muted`}>
+          <p className={`min-h-[48px] rounded-xl border border-dashed px-4 py-4 text-sm text-muted ${isOver ? '' : 'app-toolbar'}`} style={isOver ? { borderColor: 'color-mix(in srgb, var(--color-accent) 60%, var(--color-border) 40%)', background: 'var(--color-accent-soft)' } : undefined}>
             {viewMode === 'snoozed' ? tBoard('columns.empty.snoozed') : tBoard('columns.empty.default')}
           </p>
         ) : (

@@ -880,19 +880,46 @@ export default function BoardMindmapView({
   const hoveredNode = hoveredNodeId ? layoutResult.nodes.find(n => n.id === hoveredNodeId) : null;
   const selectedNode = selectedNodeId ? layoutResult.nodes.find(n => n.id === selectedNodeId) : null;
   const panelNode = hoveredNode ?? selectedNode;
+  const getPriorityTone = useCallback((priority: MindmapNode['priority']) => {
+    switch (priority) {
+      case 'CRITICAL':
+        return { background: 'var(--color-danger-soft)', color: 'var(--color-danger)' };
+      case 'HIGH':
+        return { background: 'var(--color-warning-soft)', color: 'var(--color-warning)' };
+      case 'MEDIUM':
+        return { background: 'color-mix(in srgb, var(--color-accent) 18%, transparent)', color: 'var(--color-accent)' };
+      case 'LOW':
+        return { background: 'var(--color-success-soft)', color: 'var(--color-success)' };
+      default:
+        return null;
+    }
+  }, []);
+
+  const getBehaviorTone = useCallback((behaviorKey: MindmapNode['behaviorKey']) => {
+    switch (behaviorKey) {
+      case 'DONE':
+        return { background: 'var(--color-success-soft)', color: 'var(--color-success)' };
+      case 'IN_PROGRESS':
+        return { background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', color: 'var(--color-accent)' };
+      case 'BLOCKED':
+        return { background: 'var(--color-danger-soft)', color: 'var(--color-danger)' };
+      default:
+        return { background: 'var(--color-warning-soft)', color: 'var(--color-warning)' };
+    }
+  }, []);
 
   if (!mounted) {
     return (
-      <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-card/60">
+      <div ref={containerRef} className="app-section relative h-full w-full overflow-hidden rounded-2xl">
         <div className="flex h-full items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0f1117]">
+    <div ref={containerRef} className="app-section relative h-full w-full overflow-hidden rounded-2xl" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--color-surface) 82%, transparent), color-mix(in srgb, var(--color-background) 94%, transparent) 58%)' }}>
       {containerWidth > 0 && containerHeight > 0 && (
         <Stage
           ref={stageRef}
@@ -954,14 +981,14 @@ export default function BoardMindmapView({
             <div
               ref={contextMenuRef}
               role="menu"
-              className="fixed z-[10000] min-w-[180px] rounded-xl border border-white/10 bg-surface/95 p-2 text-sm shadow-xl backdrop-blur"
+              className="app-floating-panel fixed z-[10000] min-w-[180px] rounded-xl p-2 text-sm shadow-xl"
               style={{ top: clampedContextMenuPos.y, left: clampedContextMenuPos.x }}
             >
             <button
               type="button"
               role="menuitem"
               onClick={() => { closeContextMenu(); centerOnNode(contextMenu.nodeId); }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+              className="app-toolbar flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
             >
               <Home size={14} /> <span>{t('mindmap.contextMenu.centerOnNode')}</span>
             </button>
@@ -969,7 +996,7 @@ export default function BoardMindmapView({
               type="button"
               role="menuitem"
               onClick={() => { closeContextMenu(); onOpenTask(contextMenu.nodeId); }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+              className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
             >
               <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[12px]">✏️</span> <span>{t('mindmap.contextMenu.edit')}</span>
             </button>
@@ -978,7 +1005,7 @@ export default function BoardMindmapView({
                 type="button"
                 role="menuitem"
                 onClick={() => { closeContextMenu(); void handleCreateChildTask(contextMenu.nodeId); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
               >
                 <Plus size={14} /> <span>{t('mindmap.contextMenu.createChild')}</span>
               </button>
@@ -988,7 +1015,7 @@ export default function BoardMindmapView({
                 type="button"
                 role="menuitem"
                 onClick={() => { closeContextMenu(); requestExpand(contextMenu.nodeId); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
               >
                 <ChevronsUpDown size={14} /> <span>{cmNode.collapsed ? t('mindmap.contextMenu.expand') : t('mindmap.contextMenu.collapse')}</span>
               </button>
@@ -998,7 +1025,7 @@ export default function BoardMindmapView({
                 type="button"
                 role="menuitem"
                 onClick={() => { closeContextMenu(); handleNavigateChild(contextMenu.nodeId); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition hover:bg-white/10"
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
               >
                 <ArrowUpLeft size={14} className="rotate-180" /> <span>{t('mindmap.contextMenu.openChildBoard')}</span>
               </button>
@@ -1011,7 +1038,7 @@ export default function BoardMindmapView({
 
       {/* Kanban-style card preview (bottom-left) */}
       {panelNode && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10 w-80 max-w-[calc(100%-2rem)] rounded-xl border border-white/10 bg-card/80 text-foreground shadow-2xl backdrop-blur">
+        <div className="app-panel-strong pointer-events-none absolute bottom-4 left-4 z-10 w-80 max-w-[calc(100%-2rem)] rounded-xl text-foreground shadow-2xl">
           {/* Header */}
           <div className="flex items-start justify-between px-4 pt-3 pb-2">
             <div className="flex items-center gap-2">
@@ -1019,25 +1046,13 @@ export default function BoardMindmapView({
                 <span className="text-xs font-semibold text-muted">#{panelNode.shortId}</span>
               )}
               {panelNode.priority !== 'NONE' && (
-                <span className={[
-                  'inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none',
-                  panelNode.priority === 'CRITICAL' ? 'bg-red-900 text-red-300' :
-                  panelNode.priority === 'HIGH' ? 'bg-orange-900 text-orange-300' :
-                  panelNode.priority === 'MEDIUM' ? 'bg-yellow-900 text-yellow-300' :
-                  'bg-green-900 text-green-300',
-                ].join(' ')}>
+                <span className="app-badge inline-flex px-2 py-0.5 text-[11px] font-semibold leading-none" style={getPriorityTone(panelNode.priority) ?? undefined}>
                   {t(`mindmap.priority.${panelNode.priority.toLowerCase()}`)}
                 </span>
               )}
             </div>
             {panelNode.behaviorKey && (
-              <span className={[
-                'inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full leading-none',
-                panelNode.behaviorKey === 'DONE' ? 'bg-emerald-900 text-emerald-300' :
-                panelNode.behaviorKey === 'IN_PROGRESS' ? 'bg-sky-900 text-sky-300' :
-                panelNode.behaviorKey === 'BLOCKED' ? 'bg-rose-900 text-rose-300' :
-                'bg-amber-900 text-amber-300',
-              ].join(' ')}>
+              <span className="app-badge inline-flex px-2 py-0.5 text-[10px] font-semibold leading-none" style={getBehaviorTone(panelNode.behaviorKey)}>
                 {panelNode.behaviorKey.replace('_', ' ')}
               </span>
             )}
@@ -1049,7 +1064,7 @@ export default function BoardMindmapView({
               <p className="text-xs leading-snug text-muted line-clamp-2">{panelNode.description}</p>
             )}
           </div>
-          <div className="mx-4 h-px bg-white/10" />
+          <div className="mx-4 h-px" style={{ background: 'var(--color-border-subtle)' }} />
           {/* Footer */}
           <div className="px-4 py-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
@@ -1058,16 +1073,17 @@ export default function BoardMindmapView({
                   {panelNode.assignees.slice(0, 3).map(a => (
                     <div
                       key={a.id}
-                      className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-blue-900"
+                      className="flex h-6 w-6 items-center justify-center rounded-full ring-2"
+                      style={{ background: 'color-mix(in srgb, var(--color-accent) 24%, var(--color-surface))', color: 'var(--color-accent)', ringColor: 'var(--color-background)' } as React.CSSProperties}
                       title={a.displayName}
                     >
-                      <span className="text-[10px] font-bold text-blue-200">
+                      <span className="text-[10px] font-bold">
                         {a.displayName.split(/\s+/).map(p => p.charAt(0)).join('').toUpperCase().slice(0, 2)}
                       </span>
                     </div>
                   ))}
                   {panelNode.assignees.length > 3 && (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-surface/70">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2" style={{ background: 'color-mix(in srgb, var(--color-surface) 72%, transparent)', ringColor: 'var(--color-background)' } as React.CSSProperties}>
                       <span className="text-[9px] font-semibold text-muted">+{panelNode.assignees.length - 3}</span>
                     </div>
                   )}
@@ -1078,11 +1094,13 @@ export default function BoardMindmapView({
                 if (Number.isNaN(dueDate.getTime())) return null;
                 const today = new Date();
                 const diff = Math.round((new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000);
-                const cls = diff <= 0 ? 'bg-red-500/20 border-red-500/30 text-red-300' :
-                  diff <= 3 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' :
-                  'bg-teal-500/20 border-teal-500/30 text-teal-300';
+                const tone = diff <= 0
+                  ? { background: 'var(--color-danger-soft)', borderColor: 'color-mix(in srgb, var(--color-danger) 30%, transparent)', color: 'var(--color-danger)' }
+                  : diff <= 3
+                    ? { background: 'var(--color-warning-soft)', borderColor: 'color-mix(in srgb, var(--color-warning) 30%, transparent)', color: 'var(--color-warning)' }
+                    : { background: 'var(--color-success-soft)', borderColor: 'color-mix(in srgb, var(--color-success) 30%, transparent)', color: 'var(--color-success)' };
                 return (
-                  <span className={`inline-flex min-w-[2.5rem] justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+                  <span className="inline-flex min-w-[2.5rem] justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold" style={tone}>
                     {diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '0'}
                   </span>
                 );
@@ -1090,7 +1108,7 @@ export default function BoardMindmapView({
             </div>
             <div className="flex items-center gap-3">
               {panelNode.progress > 0 && (
-                <div className="flex h-5 min-w-[38px] items-center justify-center rounded-md border border-white/10 bg-surface/70 text-[10px] font-semibold text-foreground">
+                <div className="app-toolbar flex h-5 min-w-[38px] items-center justify-center rounded-md text-[10px] font-semibold text-foreground">
                   {Math.round(panelNode.progress)}%
                 </div>
               )}
@@ -1099,13 +1117,13 @@ export default function BoardMindmapView({
               )}
               {panelNode.counts && (
                 <div className="flex items-center gap-[1px] text-[10px] font-mono">
-                  <span className="text-amber-400">{panelNode.counts.backlog}</span>
+                  <span style={{ color: 'var(--color-warning)' }}>{panelNode.counts.backlog}</span>
                   <span className="text-muted">.</span>
-                  <span className="text-sky-400">{panelNode.counts.inProgress}</span>
+                  <span style={{ color: 'var(--color-accent)' }}>{panelNode.counts.inProgress}</span>
                   <span className="text-muted">.</span>
-                  <span className="text-red-400">{panelNode.counts.blocked}</span>
+                  <span style={{ color: 'var(--color-danger)' }}>{panelNode.counts.blocked}</span>
                   <span className="text-muted">.</span>
-                  <span className="text-emerald-400">{panelNode.counts.done}</span>
+                  <span style={{ color: 'var(--color-success)' }}>{panelNode.counts.done}</span>
                 </div>
               )}
             </div>
@@ -1116,11 +1134,11 @@ export default function BoardMindmapView({
       {/* Filter panel — supprimé : la recherche est dans BoardFilterBar, les statuts dans le rightSlot */}
 
       {/* Toolbar (DOM) */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-full border border-white/10 bg-surface/90 px-2 py-1 shadow-xl backdrop-blur">
+      <div className="app-floating-panel absolute bottom-4 right-4 flex items-center gap-1 rounded-full px-2 py-1 shadow-xl">
         <button
           type="button"
           onClick={() => adjustZoom(0.2)}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.zoomIn')}
         >
           <ZoomIn size={16} />
@@ -1128,16 +1146,16 @@ export default function BoardMindmapView({
         <button
           type="button"
           onClick={() => adjustZoom(-0.2)}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.zoomOut')}
         >
           <ZoomOut size={16} />
         </button>
-        <div className="mx-1 h-4 w-px bg-white/10" />
+        <div className="mx-1 h-4 w-px" style={{ background: 'var(--color-border-subtle)' }} />
         <button
           type="button"
           onClick={fitToContent}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.fitToContent')}
         >
           <Maximize2 size={16} />
@@ -1145,7 +1163,7 @@ export default function BoardMindmapView({
         <button
           type="button"
           onClick={centerOnRoot}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.centerRoot')}
         >
           <Home size={16} />
@@ -1154,7 +1172,7 @@ export default function BoardMindmapView({
           <button
             type="button"
             onClick={onOpenParentBoard}
-            className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+            className="app-icon-button rounded-full p-1.5 text-muted transition"
             title={t('mindmap.toolbar.goToParent')}
           >
             <ArrowUpLeft size={16} />
@@ -1166,7 +1184,7 @@ export default function BoardMindmapView({
             onClick={() => {
               void handleQuickCreate();
             }}
-            className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+            className="app-icon-button rounded-full p-1.5 text-muted transition"
             title={t('mindmap.toolbar.quickAdd')}
           >
             <Plus size={16} />
@@ -1175,7 +1193,7 @@ export default function BoardMindmapView({
         <button
           type="button"
           onClick={expandOneLevel}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.expandAll')}
         >
           <ChevronsUpDown size={16} />
@@ -1183,12 +1201,12 @@ export default function BoardMindmapView({
         <button
           type="button"
           onClick={collapseOneLevel}
-          className="rounded-full p-1.5 text-muted transition hover:text-foreground"
+          className="app-icon-button rounded-full p-1.5 text-muted transition"
           title={t('mindmap.toolbar.collapseAll')}
         >
           <ChevronsUpDown size={16} className="rotate-90" />
         </button>
-        <div className="mx-1 h-4 w-px bg-white/10" />
+        <div className="mx-1 h-4 w-px" style={{ background: 'var(--color-border-subtle)' }} />
       </div>
 
       {/* a11y live region */}

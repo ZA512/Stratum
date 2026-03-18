@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const vulcanEmber: ThemeDefinition = {
+const vulcanEmber = defineTheme({
   id: "vulcan-ember",
   tone: "dark",
   nameKey: "settings.theme.names.vulcanEmber",
@@ -29,6 +29,6 @@ const vulcanEmber: ThemeDefinition = {
     card: "#26211C",
     accent: "#FF7A00",
   },
-};
+});
 
 export default vulcanEmber;

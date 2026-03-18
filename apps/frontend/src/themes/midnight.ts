@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const midnight: ThemeDefinition = {
+const midnight = defineTheme({
   id: "midnight",
   tone: "dark",
   nameKey: "settings.theme.names.midnight",
@@ -29,6 +29,6 @@ const midnight: ThemeDefinition = {
     card: "#1f2937",
     accent: "#22d3ee",
   },
-};
+});
 
 export default midnight;

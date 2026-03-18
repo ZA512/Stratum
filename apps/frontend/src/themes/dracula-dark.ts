@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const draculaDark: ThemeDefinition = {
+const draculaDark = defineTheme({
   id: "dracula-dark",
   tone: "dark",
   nameKey: "settings.theme.names.draculaDark",
@@ -29,6 +29,6 @@ const draculaDark: ThemeDefinition = {
     card: "#3a3c4f",
     accent: "#bd93f9",
   },
-};
+});
 
 export default draculaDark;

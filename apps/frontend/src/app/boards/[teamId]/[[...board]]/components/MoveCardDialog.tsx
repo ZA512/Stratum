@@ -463,11 +463,12 @@ export function MoveCardDialog({
           disabled={!canSelect}
           className={`flex w-full items-center gap-2 rounded-lg py-1.5 px-2 text-left text-sm transition ${
             isSelected
-              ? 'bg-accent/20 text-foreground font-medium'
+              ? 'font-medium'
               : canSelect
-              ? 'text-foreground hover:bg-white/5'
+              ? 'text-foreground'
               : 'text-muted/60 cursor-not-allowed'
           }`}
+          style={isSelected ? { background: 'var(--color-accent-soft)', color: 'var(--color-foreground)' } : canSelect ? undefined : undefined}
           style={{ paddingLeft: `${8 + level * 16}px` }}
         >
           {option.hasChildren ? (
@@ -500,7 +501,7 @@ export function MoveCardDialog({
   };
 
   const content = (
-    <div className={variant === 'modal' ? 'w-full max-w-4xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl' : 'rounded-2xl border border-white/10 bg-surface/70 p-6'}>
+    <div className={variant === 'modal' ? 'app-panel-strong w-full max-w-4xl rounded-2xl p-6 shadow-2xl' : 'app-panel rounded-2xl p-6'}>
       <h2 id="move-dialog-title" className="text-lg font-semibold">
         {tBoard('moveDialog.title', { title: node.title })}
       </h2>
@@ -509,12 +510,12 @@ export function MoveCardDialog({
       </p>
 
       {nodesLoading ? (
-        <p className="mt-6 text-sm text-accent">{tBoard('moveDialog.loadingHierarchy')}</p>
+        <p className="mt-6 text-sm" style={{ color: 'var(--color-accent)' }}>{tBoard('moveDialog.loadingHierarchy')}</p>
       ) : nodesError ? (
-        <p className="mt-6 text-sm text-rose-300">{nodesError}</p>
+        <p className="mt-6 text-sm" style={{ color: 'var(--color-danger)' }}>{nodesError}</p>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-[1fr_minmax(0,200px)]">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="app-toolbar rounded-xl p-3">
             <div className="flex items-center gap-2 mb-3">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
@@ -523,7 +524,7 @@ export function MoveCardDialog({
                   placeholder={tBoard('moveDialog.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="app-input w-full rounded-lg py-1.5 pl-9 pr-3 text-sm"
                 />
               </div>
             </div>
@@ -545,12 +546,12 @@ export function MoveCardDialog({
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="app-toolbar rounded-xl p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
               {tBoard('moveDialog.targetColumn')}
             </p>
             {columnsLoading ? (
-              <p className="mt-3 text-sm text-accent">{tBoard('moveDialog.columnsLoading')}</p>
+              <p className="mt-3 text-sm" style={{ color: 'var(--color-accent)' }}>{tBoard('moveDialog.columnsLoading')}</p>
             ) : selectedNodeId ? (
               selectedColumns && selectedColumns.length > 0 ? (
                 <ul className="space-y-2">
@@ -563,9 +564,10 @@ export function MoveCardDialog({
                           onClick={() => setSelectedColumnId(column.id)}
                           className={`flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left text-sm transition ${
                             isSelected
-                              ? 'border-accent bg-accent/10 text-foreground'
-                              : 'border-white/10 text-muted hover:border-accent/60 hover:text-foreground'
+                              ? 'text-foreground'
+                              : 'text-muted hover:text-foreground'
                           }`}
+                          style={isSelected ? { borderColor: 'color-mix(in srgb, var(--color-accent) 42%, transparent)', background: 'var(--color-accent-soft)' } : { borderColor: 'var(--color-border-subtle)' }}
                         >
                           <span className="truncate text-xs">{column.name}</span>
                           <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">
@@ -583,14 +585,14 @@ export function MoveCardDialog({
               <p className="mt-3 text-xs text-muted">{tBoard('moveDialog.selectTaskFirst')}</p>
             )}
             {columnsError && (
-              <p className="mt-3 text-xs text-rose-300">{columnsError}</p>
+              <p className="mt-3 text-xs" style={{ color: 'var(--color-danger)' }}>{columnsError}</p>
             )}
           </div>
         </div>
       )}
 
       {formError && !nodesError && (
-        <p className="mt-4 text-sm text-rose-300">{formError}</p>
+        <p className="mt-4 text-sm" style={{ color: 'var(--color-danger)' }}>{formError}</p>
       )}
 
       <div className="mt-6 flex flex-wrap justify-end gap-2">
@@ -598,7 +600,7 @@ export function MoveCardDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-muted transition hover:border-accent hover:text-foreground"
+            className="app-pill rounded-full px-4 py-2 text-sm font-semibold text-muted transition hover:text-foreground"
           >
             {tBoard('moveDialog.cancel')}
           </button>
@@ -612,9 +614,10 @@ export function MoveCardDialog({
               disabled={disableConfirm}
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                 disableConfirm
-                  ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted'
-                  : 'border-accent/60 bg-accent/20 text-foreground hover:border-accent hover:bg-accent/30'
+                  ? 'cursor-not-allowed text-muted'
+                  : 'text-foreground'
               }`}
+              style={disableConfirm ? { borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 42%, transparent)' } : { borderColor: 'color-mix(in srgb, var(--color-accent) 42%, transparent)', background: 'var(--color-accent-soft)' }}
             >
               {submitting ? tBoard('moveDialog.confirmLoading') : action.label}
             </button>
@@ -626,9 +629,10 @@ export function MoveCardDialog({
             disabled={disableConfirm}
             className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
               disableConfirm
-                ? 'cursor-not-allowed border-white/10 bg-white/5 text-muted'
-                : 'border-accent/60 bg-accent/20 text-foreground hover:border-accent hover:bg-accent/30'
+                ? 'cursor-not-allowed text-muted'
+                : 'text-foreground'
             }`}
+            style={disableConfirm ? { borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 42%, transparent)' } : { borderColor: 'color-mix(in srgb, var(--color-accent) 42%, transparent)', background: 'var(--color-accent-soft)' }}
           >
             {submitting ? tBoard('moveDialog.confirmLoading') : tBoard('moveDialog.confirm')}
           </button>
@@ -643,7 +647,8 @@ export function MoveCardDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+      style={{ background: 'color-mix(in srgb, var(--color-overlay) 68%, transparent)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="move-dialog-title"

@@ -133,22 +133,23 @@ export function AgentChatPanel({
     <div className="fixed inset-0 z-50 flex items-end justify-end p-4 sm:items-stretch">
       <button
         type="button"
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ background: "color-mix(in srgb, var(--color-overlay) 76%, transparent)" }}
         aria-label="Fermer le chat agent"
         onClick={onClose}
       />
-      <div className="relative z-10 flex h-[70vh] w-full max-w-md flex-col rounded-2xl border border-white/10 bg-surface shadow-2xl sm:h-full sm:max-h-[600px]">
+      <div className="app-panel-strong relative z-10 flex h-[70vh] w-full max-w-md flex-col rounded-[1.5rem] shadow-2xl sm:h-full sm:max-h-[600px]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-[color:var(--color-border-subtle)] px-4 py-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">Agent IA</h3>
-            <div className="flex rounded-full border border-white/10 p-0.5">
+            <div className="app-segmented flex rounded-full p-0.5">
               <button
                 type="button"
                 onClick={() => setMode('chat')}
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${
                   mode === 'chat'
-                    ? 'bg-white/10 text-foreground'
+                    ? 'app-segment-active text-[color:var(--color-accent-foreground)]'
                     : 'text-muted hover:text-foreground'
                 }`}
               >
@@ -159,7 +160,7 @@ export function AgentChatPanel({
                 onClick={() => setMode('command')}
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${
                   mode === 'command'
-                    ? 'bg-accent/20 text-accent'
+                    ? 'app-segment-active text-[color:var(--color-accent-foreground)]'
                     : 'text-muted hover:text-foreground'
                 }`}
               >
@@ -172,7 +173,7 @@ export function AgentChatPanel({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1 text-muted transition hover:text-foreground"
+              className="app-icon-button"
               aria-label="Fermer"
             >
               ✕
@@ -203,9 +204,10 @@ export function AgentChatPanel({
               <div
                 className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
                   msg.role === 'user'
-                    ? 'bg-accent/20 text-foreground'
-                    : 'bg-white/5 text-foreground/90'
+                    ? 'app-pill text-foreground'
+                    : 'app-section text-foreground/90'
                 }`}
+                style={msg.role === 'user' ? { background: 'color-mix(in srgb, var(--color-accent-soft) 86%, var(--color-surface-raised) 14%)' } : undefined}
               >
                 {msg.mode === 'command' && msg.role === 'user' && (
                   <span className="mb-1 block text-[10px] font-medium text-accent">
@@ -232,7 +234,7 @@ export function AgentChatPanel({
                     onClick={() =>
                       handleSwitchToCommand(msg.suggestedPrompt!)
                     }
-                    className="mt-2 block rounded-lg border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] text-accent transition hover:bg-accent/20"
+                    className="app-pill mt-2 block rounded-lg px-2 py-1 text-[11px] text-accent transition hover:bg-accent/10"
                   >
                     Passer en mode command: &quot;{msg.suggestedPrompt}&quot;
                   </button>
@@ -243,7 +245,7 @@ export function AgentChatPanel({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-xl bg-white/5 px-3 py-2">
+              <div className="app-section max-w-[85%] rounded-xl px-3 py-2">
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-accent/60 [animation-delay:0ms]" />
                   <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-accent/60 [animation-delay:150ms]" />
@@ -255,7 +257,7 @@ export function AgentChatPanel({
         </div>
 
         {/* Input */}
-        <div className="border-t border-white/10 px-4 py-3">
+        <div className="border-t border-[color:var(--color-border-subtle)] px-4 py-3">
           <div className="flex items-end gap-2">
             <textarea
               value={input}
@@ -267,13 +269,14 @@ export function AgentChatPanel({
                   ? 'Posez une question...'
                   : 'Decrivez une action...'
               }
-              className="flex-1 resize-none rounded-lg border border-white/10 bg-surface/70 px-3 py-2 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+              className="app-input flex-1 resize-none rounded-lg px-3 py-2 text-sm text-foreground"
             />
             <button
               type="button"
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
-              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}
             >
               {mode === 'command' ? '/' : '↑'}
             </button>

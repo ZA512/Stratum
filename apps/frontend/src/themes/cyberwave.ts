@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const cyberwave: ThemeDefinition = {
+const cyberwave = defineTheme({
   id: "cyberwave",
   tone: "dark",
   nameKey: "settings.theme.names.cyberwave",
@@ -29,6 +29,6 @@ const cyberwave: ThemeDefinition = {
     card: "#16063a",
     accent: "#f72585",
   },
-};
+});
 
 export default cyberwave;

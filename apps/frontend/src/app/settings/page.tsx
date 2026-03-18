@@ -30,6 +30,12 @@ import { persistExpertMode, readStoredExpertMode } from "@/features/boards/board
 
 type SettingsTab = "appearance" | "ai" | "raciTeams" | "data";
 
+function buildThemePreviewStyle(theme: ThemeDefinition): React.CSSProperties {
+  return {
+    background: `radial-gradient(circle at top left, ${theme.cssVars["--color-page-gradient-spot"]}, transparent 42%), linear-gradient(160deg, ${theme.cssVars["--color-page-gradient-start"]}, ${theme.cssVars["--color-page-gradient-end"]})`,
+  };
+}
+
 export default function SettingsPage() {
   const { t, locale, availableLocales, setLocale } = useTranslation();
   const { accessToken } = useAuth();
@@ -412,7 +418,7 @@ export default function SettingsPage() {
 
         {activeTab === "appearance" && (
           <div className="flex flex-col gap-6">
-            <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+            <section className="app-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.theme.title")}</h2>
               <p className="mt-2 text-sm text-muted">{t("settings.theme.description")}</p>
 
@@ -425,11 +431,12 @@ export default function SettingsPage() {
                       key={theme.id}
                       type="button"
                       onClick={() => handleThemeSelect(theme)}
-                      className={`group relative flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                      className={`group relative flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                         isActive
-                          ? "border-accent/60 bg-accent/10 text-foreground shadow-lg"
-                          : "border-white/15 bg-surface/70 text-foreground hover:border-accent/40 hover:bg-surface"
+                          ? "app-panel"
+                          : "app-toolbar hover:border-[color:var(--color-accent)]"
                       }`}
+                      style={isActive ? { borderColor: 'color-mix(in srgb, var(--color-accent) 46%, var(--color-border) 54%)', background: 'var(--color-accent-soft)' } : undefined}
                       aria-pressed={isActive}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -438,7 +445,7 @@ export default function SettingsPage() {
                           <p className="mt-1 text-xs text-muted">{t(theme.descriptionKey)}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          <span className="app-pill rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
                             {toneLabel}
                           </span>
                           {isActive ? (
@@ -446,27 +453,34 @@ export default function SettingsPage() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <span
-                          className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
-                          style={{ backgroundColor: theme.preview.background }}
-                          aria-hidden
-                        />
-                        <span
-                          className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
-                          style={{ backgroundColor: theme.preview.surface }}
-                          aria-hidden
-                        />
-                        <span
-                          className="h-12 flex-1 rounded-xl border border-white/10 shadow-sm"
-                          style={{ backgroundColor: theme.preview.card }}
-                          aria-hidden
-                        />
-                        <span
-                          className="h-12 w-12 rounded-xl border border-white/10 shadow-sm"
-                          style={{ backgroundColor: theme.preview.accent }}
-                          aria-hidden
-                        />
+                      <div className="overflow-hidden rounded-2xl border shadow-sm" style={{ borderColor: theme.cssVars["--color-border-subtle"] }}>
+                        <div className="p-3" style={buildThemePreviewStyle(theme)}>
+                          <div className="flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: theme.cssVars["--color-border-subtle"], backgroundColor: theme.cssVars["--color-surface"] }}>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: theme.cssVars["--color-foreground-faint"] }}>Board shell</p>
+                              <p className="text-sm font-semibold" style={{ color: theme.cssVars["--color-foreground"] }}>Projet Racine</p>
+                            </div>
+                            <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: theme.cssVars["--color-accent-soft"], color: theme.cssVars["--color-foreground"] }}>Actif</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-[1.45fr_0.9fr] gap-2">
+                            <div className="rounded-2xl border p-3" style={{ borderColor: theme.cssVars["--color-border-subtle"], backgroundColor: theme.cssVars["--color-card"] }}>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: theme.cssVars["--color-foreground-faint"] }}>Rapport</p>
+                              <p className="mt-1 text-sm font-semibold" style={{ color: theme.cssVars["--color-foreground"] }}>6 événements</p>
+                              <div className="mt-3 rounded-xl px-3 py-2" style={{ backgroundColor: theme.cssVars["--color-success-soft"], color: theme.cssVars["--color-foreground"] }}>Commentaire ajouté</div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="rounded-2xl border p-3" style={{ borderColor: theme.cssVars["--color-border-subtle"], backgroundColor: theme.cssVars["--color-card"] }}>
+                                <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: theme.cssVars["--color-foreground-faint"] }}>Accent</p>
+                                <div className="mt-2 h-8 rounded-xl" style={{ backgroundColor: theme.cssVars["--color-accent"] }} />
+                              </div>
+                              <div className="rounded-2xl border p-3" style={{ borderColor: theme.cssVars["--color-border-subtle"], backgroundColor: theme.cssVars["--color-surface"] }}>
+                                <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: theme.cssVars["--color-foreground-faint"] }}>Texte</p>
+                                <p className="mt-1 text-sm font-semibold" style={{ color: theme.cssVars["--color-foreground"] }}>Aa</p>
+                                <p className="text-xs" style={{ color: theme.cssVars["--color-foreground-subtle"] }}>Subtil</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </button>
                   );
@@ -474,7 +488,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/10 bg-card/70 p-6 shadow-md">
+            <section className="app-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.breadcrumb.title")}</h2>
               <p className="mt-2 text-sm text-muted">{t("settings.breadcrumb.description")}</p>
 
@@ -487,11 +501,12 @@ export default function SettingsPage() {
                       key={variant}
                       type="button"
                       onClick={() => handleBreadcrumbVariantChange(variant)}
-                      className={`group flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                      className={`group flex h-full flex-col gap-4 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                         isActive
-                          ? "border-accent/60 bg-accent/10 text-foreground shadow-lg"
-                          : "border-white/15 bg-surface/70 text-foreground hover:border-accent/40 hover:bg-surface"
+                          ? "app-panel"
+                          : "app-toolbar hover:border-[color:var(--color-accent)]"
                       }`}
+                      style={isActive ? { borderColor: 'color-mix(in srgb, var(--color-accent) 46%, var(--color-border) 54%)', background: 'var(--color-accent-soft)' } : undefined}
                       aria-pressed={isActive}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -508,7 +523,7 @@ export default function SettingsPage() {
                         ) : null}
                       </div>
 
-                      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-3">
+                      <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 74%, transparent)' }}>
                         {variant === "fractal" ? (
                           <div className="space-y-2 text-[11px] uppercase tracking-[0.08em] text-foreground/90">
                             <div className="w-full border-t border-accent/40 pt-2">Projet racine</div>

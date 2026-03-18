@@ -57,8 +57,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card/80 p-8 shadow-xl backdrop-blur">
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="app-panel-strong w-full max-w-md rounded-[1.8rem] p-8 shadow-xl">
         <div className="mb-6 space-y-2 text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-accent">Stratum</p>
           <h1 className="text-2xl font-semibold">{t("register.title")}</h1>
@@ -72,7 +72,7 @@ export default function RegisterPage() {
               type="text"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
+              className="app-input w-full rounded-lg px-4 py-2 text-foreground"
               placeholder={t("register.displayNamePlaceholder")}
               autoComplete="name"
               disabled={isSubmitting || success}
@@ -86,7 +86,7 @@ export default function RegisterPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
+              className="app-input w-full rounded-lg px-4 py-2 text-foreground"
               placeholder="votre@email.com"
               autoComplete="email"
               disabled={isSubmitting || success}
@@ -100,7 +100,7 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
+              className="app-input w-full rounded-lg px-4 py-2 text-foreground"
               placeholder="********"
               autoComplete="new-password"
               disabled={isSubmitting || success}
@@ -114,7 +114,7 @@ export default function RegisterPage() {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-surface px-4 py-2 text-foreground outline-none transition focus:border-accent"
+              className="app-input w-full rounded-lg px-4 py-2 text-foreground"
               placeholder="********"
               autoComplete="new-password"
               disabled={isSubmitting || success}
@@ -123,11 +123,11 @@ export default function RegisterPage() {
           </label>
 
           {error ? (
-            <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>
+            <p className="app-danger-panel rounded-lg px-3 py-2 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>
           ) : null}
 
           {success ? (
-            <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+            <p className="app-success-panel rounded-lg px-3 py-2 text-sm" style={{ color: "var(--color-success)" }}>
               {t("register.success")}
             </p>
           ) : null}
@@ -136,7 +136,8 @@ export default function RegisterPage() {
             type="button"
             onClick={() => doSubmit()}
             disabled={isSubmitting || success}
-            className="w-full rounded-full bg-accent px-4 py-3 text-sm font-semibold text-background transition hover:bg-accent-strong disabled:opacity-60"
+            className="w-full rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-60"
+            style={{ background: "var(--color-accent)", color: "var(--color-accent-foreground)" }}
           >
             {isSubmitting ? t("register.submitting") : t("register.submit")}
           </button>

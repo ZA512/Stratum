@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const materialLight: ThemeDefinition = {
+const materialLight = defineTheme({
   id: "material-light",
   tone: "light",
   nameKey: "settings.theme.names.materialLight",
@@ -29,6 +29,6 @@ const materialLight: ThemeDefinition = {
     card: "#e7eef8",
     accent: "#0b7285",
   },
-};
+});
 
 export default materialLight;

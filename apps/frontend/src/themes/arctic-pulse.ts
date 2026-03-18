@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const arcticPulse: ThemeDefinition = {
+const arcticPulse = defineTheme({
   id: "arctic-pulse",
   tone: "light",
   nameKey: "settings.theme.names.arcticPulse",
@@ -29,6 +29,6 @@ const arcticPulse: ThemeDefinition = {
     card: "#E7F0FF",
     accent: "#0066FF",
   },
-};
+});
 
 export default arcticPulse;

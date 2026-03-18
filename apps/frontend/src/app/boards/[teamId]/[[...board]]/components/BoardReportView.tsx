@@ -195,12 +195,57 @@ function formatTimeLabel(value: string): string {
   });
 }
 
-function getEventTone(eventType: string): string {
-  if (eventType.includes('COMMENT')) return 'border-emerald-400/25 bg-emerald-500/10';
-  if (eventType.includes('MOVED')) return 'border-sky-400/25 bg-sky-500/10';
-  if (eventType.includes('UPDATED')) return 'border-amber-400/25 bg-amber-500/10';
-  if (eventType.includes('ARCHIVED') || eventType.includes('DELETED')) return 'border-rose-400/25 bg-rose-500/10';
-  return 'border-white/10 bg-card/70';
+function getEventToneStyle(eventType: string): React.CSSProperties {
+  if (eventType.includes('COMMENT')) {
+    return {
+      borderColor: 'var(--color-success)',
+      background: 'var(--color-success-soft)',
+    };
+  }
+  if (eventType.includes('MOVED')) {
+    return {
+      borderColor: 'var(--color-info)',
+      background: 'var(--color-info-soft)',
+    };
+  }
+  if (eventType.includes('UPDATED')) {
+    return {
+      borderColor: 'var(--color-warning)',
+      background: 'var(--color-warning-soft)',
+    };
+  }
+  if (eventType.includes('ARCHIVED') || eventType.includes('DELETED')) {
+    return {
+      borderColor: 'var(--color-danger)',
+      background: 'var(--color-danger-soft)',
+    };
+  }
+  return {
+    borderColor: 'var(--color-border-subtle)',
+    background: 'color-mix(in srgb, var(--color-card) 88%, transparent)',
+  };
+}
+
+function getSummaryToneStyle(
+  tone: 'accent' | 'success' | 'info' | 'warning' | 'danger' | 'neutral',
+): React.CSSProperties {
+  const variable =
+    tone === 'accent'
+      ? 'var(--color-accent)'
+      : tone === 'success'
+        ? 'var(--color-success)'
+        : tone === 'info'
+          ? 'var(--color-info)'
+          : tone === 'warning'
+            ? 'var(--color-warning)'
+            : tone === 'danger'
+              ? 'var(--color-danger)'
+              : 'var(--color-border-strong)';
+
+  return {
+    borderColor: `color-mix(in srgb, ${variable} 34%, var(--color-border) 66%)`,
+    background: `linear-gradient(135deg, color-mix(in srgb, ${variable} 18%, var(--color-card) 82%), color-mix(in srgb, ${variable} 6%, var(--color-surface) 94%))`,
+  };
 }
 
 export function BoardReportView({
@@ -277,15 +322,15 @@ export function BoardReportView({
   const groups = groupReportItems(report?.items ?? [], filters.groupBy);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(244,114,36,0.18),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(17,24,39,0.92))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-4">
+      <section className="app-panel-strong rounded-[26px] p-4 md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-200/70">
+            <p className="app-kicker">
               {t('report.eyebrow')}
             </p>
-            <h2 className="font-serif text-3xl text-white">{t('report.title', { boardName })}</h2>
-            <p className="max-w-2xl text-sm text-slate-300">{t('report.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-foreground md:text-[1.8rem]">{t('report.title', { boardName })}</h2>
+            <p className="max-w-2xl text-sm text-[color:var(--color-foreground-subtle)]">{t('report.subtitle')}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(['24h', '7d', '14d', '21d', '28d', 'current-week', 'previous-week', 'current-month', 'previous-month'] as ReportPreset[]).map((preset) => (
@@ -296,10 +341,10 @@ export function BoardReportView({
                   const range = getPresetRange(preset);
                   setFilters((current) => ({ ...current, preset, from: range.from, to: range.to }));
                 }}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                   filters.preset === preset
-                    ? 'border-orange-300 bg-orange-300 text-slate-950'
-                    : 'border-white/10 bg-white/5 text-slate-200 hover:border-orange-300/40 hover:text-white'
+                    ? 'app-pill-active'
+                    : 'app-pill hover:border-[color:var(--color-accent)] hover:text-foreground'
                 }`}
               >
                 {t(`report.presets.${preset}`)}
@@ -308,41 +353,43 @@ export function BoardReportView({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
-          <label className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+        <div className="mt-4 grid gap-2.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
+          <label className="app-toolbar flex flex-col gap-1 rounded-2xl p-2.5 text-xs text-[color:var(--color-foreground-subtle)]">
             <span>{t('report.filters.search')}</span>
             <input
               type="text"
               value={filters.query}
               onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
               placeholder={t('report.filters.searchPlaceholder')}
-              className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-orange-300"
+              className="app-input rounded-xl px-3 py-2 text-sm"
             />
           </label>
-          <label className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+          <label className="app-toolbar flex flex-col gap-1 rounded-2xl p-2.5 text-xs text-[color:var(--color-foreground-subtle)]">
             <span>{t('report.filters.from')}</span>
             <input
               type="date"
               value={filters.from}
               onChange={(event) => setFilters((current) => ({ ...current, preset: 'custom', from: event.target.value }))}
-              className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-orange-300 [color-scheme:dark]"
+              className="app-input rounded-xl px-3 py-2 text-sm"
+              style={{ colorScheme: 'var(--color-scheme)' }}
             />
           </label>
-          <label className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+          <label className="app-toolbar flex flex-col gap-1 rounded-2xl p-2.5 text-xs text-[color:var(--color-foreground-subtle)]">
             <span>{t('report.filters.to')}</span>
             <input
               type="date"
               value={filters.to}
               onChange={(event) => setFilters((current) => ({ ...current, preset: 'custom', to: event.target.value }))}
-              className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-orange-300 [color-scheme:dark]"
+              className="app-input rounded-xl px-3 py-2 text-sm"
+              style={{ colorScheme: 'var(--color-scheme)' }}
             />
           </label>
-          <label className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+          <label className="app-toolbar flex flex-col gap-1 rounded-2xl p-2.5 text-xs text-[color:var(--color-foreground-subtle)]">
             <span>{t('report.filters.eventType')}</span>
             <select
               value={filters.eventType}
               onChange={(event) => setFilters((current) => ({ ...current, eventType: event.target.value }))}
-              className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none focus:border-orange-300"
+              className="app-input rounded-xl px-3 py-2 text-sm"
             >
               {EVENT_TYPE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -353,16 +400,16 @@ export function BoardReportView({
           </label>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {(['project', 'timeline', 'type'] as ReportGroupBy[]).map((groupBy) => (
             <button
               key={groupBy}
               type="button"
               onClick={() => setFilters((current) => ({ ...current, groupBy }))}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                 filters.groupBy === groupBy
-                  ? 'border-sky-300 bg-sky-300 text-slate-950'
-                  : 'border-white/10 bg-white/5 text-slate-200 hover:border-sky-300/40 hover:text-white'
+                  ? 'app-pill-active'
+                  : 'app-pill hover:border-[color:var(--color-accent)] hover:text-foreground'
               }`}
             >
               {t(`report.groupBy.${groupBy}`)}
@@ -371,68 +418,68 @@ export function BoardReportView({
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label={t('report.summary.totalEvents')} value={report?.summary.totalEvents ?? 0} accent="orange" />
-        <SummaryTile label={t('report.summary.cardsCreated')} value={report?.summary.cardsCreated ?? 0} accent="emerald" />
-        <SummaryTile label={t('report.summary.cardsMoved')} value={report?.summary.cardsMoved ?? 0} accent="sky" />
-        <SummaryTile label={t('report.summary.commentsAdded')} value={report?.summary.commentsAdded ?? 0} accent="amber" />
-        <SummaryTile label={t('report.summary.descriptionsUpdated')} value={report?.summary.descriptionsUpdated ?? 0} accent="rose" />
-        <SummaryTile label={t('report.summary.dueDatesUpdated')} value={report?.summary.dueDatesUpdated ?? 0} accent="violet" />
-        <SummaryTile label={t('report.summary.progressUpdated')} value={report?.summary.progressUpdated ?? 0} accent="cyan" />
-        <SummaryTile label={t('report.summary.cardsArchived')} value={(report?.summary.cardsArchived ?? 0) + (report?.summary.cardsRestored ?? 0)} accent="slate" />
+      <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile label={t('report.summary.totalEvents')} value={report?.summary.totalEvents ?? 0} tone="accent" />
+        <SummaryTile label={t('report.summary.cardsCreated')} value={report?.summary.cardsCreated ?? 0} tone="success" />
+        <SummaryTile label={t('report.summary.cardsMoved')} value={report?.summary.cardsMoved ?? 0} tone="info" />
+        <SummaryTile label={t('report.summary.commentsAdded')} value={report?.summary.commentsAdded ?? 0} tone="warning" />
+        <SummaryTile label={t('report.summary.descriptionsUpdated')} value={report?.summary.descriptionsUpdated ?? 0} tone="danger" />
+        <SummaryTile label={t('report.summary.dueDatesUpdated')} value={report?.summary.dueDatesUpdated ?? 0} tone="info" />
+        <SummaryTile label={t('report.summary.progressUpdated')} value={report?.summary.progressUpdated ?? 0} tone="success" />
+        <SummaryTile label={t('report.summary.cardsArchived')} value={(report?.summary.cardsArchived ?? 0) + (report?.summary.cardsRestored ?? 0)} tone="neutral" />
       </section>
 
       {loading ? (
-        <div className="rounded-3xl border border-white/10 bg-card/70 p-8 text-sm text-slate-300">
+        <div className="app-panel rounded-3xl p-6 text-sm text-[color:var(--color-foreground-subtle)]">
           {t('report.states.loading')}
         </div>
       ) : error ? (
-        <div className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-8 text-sm text-rose-100">
+        <div className="rounded-3xl border p-6 text-sm text-foreground" style={{ borderColor: 'var(--color-danger)', background: 'var(--color-danger-soft)' }}>
           {error}
         </div>
       ) : groups.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-white/15 bg-card/60 p-8 text-sm text-slate-300">
+        <div className="app-panel rounded-3xl border-dashed p-6 text-sm text-[color:var(--color-foreground-subtle)]">
           {t('report.states.empty')}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {groups.map((group) => (
-            <section key={group.key} className="rounded-3xl border border-white/10 bg-card/60 p-4">
-              <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <h3 className="text-lg font-semibold text-white">{group.label}</h3>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+            <section key={group.key} className="app-panel rounded-3xl p-3.5 md:p-4">
+              <div className="mb-3 flex items-center justify-between gap-3 border-b pb-3" style={{ borderColor: 'var(--color-border-subtle)' }}>
+                <h3 className="text-base font-semibold text-foreground md:text-lg">{group.label}</h3>
+                <span className="app-pill rounded-full px-3 py-1 text-[11px]">
                   {group.sections.reduce((count, section) => count + section.items.length, 0)} {t('report.units.events')}
                 </span>
               </div>
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {group.sections.map((section) => (
-                  <div key={section.key} className="space-y-3">
-                    <h4 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{section.label}</h4>
-                    <div className="space-y-3">
+                  <div key={section.key} className="space-y-2.5">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--color-foreground-faint)]">{section.label}</h4>
+                    <div className="space-y-2.5">
                       {section.items.map((item) => (
-                        <article key={item.id} className={`rounded-2xl border p-4 ${getEventTone(item.eventType)}`}>
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <article key={item.id} className="rounded-2xl border p-3" style={getEventToneStyle(item.eventType)}>
+                          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 space-y-2">
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                                <span className="rounded-full bg-black/25 px-2 py-1 font-semibold text-white">{formatTimeLabel(item.createdAt)}</span>
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-foreground-subtle)]">
+                                <span className="rounded-full px-2 py-1 font-semibold text-foreground" style={{ background: 'color-mix(in srgb, var(--color-background) 36%, transparent)' }}>{formatTimeLabel(item.createdAt)}</span>
                                 <span>{item.actorDisplayName ?? t('report.labels.system')}</span>
-                                <span className="text-slate-500">/</span>
+                                <span className="text-[color:var(--color-foreground-faint)]">/</span>
                                 <span>{item.eventType}</span>
                               </div>
-                              <p className="text-sm font-medium text-white">{item.summary}</p>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                                <span className="rounded-full border border-white/10 px-2 py-1">#{item.nodeShortId ?? '...'}</span>
+                              <p className="text-sm font-medium text-foreground">{item.summary}</p>
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-foreground-subtle)]">
+                                <span className="rounded-full border px-2 py-1" style={{ borderColor: 'var(--color-border-subtle)' }}>#{item.nodeShortId ?? '...'}</span>
                                 <span className="truncate">{item.nodeTitle}</span>
-                                {item.columnName ? <span className="rounded-full border border-white/10 px-2 py-1">{item.columnName}</span> : null}
-                                {item.boardName !== boardName ? <span className="rounded-full border border-sky-300/30 bg-sky-500/10 px-2 py-1 text-sky-100">{item.boardName}</span> : null}
+                                {item.columnName ? <span className="rounded-full border px-2 py-1" style={{ borderColor: 'var(--color-border-subtle)' }}>{item.columnName}</span> : null}
+                                {item.boardName !== boardName ? <span className="rounded-full px-2 py-1" style={{ border: '1px solid var(--color-info)', background: 'var(--color-info-soft)', color: 'var(--color-foreground)' }}>{item.boardName}</span> : null}
                               </div>
                               {item.oldValue !== null || item.newValue !== null ? (
-                                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200">
-                                  <span className="font-semibold text-slate-100">{t('report.labels.before')}</span> {item.oldValue ?? t('report.labels.emptyValue')} <span className="mx-2 text-slate-500">→</span> <span className="font-semibold text-slate-100">{t('report.labels.after')}</span> {item.newValue ?? t('report.labels.emptyValue')}
+                                <div className="rounded-xl border px-3 py-2 text-[11px] text-[color:var(--color-foreground-subtle)]" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-background) 16%, transparent)' }}>
+                                  <span className="font-semibold text-foreground">{t('report.labels.before')}</span> {item.oldValue ?? t('report.labels.emptyValue')} <span className="mx-2 text-[color:var(--color-foreground-faint)]">→</span> <span className="font-semibold text-foreground">{t('report.labels.after')}</span> {item.newValue ?? t('report.labels.emptyValue')}
                                 </div>
                               ) : null}
                               {item.commentPreview ? (
-                                <div className="max-h-40 overflow-y-auto rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-sm leading-6 text-emerald-50 whitespace-pre-wrap">
+                                <div className="max-h-36 overflow-y-auto rounded-xl border px-3 py-2 text-sm leading-6 text-foreground whitespace-pre-wrap" style={{ borderColor: 'var(--color-success)', background: 'var(--color-success-soft)' }}>
                                   {item.commentPreview}
                                 </div>
                               ) : null}
@@ -442,7 +489,7 @@ export function BoardReportView({
                                 <button
                                   type="button"
                                   onClick={() => onOpenBoard(item.boardId)}
-                                  className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-sky-300 hover:text-white"
+                                  className="app-pill rounded-full px-3 py-2 text-[11px] font-semibold transition hover:border-[color:var(--color-accent)] hover:text-foreground"
                                 >
                                   {t('report.actions.openBoard')}
                                 </button>
@@ -456,7 +503,8 @@ export function BoardReportView({
                                   }
                                   onOpenTask(item.nodeId);
                                 }}
-                                className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-orange-200"
+                                className="rounded-full px-3 py-2 text-[11px] font-semibold transition"
+                                style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}
                               >
                                 {item.boardId !== boardId ? t('report.actions.openContext') : t('report.actions.openTask')}
                               </button>
@@ -479,27 +527,16 @@ export function BoardReportView({
 function SummaryTile({
   label,
   value,
-  accent,
+  tone,
 }: {
   label: string;
   value: number;
-  accent: 'orange' | 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'cyan' | 'slate';
+  tone: 'accent' | 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 }) {
-  const accents: Record<string, string> = {
-    orange: 'from-orange-500/20 to-orange-500/5 text-orange-100',
-    emerald: 'from-emerald-500/20 to-emerald-500/5 text-emerald-100',
-    sky: 'from-sky-500/20 to-sky-500/5 text-sky-100',
-    amber: 'from-amber-500/20 to-amber-500/5 text-amber-100',
-    rose: 'from-rose-500/20 to-rose-500/5 text-rose-100',
-    violet: 'from-violet-500/20 to-violet-500/5 text-violet-100',
-    cyan: 'from-cyan-500/20 to-cyan-500/5 text-cyan-100',
-    slate: 'from-slate-500/20 to-slate-500/5 text-slate-100',
-  };
-
   return (
-    <div className={`rounded-2xl border border-white/10 bg-gradient-to-br p-4 ${accents[accent]}`}>
-      <p className="text-xs uppercase tracking-[0.2em] text-current/70">{label}</p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
+    <div className="app-stat-tile rounded-2xl p-3" style={getSummaryToneStyle(tone)}>
+      <p className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--color-foreground-faint)]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-foreground md:text-[1.8rem]">{value}</p>
     </div>
   );
 }

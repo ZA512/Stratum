@@ -132,12 +132,12 @@ export function QuickNotesRadar() {
     <button
       type="button"
       onClick={openModal}
-      className="flex h-9 items-center gap-2 rounded-full border border-white/15 bg-surface/70 px-3 text-xs font-semibold text-foreground transition hover:border-accent hover:text-foreground"
+      className="app-pill flex h-9 items-center gap-2 rounded-full px-3 text-xs font-semibold text-foreground transition hover:border-accent hover:text-foreground"
     >
       <span className="material-symbols-outlined text-[18px]">radar</span>
       Quick Note
       {openCount > 0 && (
-        <span className="ml-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-background">
+        <span className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "var(--color-accent)", color: "var(--color-accent-foreground)" }}>
           {openCount}
         </span>
       )}
@@ -150,8 +150,8 @@ export function QuickNotesRadar() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
-          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">
+          <div className="absolute inset-0 backdrop-blur-sm" style={{ background: "color-mix(in srgb, var(--color-overlay) 82%, transparent)" }} onClick={handleClose} />
+          <div className="app-panel-strong relative z-10 w-full max-w-xl rounded-[1.6rem] p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Quick Notes</h2>
@@ -160,7 +160,7 @@ export function QuickNotesRadar() {
               <button
                 type="button"
                 onClick={handleClose}
-                className="text-muted transition hover:text-foreground"
+                className="app-icon-button"
               >
                 ✕
               </button>
@@ -198,7 +198,7 @@ export function QuickNotesRadar() {
                   }}
                   autoFocus
                   rows={3}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-surface/70 px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  className="app-input w-full resize-none rounded-xl px-4 py-3 text-sm text-foreground"
                   placeholder="Note rapide..."
                 />
               </div>
@@ -213,8 +213,8 @@ export function QuickNotesRadar() {
                       onClick={() => setSelectedType(option.id)}
                       className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition ${
                         selectedType === option.id
-                          ? "border-accent bg-accent/10 text-foreground"
-                          : "border-white/10 bg-surface/60 text-muted hover:border-accent/60"
+                          ? "app-pill-active text-[color:var(--color-accent-foreground)]"
+                          : "app-pill text-muted hover:border-accent/60"
                       }`}
                     >
                       <span className="material-symbols-outlined text-sm">{option.icon}</span>
@@ -233,7 +233,7 @@ export function QuickNotesRadar() {
                     showDock();
                     handleClose();
                   }}
-                  className="rounded-full border border-accent/40 px-4 py-2 text-xs font-medium text-accent transition hover:border-accent hover:bg-accent/10"
+                  className="app-pill rounded-full px-4 py-2 text-xs font-medium text-accent transition hover:border-accent hover:bg-accent/10"
                 >
                   Traitement des entrées
                 </button>
@@ -244,7 +244,8 @@ export function QuickNotesRadar() {
                   type="button"
                   disabled={!canSubmit}
                   onClick={() => void handleSubmit("continue")}
-                  className="rounded-full bg-accent/90 px-4 py-2 text-xs font-semibold text-white transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ background: "var(--color-accent)", color: "var(--color-accent-foreground)" }}
                 >
                   Valider & continuer
                 </button>
@@ -252,7 +253,7 @@ export function QuickNotesRadar() {
                   type="button"
                   disabled={!canSubmit}
                   onClick={() => void handleSubmit("close")}
-                  className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-foreground transition hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="app-pill rounded-full px-4 py-2 text-xs font-semibold text-foreground transition disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Valider & fermer
                 </button>

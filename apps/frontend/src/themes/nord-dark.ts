@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const nordDark: ThemeDefinition = {
+const nordDark = defineTheme({
   id: "nord-dark",
   tone: "dark",
   nameKey: "settings.theme.names.nordDark",
@@ -29,6 +29,6 @@ const nordDark: ThemeDefinition = {
     card: "#434c5e",
     accent: "#88c0d0",
   },
-};
+});
 
 export default nordDark;

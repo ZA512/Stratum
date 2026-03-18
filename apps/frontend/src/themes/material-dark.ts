@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const materialDark: ThemeDefinition = {
+const materialDark = defineTheme({
   id: "material-dark",
   tone: "dark",
   nameKey: "settings.theme.names.materialDark",
@@ -29,6 +29,6 @@ const materialDark: ThemeDefinition = {
     card: "#242424",
     accent: "#bb86fc",
   },
-};
+});
 
 export default materialDark;

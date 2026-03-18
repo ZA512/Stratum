@@ -9,25 +9,22 @@ import {
   type TranslateFn,
 } from "@/features/dashboards/utils/widget-i18n";
 
-const STATUS_STYLES: Record<
-  DashboardWidgetEntry["status"],
-  { badge: string; container: string }
-> = {
+const STATUS_STYLES: Record<DashboardWidgetEntry["status"], { borderColor: string; background: string }> = {
   ok: {
-    badge: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
-    container: "text-emerald-200",
+    borderColor: 'var(--color-success)',
+    background: 'var(--color-success-soft)',
   },
   "no-data": {
-    badge: "border-amber-400/40 bg-amber-500/10 text-amber-200",
-    container: "text-amber-200",
+    borderColor: 'var(--color-warning)',
+    background: 'var(--color-warning-soft)',
   },
   "insufficient-coverage": {
-    badge: "border-rose-400/40 bg-rose-500/10 text-rose-200",
-    container: "text-rose-200",
+    borderColor: 'var(--color-danger)',
+    background: 'var(--color-danger-soft)',
   },
   "insufficient-history": {
-    badge: "border-amber-400/40 bg-amber-500/10 text-amber-200",
-    container: "text-amber-200",
+    borderColor: 'var(--color-warning)',
+    background: 'var(--color-warning-soft)',
   },
 };
 
@@ -55,7 +52,7 @@ export function DashboardWidgetCard({ widget }: DashboardWidgetCardProps) {
   const statusLabel = t(`dashboard.widget.status.${status}` as const);
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-card/60 p-6 shadow-lg">
+    <section className="app-section flex flex-col gap-4 rounded-2xl p-5">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">{displayLabel}</h2>
@@ -63,7 +60,8 @@ export function DashboardWidgetCard({ widget }: DashboardWidgetCardProps) {
         </div>
         <div className="flex items-center gap-2 text-xs text-muted">
           <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-medium uppercase tracking-wide ${statusStyle.badge}`}
+            className="inline-flex items-center gap-1 rounded-full border px-2 py-1 font-medium uppercase tracking-wide"
+            style={{ borderColor: statusStyle.borderColor, background: statusStyle.background, color: 'var(--color-foreground)' }}
           >
             <span className="material-symbols-outlined text-base" aria-hidden>
               {status === "ok" ? "check_circle" : status === "no-data" ? "info" : "warning"}
@@ -73,7 +71,7 @@ export function DashboardWidgetCard({ widget }: DashboardWidgetCardProps) {
           <span>{t("dashboard.widget.duration", { value: Math.round(durationMs) })}</span>
         </div>
       </header>
-      <div className="min-h-[120px] rounded-xl bg-surface/60 p-4 text-sm text-foreground">
+      <div className="app-toolbar min-h-[120px] rounded-xl p-4 text-sm text-foreground">
         {status !== "ok" ? (
           <WidgetStatusMessage status={status} reason={reason} t={t} />
         ) : (
@@ -99,8 +97,8 @@ function WidgetStatusMessage({
   const fallback = emptyMessage === emptyKey ? t("dashboard.widget.empty.generic") : emptyMessage;
   const styles = STATUS_STYLES[status];
   return (
-    <div className={`flex h-full flex-col items-start justify-center gap-3 text-sm ${styles.container}`}>
-      <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs uppercase tracking-wide ${styles.badge}`}>
+    <div className="flex h-full flex-col items-start justify-center gap-3 text-sm text-foreground">
+      <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs uppercase tracking-wide" style={{ borderColor: styles.borderColor, background: styles.background, color: 'var(--color-foreground)' }}>
         <span className="material-symbols-outlined text-base" aria-hidden>
           {status === "no-data" ? "help" : "error"}
         </span>
@@ -132,7 +130,7 @@ function WidgetPayloadRenderer({ widget, t }: { widget: DashboardWidgetEntry; t:
           render={(item, index) => (
             <li
               key={(item as { id?: string }).id ?? index}
-              className="rounded-xl border border-white/10 bg-white/5 p-3"
+              className="app-toolbar rounded-xl p-3"
             >
               <PayloadObjectPreview value={item as Record<string, unknown>} depth={1} t={t} />
             </li>
@@ -163,7 +161,7 @@ function WidgetPayloadRenderer({ widget, t }: { widget: DashboardWidgetEntry; t:
           render={(item, index) => (
             <div
               key={(item as { id?: string }).id ?? index}
-              className="rounded-xl border border-white/10 bg-white/5 p-3"
+              className="app-toolbar rounded-xl p-3"
             >
               <PayloadObjectPreview value={item as Record<string, unknown>} depth={1} t={t} />
             </div>

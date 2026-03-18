@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const velvet: ThemeDefinition = {
+const velvet = defineTheme({
   id: "velvet",
   tone: "dark",
   nameKey: "settings.theme.names.velvet",
@@ -29,6 +29,6 @@ const velvet: ThemeDefinition = {
     card: "#2a1f46",
     accent: "#a855f7",
   },
-};
+});
 
 export default velvet;

@@ -912,22 +912,23 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
     if (!activeLinkMenu || !activeDependency) return null;
     return (
       <div
-        className="absolute z-50 rounded-xl border border-white/10 bg-surface/95 p-3 text-xs shadow-2xl"
-        style={{ left: activeLinkMenu.x, top: activeLinkMenu.y }}
+        className="app-floating-panel absolute z-50 rounded-xl p-3 text-xs shadow-2xl"
+        style={{ left: activeLinkMenu.x, top: activeLinkMenu.y, width: 220 }}
         data-link-menu
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 font-semibold">
             <span>{activeDependency.type}</span>
             {activeDependency.mode === "ASAP" ? (
-              <span className="inline-flex items-center gap-1 text-accent"><Zap size={14} />{tBoard("gantt.links.modeAsap")}</span>
+              <span className="inline-flex items-center gap-1" style={{ color: 'var(--color-accent)' }}><Zap size={14} />{tBoard("gantt.links.modeAsap")}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-muted"><Circle size={12} />{tBoard("gantt.links.modeFree")}</span>
             )}
           </div>
           <button
             type="button"
-            className="rounded-full border border-white/15 p-1 text-muted hover:border-rose-300 hover:text-rose-200"
+            className="app-icon-button rounded-full p-1 text-muted"
+            style={{ color: 'var(--color-danger)' }}
             onClick={() => {
               onDeleteDependency(activeDependency.id);
               setActiveLinkMenu(null);
@@ -939,7 +940,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
         <div className="mt-3 space-y-2">
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-1.5 text-left text-xs hover:border-accent hover:text-foreground"
+            className="app-toolbar flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs"
             onClick={() =>
               onUpdateDependency(activeDependency.id, {
                 mode: activeDependency.mode === "ASAP" ? "FREE" : "ASAP",
@@ -949,12 +950,12 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             <span>{tBoard("gantt.links.toggleMode")}</span>
             {activeDependency.mode === "ASAP" ? <Circle size={12} /> : <Zap size={14} />}
           </button>
-          <div className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-1.5 text-xs">
+          <div className="app-toolbar flex items-center justify-between rounded-lg px-3 py-1.5 text-xs">
             <span>{tBoard("gantt.links.lag")}</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="rounded-full border border-white/15 p-1 hover:border-accent"
+                className="app-icon-button rounded-full p-1"
                 onClick={() =>
                   onUpdateDependency(activeDependency.id, {
                     lag: activeDependency.lag - 1,
@@ -966,7 +967,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               <span className="min-w-[2ch] text-center font-semibold">{activeDependency.lag}</span>
               <button
                 type="button"
-                className="rounded-full border border-white/15 p-1 hover:border-accent"
+                className="app-icon-button rounded-full p-1"
                 onClick={() =>
                   onUpdateDependency(activeDependency.id, {
                     lag: activeDependency.lag + 1,
@@ -982,11 +983,12 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               <button
                 key={type}
                 type="button"
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                className={`app-pill rounded-full px-3 py-1 text-xs font-semibold transition ${
                   activeDependency.type === type
-                    ? "border-accent bg-accent/20 text-accent"
-                    : "border-white/15 text-muted hover:border-accent hover:text-foreground"
+                    ? ""
+                    : "text-muted hover:text-foreground"
                 }`}
+                style={activeDependency.type === type ? { borderColor: 'color-mix(in srgb, var(--color-accent) 45%, transparent)', background: 'var(--color-accent-soft)', color: 'var(--color-accent)' } : undefined}
                 onClick={() => onUpdateDependency(activeDependency.id, { type })}
               >
                 {type}
@@ -995,7 +997,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </div>
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:border-accent hover:text-foreground"
+            className="app-toolbar flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-xs"
             onClick={() =>
               onUpdateDependency(activeDependency.id, {
                 hardConstraint: !activeDependency.hardConstraint,
@@ -1007,7 +1009,8 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </button>
           <button
             type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-accent/40 bg-accent/20 px-3 py-1.5 text-xs font-semibold text-accent hover:border-accent hover:bg-accent/30"
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+            style={{ border: '1px solid color-mix(in srgb, var(--color-accent) 42%, transparent)', background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
             onClick={() => {
               handleAlignDependency();
               setActiveLinkMenu(null);
@@ -1056,14 +1059,15 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
       >
         <button
           type="button"
-          className="absolute -right-2 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-surface/95 shadow transition hover:border-accent hover:bg-accent/20 z-20"
+          className="app-icon-button absolute -right-2 top-1/2 z-20 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full shadow transition"
           onPointerDown={handleStartLink(task.id)}
           aria-label={tBoard("gantt.links.startFromTask")}
           title={tBoard("gantt.links.handleHint")}
           onClick={(e) => e.stopPropagation()}
         />
         <div
-          className={`group relative flex h-10 items-center overflow-hidden rounded-lg border border-white/15 px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
+          className={`group relative flex h-10 items-center overflow-hidden rounded-lg border px-3 text-xs text-foreground shadow transition ${task.colorClass}`}
+          style={{ borderColor: 'color-mix(in srgb, var(--color-border) 82%, transparent)' }}
           onDoubleClick={(event) => {
             event.stopPropagation();
             onOpenTask(task.id);
@@ -1074,8 +1078,8 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           <div className={`absolute inset-x-0 top-0 h-1 ${task.accentClass}`} />
           {task.progress != null && (
             <div
-              className="absolute inset-0 bg-black/20"
-              style={{ width: `${Math.max(0, Math.min(100, task.progress))}%` }}
+              className="absolute inset-0"
+              style={{ background: 'color-mix(in srgb, var(--color-background) 18%, transparent)', width: `${Math.max(0, Math.min(100, task.progress))}%` }}
             />
           )}
           <div className="relative z-10 flex w-full items-center gap-2">
@@ -1084,7 +1088,8 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             </div>
             {task.progress != null && (
               <span
-                className={`shrink-0 rounded-full bg-black/30 px-2 py-0.5 font-semibold text-white/80 ${isCompact ? "text-[9px]" : "text-[11px]"}`}
+                className={`app-badge shrink-0 rounded-full px-2 py-0.5 font-semibold ${isCompact ? "text-[9px]" : "text-[11px]"}`}
+                style={{ background: 'color-mix(in srgb, var(--color-background) 28%, transparent)', color: 'var(--color-foreground)' }}
               >
                 {task.progress}%
               </span>
@@ -1093,7 +1098,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               {childBoard && onOpenChildBoard && (
                 <button
                   type="button"
-                  className="opacity-0 group-hover:opacity-100 rounded-full border border-white/15 p-1 text-muted hover:border-accent hover:text-foreground transition"
+                  className="app-icon-button rounded-full p-1 text-muted opacity-0 transition group-hover:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenChildBoard(childBoard.boardId);
@@ -1119,7 +1124,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             }}
           />
           {isSaving && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'color-mix(in srgb, var(--color-overlay) 72%, transparent)' }} />
           )}
         </div>
       </div>
@@ -1127,22 +1132,22 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-card/80">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+    <div className="app-section rounded-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: 'var(--color-border-subtle)' }}>
         <div className="min-w-0">
           <h3 className="text-lg font-semibold">{boardName}</h3>
           <p className="text-xs text-muted">{tBoard("gantt.subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-surface/60 p-0.5">
+          <div className="app-segmented flex items-center gap-1 rounded-full p-0.5">
             {(["day", "week", "month"] as ZoomLevel[]).map((level) => (
               <button
                 key={level}
                 type="button"
                 className={`rounded-full px-3 py-1 font-semibold transition ${
                   zoom === level
-                    ? "bg-accent text-background shadow"
-                    : "text-muted hover:text-foreground"
+                    ? "app-segment-active"
+                    : "app-segment"
                 }`}
                 onClick={() => setZoom(level)}
               >
@@ -1150,10 +1155,10 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-surface/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+          <div className="app-toolbar flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             <button
               type="button"
-              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              className="app-icon-button rounded-full p-1 text-muted transition disabled:opacity-40"
               onClick={handleZoomOut}
               disabled={!canZoomOut}
               title={tBoard("gantt.toolbar.zoomOut")}
@@ -1163,7 +1168,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             <span className="px-1 font-semibold text-foreground">×{zoomScale.toFixed(1)}</span>
             <button
               type="button"
-              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              className="app-icon-button rounded-full p-1 text-muted transition disabled:opacity-40"
               onClick={handleZoomIn}
               disabled={!canZoomIn}
               title={tBoard("gantt.toolbar.zoomIn")}
@@ -1172,18 +1177,18 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             </button>
             <button
               type="button"
-              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button rounded-full p-1 text-muted transition"
               onClick={handleResetZoom}
               title={tBoard("gantt.toolbar.resetZoom")}
             >
               <RefreshCw size={12} />
             </button>
           </div>
-          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-surface/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+          <div className="app-toolbar flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             <span>{tBoard("gantt.toolbar.lanesLabel")}</span>
             <button
               type="button"
-              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground disabled:opacity-40"
+              className="app-icon-button rounded-full p-1 text-muted transition disabled:opacity-40"
               onClick={() => setLaneCount((prev) => Math.max(autoLaneCount, prev - 1))}
               disabled={laneCount <= autoLaneCount}
               title={tBoard("gantt.toolbar.lanesDecrease")}
@@ -1193,7 +1198,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             <span className="px-1 font-semibold text-foreground">{laneCount}</span>
             <button
               type="button"
-              className="rounded-full border border-white/15 p-1 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button rounded-full p-1 text-muted transition"
               onClick={() => setLaneCount((prev) => prev + 1)}
               title={tBoard("gantt.toolbar.lanesIncrease")}
             >
@@ -1202,7 +1207,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </div>
           <button
             type="button"
-            className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 transition hover:border-accent hover:text-foreground"
+            className="app-pill flex items-center gap-1 rounded-full px-3 py-1 transition hover:border-accent hover:text-foreground"
             onClick={handleScrollToToday}
           >
             <CalendarClock size={14} />
@@ -1210,7 +1215,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </button>
           <button
             type="button"
-            className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 transition hover:border-accent hover:text-foreground disabled:opacity-40"
+            className="app-pill flex items-center gap-1 rounded-full px-3 py-1 transition hover:border-accent hover:text-foreground disabled:opacity-40"
             onClick={handleUndo}
             disabled={undoStack.length === 0}
           >
@@ -1219,7 +1224,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
           </button>
           <button
             type="button"
-            className="flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 transition hover:border-accent hover:text-foreground disabled:opacity-40"
+            className="app-pill flex items-center gap-1 rounded-full px-3 py-1 transition hover:border-accent hover:text-foreground disabled:opacity-40"
             onClick={handleRedo}
             disabled={redoStack.length === 0}
           >
@@ -1229,25 +1234,25 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
         </div>
       </div>
       {scheduleWarning && (
-        <div className="border-b border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
+        <div className="app-warning-panel border-b px-4 py-2 text-xs" style={{ color: 'var(--color-warning)' }}>
           {scheduleWarning}
         </div>
       )}
-      <div className="flex border-b border-white/10 bg-surface/60">
+      <div className="flex border-b" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 62%, transparent)' }}>
         <div
-          className="shrink-0 border-r border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted"
-          style={{ width: LANE_GUTTER_WIDTH }}
+          className="shrink-0 border-r px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted"
+          style={{ borderColor: 'var(--color-border-subtle)', width: LANE_GUTTER_WIDTH }}
         >
           {tBoard("gantt.lanes")}
         </div>
         <div className="relative flex-1 overflow-hidden">
-          <div className="sticky top-0 z-20 border-b border-white/10 bg-surface/80 backdrop-blur">
+          <div className="sticky top-0 z-20 border-b backdrop-blur" style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 80%, transparent)' }}>
             <div className="flex" style={{ width: totalDays * dayWidth }}>
               {months.map((segment) => (
                 <div
                   key={`${segment.key}-${segment.span}`}
-                  className="border-r border-white/10 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
-                  style={{ width: segment.span * dayWidth }}
+                  className="border-r px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
+                  style={{ borderColor: 'var(--color-border-subtle)', width: segment.span * dayWidth }}
                 >
                   {segment.label}
                 </div>
@@ -1257,8 +1262,8 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               {days.map((day) => (
                 <div
                   key={day.toISOString()}
-                  className={`border-r border-white/10 px-2 py-1 text-[10px] ${isWeekend(day) ? "bg-white/5 text-muted" : "text-muted"}`}
-                  style={{ width: dayWidth }}
+                  className="border-r px-2 py-1 text-[10px] text-muted"
+                  style={{ borderColor: 'var(--color-border-subtle)', background: isWeekend(day) ? 'color-mix(in srgb, var(--color-background) 16%, transparent)' : undefined, width: dayWidth }}
                 >
                   {dayFormatter.format(day)}
                 </div>
@@ -1273,8 +1278,8 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
       </div>
       <div className="relative flex" style={{ minHeight: Math.max(laneCount * LANE_HEIGHT, 240) }}>
         <div
-          className="shrink-0 border-r border-white/10 bg-surface/40"
-          style={{ width: LANE_GUTTER_WIDTH }}
+          className="shrink-0 border-r"
+          style={{ width: LANE_GUTTER_WIDTH, borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 42%, transparent)' }}
         >
           {paddedLaneMeta.map((lane, index) => (
             <div
@@ -1282,7 +1287,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               className="flex h-[60px] items-center justify-between px-3 text-[10px] uppercase tracking-wide text-muted"
             >
               <span className="font-semibold text-foreground">{tBoard('gantt.laneLabel', { index: index + 1 })}</span>
-              <span className="text-[10px] text-white/60">{lane.taskIds.length}</span>
+              <span className="text-[10px] text-muted">{lane.taskIds.length}</span>
             </div>
           ))}
         </div>
@@ -1296,15 +1301,16 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
             {Array.from({ length: laneCount }).map((_, laneIndex) => (
               <div
                 key={`lane-row-${laneIndex}`}
-                className="pointer-events-none absolute left-0 right-0 border-b border-white/10"
+                className="pointer-events-none absolute left-0 right-0 border-b"
+                style={{ borderColor: 'var(--color-border-subtle)' }}
                 style={{ top: laneIndex * LANE_HEIGHT, height: LANE_HEIGHT }}
               />
             ))}
             {days.map((day, index) => (
               <div
                 key={`grid-${day.toISOString()}`}
-                className={`absolute top-0 bottom-0 border-r border-white/5 ${isWeekend(day) ? "bg-white/5" : ""}`}
-                style={{ left: index * dayWidth, width: dayWidth }}
+                className="absolute top-0 bottom-0 border-r"
+                style={{ left: index * dayWidth, width: dayWidth, borderColor: 'color-mix(in srgb, var(--color-border-subtle) 65%, transparent)', background: isWeekend(day) ? 'color-mix(in srgb, var(--color-background) 14%, transparent)' : undefined }}
               />
             ))}
             <div
@@ -1354,7 +1360,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
                     >
                       <button
                         type="button"
-                        className="flex w-full items-center justify-center gap-1 rounded-full border border-white/10 bg-surface/80 px-1.5 py-1 text-[10px] font-semibold text-foreground hover:border-accent"
+                        className="app-toolbar flex w-full items-center justify-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-semibold text-foreground"
                         onClick={() => setActiveLinkMenu({ id: dep.id, x: Math.min(sourceX, targetX) + Math.abs(targetX - sourceX) / 2 - 24, y: (sourceY + targetY) / 2 })}
                         data-link-label
                       >
@@ -1387,7 +1393,7 @@ export const BoardGanttView: React.FC<BoardGanttViewProps> = ({
               )}
             </svg>
             {loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-surface/60 text-sm text-muted">
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted backdrop-blur-sm" style={{ background: 'color-mix(in srgb, var(--color-overlay) 46%, transparent)' }}>
                 {tBoard("gantt.loading")}
               </div>
             )}

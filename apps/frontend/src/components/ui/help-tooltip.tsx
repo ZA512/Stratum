@@ -296,21 +296,23 @@ export function HelpTooltip({
           id={tooltipId}
           role="tooltip"
           data-placement={position.placement}
-          className={`pointer-events-none fixed z-[9999] rounded-lg border border-white/10 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-2xl ${widthClassName}`}
+          className={`app-tooltip pointer-events-none fixed z-[9999] rounded-lg p-3 text-xs shadow-2xl ${widthClassName}`}
           style={{ top: position.top, left: position.left }}
         >
           <div
-            className="absolute h-2 w-2 rotate-45 border border-white/10 border-b-0 border-r-0 bg-slate-900/95"
+            className="absolute h-2 w-2 rotate-45 border border-b-0 border-r-0"
             style={{
               left: position.arrowX,
+              borderColor: "var(--color-border-subtle)",
+              background: "color-mix(in srgb, var(--color-background) 84%, var(--color-surface) 16%)",
               transform: "translateX(-50%)",
               ...(position.placement === "top" ? { bottom: -1 } : { top: -1 }),
             }}
           />
           <div className="space-y-2 text-left">
-            {title && <h4 className="font-semibold text-accent">{title}</h4>}
-            <div className="space-y-1 leading-relaxed text-slate-100">{renderContent(description)}</div>
-            {hint && <div className="text-[10px] text-slate-400">{renderContent(hint)}</div>}
+            {title && <h4 className="font-semibold text-foreground">{title}</h4>}
+            <div className="space-y-1 leading-relaxed text-foreground">{renderContent(description)}</div>
+            {hint && <div className="text-[10px] text-[color:var(--color-foreground-faint)]">{renderContent(hint)}</div>}
           </div>
         </div>,
         document.body,

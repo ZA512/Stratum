@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const solarizedLight: ThemeDefinition = {
+const solarizedLight = defineTheme({
   id: "solarized-light",
   tone: "light",
   nameKey: "settings.theme.names.solarizedLight",
@@ -29,6 +29,6 @@ const solarizedLight: ThemeDefinition = {
     card: "#eee8d5",
     accent: "#268bd2",
   },
-};
+});
 
 export default solarizedLight;

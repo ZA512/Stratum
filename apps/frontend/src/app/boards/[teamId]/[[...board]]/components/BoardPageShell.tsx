@@ -1981,12 +1981,12 @@ function TeamBoardPageInner(){
     : 'opacity-100 translate-x-0 translate-y-0';
 
   const headerClassName = `${headerRoot
-    ? 'border-b border-white/10 bg-surface/90 backdrop-blur'
-    : 'border-b border-white/10 bg-surface/90 backdrop-blur fixed top-0 left-0 right-0 z-50'}
+    ? 'border-b'
+    : 'border-b fixed top-0 left-0 right-0 z-50'}
     transition duration-500 ease-out transform-gpu ${enterClassName}`;
 
   const headerContent = (
-      <header className={headerClassName}>
+      <header className={headerClassName} style={{ borderColor: 'var(--color-border-subtle)', background: 'color-mix(in srgb, var(--color-surface) 88%, transparent)', backdropFilter: 'blur(18px)' }}>
         <div className="flex items-center justify-between gap-4 px-8 py-3">
           <div className="flex items-center gap-3">
             <Image src="/stratum.png" alt="Stratum" width={160} height={40} className="h-10 w-auto" priority />
@@ -1997,12 +1997,12 @@ function TeamBoardPageInner(){
               <button
                 type="button"
                 onClick={() => setIsInvitationsPanelOpen(true)}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+                className="app-icon-button relative flex h-9 w-9 items-center justify-center rounded-full"
                 title={`${pendingInvitationsCount} invitation(s) en attente`}
                 aria-label={`${pendingInvitationsCount} invitations en attente`}
               >
                 <span className="material-symbols-outlined text-[20px]">cloud</span>
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}>
                   {pendingInvitationsCount}
                 </span>
               </button>
@@ -2012,12 +2012,12 @@ function TeamBoardPageInner(){
               <button
                 type="button"
                 onClick={() => setIsActivityPanelOpen(true)}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+                className="app-icon-button relative flex h-9 w-9 items-center justify-center rounded-full"
                 title={tBoard('activity.badge.tooltip', { count: activityStats.todayCount })}
                 aria-label={tBoard('activity.badge.aria', { count: activityStats.todayCount })}
               >
                 <span className="material-symbols-outlined text-[20px]">receipt_long</span>
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-background">
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}>
                   {activityStats.todayCount}
                 </span>
               </button>
@@ -2025,13 +2025,13 @@ function TeamBoardPageInner(){
             <button
               type="button"
               onClick={openDueListView}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button relative flex h-9 w-9 items-center justify-center rounded-full"
               title={tBoard('dueList.title')}
               aria-label={tBoard('dueList.aria')}
             >
               <span className="material-symbols-outlined text-[20px]">event</span>
               {!dueBadgeLoading && dueBadgeCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-background">
+                <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold" style={{ background: 'var(--color-accent)', color: 'var(--color-accent-foreground)' }}>
                   {dueBadgeCount}
                 </span>
               )}
@@ -2043,7 +2043,7 @@ function TeamBoardPageInner(){
             <button
               type="button"
               onClick={() => setIsAgentChatOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button flex h-9 w-9 items-center justify-center rounded-full"
               title="Ouvrir l'agent"
               aria-label="Ouvrir l'agent"
             >
@@ -2052,7 +2052,7 @@ function TeamBoardPageInner(){
             {/* Bouton paramètres (icône seule) */}
             <Link
               href="/settings"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button flex h-9 w-9 items-center justify-center rounded-full"
               title={t("common.actions.settings")}
               aria-label={t("common.actions.settings")}
             >
@@ -2061,7 +2061,7 @@ function TeamBoardPageInner(){
             {/* Bouton déconnexion (icône seule) */}
             <button
               onClick={() => logout()}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-surface/70 text-muted transition hover:border-accent hover:text-foreground"
+              className="app-icon-button flex h-9 w-9 items-center justify-center rounded-full"
               title={t("common.actions.signOut")}
               aria-label={t("common.actions.signOut")}
             >
@@ -2211,7 +2211,7 @@ function TeamBoardPageInner(){
         />
         {isAddingColumn && (
           <section className="grid gap-4">
-            <div className="relative rounded-xl border border-white/10 bg-card/70 px-6 py-2 w-full">
+            <div className="app-panel relative rounded-xl px-6 py-3 w-full">
               <form onSubmit={handleSubmitColumn} className="grid gap-4 md:grid-cols-2">
                   <HelpTooltip
                     helpMode={helpMode}
@@ -2279,14 +2279,14 @@ function TeamBoardPageInner(){
                   maxVisible={10}
                 />
               </div>
-              <div className="flex overflow-hidden rounded-full border border-white/10 bg-surface/60 p-0.5 text-xs font-semibold">
+              <div className="app-segmented flex overflow-hidden rounded-full p-0.5 text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setBoardView('kanban')}
                   className={`rounded-full px-3 py-1 transition ${
                     boardView === 'kanban'
-                      ? 'bg-accent text-background shadow-sm'
-                      : 'text-muted hover:text-foreground'
+                      ? 'app-segment-active'
+                      : 'app-segment'
                   }`}
                   aria-pressed={boardView === 'kanban'}
                   title={tBoard('viewToggle.kanbanHint')}
@@ -2298,8 +2298,8 @@ function TeamBoardPageInner(){
                   onClick={() => setBoardView('list')}
                   className={`rounded-full px-3 py-1 transition ${
                     boardView === 'list'
-                      ? 'bg-accent text-background shadow-sm'
-                      : 'text-muted hover:text-foreground'
+                      ? 'app-segment-active'
+                      : 'app-segment'
                   }`}
                   aria-pressed={boardView === 'list'}
                   title={tBoard('viewToggle.listHint')}
@@ -2311,8 +2311,8 @@ function TeamBoardPageInner(){
                   onClick={() => setBoardView('gantt')}
                   className={`rounded-full px-3 py-1 transition ${
                     boardView === 'gantt'
-                      ? 'bg-accent text-background shadow-sm'
-                      : 'text-muted hover:text-foreground'
+                      ? 'app-segment-active'
+                      : 'app-segment'
                   }`}
                   aria-pressed={boardView === 'gantt'}
                   title={tBoard('viewToggle.ganttHint')}
@@ -2324,8 +2324,8 @@ function TeamBoardPageInner(){
                   onClick={() => setBoardView('mindmap')}
                   className={`rounded-full px-3 py-1 transition ${
                     boardView === 'mindmap'
-                      ? 'bg-accent text-background shadow-sm'
-                      : 'text-muted hover:text-foreground'
+                      ? 'app-segment-active'
+                      : 'app-segment'
                   }`}
                   aria-pressed={boardView === 'mindmap'}
                   title={tBoard('viewToggle.mindmapHint')}
@@ -2337,8 +2337,8 @@ function TeamBoardPageInner(){
                   onClick={() => setBoardView('report')}
                   className={`rounded-full px-3 py-1 transition ${
                     boardView === 'report'
-                      ? 'bg-accent text-background shadow-sm'
-                      : 'text-muted hover:text-foreground'
+                      ? 'app-segment-active'
+                      : 'app-segment'
                   }`}
                   aria-pressed={boardView === 'report'}
                   title={tBoard('viewToggle.reportHint')}
@@ -2364,7 +2364,7 @@ function TeamBoardPageInner(){
                         setIsAddingColumn(true);
                         setFiltersExpanded(false);
                       }}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-lg text-muted transition hover:border-accent hover:text-foreground"
+                      className="app-icon-button flex h-8 w-8 items-center justify-center rounded-full text-lg"
                       title={tBoard('columns.header.addTooltip')}
                       aria-label={tBoard('columns.header.addTooltip')}
                     >
@@ -2376,8 +2376,8 @@ function TeamBoardPageInner(){
                     onClick={toggleHelpMode}
                     className={`flex h-8 w-8 items-center justify-center rounded-full border text-lg transition group relative ${
                       helpMode
-                        ? 'border-accent bg-accent/20 text-accent'
-                        : 'border-white/15 text-muted hover:border-accent hover:text-foreground'
+                        ? 'app-pill-active'
+                        : 'app-pill hover:border-[color:var(--color-accent)] hover:text-foreground'
                     }`}
                     title={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
                     aria-label={helpMode ? tBoard('helpMode.tooltip.disableTitle') : tBoard('helpMode.tooltip.enableTitle')}
@@ -2461,7 +2461,7 @@ function TeamBoardPageInner(){
                   />
                   <DragOverlay dropAnimation={null}>
                     {draggingCard && (
-                      <div className="pointer-events-none w-64 rounded-xl border border-accent/40 bg-card/90 px-4 py-3 shadow-2xl backdrop-blur">
+                      <div className="app-panel pointer-events-none w-64 rounded-xl px-4 py-3">
                         <p className="text-sm font-medium">{draggingCard.title}</p>
                       </div>
                     )}
@@ -2539,7 +2539,7 @@ function TeamBoardPageInner(){
                 />
               )
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/15 bg-card/60 p-8 text-center">
+              <div className="app-panel rounded-2xl border-dashed p-8 text-center">
                 <p className="text-sm text-muted">{tBoard('columns.emptyBoard')}</p>
               </div>
             )}

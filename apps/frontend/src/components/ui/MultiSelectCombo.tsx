@@ -216,8 +216,8 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
   return (
     <div ref={containerRef} className={`relative text-sm ${className ?? ''}`}>
       <div
-        className={`relative flex min-h-[40px] cursor-text flex-wrap items-center gap-2 rounded border px-3 py-2 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 ${
-          disabled ? 'cursor-not-allowed border-white/10 bg-surface/40 text-muted' : 'border-white/15 bg-surface/70 hover:border-accent/60'
+        className={`app-input relative flex min-h-[40px] cursor-text flex-wrap items-center gap-2 rounded px-3 py-2 transition ${
+          disabled ? 'cursor-not-allowed opacity-70 text-muted' : 'hover:border-accent/60'
         }`}
         onClick={() => {
           if (disabled) return;
@@ -231,7 +231,8 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
         {selectedOptions.map((option) => (
           <span
             key={option.id}
-            className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-foreground"
+            className="app-pill inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-foreground"
+            style={{ background: 'color-mix(in srgb, var(--color-accent-soft) 82%, var(--color-surface-raised) 18%)' }}
           >
             {option.label}
             <button
@@ -272,7 +273,7 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
       {open && (
         <div
           ref={listRef}
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-white/15 bg-surface/95 shadow-xl backdrop-blur"
+          className="app-floating-panel absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg shadow-xl"
         >
           {normalizedOptions.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted">{emptyMessage}</div>
@@ -294,8 +295,9 @@ export const MultiSelectCombo: React.FC<MultiSelectComboProps> = ({
                     }
                   }}
                   className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
-                    highlighted ? 'bg-accent/20 text-foreground' : 'hover:bg-white/10'
+                    highlighted ? 'text-foreground' : 'text-muted'
                   } ${active ? 'text-foreground' : 'text-muted'}`}
+                  style={highlighted ? { background: 'color-mix(in srgb, var(--color-accent-soft) 84%, var(--color-surface-raised) 16%)' } : undefined}
                 >
                   <span>{option.label}</span>
                   {option.description && (

@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const solarForge: ThemeDefinition = {
+const solarForge = defineTheme({
   id: "solar-forge",
   tone: "light",
   nameKey: "settings.theme.names.solarForge",
@@ -29,6 +29,6 @@ const solarForge: ThemeDefinition = {
     card: "#FDE7CC",
     accent: "#FF5A1F",
   },
-};
+});
 
 export default solarForge;

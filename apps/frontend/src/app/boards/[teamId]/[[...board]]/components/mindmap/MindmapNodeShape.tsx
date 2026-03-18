@@ -5,6 +5,7 @@ import { Group, Rect, Text, Circle } from 'react-konva';
 import type Konva from 'konva';
 import type { MindmapNode } from './mindmap-types';
 import { LAYOUT_CONSTANTS } from './mindmap-types';
+import { useTheme } from '@/themes/theme-provider';
 
 // ---------------------------------------------------------------------------
 // Color palette per behaviorKey — used for left priority stripe
@@ -91,6 +92,7 @@ function MindmapNodeShapeInner({
   onBlingDragMove,
   onBlingDragEnd,
 }: MindmapNodeShapeProps) {
+  const { activeTheme } = useTheme();
   const isRoot = node.depth === 0;
   const w = isRoot ? LAYOUT_CONSTANTS.ROOT_WIDTH : LAYOUT_CONSTANTS.NODE_WIDTH;
   const h = isRoot ? LAYOUT_CONSTANTS.ROOT_HEIGHT : LAYOUT_CONSTANTS.NODE_HEIGHT;
@@ -106,6 +108,23 @@ function MindmapNodeShapeInner({
   const displayTitle = truncateText(node.title, maxTitleChars);
   const priorityColor = getPriorityColor(node.priority);
   const accentColor = getNodeColor(node);
+  const cardFill = isRoot
+    ? activeTheme.cssVars['--color-elevated']
+    : activeTheme.cssVars['--color-card'];
+  const cardStroke = isSelected
+    ? activeTheme.cssVars['--color-accent']
+    : isSearchMatch
+      ? activeTheme.cssVars['--color-warning']
+      : activeTheme.cssVars['--color-border'];
+  const cardShadow = isSelected
+    ? activeTheme.cssVars['--color-theme-ring']
+    : isSearchMatch
+      ? activeTheme.cssVars['--color-warning-soft']
+      : activeTheme.cssVars['--color-shadow'];
+  const progressTrack = activeTheme.cssVars['--color-border-subtle'];
+  const collapseBadgeFill = activeTheme.cssVars['--color-elevated'];
+  const collapseBadgeText = activeTheme.cssVars['--color-foreground'];
+  const titleColor = activeTheme.cssVars['--color-foreground'];
 
   return (
     <Group
@@ -137,12 +156,12 @@ function MindmapNodeShapeInner({
         y={-halfH}
         width={w}
         height={h}
-        fill="#1a1d24"
-        stroke={isSelected ? '#ffffff' : isSearchMatch ? '#fbbf24' : 'rgba(255,255,255,0.1)'}
+        fill={cardFill}
+        stroke={cardStroke}
         strokeWidth={isSelected ? 2 : isSearchMatch ? 2 : 1}
         cornerRadius={8}
         shadowBlur={isSelected ? 10 : isSearchMatch ? 14 : 0}
-        shadowColor={isSelected ? '#ffffff' : isSearchMatch ? '#fbbf24' : undefined}
+        shadowColor={cardShadow}
         opacity={isLoading ? 0.6 : 1}
         onClick={() => onSelect(node.id)}
         onDblClick={() => onOpenTask(node.id)}
@@ -194,7 +213,7 @@ function MindmapNodeShapeInner({
         text={displayTitle}
         fontSize={isRoot ? 12 : 11}
         fontStyle={isRoot ? 'bold' : 'normal'}
-        fill="#e5e7eb"
+        fill={titleColor}
         verticalAlign="middle"
         listening={false}
         ellipsis
@@ -209,7 +228,7 @@ function MindmapNodeShapeInner({
             y={halfH - 4}
             width={w - 8}
             height={2}
-            fill="rgba(255,255,255,0.08)"
+            fill={progressTrack}
             cornerRadius={1}
             listening={false}
           />
@@ -236,7 +255,16 @@ function MindmapNodeShapeInner({
           ) / 86400000,
         );
         const label = diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '0';
-        const badgeColor = diff < 0 ? '#ef4444' : diff <= 3 ? '#34d399' : '#0d9488';
+        const badgeColor = diff < 0
+          ? activeTheme.cssVars['--color-danger']
+          : diff <= 3
+            ? activeTheme.cssVars['--color-warning']
+            : activeTheme.cssVars['--color-success'];
+        const badgeFill = diff < 0
+          ? activeTheme.cssVars['--color-danger-soft']
+          : diff <= 3
+            ? activeTheme.cssVars['--color-warning-soft']
+            : activeTheme.cssVars['--color-success-soft'];
         const badgeW = 26;
         const badgeH = 13;
         return (
@@ -246,8 +274,8 @@ function MindmapNodeShapeInner({
               y={-badgeH / 2}
               width={badgeW}
               height={badgeH}
-              fill={badgeColor + '33'}
-              stroke={badgeColor + '80'}
+              fill={badgeFill}
+              stroke={badgeColor}
               strokeWidth={0.5}
               cornerRadius={4}
             />
@@ -290,14 +318,16 @@ function MindmapNodeShapeInner({
           {/* Visual badge */}
           <Circle
             radius={LAYOUT_CONSTANTS.COLLAPSE_INDICATOR_SIZE}
-            fill="#ffffff"
+            fill={collapseBadgeFill}
+            stroke={activeTheme.cssVars['--color-border']}
+            strokeWidth={1}
             listening={false}
           />
           <Text
             text={(node.collapsed || !node.childrenLoaded) ? '+' : '−'}
             fontSize={12}
             fontStyle="bold"
-            fill="#0f1117"
+            fill={collapseBadgeText}
             align="center"
             verticalAlign="middle"
             offsetX={4}

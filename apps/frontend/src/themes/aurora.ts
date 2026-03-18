@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from "./types";
+import { defineTheme } from "./define-theme";
 
-const aurora: ThemeDefinition = {
+const aurora = defineTheme({
   id: "aurora",
   tone: "light",
   nameKey: "settings.theme.names.aurora",
@@ -29,6 +29,6 @@ const aurora: ThemeDefinition = {
     card: "#eef2ff",
     accent: "#2563eb",
   },
-};
+});
 
 export default aurora;

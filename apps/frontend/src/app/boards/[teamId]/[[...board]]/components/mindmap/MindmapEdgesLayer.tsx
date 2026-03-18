@@ -4,6 +4,7 @@ import React, { useMemo, useCallback } from 'react';
 import { Path } from 'react-konva';
 import type Konva from 'konva';
 import type { MindmapEdge, MindmapNode } from './mindmap-types';
+import { useTheme } from '@/themes/theme-provider';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -35,10 +36,15 @@ export function computeBezierPath(
 // ---------------------------------------------------------------------------
 
 function MindmapEdgesLayerInner({ edges, nodes, registerEdgeRef }: MindmapEdgesLayerProps) {
+  const { activeTheme } = useTheme();
   const nodeMap = useMemo(
     () => new Map(nodes.map(n => [n.id, n])),
     [nodes],
   );
+
+  const edgeStroke = activeTheme.tone === 'light'
+    ? activeTheme.cssVars['--color-border-strong']
+    : activeTheme.cssVars['--color-border'];
 
   const handleRef = useCallback(
     (key: string) => (ref: Konva.Path | null) => {
@@ -60,8 +66,9 @@ function MindmapEdgesLayerInner({ edges, nodes, registerEdgeRef }: MindmapEdgesL
             key={key}
             ref={handleRef(key)}
             data={computeBezierPath(source, target)}
-            stroke="rgba(255, 255, 255, 0.12)"
-            strokeWidth={1.5}
+            stroke={edgeStroke}
+            strokeWidth={activeTheme.tone === 'light' ? 1.8 : 1.5}
+            opacity={activeTheme.tone === 'light' ? 0.92 : 0.82}
             listening={false}
           />
         );

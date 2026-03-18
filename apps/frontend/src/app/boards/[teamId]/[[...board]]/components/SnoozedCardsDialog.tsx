@@ -54,12 +54,13 @@ export function SnoozedCardsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-40 flex items-center justify-center px-4 py-8"
+      style={{ background: 'color-mix(in srgb, var(--color-overlay) 68%, transparent)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="snoozed-dialog-title"
     >
-      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-surface/95 p-6 shadow-2xl">
+      <div className="app-panel-strong w-full max-w-3xl rounded-2xl p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="snoozed-dialog-title" className="text-lg font-semibold">
@@ -72,18 +73,18 @@ export function SnoozedCardsDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-white/15 px-3 py-1 text-sm text-muted transition hover:border-accent hover:text-foreground"
+            className="app-pill rounded-full px-3 py-1 text-sm text-muted transition hover:text-foreground"
           >
             Fermer
           </button>
         </div>
 
-        <div className="mt-4 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="app-toolbar mt-4 max-h-[60vh] overflow-y-auto rounded-2xl p-4">
           {loading && (
             <p className="text-sm text-muted">Chargement des cartes reportées…</p>
           )}
           {!loading && error && (
-            <p className="text-sm text-rose-300">{error}</p>
+            <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>
           )}
           {!loading && !error && nodes.length === 0 && (
             <p className="text-sm text-muted">
@@ -97,14 +98,14 @@ export function SnoozedCardsDialog({
                 return (
                   <li
                     key={node.id}
-                    className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-surface/80 p-4"
+                    className="app-panel flex items-start justify-between gap-4 rounded-xl p-4"
                   >
                     <div className="space-y-1">
                       <p className="text-sm font-semibold">
                         {node.shortId ? `#${node.shortId} ` : ''}
                         {node.title}
                       </p>
-                      <p className="text-xs text-cyan-300">
+                      <p className="text-xs" style={{ color: 'var(--color-info)' }}>
                         Reportée jusqu&apos;au {formatDate(node.backlogHiddenUntil ?? null)}
                       </p>
                       {node.dueAt && (
@@ -116,11 +117,12 @@ export function SnoozedCardsDialog({
                         type="button"
                         onClick={() => onUnsnooze(node.id)}
                         disabled={unsnoozing}
-                        className={`rounded-full border border-cyan-400/40 px-3 py-1 text-sm font-semibold transition ${
+                        className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
                           unsnoozing
-                            ? 'cursor-wait bg-cyan-500/20 text-cyan-100'
-                            : 'bg-cyan-500/10 text-cyan-200 hover:border-cyan-200 hover:text-cyan-100'
+                            ? 'cursor-wait'
+                            : ''
                         }`}
+                        style={unsnoozing ? { background: 'var(--color-info-soft)', borderColor: 'color-mix(in srgb, var(--color-info) 42%, transparent)', color: 'var(--color-info)' } : { background: 'color-mix(in srgb, var(--color-info) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--color-info) 36%, transparent)', color: 'var(--color-info)' }}
                       >
                         {unsnoozing ? 'Réveiller…' : 'Réveiller'}
                       </button>

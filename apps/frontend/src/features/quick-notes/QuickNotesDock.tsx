@@ -90,7 +90,7 @@ export function QuickNotesDock() {
       return (
         <div
           key={note.id}
-          className="flex items-center gap-3 border-b border-white/5 py-2 text-sm last:border-b-0"
+          className="flex items-center gap-3 border-b border-[color:var(--color-border-subtle)] py-2 text-sm last:border-b-0"
         >
           <span className="material-symbols-outlined text-base text-muted">{icon}</span>
           <div className="flex flex-1 flex-col gap-1">
@@ -121,8 +121,8 @@ export function QuickNotesDock() {
             }
             className={`rounded-full border px-2 py-1 text-[11px] font-semibold transition ${
               aiReady
-                ? "border-accent/30 text-accent hover:border-accent"
-                : "cursor-not-allowed border-white/10 text-muted/60"
+                ? "app-pill text-accent hover:border-accent"
+                : "cursor-not-allowed border-[color:var(--color-border-subtle)] text-muted/60"
             }`}
             aria-label="Ouvrir l'assistant IA"
           >
@@ -131,7 +131,7 @@ export function QuickNotesDock() {
           <button
             type="button"
             onClick={() => void handleTreat(note.id)}
-            className="rounded-full p-1 text-muted transition hover:text-foreground"
+            className="app-icon-button p-1 text-muted transition hover:text-foreground"
             aria-label="Traiter la note"
           >
             ✕
@@ -146,8 +146,8 @@ export function QuickNotesDock() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 z-40 w-[320px] rounded-2xl border border-white/10 bg-surface/95 shadow-2xl shadow-black/20">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+    <div className="app-panel-strong fixed bottom-6 left-6 z-40 w-[320px] rounded-[1.5rem] shadow-2xl">
+      <div className="flex items-center justify-between border-b border-[color:var(--color-border-subtle)] px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-foreground">Traitement des entrées</p>
           <p className="text-[11px] text-muted">{openCount} note(s) en attente</p>
@@ -155,7 +155,7 @@ export function QuickNotesDock() {
         <button
           type="button"
           onClick={handleHide}
-          className="text-muted transition hover:text-foreground"
+          className="app-icon-button"
           aria-label="Masquer le dock"
         >
           ✕
@@ -163,7 +163,7 @@ export function QuickNotesDock() {
       </div>
 
       {!aiReady && (
-        <div className="border-b border-white/10 px-4 py-2 text-[11px] text-muted">
+        <div className="app-warning-panel border-b px-4 py-2 text-[11px] text-muted">
           IA non configurée. <Link href="/settings" className="text-accent hover:underline">Paramétrer</Link>
         </div>
       )}

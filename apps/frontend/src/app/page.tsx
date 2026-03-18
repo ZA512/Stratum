@@ -81,31 +81,46 @@ export default function Home() {
 
   if (initializing) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <span className="text-muted">{t("common.loading")}</span>
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <div className="app-panel-strong rounded-[1.8rem] px-6 py-5 text-center">
+          <span className="text-muted">{t("common.loading")}</span>
+        </div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center">
-        <h1 className="text-4xl font-semibold">{t("home.guest.title")}</h1>
-        <p className="max-w-xl text-balance text-muted">{t("home.guest.subtitle")}</p>
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-background transition hover:bg-accent-strong"
-        >
-          {t("home.guest.cta")}
-        </Link>
+      <div className="flex min-h-screen items-center justify-center px-6 py-12">
+        <div className="app-panel-strong flex w-full max-w-4xl flex-col gap-8 rounded-[2rem] px-8 py-10 text-center md:px-12 md:py-12">
+          <div className="space-y-4">
+            <p className="app-kicker">Stratum</p>
+            <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">{t("home.guest.title")}</h1>
+            <p className="mx-auto max-w-2xl text-balance text-base text-muted md:text-lg">{t("home.guest.subtitle")}</p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/login"
+              className="rounded-full px-6 py-3 text-sm font-semibold transition"
+              style={{ background: "var(--color-accent)", color: "var(--color-accent-foreground)" }}
+            >
+              {t("home.guest.cta")}
+            </Link>
+            <Link href="/register" className="app-pill rounded-full px-6 py-3 text-sm font-semibold text-foreground">
+              {t("register.title")}
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (hasTeams) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface">
-  <span className="text-sm text-muted">{t("home.redirecting")}</span>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
+        <div className="app-panel rounded-[1.4rem] px-5 py-4 text-center">
+          <span className="text-sm text-muted">{t("home.redirecting")}</span>
+        </div>
       </div>
     );
   }
@@ -118,8 +133,10 @@ export default function Home() {
 
   if (user && isResolvingTeams) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface">
-        <span className="text-sm text-muted">{t("home.loadingTeams")}</span>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
+        <div className="app-panel rounded-[1.4rem] px-5 py-4 text-center">
+          <span className="text-sm text-muted">{t("home.loadingTeams")}</span>
+        </div>
       </div>
     );
   }
@@ -142,38 +159,40 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center">
-      {error ? (
-        <div className="max-w-md rounded border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
-        </div>
-      ) : null}
-      <p className="text-sm text-muted">
-        {bootstrapMutation.isPending || teamsQuery.isLoading
-          ? t("home.bootstrapping")
-          : t("home.waitingForTeams")}
-      </p>
-      <button
-        type="button"
-        onClick={handleManualBootstrap}
-        disabled={bootstrapMutation.isPending || teamsQuery.isLoading}
-        className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-muted transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {bootstrapMutation.isPending
-          ? t("home.bootstrappingAction")
-          : t("home.bootstrapCta")}
-      </button>
-      <div className="flex items-center gap-3 text-xs text-muted">
-        <Link href="/settings" className="underline-offset-2 hover:underline">
-          {t("common.actions.settings")}
-        </Link>
+    <div className="flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="app-panel-strong flex w-full max-w-2xl flex-col items-center gap-5 rounded-[1.8rem] px-8 py-8 text-center">
+        {error ? (
+          <div className="app-danger-panel max-w-md rounded-xl px-4 py-3 text-sm" style={{ color: "var(--color-danger)" }}>
+            {error}
+          </div>
+        ) : null}
+        <p className="text-sm text-muted">
+          {bootstrapMutation.isPending || teamsQuery.isLoading
+            ? t("home.bootstrapping")
+            : t("home.waitingForTeams")}
+        </p>
         <button
           type="button"
-          onClick={() => void logout()}
-          className="underline-offset-2 hover:underline"
+          onClick={handleManualBootstrap}
+          disabled={bootstrapMutation.isPending || teamsQuery.isLoading}
+          className="app-pill rounded-full px-4 py-2 text-sm font-medium text-muted transition disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {t("common.actions.signOut")}
+          {bootstrapMutation.isPending
+            ? t("home.bootstrappingAction")
+            : t("home.bootstrapCta")}
         </button>
+        <div className="flex items-center gap-3 text-xs text-muted">
+          <Link href="/settings" className="underline-offset-2 hover:underline">
+            {t("common.actions.settings")}
+          </Link>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="underline-offset-2 hover:underline"
+          >
+            {t("common.actions.signOut")}
+          </button>
+        </div>
       </div>
     </div>
   );

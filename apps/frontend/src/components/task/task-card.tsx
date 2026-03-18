@@ -78,13 +78,71 @@ export interface TaskCardProps {
   isShared?: boolean;
 }
 
-// Helper palette (conserver les couleurs existantes)
-const priorityBadgeClasses: Record<TaskPriority, string> = {
-  Low: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  Medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-  High: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
-  Critical: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
+const priorityBadgeStyles: Record<TaskPriority, React.CSSProperties> = {
+  Low: {
+    borderColor: "color-mix(in srgb, var(--color-success) 34%, var(--color-border) 66%)",
+    background: "var(--color-success-soft)",
+    color: "var(--color-success)",
+  },
+  Medium: {
+    borderColor: "color-mix(in srgb, var(--color-info) 34%, var(--color-border) 66%)",
+    background: "var(--color-info-soft)",
+    color: "var(--color-info)",
+  },
+  High: {
+    borderColor: "color-mix(in srgb, var(--color-warning) 34%, var(--color-border) 66%)",
+    background: "var(--color-warning-soft)",
+    color: "var(--color-warning)",
+  },
+  Critical: {
+    borderColor: "color-mix(in srgb, var(--color-danger) 34%, var(--color-border) 66%)",
+    background: "var(--color-danger-soft)",
+    color: "var(--color-danger)",
+  },
 };
+
+function getLatenessStyle(lateness: number): React.CSSProperties {
+  if (lateness < -7) {
+    return {
+      borderColor: "color-mix(in srgb, var(--color-danger) 34%, var(--color-border) 66%)",
+      background: "var(--color-danger-soft)",
+      color: "var(--color-danger)",
+    };
+  }
+  if (lateness < 0) {
+    return {
+      borderColor: "color-mix(in srgb, var(--color-warning) 36%, var(--color-border) 64%)",
+      background: "var(--color-warning-soft)",
+      color: "var(--color-warning)",
+    };
+  }
+  if (lateness <= 3) {
+    return {
+      borderColor: "color-mix(in srgb, var(--color-success) 34%, var(--color-border) 66%)",
+      background: "var(--color-success-soft)",
+      color: "var(--color-success)",
+    };
+  }
+  if (lateness <= 7) {
+    return {
+      borderColor: "color-mix(in srgb, var(--color-info) 34%, var(--color-border) 66%)",
+      background: "var(--color-info-soft)",
+      color: "var(--color-info)",
+    };
+  }
+  return {
+    borderColor: "color-mix(in srgb, var(--color-accent) 30%, var(--color-border) 70%)",
+    background: "color-mix(in srgb, var(--color-accent-soft) 88%, transparent)",
+    color: "var(--color-accent)",
+  };
+}
+
+const fractalPathColors = [
+  "var(--color-info)",
+  "var(--color-warning)",
+  "var(--color-danger)",
+  "var(--color-success)",
+];
 
 function pickTooltipEntry(entry: TooltipEntry | undefined, helpMode: boolean): (TooltipCopy & {
   align?: "left" | "right";
@@ -196,7 +254,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     <div
       onClick={onClick}
       className={cx(
-        "group relative rounded-xl border border-white/10 bg-card/80 text-foreground shadow-lg transition hover:border-accent/40",
+        "app-panel group relative rounded-[1.1rem] text-foreground shadow-lg transition hover:border-[color:var(--color-accent)]/50",
         onClick &&
           "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
@@ -229,10 +287,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             const tooltip = pickTooltipEntry(helpMessages?.priority, helpMode);
             const content = (
               <span
-                className={cx(
-                  "inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full leading-none",
-                  priorityBadgeClasses[priority]
-                )}
+                className="inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none"
+                style={priorityBadgeStyles[priority]}
               >
                 {priority}
               </span>
@@ -260,7 +316,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               aria-label="Actions de la tâche"
               onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
               ref={menuButtonRef}
-              className="p-1 -m-1 rounded text-muted transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="app-icon-button -m-1 p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
             </button>
@@ -302,7 +358,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <p className="text-sm leading-snug text-muted">{description}</p>
         )}
       </div>
-      <div className="mx-4 h-px bg-white/10" />
+      <div className="mx-4 h-px bg-[color:var(--color-border-subtle)]" />
       {/* Pied */}
       <div className={cx("px-4", compact ? "py-2" : "py-3", "grid grid-cols-12 items-center gap-3")}>        
         <div className="col-span-7 flex items-center gap-3 min-w-0">
@@ -320,12 +376,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 {assignees.slice(0, 4).map(a => (
                   <div
                     key={a.id}
-                    className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)] bg-blue-200 dark:bg-blue-900"
-                    style={a.color ? { backgroundColor: a.color } : undefined}
+                    className="flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-[color:var(--color-background)]"
+                    style={a.color ? { backgroundColor: a.color } : { background: "color-mix(in srgb, var(--color-accent-soft) 88%, var(--color-surface-raised) 12%)" }}
                     // Supprime title natif pour éviter conflit avec tooltip multi-ligne
                     aria-label={a.displayName || a.initials}
                   >
-                    <span className="text-xs font-bold text-blue-900 dark:text-blue-200">{a.initials}</span>
+                    <span className="text-xs font-bold" style={{ color: a.color ? "var(--color-accent-foreground)" : "var(--color-accent)" }}>{a.initials}</span>
                   </div>
                 ))}
                 {assignees.length > 4 && (
@@ -337,7 +393,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   <div
                     id={raciTooltipId}
                     role="tooltip"
-                    className="absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left whitespace-pre-line rounded-md border border-white/10 bg-background/95 px-3 py-2 text-[11px] leading-relaxed text-foreground shadow-xl"
+                    className="app-panel absolute left-0 top-full z-50 mt-2 w-max max-w-xs origin-top-left whitespace-pre-line rounded-md px-3 py-2 text-[11px] leading-relaxed text-foreground shadow-xl"
                   >
                     {computedTooltip}
                   </div>
@@ -361,19 +417,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {showDueDate && typeof lateness === "number" && (() => {
             const tooltip = pickTooltipEntry(helpMessages?.dueDate, helpMode);
             const badge = (
-              <div className={cx(
-                "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
-                // Très en retard (< -7 jours) : rouge vif
-                lateness < -7 ? "bg-red-500/20 border border-red-500/30 text-red-300" :
-                // En retard (< 0) : rouge-orange
-                lateness < 0 ? "bg-orange-500/20 border border-orange-500/30 text-orange-300" :
-                // À temps (0-3 jours) : vert
-                lateness <= 3 ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300" :
-                // Confortable (4-7 jours) : vert clair
-                lateness <= 7 ? "bg-green-500/20 border border-green-500/30 text-green-300" :
-                // Très à l'avance (>7 jours) : bleu-vert
-                "bg-teal-500/20 border border-teal-500/30 text-teal-300"
-              )}>
+              <div className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium" style={getLatenessStyle(lateness)}>
                 <span className="material-icons-outlined" style={{ fontSize: 16 }}>timer</span>
                 <span className="-mt-px">{lateness}</span>
               </div>
@@ -399,7 +443,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             const tooltip = pickTooltipEntry(helpMessages?.progress, helpMode);
             const chip = (
               <div
-                className="flex h-5 min-w-[42px] items-center justify-center rounded-md border border-white/10 bg-surface/70 text-[11px] font-semibold text-foreground"
+                className="app-badge flex h-5 min-w-[42px] items-center justify-center rounded-md text-[11px] font-semibold text-foreground"
                 title={typeof progress === 'number' ? `Progression ${Math.min(Math.max(progress, 0), 100)}%` : 'Aucune progression'}
                 aria-label="Progression"
               >
@@ -458,11 +502,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="flex items-center gap-[1px] font-mono text-[11px] font-semibold">
                   {(() => {
                     const parts = fractalPath.split('.');
-                    // Ordre des couleurs : Bleu (Backlog), Jaune (En cours), Rouge (Bloqué), Vert (Terminé)
-                    const colors = ['text-sky-700 dark:text-sky-300', 'text-amber-700 dark:text-amber-300', 'text-red-700 dark:text-red-300', 'text-emerald-700 dark:text-emerald-300'];
                     return parts.map((part, i) => (
                       <React.Fragment key={i}>
-                        <span className={colors[i] || 'text-muted'}>{part}</span>
+                        <span style={{ color: fractalPathColors[i] || 'var(--color-foreground-subtle)' }}>{part}</span>
                         {i < parts.length - 1 && <span className="text-muted">.</span>}
                       </React.Fragment>
                     ));
@@ -486,7 +528,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           })()}
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-0 rounded-xl ring-0 transition group-hover:ring-2 group-hover:ring-accent/30" />
+      <div className="pointer-events-none absolute inset-0 rounded-[1.1rem] ring-0 transition group-hover:ring-2 group-hover:ring-accent/30" />
     </div>
   );
 };

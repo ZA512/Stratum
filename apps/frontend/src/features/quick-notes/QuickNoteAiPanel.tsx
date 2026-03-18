@@ -192,12 +192,13 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
     <div className="fixed inset-0 z-50 flex items-end justify-start p-4 sm:items-center sm:justify-center">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ background: "color-mix(in srgb, var(--color-overlay) 88%, transparent)" }}
         aria-label="Fermer le panneau IA"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-3xl rounded-2xl border border-white/10 bg-surface p-4 shadow-2xl sm:p-5">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-3">
+      <div className="app-panel-strong relative z-10 w-full max-w-3xl rounded-[1.6rem] p-4 shadow-2xl sm:p-5">
+        <div className="flex items-start justify-between gap-4 border-b border-[color:var(--color-border-subtle)] pb-3">
           <div>
             <h3 className="text-base font-semibold text-foreground">Assistant IA</h3>
             <p className="text-xs text-muted">{providerLabel}</p>
@@ -206,7 +207,7 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-muted transition hover:text-foreground"
+            className="app-icon-button"
             aria-label="Fermer"
           >
             ✕
@@ -214,13 +215,13 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
         </div>
 
         {warnings.length > 0 && (
-          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <div className="app-warning-panel mt-3 rounded-lg px-3 py-2 text-xs" style={{ color: "var(--color-warning)" }}>
             {warnings.join(' ')}
           </div>
         )}
 
         {executionResults.some((entry) => !entry.success) && (
-          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          <div className="app-danger-panel mt-3 rounded-lg px-3 py-2 text-xs" style={{ color: "var(--color-danger)" }}>
             <p className="font-semibold">Certaines actions ont échoué:</p>
             <ul className="mt-1 space-y-1">
               {executionResults
@@ -236,13 +237,13 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
 
         <div className="mt-4 space-y-3">
           {isLoading && (
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-muted">
+            <div className="app-section rounded-lg px-3 py-3 text-sm text-muted">
               Génération des suggestions IA...
             </div>
           )}
 
           {!isLoading && suggestions.length === 0 && (
-            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-muted">
+            <div className="app-section rounded-lg px-3 py-3 text-sm text-muted">
               Aucune suggestion disponible.
             </div>
           )}
@@ -252,7 +253,7 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
             return (
               <label
                 key={suggestion.id}
-                className="block rounded-lg border border-white/10 bg-card/30 px-3 py-3"
+                className="app-section block rounded-lg px-3 py-3"
               >
                 <div className="flex items-start gap-3">
                   <input
@@ -298,7 +299,7 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
                           }
                           rows={2}
                           placeholder="Ex: au lieu de 45% mets 65%"
-                          className="w-full resize-none rounded-lg border border-white/10 bg-surface/70 px-3 py-2 text-xs text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                          className="app-input w-full resize-none rounded-lg px-3 py-2 text-xs text-foreground"
                         />
                       </div>
                     )}
@@ -318,7 +319,7 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
               type="button"
               disabled={isLoading}
               onClick={() => suggestMutation.mutate({ instructions: undefined })}
-              className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="app-pill rounded-full px-3 py-1.5 text-xs font-medium text-foreground transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               Régénérer
             </button>
@@ -326,7 +327,8 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
               type="button"
               disabled={isLoading || !hasCommentEdits}
               onClick={handleApplyWithChanges}
-              className="rounded-full border border-amber-400/40 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="app-warning-panel rounded-full px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ color: "var(--color-warning)" }}
             >
               Appliquer avec modifications
             </button>
@@ -334,7 +336,8 @@ export function QuickNoteAiPanel({ note, onClose }: QuickNoteAiPanelProps) {
               type="button"
               disabled={isLoading || selectedActions.length === 0}
               onClick={() => applySelection(selectedActions)}
-              className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full px-4 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: "var(--color-accent)", color: "var(--color-accent-foreground)" }}
             >
               {executeMutation.isPending ? 'Exécution...' : 'Appliquer la sélection'}
             </button>
