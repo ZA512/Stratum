@@ -1324,6 +1324,17 @@
         "eventType": "Action type",
         "allEvents": "All actions"
       },
+      "density": {
+        "comfortable": "Comfort",
+        "compact": "Compact"
+      },
+      "toolbar": {
+        "period": "Period"
+      },
+      "drawer": {
+        "view": "Report display",
+        "groupBy": "Grouping"
+      },
       "groupBy": {
         "project": "Project + chronology",
         "timeline": "Global chronology",

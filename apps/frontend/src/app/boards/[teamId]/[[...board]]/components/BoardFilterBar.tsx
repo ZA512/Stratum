@@ -49,6 +49,8 @@ export interface BoardFilterBarProps {
   /** Sections supplémentaires dans le drawer (spécifiques à la vue) */
   extraDrawerSections?: React.ReactNode;
   showActiveChips?: boolean;
+  showDefaultFamilies?: boolean;
+  searchPlaceholder?: string;
   className?: string;
 }
 
@@ -66,6 +68,8 @@ export function BoardFilterBar({
   rightSlot,
   extraDrawerSections,
   showActiveChips = true,
+  showDefaultFamilies = true,
+  searchPlaceholder,
   className,
 }: BoardFilterBarProps) {
   const { t: tBoard } = useTranslation('board');
@@ -468,7 +472,7 @@ export function BoardFilterBar({
               blurTimeoutRef.current = window.setTimeout(() => setFocused(false), 120);
             }}
             onKeyDown={(e) => { if (e.key === 'Escape') { setDraft(''); setSearchQuery(''); } }}
-            placeholder={tBoard('sharedFilter.search.placeholder')}
+            placeholder={searchPlaceholder ?? tBoard('sharedFilter.search.placeholder')}
             className="w-full rounded-xl border border-white/10 bg-surface py-1.5 pl-8 pr-10 text-sm text-foreground outline-none transition focus:border-accent"
             aria-label={tBoard('sharedFilter.search.aria')}
           />
@@ -512,6 +516,7 @@ export function BoardFilterBar({
             </div>
           )}
 
+          {showDefaultFamilies && (
           <div ref={familyMenuRef} className="flex items-center gap-1.5">
             <div className="relative">
             <button
@@ -690,9 +695,11 @@ export function BoardFilterBar({
             )}
             </div>
           </div>
+          )}
 
           {/* --- Compteur + Bouton Affichage + Reset --- */}
           <div className="flex items-center gap-2">
+            {showDefaultFamilies && (
             <div ref={presetsRef} className="relative">
             <button
               type="button"
@@ -761,6 +768,7 @@ export function BoardFilterBar({
               </div>
             )}
             </div>
+            )}
             {typeof tasksCount === 'number' && (
               <div className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
                 <span>

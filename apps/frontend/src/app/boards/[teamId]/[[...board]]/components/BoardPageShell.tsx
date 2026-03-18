@@ -41,7 +41,16 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
 import { BoardListView, COLUMN_LABELS, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
-import { BoardReportView } from './BoardReportView';
+import {
+  BoardReportView,
+  createDefaultReportFilters,
+  getPresetRange,
+  REPORT_EVENT_TYPE_OPTIONS,
+  type ReportDensity,
+  type ReportGroupBy,
+  type ReportPreset,
+  type ReportViewFilters,
+} from './BoardReportView';
 import dynamic from 'next/dynamic';
 import type { MindmapLayoutMode } from './mindmap/mindmap-types';
 
@@ -198,6 +207,114 @@ const EFFORT_LABELS: Record<EffortValue, string> = EFFORT_OPTIONS.reduce((acc, o
   acc[option.value] = option.label;
   return acc;
 }, {} as Record<EffortValue, string>);
+
+function formatCompactReportDate(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+
+function ReportToolbarControls({
+  filters,
+  onChange,
+}: {
+  filters: ReportViewFilters;
+  onChange: (next: ReportViewFilters | ((current: ReportViewFilters) => ReportViewFilters)) => void;
+}) {
+  const { t: tBoard } = useTranslation('board');
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!periodOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      setPeriodOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [periodOpen]);
+
+  const periodLabel = filters.preset === 'custom'
+    ? `${formatCompactReportDate(filters.from)} - ${formatCompactReportDate(filters.to)}`
+    : tBoard(`report.presets.${filters.preset}` as const);
+
+  const updateFilters = (next: ReportViewFilters | ((current: ReportViewFilters) => ReportViewFilters)) => {
+    onChange(next);
+  };
+
+  return (
+    <>
+      <div ref={panelRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setPeriodOpen((current) => !current)}
+          className="app-pill flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold transition hover:border-[color:var(--color-accent)] hover:text-foreground"
+        >
+          <span>{tBoard('report.toolbar.period')}</span>
+          <span className="text-foreground">{periodLabel}</span>
+        </button>
+        {periodOpen && (
+          <div className="app-floating-panel absolute right-0 top-full z-[75] mt-2 w-[340px] rounded-2xl p-3 shadow-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-foreground-faint)]">
+              {tBoard('report.toolbar.period')}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(['24h', '7d', '14d', '21d', '28d', 'current-week', 'previous-week', 'current-month', 'previous-month'] as ReportPreset[]).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    const range = getPresetRange(preset);
+                    updateFilters((current) => ({ ...current, preset, from: range.from, to: range.to }));
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${filters.preset === preset ? 'app-pill-active' : 'app-pill hover:border-[color:var(--color-accent)] hover:text-foreground'}`}
+                >
+                  {tBoard(`report.presets.${preset}` as const)}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="space-y-1 text-[11px] text-[color:var(--color-foreground-subtle)]">
+                <span>{tBoard('report.filters.from')}</span>
+                <input
+                  type="date"
+                  value={filters.from}
+                  onChange={(event) => updateFilters((current) => ({ ...current, preset: 'custom', from: event.target.value }))}
+                  className="app-input w-full rounded-xl px-2.5 py-1.5 text-[12px]"
+                />
+              </label>
+              <label className="space-y-1 text-[11px] text-[color:var(--color-foreground-subtle)]">
+                <span>{tBoard('report.filters.to')}</span>
+                <input
+                  type="date"
+                  value={filters.to}
+                  onChange={(event) => updateFilters((current) => ({ ...current, preset: 'custom', to: event.target.value }))}
+                  className="app-input w-full rounded-xl px-2.5 py-1.5 text-[12px]"
+                />
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <label className="app-pill flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold text-muted">
+        <span>{tBoard('report.filters.eventType')}</span>
+        <select
+          value={filters.eventType}
+          onChange={(event) => updateFilters((current) => ({ ...current, eventType: event.target.value }))}
+          className="bg-transparent text-foreground outline-none"
+        >
+          {REPORT_EVENT_TYPE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option === 'ALL' ? tBoard('report.filters.allEvents') : option}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
+  );
+}
 // parseSearchTokens et normalizeSearchString sont importés depuis utils/search-tokens.ts
 // normalizeSearchString est un alias de normalizeText défini plus haut avec les imports
 
@@ -344,6 +461,7 @@ function TeamBoardPageInner(){
   const isPushing = transitionPhase === 'pushing' && transitionDirection === 'descend';
   const [listFilters, setListFilters] = useState<BoardListFilters>(DEFAULT_LIST_FILTERS);
   const [listFiltersHydrated, setListFiltersHydrated] = useState(false);
+  const [reportFilters, setReportFilters] = useState<ReportViewFilters>(() => createDefaultReportFilters());
   const [dueBadgeCount, setDueBadgeCount] = useState(0);
   const [dueBadgeLoading, setDueBadgeLoading] = useState(false);
   const [mindmapLayoutMode, setMindmapLayoutMode] = useState<MindmapLayoutMode>('horizontal');
@@ -393,6 +511,7 @@ function TeamBoardPageInner(){
   const dueBadgeTtlMs = 5 * 60 * 1000;
 
   const listFiltersStorageKey = teamId ? `stratum:team:${teamId}:list-filters` : null;
+  const reportFiltersStorageKey = board?.id ? `stratum:board:${board.id}:report-ui:v2` : null;
 
   useEffect(() => {
     if (!listFiltersStorageKey) {
@@ -435,6 +554,41 @@ function TeamBoardPageInner(){
       setListFiltersHydrated(true);
     }
   }, [listFiltersStorageKey]);
+
+  useEffect(() => {
+    if (!reportFiltersStorageKey) {
+      setReportFilters(createDefaultReportFilters());
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(reportFiltersStorageKey);
+      if (!raw) {
+        setReportFilters(createDefaultReportFilters());
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<ReportViewFilters>;
+      const defaults = createDefaultReportFilters();
+      setReportFilters({
+        ...defaults,
+        ...parsed,
+        density: parsed.density === 'comfortable' ? 'comfortable' : 'compact',
+        groupBy: parsed.groupBy === 'timeline' || parsed.groupBy === 'type' ? parsed.groupBy : 'project',
+        preset: parsed.preset ?? defaults.preset,
+      });
+    } catch {
+      setReportFilters(createDefaultReportFilters());
+    }
+  }, [reportFiltersStorageKey]);
+
+  useEffect(() => {
+    if (!reportFiltersStorageKey || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(reportFiltersStorageKey, JSON.stringify(reportFilters));
+    } catch {
+      // ignore storage errors
+    }
+  }, [reportFilters, reportFiltersStorageKey]);
 
   useEffect(() => {
     if (!listFiltersStorageKey || !listFiltersHydrated) return;
@@ -2082,17 +2236,19 @@ function TeamBoardPageInner(){
           }`}
         >
         <BoardFilterBar
-          tasksCount={sharedShownTaskCount}
-          totalTasksCount={sharedTotalTaskCount}
+          tasksCount={boardView === 'report' ? undefined : sharedShownTaskCount}
+          totalTasksCount={boardView === 'report' ? undefined : sharedTotalTaskCount}
           assigneeOptions={assigneeOptions}
           allAssignees={allAssignees}
           priorityOptions={priorityOptions}
           effortOptions={EFFORT_OPTIONS}
           showActiveChips={false}
+          showDefaultFamilies={boardView !== 'report'}
+          searchPlaceholder={boardView === 'report' ? tBoard('report.filters.searchPlaceholder') : undefined}
           rightSlot={
-            boardView === 'kanban' ? (
-              null
-            ) : null
+            boardView === 'report' ? (
+              <ReportToolbarControls filters={reportFilters} onChange={setReportFilters} />
+            ) : boardView === 'kanban' ? null : null
           }
           extraDrawerSections={
             boardView === 'kanban' ? (
@@ -2121,6 +2277,40 @@ function TeamBoardPageInner(){
                       onChange={() => toggleDisplayOption(key)}
                     />
                   ))}
+                </DrawerSection>
+              </>
+            ) : boardView === 'report' ? (
+              <>
+                <DrawerSection title={tBoard('report.drawer.view')}>
+                  <div className="flex gap-2">
+                    {(['compact', 'comfortable'] as ReportDensity[]).map((density) => (
+                      <button
+                        key={density}
+                        type="button"
+                        onClick={() => setReportFilters((current) => ({ ...current, density }))}
+                        className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${reportFilters.density === density ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
+                        aria-pressed={reportFilters.density === density}
+                      >
+                        {tBoard(`report.density.${density}` as const)}
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title={tBoard('report.drawer.groupBy')}>
+                  <div className="space-y-1.5">
+                    {(['project', 'timeline', 'type'] as ReportGroupBy[]).map((groupBy) => (
+                      <button
+                        key={groupBy}
+                        type="button"
+                        onClick={() => setReportFilters((current) => ({ ...current, groupBy }))}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition ${reportFilters.groupBy === groupBy ? 'border-accent/50 bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20 hover:text-foreground'}`}
+                        aria-pressed={reportFilters.groupBy === groupBy}
+                      >
+                        <span>{tBoard(`report.groupBy.${groupBy}` as const)}</span>
+                        <span className="text-[10px] uppercase tracking-wide">{reportFilters.groupBy === groupBy ? 'On' : 'Off'}</span>
+                      </button>
+                    ))}
+                  </div>
                 </DrawerSection>
               </>
             ) : boardView === 'list' ? (
@@ -2516,6 +2706,8 @@ function TeamBoardPageInner(){
                 <BoardReportView
                   boardId={board.id}
                   boardName={board.name}
+                  query={searchQuery}
+                  filters={reportFilters}
                   onOpenTask={handleOpenCard}
                   onOpenBoard={(targetBoardId) => {
                     if (targetBoardId === board.id) {

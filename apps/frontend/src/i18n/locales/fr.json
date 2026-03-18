@@ -1323,6 +1323,17 @@
         "eventType": "Type d'action",
         "allEvents": "Toutes les actions"
       },
+      "density": {
+        "comfortable": "Confort",
+        "compact": "Compact"
+      },
+      "toolbar": {
+        "period": "Periode"
+      },
+      "drawer": {
+        "view": "Affichage du rapport",
+        "groupBy": "Regroupement"
+      },
       "groupBy": {
         "project": "Projet + chrono",
         "timeline": "Chronologie globale",
