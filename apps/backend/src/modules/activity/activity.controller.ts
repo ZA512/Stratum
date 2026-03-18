@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { ActivityService } from './activity.service';
 import { ActivityLogDto, BoardActivityStatsDto } from './dto/activity-log.dto';
+import { BoardActivityReportResponseDto } from './dto/activity-report.dto';
 
 @ApiTags('Activity')
 @Controller('activity')
@@ -56,6 +57,52 @@ export class ActivityController {
     const todayCount =
       await this.activityService.getTodayActivityCount(boardId);
     return { todayCount };
+  }
+
+  @Get('boards/:boardId/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Récupère le rapport d'activité canonique pour un board et son sous-arbre",
+  })
+  @ApiParam({ name: 'boardId', example: 'board_123' })
+  @ApiQuery({ name: 'from', required: false, example: '2026-03-11' })
+  @ApiQuery({ name: 'to', required: false, example: '2026-03-18' })
+  @ApiQuery({ name: 'actorId', required: false, example: 'user_123' })
+  @ApiQuery({
+    name: 'eventTypes',
+    required: false,
+    example: 'COMMENT_ADDED,NODE_MOVED',
+  })
+  @ApiQuery({ name: 'query', required: false, example: 'devis' })
+  @ApiQuery({ name: 'limit', required: false, example: 400 })
+  @ApiOkResponse({ type: BoardActivityReportResponseDto })
+  async getBoardReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId') boardId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('actorId') actorId?: string,
+    @Query('eventTypes') eventTypesRaw?: string,
+    @Query('query') query?: string,
+    @Query('limit') limitRaw?: string,
+  ): Promise<BoardActivityReportResponseDto> {
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    const eventTypes = eventTypesRaw
+      ? eventTypesRaw
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      : undefined;
+
+    return this.activityService.getBoardReport(boardId, user.id, {
+      from,
+      to,
+      actorId,
+      eventTypes,
+      query,
+      limit,
+    });
   }
 
   @Get('nodes/:nodeId')

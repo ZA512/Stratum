@@ -1296,7 +1296,67 @@
       "gantt": "Timeline",
       "ganttHint": "Ouvrir la timeline légère",
       "mindmap": "Mindmap",
-      "mindmapHint": "Ouvrir la vue hiérarchique mindmap"
+      "mindmapHint": "Ouvrir la vue hiérarchique mindmap",
+      "report": "Rapport",
+      "reportHint": "Ouvrir le rapport d'activité sur la période"
+    },
+    "report": {
+      "eyebrow": "Mode rapport",
+      "title": "Rapport d'activite - {boardName}",
+      "subtitle": "Lis l'activite reelle sur la periode, avec les commentaires, les changements de contenu et les mouvements de cartes.",
+      "presets": {
+        "24h": "24h",
+        "7d": "7 jours",
+        "14d": "2 semaines",
+        "21d": "3 semaines",
+        "28d": "4 semaines",
+        "current-week": "Semaine en cours",
+        "previous-week": "Semaine passee",
+        "current-month": "Mois en cours",
+        "previous-month": "Mois passe"
+      },
+      "filters": {
+        "search": "Recherche",
+        "searchPlaceholder": "Rechercher un commentaire, une carte, un changement…",
+        "from": "Date de debut",
+        "to": "Date de fin",
+        "eventType": "Type d'action",
+        "allEvents": "Toutes les actions"
+      },
+      "groupBy": {
+        "project": "Projet + chrono",
+        "timeline": "Chronologie globale",
+        "type": "Par type d'action"
+      },
+      "summary": {
+        "totalEvents": "Evenements",
+        "cardsCreated": "Cartes creees",
+        "cardsMoved": "Cartes deplacees",
+        "commentsAdded": "Commentaires",
+        "descriptionsUpdated": "Descriptions",
+        "dueDatesUpdated": "Echeances",
+        "progressUpdated": "Progressions",
+        "cardsArchived": "Archives / retours"
+      },
+      "states": {
+        "loading": "Chargement du rapport…",
+        "error": "Impossible de charger le rapport.",
+        "empty": "Aucun evenement ne correspond a cette periode ou a ces filtres."
+      },
+      "labels": {
+        "before": "Avant:",
+        "after": "Apres:",
+        "emptyValue": "vide",
+        "system": "Systeme"
+      },
+      "actions": {
+        "openTask": "Ouvrir la carte",
+        "openBoard": "Ouvrir le board",
+        "openContext": "Ouvrir le contexte"
+      },
+      "units": {
+        "events": "evenements"
+      }
     },
     "mindmap": {
       "ariaLabel": "Visualisation mindmap du board",

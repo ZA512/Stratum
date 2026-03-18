@@ -61,6 +61,9 @@ export class NodeCommentDto {
   @ApiProperty({ example: '2024-05-01T10:00:00.000Z' })
   createdAt!: string;
 
+  @ApiProperty({ example: '2024-05-01T10:05:00.000Z' })
+  updatedAt!: string;
+
   @ApiProperty({ type: () => NodeCommentNotificationDto })
   notify!: NodeCommentNotificationDto;
 
@@ -70,6 +73,32 @@ export class NodeCommentDto {
 
 export class CreateNodeCommentDto {
   @ApiProperty({ example: 'Voici les dernières nouvelles', minLength: 1 })
+  body!: string;
+
+  @ApiProperty({ example: true, required: false })
+  notifyResponsible?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  notifyAccountable?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  notifyConsulted?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  notifyInformed?: boolean;
+
+  @ApiProperty({ example: false, required: false })
+  notifyProject?: boolean;
+
+  @ApiProperty({ example: false, required: false })
+  notifySubProject?: boolean;
+
+  @ApiProperty({ type: [String], required: false })
+  mentions?: string[];
+}
+
+export class UpdateNodeCommentDto {
+  @ApiProperty({ example: 'Voici une version modifiée du commentaire', minLength: 1 })
   body!: string;
 
   @ApiProperty({ example: true, required: false })

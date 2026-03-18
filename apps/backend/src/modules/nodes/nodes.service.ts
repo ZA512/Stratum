@@ -14,6 +14,7 @@ import {
   ActivityType,
 } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service';
+import { EventLogService } from '../activity/event-log.service';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -22,7 +23,11 @@ import { MailService } from '../mail/mail.service';
 import { CreateNodeDto } from './dto/create-node.dto';
 import { NodeDto } from './dto/node.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
-import { CreateNodeCommentDto, NodeCommentDto } from './dto/node-comment.dto';
+import {
+  CreateNodeCommentDto,
+  NodeCommentDto,
+  UpdateNodeCommentDto,
+} from './dto/node-comment.dto';
 import {
   NodeAssignmentDto,
   NodeMinimalChildDto,
@@ -379,6 +384,7 @@ export class NodesService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly activityService: ActivityService,
+    private readonly eventLogService: EventLogService,
   ) {
     this.mailLogMaxBytes = this.resolveMailLogMaxBytes();
     this.mailLogMaxFiles = this.resolveMailLogMaxFiles();
@@ -2098,6 +2104,23 @@ export class NodesService {
 
     // Logs d'activité pour tous les changements de champs
     const activityPromises: Promise<void>[] = [];
+    const canonicalEventPromises: Promise<string | null>[] = [];
+
+    const logCanonicalNodeEvent = (
+      eventType: string,
+      payload?: Record<string, unknown>,
+      summary?: string,
+    ) => {
+      canonicalEventPromises.push(
+        this.eventLogService.logNodeEvent({
+          nodeId,
+          actorId: userId,
+          eventType,
+          payload,
+          summary,
+        }),
+      );
+    };
 
     if (dto.title !== undefined && data.title && node.title !== data.title) {
       activityPromises.push(
@@ -2185,6 +2208,175 @@ export class NodesService {
           { oldValue: node.progress, newValue: dto.progress },
         ),
       );
+    }
+
+    if (
+      dto.estimatedTimeHours !== undefined &&
+      extractedMetadata.timeTracking.estimatedTimeHours !==
+        nextTimeTracking.estimatedTimeHours
+    ) {
+      logCanonicalNodeEvent('ESTIMATED_TIME_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.estimatedTimeHours,
+        newValue: nextTimeTracking.estimatedTimeHours,
+      });
+    }
+
+    if (
+      dto.actualOpexHours !== undefined &&
+      extractedMetadata.timeTracking.actualOpexHours !==
+        nextTimeTracking.actualOpexHours
+    ) {
+      logCanonicalNodeEvent('ACTUAL_OPEX_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.actualOpexHours,
+        newValue: nextTimeTracking.actualOpexHours,
+      });
+    }
+
+    if (
+      dto.actualCapexHours !== undefined &&
+      extractedMetadata.timeTracking.actualCapexHours !==
+        nextTimeTracking.actualCapexHours
+    ) {
+      logCanonicalNodeEvent('ACTUAL_CAPEX_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.actualCapexHours,
+        newValue: nextTimeTracking.actualCapexHours,
+      });
+    }
+
+    if (
+      dto.plannedStartDate !== undefined &&
+      extractedMetadata.timeTracking.plannedStartDate !==
+        nextTimeTracking.plannedStartDate
+    ) {
+      logCanonicalNodeEvent('PLANNED_START_DATE_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.plannedStartDate,
+        newValue: nextTimeTracking.plannedStartDate,
+      });
+    }
+
+    if (
+      dto.plannedEndDate !== undefined &&
+      extractedMetadata.timeTracking.plannedEndDate !==
+        nextTimeTracking.plannedEndDate
+    ) {
+      logCanonicalNodeEvent('PLANNED_END_DATE_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.plannedEndDate,
+        newValue: nextTimeTracking.plannedEndDate,
+      });
+    }
+
+    if (
+      dto.actualEndDate !== undefined &&
+      extractedMetadata.timeTracking.actualEndDate !==
+        nextTimeTracking.actualEndDate
+    ) {
+      logCanonicalNodeEvent('ACTUAL_END_DATE_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.actualEndDate,
+        newValue: nextTimeTracking.actualEndDate,
+      });
+    }
+
+    if (
+      dto.scheduleMode !== undefined &&
+      extractedMetadata.timeTracking.scheduleMode !==
+        nextTimeTracking.scheduleMode
+    ) {
+      logCanonicalNodeEvent('SCHEDULE_MODE_CHANGED', {
+        oldValue: extractedMetadata.timeTracking.scheduleMode,
+        newValue: nextTimeTracking.scheduleMode,
+      });
+    }
+
+    if (
+      dto.hardConstraint !== undefined &&
+      extractedMetadata.timeTracking.hardConstraint !==
+        nextTimeTracking.hardConstraint
+    ) {
+      logCanonicalNodeEvent('HARD_CONSTRAINT_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.hardConstraint,
+        newValue: nextTimeTracking.hardConstraint,
+      });
+    }
+
+    if (
+      dto.scheduleDependencies !== undefined &&
+      JSON.stringify(extractedMetadata.timeTracking.dependencies) !==
+        JSON.stringify(nextTimeTracking.dependencies)
+    ) {
+      logCanonicalNodeEvent('SCHEDULE_DEPENDENCIES_UPDATED', {
+        oldValue: extractedMetadata.timeTracking.dependencies,
+        newValue: nextTimeTracking.dependencies,
+      });
+    }
+
+    if (
+      dto.billingStatus !== undefined &&
+      extractedMetadata.financials.billingStatus !== nextFinancials.billingStatus
+    ) {
+      logCanonicalNodeEvent('BILLING_STATUS_UPDATED', {
+        oldValue: extractedMetadata.financials.billingStatus,
+        newValue: nextFinancials.billingStatus,
+      });
+    }
+
+    if (
+      dto.hourlyRate !== undefined &&
+      extractedMetadata.financials.hourlyRate !== nextFinancials.hourlyRate
+    ) {
+      logCanonicalNodeEvent('HOURLY_RATE_UPDATED', {
+        oldValue: extractedMetadata.financials.hourlyRate,
+        newValue: nextFinancials.hourlyRate,
+      });
+    }
+
+    if (
+      dto.plannedBudget !== undefined &&
+      extractedMetadata.financials.plannedBudget !== nextFinancials.plannedBudget
+    ) {
+      logCanonicalNodeEvent('PLANNED_BUDGET_UPDATED', {
+        oldValue: extractedMetadata.financials.plannedBudget,
+        newValue: nextFinancials.plannedBudget,
+      });
+    }
+
+    if (
+      dto.consumedBudgetValue !== undefined &&
+      extractedMetadata.financials.consumedBudgetValue !==
+        nextFinancials.consumedBudgetValue
+    ) {
+      logCanonicalNodeEvent('CONSUMED_BUDGET_UPDATED', {
+        oldValue: extractedMetadata.financials.consumedBudgetValue,
+        newValue: nextFinancials.consumedBudgetValue,
+      });
+    }
+
+    if (
+      dto.consumedBudgetPercent !== undefined &&
+      extractedMetadata.financials.consumedBudgetPercent !==
+        nextFinancials.consumedBudgetPercent
+    ) {
+      logCanonicalNodeEvent('CONSUMED_BUDGET_PERCENT_UPDATED', {
+        oldValue: extractedMetadata.financials.consumedBudgetPercent,
+        newValue: nextFinancials.consumedBudgetPercent,
+      });
+    }
+
+    if (
+      dto.backlogHiddenUntil !== undefined &&
+      extractedMetadata.workflow.backlog.hiddenUntil !==
+        workflowState.backlog.hiddenUntil
+    ) {
+      logCanonicalNodeEvent('BACKLOG_HIDDEN_UNTIL_UPDATED', {
+        oldValue: extractedMetadata.workflow.backlog.hiddenUntil,
+        newValue: workflowState.backlog.hiddenUntil,
+      });
+    }
+
+    if (dto.backlogReviewRestart) {
+      logCanonicalNodeEvent('BACKLOG_REVIEW_RESTARTED', {
+        nextReviewAt: workflowState.backlog.nextReviewAt,
+        previousHiddenUntil: extractedMetadata.workflow.backlog.hiddenUntil,
+      });
     }
 
     if (dto.blockedReason !== undefined || dto.isBlockResolved !== undefined) {
@@ -2282,7 +2474,7 @@ export class NodesService {
     }
 
     // Exécuter tous les logs en parallèle
-    await Promise.all(activityPromises);
+    await Promise.all([...activityPromises, ...canonicalEventPromises]);
 
     return this.mapNode(updated);
   }
@@ -2332,6 +2524,20 @@ export class NodesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.eventLogService.logNodeEvent(
+        {
+          nodeId: node.id,
+          actorId: userId,
+          eventType: 'NODE_DELETED',
+          payload: {
+            recursive,
+            parentId: node.parentId,
+          },
+          summary: `Carte supprimee${recursive ? ' (recursif)' : ''}`,
+        },
+        tx,
+      );
+
       await tx.node.delete({ where: { id: node.id } });
       if (node.parentId) {
         try {
@@ -2810,6 +3016,7 @@ export class NodesService {
       nodeId: string;
       body: string;
       createdAt: Date;
+      updatedAt: Date;
       notifyResponsible: boolean;
       notifyAccountable: boolean;
       notifyConsulted: boolean;
@@ -2845,6 +3052,7 @@ export class NodesService {
       nodeId: comment.nodeId,
       body: comment.body,
       createdAt: comment.createdAt.toISOString(),
+      updatedAt: comment.updatedAt.toISOString(),
       notify: {
         responsible: comment.notifyResponsible ?? true,
         accountable: comment.notifyAccountable ?? true,
@@ -4480,6 +4688,7 @@ export class NodesService {
         nodeId: string;
         body: string;
         createdAt: Date;
+        updatedAt: Date;
         notifyResponsible: boolean;
         notifyAccountable: boolean;
         notifyConsulted: boolean;
@@ -4501,9 +4710,204 @@ export class NodesService {
       nodeId,
       userId,
       ActivityType.COMMENT_ADDED,
+      {
+        commentId: comment.id,
+        body,
+        bodyPreview: body.length > 280 ? `${body.slice(0, 277)}...` : body,
+        mentions,
+      },
+      { skipCanonicalEvent: true },
     );
 
+    await this.eventLogService.logNodeEvent({
+      nodeId,
+      actorId: userId,
+      eventType: 'COMMENT_ADDED',
+      entityType: 'comment',
+      entityId: comment.id,
+      payload: {
+        commentId: comment.id,
+        body,
+        bodyPreview: body.length > 280 ? `${body.slice(0, 277)}...` : body,
+        mentions,
+      },
+      summary: `Commentaire ajoute sur ${node.title}`,
+    });
+
     return mapped[0];
+  }
+
+  async updateNodeComment(
+    nodeId: string,
+    commentId: string,
+    dto: UpdateNodeCommentDto,
+    userId: string,
+  ): Promise<NodeCommentDto> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: {
+        node: {
+          select: {
+            id: true,
+            title: true,
+            teamId: true,
+          },
+        },
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!comment || comment.nodeId !== nodeId) {
+      throw new NotFoundException('Commentaire introuvable');
+    }
+
+    await this.ensureUserCanWrite(comment.node.teamId, userId);
+    if (comment.authorId !== userId) {
+      throw new ForbiddenException(
+        'Seul l\'auteur peut modifier ce commentaire',
+      );
+    }
+
+    const body = dto.body?.trim();
+    if (!body) {
+      throw new BadRequestException('Le commentaire est obligatoire');
+    }
+    if (body.length > 5000) {
+      throw new BadRequestException(
+        'Commentaire trop long (max 5000 caractères)',
+      );
+    }
+
+    const mentions = Array.from(
+      new Set(
+        (dto.mentions ?? comment.mentions ?? [])
+          .map((mention) => mention?.trim())
+          .filter((mention): mention is string => !!mention),
+      ),
+    );
+
+    const updated = await this.prisma.comment.update({
+      where: { id: commentId },
+      data: {
+        body,
+        mentions,
+        notifyResponsible: dto.notifyResponsible ?? comment.notifyResponsible,
+        notifyAccountable: dto.notifyAccountable ?? comment.notifyAccountable,
+        notifyConsulted: dto.notifyConsulted ?? comment.notifyConsulted,
+        notifyInformed: dto.notifyInformed ?? comment.notifyInformed,
+        notifyProject: dto.notifyProject ?? comment.notifyProject,
+        notifySubProject: dto.notifySubProject ?? comment.notifySubProject,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await this.eventLogService.logNodeEvent({
+      nodeId,
+      actorId: userId,
+      eventType: 'COMMENT_EDITED',
+      entityType: 'comment',
+      entityId: commentId,
+      payload: {
+        commentId,
+        oldValue: comment.body,
+        newValue: body,
+        body,
+        bodyPreview: body.length > 280 ? `${body.slice(0, 277)}...` : body,
+        mentions,
+      },
+      summary: `Commentaire modifie sur ${comment.node.title}`,
+    });
+
+    const mapped = await this.mapCommentRecords(this.prisma, [
+      updated as unknown as {
+        id: string;
+        nodeId: string;
+        body: string;
+        createdAt: Date;
+        updatedAt: Date;
+        notifyResponsible: boolean;
+        notifyAccountable: boolean;
+        notifyConsulted: boolean;
+        notifyInformed: boolean;
+        notifyProject: boolean;
+        notifySubProject: boolean;
+        mentions: string[];
+        author: {
+          id: string;
+          displayName: string | null;
+          avatarUrl: string | null;
+          email?: string | null;
+        } | null;
+      },
+    ]);
+
+    return mapped[0];
+  }
+
+  async deleteNodeComment(
+    nodeId: string,
+    commentId: string,
+    userId: string,
+  ): Promise<void> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id: commentId },
+      include: {
+        node: {
+          select: {
+            id: true,
+            title: true,
+            teamId: true,
+          },
+        },
+      },
+    });
+
+    if (!comment || comment.nodeId !== nodeId) {
+      throw new NotFoundException('Commentaire introuvable');
+    }
+
+    await this.ensureUserCanWrite(comment.node.teamId, userId);
+    if (comment.authorId !== userId) {
+      throw new ForbiddenException(
+        'Seul l\'auteur peut supprimer ce commentaire',
+      );
+    }
+
+    await this.eventLogService.logNodeEvent({
+      nodeId,
+      actorId: userId,
+      eventType: 'COMMENT_DELETED',
+      entityType: 'comment',
+      entityId: commentId,
+      payload: {
+        commentId,
+        oldValue: comment.body,
+        body: comment.body,
+        bodyPreview:
+          comment.body.length > 280
+            ? `${comment.body.slice(0, 277)}...`
+            : comment.body,
+      },
+      summary: `Commentaire supprime sur ${comment.node.title}`,
+    });
+
+    await this.prisma.comment.delete({ where: { id: commentId } });
   }
 
   async listChildBoards(

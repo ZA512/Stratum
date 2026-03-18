@@ -41,6 +41,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnList } from './ColumnList';
 import { BoardGanttView } from './BoardGanttView';
 import { BoardListView, COLUMN_LABELS, DEFAULT_LIST_FILTERS, type BoardListFilters } from './BoardListView';
+import { BoardReportView } from './BoardReportView';
 import dynamic from 'next/dynamic';
 import type { MindmapLayoutMode } from './mindmap/mindmap-types';
 
@@ -2331,6 +2332,19 @@ function TeamBoardPageInner(){
                 >
                   {tBoard('viewToggle.mindmap')}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setBoardView('report')}
+                  className={`rounded-full px-3 py-1 transition ${
+                    boardView === 'report'
+                      ? 'bg-accent text-background shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                  aria-pressed={boardView === 'report'}
+                  title={tBoard('viewToggle.reportHint')}
+                >
+                  {tBoard('viewToggle.report')}
+                </button>
               </div>
             </div>
             {boardView === 'kanban' && (
@@ -2498,6 +2512,19 @@ function TeamBoardPageInner(){
                     organicMode={mindmapOrganicMode}
                   />
                 </div>
+              ) : boardView === 'report' ? (
+                <BoardReportView
+                  boardId={board.id}
+                  boardName={board.name}
+                  onOpenTask={handleOpenCard}
+                  onOpenBoard={(targetBoardId) => {
+                    if (targetBoardId === board.id) {
+                      return;
+                    }
+                    setBoardView('kanban');
+                    openChildBoard(targetBoardId);
+                  }}
+                />
               ) : (
                 <BoardListView
                   rootBoard={board}

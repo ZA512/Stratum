@@ -18,6 +18,52 @@ export interface BoardActivityStats {
   todayCount: number;
 }
 
+export interface BoardActivityReportSummary {
+  totalEvents: number;
+  cardsCreated: number;
+  cardsMoved: number;
+  commentsAdded: number;
+  descriptionsUpdated: number;
+  dueDatesUpdated: number;
+  progressUpdated: number;
+  cardsArchived: number;
+  cardsRestored: number;
+}
+
+export interface BoardActivityReportItem {
+  id: string;
+  createdAt: string;
+  eventType: string;
+  summary: string;
+  actorId: string | null;
+  actorDisplayName: string | null;
+  actorAvatarUrl: string | null;
+  boardId: string;
+  boardName: string;
+  nodeId: string;
+  nodeShortId: number | null;
+  nodeTitle: string;
+  parentNodeId: string | null;
+  columnId: string | null;
+  columnName: string | null;
+  fieldKey: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  commentBody: string | null;
+  commentPreview: string | null;
+  payload: Record<string, unknown> | null;
+}
+
+export interface BoardActivityReport {
+  boardId: string;
+  boardName: string;
+  from: string;
+  to: string;
+  generatedAt: string;
+  summary: BoardActivityReportSummary;
+  items: BoardActivityReportItem[];
+}
+
 export enum ActivityType {
   SHARE_INVITE_CREATED = 'SHARE_INVITE_CREATED',
   SHARE_INVITE_ACCEPTED = 'SHARE_INVITE_ACCEPTED',
@@ -133,4 +179,39 @@ export async function fetchNodeActivity(
   }
 
   return (await response.json()) as ActivityLog[];
+}
+
+export async function fetchBoardActivityReport(
+  boardId: string,
+  accessToken: string,
+  query: {
+    from?: string;
+    to?: string;
+    actorId?: string;
+    eventTypes?: string[];
+    query?: string;
+    limit?: number;
+  } = {},
+): Promise<BoardActivityReport> {
+  const params = new URLSearchParams();
+  if (query.from) params.set('from', query.from);
+  if (query.to) params.set('to', query.to);
+  if (query.actorId) params.set('actorId', query.actorId);
+  if (query.eventTypes && query.eventTypes.length > 0) {
+    params.set('eventTypes', query.eventTypes.join(','));
+  }
+  if (query.query) params.set('query', query.query);
+  if (query.limit) params.set('limit', String(query.limit));
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetch(
+    `${API_BASE_URL}/activity/boards/${boardId}/report${suffix}`,
+    createOptions(accessToken),
+  );
+
+  if (!response.ok) {
+    await throwActivityError(response, "Impossible de charger le rapport d'activite");
+  }
+
+  return (await response.json()) as BoardActivityReport;
 }

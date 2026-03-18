@@ -1297,7 +1297,67 @@
       "gantt": "Timeline",
       "ganttHint": "Open the lightweight Gantt timeline",
       "mindmap": "Mindmap",
-      "mindmapHint": "Open the hierarchical mindmap view"
+      "mindmapHint": "Open the hierarchical mindmap view",
+      "report": "Report",
+      "reportHint": "Open the period activity report"
+    },
+    "report": {
+      "eyebrow": "Report mode",
+      "title": "Activity report - {boardName}",
+      "subtitle": "Read the real activity over the period, including comments, content edits, and card moves.",
+      "presets": {
+        "24h": "24h",
+        "7d": "7 days",
+        "14d": "2 weeks",
+        "21d": "3 weeks",
+        "28d": "4 weeks",
+        "current-week": "Current week",
+        "previous-week": "Previous week",
+        "current-month": "Current month",
+        "previous-month": "Previous month"
+      },
+      "filters": {
+        "search": "Search",
+        "searchPlaceholder": "Search a comment, card, or change…",
+        "from": "Start date",
+        "to": "End date",
+        "eventType": "Action type",
+        "allEvents": "All actions"
+      },
+      "groupBy": {
+        "project": "Project + chronology",
+        "timeline": "Global chronology",
+        "type": "By action type"
+      },
+      "summary": {
+        "totalEvents": "Events",
+        "cardsCreated": "Cards created",
+        "cardsMoved": "Cards moved",
+        "commentsAdded": "Comments",
+        "descriptionsUpdated": "Descriptions",
+        "dueDatesUpdated": "Due dates",
+        "progressUpdated": "Progress updates",
+        "cardsArchived": "Archived / restored"
+      },
+      "states": {
+        "loading": "Loading report…",
+        "error": "Unable to load report.",
+        "empty": "No events match this period or these filters."
+      },
+      "labels": {
+        "before": "Before:",
+        "after": "After:",
+        "emptyValue": "empty",
+        "system": "System"
+      },
+      "actions": {
+        "openTask": "Open card",
+        "openBoard": "Open board",
+        "openContext": "Open context"
+      },
+      "units": {
+        "events": "events"
+      }
     },
     "mindmap": {
       "ariaLabel": "Board mindmap visualisation",

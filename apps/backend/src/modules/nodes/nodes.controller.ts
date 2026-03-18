@@ -26,7 +26,11 @@ import { NodeDto } from './dto/node.dto';
 import { NodeBreadcrumbDto } from './dto/node-breadcrumb.dto';
 import { NodeChildBoardDto } from './dto/node-child-board.dto';
 import { NodeDetailDto } from './dto/node-detail.dto';
-import { CreateNodeCommentDto, NodeCommentDto } from './dto/node-comment.dto';
+import {
+  CreateNodeCommentDto,
+  NodeCommentDto,
+  UpdateNodeCommentDto,
+} from './dto/node-comment.dto';
 import { NodeSummaryOnlyDto } from './dto/node-summary-only.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
@@ -246,6 +250,38 @@ export class NodesController {
     @Body() dto: CreateNodeCommentDto,
   ): Promise<NodeCommentDto> {
     return this.nodesService.createNodeComment(nodeId, dto, user.id);
+  }
+
+  @Patch(':nodeId/comments/:commentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Met à jour un commentaire existant' })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiParam({ name: 'commentId', example: 'comment_123' })
+  @ApiOkResponse({ type: NodeCommentDto })
+  updateComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Param('commentId') commentId: string,
+    @Body() dto: UpdateNodeCommentDto,
+  ): Promise<NodeCommentDto> {
+    return this.nodesService.updateNodeComment(nodeId, commentId, dto, user.id);
+  }
+
+  @Delete(':nodeId/comments/:commentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Supprime un commentaire existant' })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiParam({ name: 'commentId', example: 'comment_123' })
+  @ApiOkResponse({ schema: { properties: { deleted: { type: 'boolean' } } } })
+  async deleteComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Param('commentId') commentId: string,
+  ): Promise<{ deleted: true }> {
+    await this.nodesService.deleteNodeComment(nodeId, commentId, user.id);
+    return { deleted: true };
   }
 
   @Delete(':nodeId/collaborators/:userId')

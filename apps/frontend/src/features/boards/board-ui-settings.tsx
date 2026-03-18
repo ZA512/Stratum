@@ -8,7 +8,7 @@ import {
   type BreadcrumbVariant,
 } from "./breadcrumb-preferences";
 
-type BoardViewMode = "kanban" | "gantt" | "list" | "mindmap";
+type BoardViewMode = "kanban" | "gantt" | "list" | "mindmap" | "report";
 
 const EXPERT_MODE_STORAGE_KEY = "stratum:preferences:expert-mode";
 
@@ -66,6 +66,8 @@ export function BoardUiSettingsProvider({ children }: { children: React.ReactNod
         setBoardViewState("list");
       } else if (storedView === "mindmap") {
         setBoardViewState("mindmap");
+      } else if (storedView === "report") {
+        setBoardViewState("report");
       } else {
         setBoardViewState("kanban");
       }

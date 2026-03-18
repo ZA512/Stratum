@@ -3,6 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NodesService } from './nodes.service';
 import { MembershipStatus, ColumnBehaviorKey } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
+import { ActivityService } from '../activity/activity.service';
+import { EventLogService } from '../activity/event-log.service';
 
 // Ce test se concentre sur l'auto-création du board et des colonnes lors de la création de sous-tâche.
 // Simplifié: on mock Prisma pour vérifier les appels structurels, sans toucher à la BD réelle.
@@ -337,6 +339,8 @@ function createMockPrisma(existingCtx?: MockCtx): PrismaService & any {
 describe('NodesService ensureBoard auto-create', () => {
 let service: NodesService;
 let mailService: { sendMail: jest.Mock };
+  let activityService: { logActivity: jest.Mock };
+  let eventLogService: { logNodeEvent: jest.Mock };
   let prisma: any;
 
   beforeEach(async () => {
@@ -370,12 +374,20 @@ let mailService: { sendMail: jest.Mock };
     mailService = {
       sendMail: jest.fn(async () => {}),
     };
+    activityService = {
+      logActivity: jest.fn(async () => {}),
+    };
+    eventLogService = {
+      logNodeEvent: jest.fn(async () => 'event-1'),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NodesService,
         { provide: PrismaService, useValue: prisma },
         { provide: MailService, useValue: mailService },
+        { provide: ActivityService, useValue: activityService },
+        { provide: EventLogService, useValue: eventLogService },
       ],
     }).compile();
 

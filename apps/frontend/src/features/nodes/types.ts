@@ -22,6 +22,7 @@ export type NodeComment = {
   nodeId: string;
   body: string;
   createdAt: string;
+  updatedAt: string;
   author: {
     id: string;
     displayName: string;

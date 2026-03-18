@@ -693,6 +693,8 @@ model ProposalAction {
 model EventLog {
   id            String         @id @default(cuid())
   workspaceId   String
+  boardId       String?
+  nodeId        String?
   actorType     EventActorType
   actorId       String?
   source        EventSource
@@ -707,6 +709,8 @@ model EventLog {
   proposal      Proposal?      @relation(fields: [proposalId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([boardId, createdAt(sort: Desc)])
+  @@index([nodeId, createdAt(sort: Desc)])
   @@index([proposalId])
   @@index([entityType, entityId, createdAt(sort: Desc)])
 

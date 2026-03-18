@@ -3,7 +3,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskDrawer } from './TaskDrawerContext';
 import { useAuth } from '@/features/auth/auth-provider';
-import { createNodeComment, fetchNodeComments } from '../node-comments-api';
+import {
+  createNodeComment,
+  deleteNodeComment,
+  fetchNodeComments,
+  updateNodeComment,
+} from '../node-comments-api';
 import type { NodeComment } from '../types';
 import type { TeamMember } from '@/features/teams/team-members-api';
 
@@ -42,7 +47,7 @@ const mentionRegex = /@([\p{L}\p{N}_.-]*)$/u;
 
 export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membersLoading, membersError }) => {
   const { detail, applyDetail } = useTaskDrawer();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [comments, setComments] = useState<NodeComment[]>(detail?.comments ?? []);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -50,18 +55,39 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
   const [notify, setNotify] = useState<Record<NotifyKey, boolean>>(notifyDefault);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState('');
+  const [editingError, setEditingError] = useState<string | null>(null);
+  const [editingBusy, setEditingBusy] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [selectedMentions, setSelectedMentions] = useState<Map<string, string>>(new Map());
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const detailRef = useRef(detail);
+  const commentsRef = useRef<NodeComment[]>(detail?.comments ?? []);
 
   useEffect(() => {
     detailRef.current = detail;
   }, [detail]);
 
   useEffect(() => {
-    setComments(detail?.comments ?? []);
+    const nextComments = detail?.comments ?? [];
+    commentsRef.current = nextComments;
+    setComments(nextComments);
   }, [detail?.comments]);
+
+  const syncComments = (nextComments: NodeComment[]) => {
+    commentsRef.current = nextComments;
+    setComments(nextComments);
+  };
+
+  const syncDetailComments = (nextComments: NodeComment[]) => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) {
+      return;
+    }
+    applyDetail({ ...currentDetail, comments: nextComments });
+  };
 
   const nodeId = detail?.id ?? null;
 
@@ -76,7 +102,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
     fetchNodeComments(nodeId, accessToken)
       .then((data) => {
         if (cancelled) return;
-        setComments(data);
+        syncComments(data);
         const currentDetail = detailRef.current;
         if (currentDetail && currentDetail.id === nodeId) {
           applyDetail({ ...currentDetail, comments: data });
@@ -193,13 +219,9 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
         accessToken,
       );
 
-      setComments((prev) => {
-        const next = [...prev, created];
-        if (detail) {
-          applyDetail({ ...detail, comments: next });
-        }
-        return next;
-      });
+      const nextComments = [...commentsRef.current, created];
+      syncComments(nextComments);
+      syncDetailComments(nextComments);
       setMessage('');
       setNotify({ ...notifyDefault });
       setSelectedMentions(new Map());
@@ -221,6 +243,77 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
     if (comment.notify.project) letters.push('P');
     if (comment.notify.subProject) letters.push('U');
     return letters.join('') || '—';
+  };
+
+  const startEditing = (comment: NodeComment) => {
+    setEditingCommentId(comment.id);
+    setEditingMessage(comment.body);
+    setEditingError(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingCommentId(null);
+    setEditingMessage('');
+    setEditingError(null);
+  };
+
+  const handleUpdateComment = async (comment: NodeComment) => {
+    if (!detail?.id || !accessToken) return;
+    const trimmed = editingMessage.trim();
+    if (!trimmed) {
+      setEditingError('Le commentaire ne peut pas être vide');
+      return;
+    }
+    setEditingBusy(true);
+    setEditingError(null);
+    try {
+      const updated = await updateNodeComment(
+        detail.id,
+        comment.id,
+        {
+          body: trimmed,
+          notifyResponsible: comment.notify.responsible,
+          notifyAccountable: comment.notify.accountable,
+          notifyConsulted: comment.notify.consulted,
+          notifyInformed: comment.notify.informed,
+          notifyProject: comment.notify.project,
+          notifySubProject: comment.notify.subProject,
+          mentions: comment.mentions.map((mention) => mention.userId),
+        },
+        accessToken,
+      );
+      const nextComments = commentsRef.current.map((entry) =>
+        entry.id === comment.id ? updated : entry,
+      );
+      syncComments(nextComments);
+      syncDetailComments(nextComments);
+      cancelEditing();
+    } catch (error) {
+      setEditingError(error instanceof Error ? error.message : 'Impossible de modifier le commentaire');
+    } finally {
+      setEditingBusy(false);
+    }
+  };
+
+  const handleDeleteComment = async (comment: NodeComment) => {
+    if (!detail?.id || !accessToken) return;
+    if (!window.confirm('Supprimer ce commentaire ?')) return;
+    setDeletingCommentId(comment.id);
+    try {
+      await deleteNodeComment(detail.id, comment.id, accessToken);
+      const nextComments = commentsRef.current.filter(
+        (entry) => entry.id !== comment.id,
+      );
+      syncComments(nextComments);
+      syncDetailComments(nextComments);
+      if (editingCommentId === comment.id) {
+        cancelEditing();
+      }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Impossible de supprimer le commentaire');
+    } finally {
+      setDeletingCommentId(null);
+    }
   };
 
   return (
@@ -335,6 +428,13 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                       dateStyle: 'short',
                       timeStyle: 'short',
                     });
+                const updatedTimestamp = new Date(comment.updatedAt);
+                const updatedFormatted = Number.isNaN(updatedTimestamp.getTime())
+                  ? null
+                  : updatedTimestamp.toLocaleString('fr-FR', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    });
                 const initials = comment.author.displayName
                   .split(' ')
                   .map((word) => word.charAt(0).toUpperCase())
@@ -353,13 +453,68 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ members, membe
                         <div>
                           <p className="font-semibold text-[color:var(--color-task-heading)]">{comment.author.displayName}</p>
                           <p className="text-xs text-[color:var(--color-task-label)]">{formatted}</p>
+                          {updatedFormatted && updatedFormatted !== formatted ? (
+                            <p className="text-[11px] text-[color:var(--color-task-label)]">Modifié le {updatedFormatted}</p>
+                          ) : null}
                         </div>
                       </div>
-                      <span className="rounded bg-card/50 px-2 py-1 text-[10px] font-semibold tracking-wider text-muted">
-                        {renderFlags(comment)}
-                      </span>
+                      <div className="flex items-start gap-2">
+                        <span className="rounded bg-card/50 px-2 py-1 text-[10px] font-semibold tracking-wider text-muted">
+                          {renderFlags(comment)}
+                        </span>
+                        {user?.id === comment.author.id ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(comment)}
+                              className="rounded border border-border/40 px-2 py-1 text-[10px] font-semibold text-[color:var(--color-task-label)] hover:text-[color:var(--color-task-heading)]"
+                            >
+                              Modifier
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteComment(comment)}
+                              disabled={deletingCommentId === comment.id}
+                              className="rounded border border-red-400/30 px-2 py-1 text-[10px] font-semibold text-red-500 hover:text-red-400 disabled:opacity-50"
+                            >
+                              {deletingCommentId === comment.id ? 'Suppression…' : 'Supprimer'}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                    <p className="whitespace-pre-wrap text-[color:var(--color-task-tab)]">{comment.body}</p>
+                    {editingCommentId === comment.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingMessage}
+                          onChange={(event) => setEditingMessage(event.target.value)}
+                          rows={4}
+                          className={`w-full resize-y ${FIELD_INPUT_BASE} px-3 py-2 text-sm`}
+                          disabled={editingBusy}
+                        />
+                        {editingError ? <p className="text-xs text-red-500">{editingError}</p> : null}
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelEditing}
+                            className="rounded border border-border/50 px-3 py-1.5 text-xs font-medium text-[color:var(--color-task-label)]"
+                            disabled={editingBusy}
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateComment(comment)}
+                            className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                            disabled={editingBusy}
+                          >
+                            {editingBusy ? 'Enregistrement…' : 'Enregistrer'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-[color:var(--color-task-tab)]">{comment.body}</p>
+                    )}
                     {comment.mentions.length > 0 && (
                       <div className="text-xs text-[color:var(--color-task-label)]">
                         Mentionnés&nbsp;:

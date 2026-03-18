@@ -14,6 +14,8 @@ export type CreateNodeCommentInput = {
   mentions?: string[];
 };
 
+export type UpdateNodeCommentInput = CreateNodeCommentInput;
+
 async function throwCommentError(response: Response, fallback: string): Promise<never> {
   let message = fallback;
   try {
@@ -54,4 +56,38 @@ export async function createNodeComment(
     await throwCommentError(response, "Impossible d'ajouter le commentaire");
   }
   return (await response.json()) as NodeComment;
+}
+
+export async function updateNodeComment(
+  nodeId: string,
+  commentId: string,
+  input: UpdateNodeCommentInput,
+  accessToken: string,
+): Promise<NodeComment> {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/comments/${commentId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    await throwCommentError(response, "Impossible de modifier le commentaire");
+  }
+  return (await response.json()) as NodeComment;
+}
+
+export async function deleteNodeComment(
+  nodeId: string,
+  commentId: string,
+  accessToken: string,
+): Promise<void> {
+  const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/comments/${commentId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    await throwCommentError(response, 'Impossible de supprimer le commentaire');
+  }
 }
