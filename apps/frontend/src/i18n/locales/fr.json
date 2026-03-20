@@ -1032,7 +1032,8 @@
           "dueDate": "Échéance",
           "progress": "Progression",
           "effort": "Effort",
-          "description": "Description"
+          "description": "Description",
+          "cardMenu": "Bouton menu \"...\" (tous les modes)"
         }
       }
     },

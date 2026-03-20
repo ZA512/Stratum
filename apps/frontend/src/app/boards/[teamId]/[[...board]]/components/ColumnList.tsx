@@ -31,7 +31,8 @@ interface ColumnListProps {
   onMoveColumn: (columnId:string, direction:-1|1) => void;
   onDeleteColumn: (columnId:string) => void;
   onCreateCard: (columnId:string, title:string) => Promise<void> | void;
-  onOpenCard: (id: string) => void;
+  onOpenCardView: (id: string) => void;
+  onOpenCardEdit: (id: string) => void;
   onOpenChildBoard?: (boardId: string) => void;
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
@@ -76,7 +77,8 @@ type ColumnListItemProps = {
   onMoveColumn: (columnId:string, direction:-1|1) => void;
   onDeleteColumn: (columnId:string) => void;
   onCreateCard: (columnId:string, title:string) => Promise<void> | void;
-  onOpenCard: (id: string) => void;
+  onOpenCardView: (id: string) => void;
+  onOpenCardEdit: (id: string) => void;
   onOpenChildBoard?: (boardId: string) => void;
   onRenameCard: (id:string, newTitle:string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
@@ -112,7 +114,8 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
   onMoveColumn,
   onDeleteColumn,
   onCreateCard,
-  onOpenCard,
+  onOpenCardView,
+  onOpenCardEdit,
   onOpenChildBoard,
   onRenameCard,
   onRequestMoveCard,
@@ -165,7 +168,8 @@ const ColumnListItem: React.FC<ColumnListItemProps> = ({
       onMove={(dir)=> onMoveColumn(column.id, dir)}
       onDelete={()=> onDeleteColumn(column.id)}
       onCreateCard={(title)=> onCreateCard(column.id, title)}
-      onOpenCard={onOpenCard}
+      onOpenCardView={onOpenCardView}
+      onOpenCardEdit={onOpenCardEdit}
       onOpenChildBoard={onOpenChildBoard}
       onRenameCard={onRenameCard}
       onRequestMoveCard={onRequestMoveCard}
@@ -227,7 +231,8 @@ export function ColumnList(props: ColumnListProps){
               onMoveColumn={props.onMoveColumn}
               onDeleteColumn={props.onDeleteColumn}
               onCreateCard={props.onCreateCard}
-              onOpenCard={props.onOpenCard}
+              onOpenCardView={props.onOpenCardView}
+              onOpenCardEdit={props.onOpenCardEdit}
               onOpenChildBoard={props.onOpenChildBoard}
               onRenameCard={props.onRenameCard}
               onRequestMoveCard={props.onRequestMoveCard}

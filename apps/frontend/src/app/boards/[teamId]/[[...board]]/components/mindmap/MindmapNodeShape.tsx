@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { Group, Rect, Text, Circle } from 'react-konva';
+import { Group, Rect, Text, Circle, Ellipse, Line } from 'react-konva';
 import type Konva from 'konva';
 import type { MindmapNode } from './mindmap-types';
 import { LAYOUT_CONSTANTS } from './mindmap-types';
@@ -57,9 +57,12 @@ interface MindmapNodeShapeProps {
   isSelected: boolean;
   isLoading: boolean;
   isSearchMatch?: boolean;
+  showMenuButton: boolean;
   onSelect: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
-  onOpenTask: (nodeId: string) => void;
+  onOpenTaskView: (nodeId: string) => void;
+  onOpenTaskEdit: (nodeId: string) => void;
+  onNavigateChild: (nodeId: string) => void;
   onContextMenu: (nodeId: string, evt: Konva.KonvaEventObject<PointerEvent | MouseEvent>) => void;
   onHoverStart: (nodeId: string) => void;
   onHoverEnd: (nodeId: string) => void;
@@ -80,9 +83,12 @@ function MindmapNodeShapeInner({
   isSelected,
   isLoading,
   isSearchMatch = false,
+  showMenuButton,
   onSelect,
   onExpand,
-  onOpenTask,
+  onOpenTaskView,
+  onOpenTaskEdit,
+  onNavigateChild,
   onContextMenu,
   onHoverStart,
   onHoverEnd,
@@ -163,8 +169,10 @@ function MindmapNodeShapeInner({
         shadowBlur={isSelected ? 10 : isSearchMatch ? 14 : 0}
         shadowColor={cardShadow}
         opacity={isLoading ? 0.6 : 1}
-        onClick={() => onSelect(node.id)}
-        onDblClick={() => onOpenTask(node.id)}
+        onClick={() => {
+          onSelect(node.id);
+        }}
+        onDblClick={() => onOpenTaskEdit(node.id)}
         onContextMenu={(e) => {
           e.evt.preventDefault();
           e.cancelBubble = true;
@@ -219,6 +227,112 @@ function MindmapNodeShapeInner({
         ellipsis
         wrap="none"
       />
+
+      {showMenuButton ? (
+        <Group x={halfW - 14} y={-halfH + 14}>
+          <Circle
+            radius={10}
+            fill={activeTheme.cssVars['--color-elevated']}
+            stroke={activeTheme.cssVars['--color-border']}
+            strokeWidth={1}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onContextMenu(node.id, e);
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'default';
+            }}
+          />
+          <Text
+            text="⋯"
+            fontSize={12}
+            fontStyle="bold"
+            fill={activeTheme.cssVars['--color-foreground']}
+            align="center"
+            verticalAlign="middle"
+            offsetX={4}
+            offsetY={6}
+            listening={false}
+          />
+        </Group>
+      ) : (
+        <Group x={halfW - 14} y={-halfH + 14}>
+          <Circle
+            radius={10}
+            fill={activeTheme.cssVars['--color-elevated']}
+            stroke={activeTheme.cssVars['--color-border']}
+            strokeWidth={1}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onOpenTaskView(node.id);
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'default';
+            }}
+          />
+          <Ellipse
+            radiusX={5}
+            radiusY={3.5}
+            stroke={activeTheme.cssVars['--color-foreground']}
+            strokeWidth={1.2}
+            listening={false}
+          />
+          <Circle
+            radius={1.5}
+            fill={activeTheme.cssVars['--color-foreground']}
+            listening={false}
+          />
+        </Group>
+      )}
+
+      {node.childBoardId && (
+        <Group x={halfW - 14} y={halfH - 14}>
+          <Circle
+            radius={10}
+            fill={activeTheme.cssVars['--color-elevated']}
+            stroke={activeTheme.cssVars['--color-border']}
+            strokeWidth={1}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onNavigateChild(node.id);
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = 'default';
+            }}
+          />
+          <Line
+            points={[-4, -4, -4, 0, 2, 0]}
+            stroke={activeTheme.cssVars['--color-foreground']}
+            strokeWidth={1.6}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+          <Line
+            points={[0, -2, 2, 0, 0, 2]}
+            stroke={activeTheme.cssVars['--color-foreground']}
+            strokeWidth={1.6}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+        </Group>
+      )}
 
       {/* Progress bar at bottom */}
       {node.progress > 0 && (

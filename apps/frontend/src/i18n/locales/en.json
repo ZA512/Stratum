@@ -1030,7 +1030,8 @@
           "dueDate": "Due date",
           "progress": "Progress",
           "effort": "Effort",
-          "description": "Description"
+          "description": "Description",
+          "cardMenu": "Menu button \"...\" (all views)"
         }
       }
     },

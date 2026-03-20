@@ -118,6 +118,15 @@ const Skeleton: React.FC = () => (
   </div>
 );
 
+function getDisplayInitials(name: string | null | undefined): string {
+  if (!name) return '--';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '--';
+  const first = parts[0]?.charAt(0) ?? '';
+  const second = parts.length > 1 ? parts[parts.length - 1]?.charAt(0) ?? '' : parts[0]?.charAt(1) ?? '';
+  return `${first}${second}`.toUpperCase().slice(0, 2);
+}
+
 interface MemberMultiSelectProps {
   label: string;
   members: TeamMember[];
@@ -165,12 +174,13 @@ const MemberMultiSelect: React.FC<MemberMultiSelectProps> = ({
 
 export const TaskDrawer: React.FC = () => {
   const { t: tBoard, locale } = useTranslation('board');
-  const { openedNodeId, close } = useTaskDrawer();
+  const { openedNodeId, mode, setMode, close } = useTaskDrawer();
   const { detail, loading, error, refresh } = useTaskDetail();
   const { accessToken, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { expertMode } = useBoardUiSettings();
   const { teamId, refreshActiveBoard, board, openChildBoard } = useBoardData();
+  const isReadOnly = mode === 'view';
 
   const formatDate = useCallback(
     (input: string | Date | null | undefined, options: Intl.DateTimeFormatOptions): string => {
@@ -423,6 +433,56 @@ export const TaskDrawer: React.FC = () => {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const membersMap = useMemo(() => new Map(teamMembers.map(member => [member.id, member])), [teamMembers]);
+  const resolveMemberLabel = useCallback((memberId: string) => {
+    const member = membersMap.get(memberId);
+    if (member?.displayName?.trim()) return member.displayName.trim();
+    if (user?.id === memberId && user.displayName?.trim()) return user.displayName.trim();
+    return memberId;
+  }, [membersMap, user]);
+
+  const readOnlyRaciTooltip = useMemo(() => {
+    const lines = [
+      ['R', rResponsible],
+      ['A', rAccountable],
+      ['C', rConsulted],
+      ['I', rInformed],
+    ].map(([role, ids]) => {
+      const labels = (ids as string[]).map(resolveMemberLabel);
+      return labels.length ? `${role} ${labels.join(', ')}` : `${role} -`;
+    });
+    return lines.join('\n');
+  }, [rResponsible, rAccountable, rConsulted, rInformed, resolveMemberLabel]);
+
+  const hasReadOnlyRaci = useMemo(
+    () => [rResponsible, rAccountable, rConsulted, rInformed].some((ids) => ids.length > 0),
+    [rResponsible, rAccountable, rConsulted, rInformed],
+  );
+
+  const readOnlyComments = useMemo(() => {
+    const entries = detail?.comments ?? [];
+    return [...entries]
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .slice(0, 6)
+      .map((comment) => ({
+        id: comment.id,
+        date: formatDate(comment.createdAt, { day: '2-digit', month: '2-digit' }),
+        initials: getDisplayInitials(comment.author.displayName),
+        body: comment.body.trim(),
+      }))
+      .filter((comment) => comment.body.length > 0);
+  }, [detail?.comments, formatDate]);
+
+  const hasReadOnlyDescription = description.trim().length > 0;
+  const hasReadOnlySubtasks = (detail?.children?.length ?? 0) > 0;
+  const hasReadOnlyPlanning = Boolean(
+    detail?.archivedAt ||
+    backlogHiddenUntil ||
+    blockedInterval ||
+    blockedEta ||
+    blockedReason.trim() ||
+    detail?.blockedSince ||
+    detail?.backlogNextReviewAt,
+  );
 
   const [collaborators, setCollaborators] = useState<SharedNodeCollaborator[]>([]);
   const [collaboratorInvites, setCollaboratorInvites] = useState<NodeCollaboratorInvitation[]>([]);
@@ -1011,12 +1071,12 @@ export const TaskDrawer: React.FC = () => {
   ]);
 
   const requestClose = useCallback(() => {
-    if (hasDirty) {
+    if (!isReadOnly && hasDirty) {
       setShowUnsavedModal(true);
     } else {
       close();
     }
-  }, [close, hasDirty]);
+  }, [close, hasDirty, isReadOnly]);
 
   const escHandler = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -1040,7 +1100,12 @@ export const TaskDrawer: React.FC = () => {
     if (!openedNodeId) {
       setShowUnsavedModal(false);
     }
-  }, [openedNodeId]);
+  }, [openedNodeId, mode]);
+
+  const switchToEditMode = useCallback(() => {
+    setMode('edit');
+    setActiveTab('details');
+  }, [setMode]);
 
   const onSave = async (): Promise<boolean> => {
     if (!detail || !accessToken) return false;
@@ -1229,34 +1294,73 @@ export const TaskDrawer: React.FC = () => {
           >
             <div className="flex items-start justify-between px-5 py-4 border-b border-border/40">
               <div className="space-y-2 min-w-0 pr-4 flex-1">
-                <input
-                  id="task-drawer-title"
-                  value={title}
-                  onChange={(e) => { setTitle(e.target.value); }}
-                  className={`w-full ${FIELD_INPUT_BASE} px-3 py-2.5 text-lg font-semibold`}
-                  placeholder="Titre de la tâche"
-                  disabled={saving}
-                />
+                {isReadOnly ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-border/60 bg-input px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-task-label)]">
+                        Lecture
+                      </span>
+                      {detail?.shortId ? (
+                        <span className="text-xs font-medium text-[color:var(--color-task-label)]">#{detail.shortId}</span>
+                      ) : null}
+                    </div>
+                    <h2 id="task-drawer-title" className="text-xl font-semibold text-foreground">
+                      {title || 'Tâche sans titre'}
+                    </h2>
+                  </div>
+                ) : (
+                  <input
+                    id="task-drawer-title"
+                    value={title}
+                    onChange={(e) => { setTitle(e.target.value); }}
+                    className={`w-full ${FIELD_INPUT_BASE} px-3 py-2.5 text-lg font-semibold`}
+                    placeholder="Titre de la tâche"
+                    disabled={saving}
+                  />
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleArchiveCard}
-                  disabled={saving || !detail}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                    detail?.archivedAt
-                      ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-600 hover:border-cyan-500 hover:bg-cyan-500/20 dark:text-cyan-400'
-                      : 'border-orange-500/40 bg-orange-500/10 text-orange-600 hover:border-orange-500 hover:bg-orange-500/20 dark:text-orange-400'
-                  }`}
-                  title={detail?.archivedAt ? 'Désarchiver cette carte' : 'Archiver cette carte'}
-                >
-                  {detail?.archivedAt ? '📂 Désarchiver' : '📦 Archiver'}
-                </button>
-                <button
-                  onClick={() => { void onSave(); }}
-                  disabled={saving || !hasDirty}
-                  className="rounded px-3 py-1 text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >{saving ? '...' : 'Valider'}</button>
+                {isReadOnly ? (
+                  <>
+                    {hasReadOnlyRaci ? (
+                      <span
+                        className="rounded-full border border-border/60 bg-card/40 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-task-label)]"
+                        title={readOnlyRaciTooltip}
+                      >
+                        RACI
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={switchToEditMode}
+                      disabled={!detail}
+                      className="rounded border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-foreground transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-soft)]/80 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Modifier
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleArchiveCard}
+                      disabled={saving || !detail}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        detail?.archivedAt
+                          ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-600 hover:border-cyan-500 hover:bg-cyan-500/20 dark:text-cyan-400'
+                          : 'border-orange-500/40 bg-orange-500/10 text-orange-600 hover:border-orange-500 hover:bg-orange-500/20 dark:text-orange-400'
+                      }`}
+                      title={detail?.archivedAt ? 'Désarchiver cette carte' : 'Archiver cette carte'}
+                    >
+                      {detail?.archivedAt ? '📂 Désarchiver' : '📦 Archiver'}
+                    </button>
+                    <button
+                      onClick={() => { void onSave(); }}
+                      disabled={saving || !hasDirty}
+                      className="rounded px-3 py-1 text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >{saving ? '...' : 'Valider'}</button>
+                  </>
+                )}
                 <button
                   onClick={requestClose}
                   className="rounded p-2 transition hover:bg-card/80 focus:outline-none focus:ring"
@@ -1273,6 +1377,134 @@ export const TaskDrawer: React.FC = () => {
               )}
               {!loading && detail && (
                 <div className="space-y-6 text-[color:var(--color-task-tab)]">
+                  {isReadOnly ? (
+                    <div className="space-y-5">
+                      <section className="app-section space-y-3 rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">visibility</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              Aperçu
+                            </h3>
+                          </div>
+                          <span className="text-xs text-[color:var(--color-task-label)]">
+                            Consultation seule
+                          </span>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Progression</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{progress}%</p>
+                          </div>
+                          <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Priorité</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{priority === 'NONE' ? 'Aucune' : tBoard(`priority.labels.${priority}`)}</p>
+                          </div>
+                          <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Effort</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{effort ?? '—'}</p>
+                          </div>
+                          <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Échéance</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">{dueAt ? formatDateMedium(dueAt) : '—'}</p>
+                          </div>
+                        </div>
+                        {tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {tags.map((tag) => (
+                              <span key={tag} className="rounded-full border border-border/50 bg-card/40 px-2.5 py-1 text-xs text-foreground">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </section>
+
+                      {hasReadOnlyDescription ? (
+                        <section className="app-section space-y-3 rounded-lg p-4">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">description</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              Description
+                            </h3>
+                          </div>
+                          <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-3 text-sm leading-6 text-foreground/90">
+                            {description}
+                          </div>
+                        </section>
+                      ) : null}
+
+                      {hasReadOnlySubtasks ? (
+                        <section className="app-section space-y-3 rounded-lg p-4">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">checklist</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              Sous-tâches
+                            </h3>
+                          </div>
+                          <ChildTasksSection readOnly />
+                        </section>
+                      ) : null}
+
+                      {hasReadOnlyPlanning ? (
+                        <section className="app-section space-y-3 rounded-lg p-4">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">event</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              Planification
+                            </h3>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Carte archivée</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">{detail.archivedAt ? 'Oui' : 'Non'}</p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Masquée du backlog</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">{backlogHiddenUntil ? formatDateMedium(backlogHiddenUntil) : 'Non'}</p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Rappel blocage</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">{blockedInterval ? `${blockedInterval} j` : 'Aucun'}</p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Déblocage estimé</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">{blockedEta ? formatDateMedium(blockedEta) : '—'}</p>
+                            </div>
+                          </div>
+                          {blockedReason.trim() ? (
+                            <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-3 text-sm leading-6 text-foreground/90">
+                              <p className="mb-1 text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Motif de blocage</p>
+                              <p>{blockedReason}</p>
+                            </div>
+                          ) : null}
+                        </section>
+                      ) : null}
+
+                      {readOnlyComments.length > 0 ? (
+                        <section className="app-section space-y-3 rounded-lg p-4">
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">chat_bubble</span>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--color-task-heading)]">
+                              Commentaires
+                            </h3>
+                          </div>
+                          <div className="space-y-2">
+                            {readOnlyComments.map((comment) => (
+                              <div key={comment.id} className="rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-sm text-foreground/90">
+                                <p className="truncate">
+                                  <span className="mr-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-task-label)]">{comment.date}</span>
+                                  <span className="mr-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-task-label)]">{comment.initials}</span>
+                                  <span>{comment.body}</span>
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
+                    </div>
+                  ) : (
+                  <>
                   <div className="app-segmented flex gap-2 rounded p-1 text-xs">
                     <button
                       type="button"
@@ -2414,6 +2646,9 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
                     </div>
+                  )}
+
+                  </>
                   )}
                 </div>
               )}

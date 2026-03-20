@@ -7,18 +7,6 @@
         "bash": "bash ~/.claude/hooks/peon-ping/adapters/copilot.sh sessionStart"
       }
     ],
-    "userPromptSubmitted": [
-      {
-        "type": "command",
-        "bash": "bash ~/.claude/hooks/peon-ping/adapters/copilot.sh userPromptSubmitted"
-      }
-    ],
-    "postToolUse": [
-      {
-        "type": "command",
-        "bash": "bash ~/.claude/hooks/peon-ping/adapters/copilot.sh postToolUse"
-      }
-    ],
     "errorOccurred": [
       {
         "type": "command",

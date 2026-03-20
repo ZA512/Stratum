@@ -64,7 +64,8 @@ interface ColumnPanelProps {
   ) => void;
   onDelete: () => void;
   onCreateCard: (title: string) => Promise<void> | void;
-  onOpenCard: (id: string) => void;              // ouvre le drawer tâche
+  onOpenCardView: (id: string) => void;
+  onOpenCardEdit: (id: string) => void;
   onOpenChildBoard?: (boardId: string) => void; // navigation vers sous-board
   onRenameCard: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMoveCard: (node: BoardNode) => void;
@@ -96,7 +97,7 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
   const {
     column, cards, isEditing, editingValues,
     onRequestEdit, onCancelEdit, onSubmitEdit, onFieldChange,
-    onDelete, onCreateCard, onOpenCard, onRenameCard,
+    onDelete, onCreateCard, onOpenCardView, onOpenCardEdit, onRenameCard,
     onRequestMoveCard, onRequestDeleteCard, onNavigateToDescendant,
     childBoards, highlightedNodeId, loadingCards, displayOptions, onOpenChildBoard,
     dragStyle, dragHandleListeners, dragHandleAttributes, dragHandleRef,
@@ -440,7 +441,8 @@ export const ColumnPanel = React.forwardRef<HTMLDivElement, ColumnPanelProps>(fu
                 columnId={column.id}
                 columnBehavior={column.behaviorKey}
                 childBoard={childBoards[card.id]}
-                onOpen={onOpenCard}
+                onOpenView={onOpenCardView}
+                onOpenEdit={onOpenCardEdit}
                 onOpenChildBoard={onOpenChildBoard}
                 onRename={onRenameCard}
                 onRequestMove={onRequestMoveCard}

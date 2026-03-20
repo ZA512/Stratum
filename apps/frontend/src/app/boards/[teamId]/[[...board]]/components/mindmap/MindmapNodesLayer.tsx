@@ -13,9 +13,12 @@ interface MindmapNodesLayerProps {
   nodes: MindmapNode[];
   selectedId: string | null;
   loadingIds: Set<string>;
+  showMenuButton: boolean;
   onSelect: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
-  onOpenTask: (nodeId: string) => void;
+  onOpenTaskView: (nodeId: string) => void;
+  onOpenTaskEdit: (nodeId: string) => void;
+  onNavigateChild: (nodeId: string) => void;
   onContextMenu: (nodeId: string, evt: Konva.KonvaEventObject<PointerEvent | MouseEvent>) => void;
   onHoverStart: (nodeId: string) => void;
   onHoverEnd: (nodeId: string) => void;
@@ -37,10 +40,13 @@ function MindmapNodesLayerInner({
   nodes,
   selectedId,
   loadingIds,
+  showMenuButton,
   matchedNodeIds,
   onSelect,
   onExpand,
-  onOpenTask,
+  onOpenTaskView,
+  onOpenTaskEdit,
+  onNavigateChild,
   onContextMenu,
   onHoverStart,
   onHoverEnd,
@@ -59,9 +65,12 @@ function MindmapNodesLayerInner({
           isSelected={node.id === selectedId}
           isLoading={loadingIds.has(node.id)}
           isSearchMatch={matchedNodeIds != null && matchedNodeIds.size > 0 && matchedNodeIds.has(node.id)}
+          showMenuButton={showMenuButton}
           onSelect={onSelect}
           onExpand={onExpand}
-          onOpenTask={onOpenTask}
+          onOpenTaskView={onOpenTaskView}
+          onOpenTaskEdit={onOpenTaskEdit}
+          onNavigateChild={onNavigateChild}
           onContextMenu={onContextMenu}
           onHoverStart={onHoverStart}
           onHoverEnd={onHoverEnd}

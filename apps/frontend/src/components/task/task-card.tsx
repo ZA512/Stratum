@@ -42,6 +42,7 @@ export interface TaskCardProps {
   progress?: number;
   href?: string;
   onClick?: () => void;
+  onDoubleClick?: () => void;
   onFractalPathClick?: () => void;
   /** Clic sur le bouton menu (trois points) */
   onMenuButtonClick?: () => void;
@@ -76,6 +77,8 @@ export interface TaskCardProps {
   >>;
   /** Indique si la tâche est partagée avec plusieurs utilisateurs */
   isShared?: boolean;
+  fractalActionIcon?: React.ReactNode;
+  fractalActionLabel?: string;
 }
 
 const priorityBadgeStyles: Record<TaskPriority, React.CSSProperties> = {
@@ -186,6 +189,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   progress,
   href: _href,
   onClick,
+  onDoubleClick,
   onFractalPathClick,
   onMenuButtonClick,
   menuButtonRef,
@@ -206,6 +210,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   showEffort = true,
   helpMode = false,
   helpMessages,
+  fractalActionIcon,
+  fractalActionLabel,
 }) => {
   void _href;
   const compact = variant === "compact";
@@ -253,6 +259,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       className={cx(
         "app-panel group relative rounded-[1.1rem] text-foreground shadow-lg transition hover:border-[color:var(--color-accent)]/50",
         onClick &&
@@ -316,7 +323,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               aria-label="Actions de la tâche"
               onClick={(e) => { e.stopPropagation(); onMenuButtonClick?.(); }}
               ref={menuButtonRef}
-              className="app-icon-button -m-1 p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="-m-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted/70 transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <span className="material-icons-outlined" style={{ fontSize: 20 }}>more_horiz</span>
             </button>
@@ -437,7 +444,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             ) : badge;
           })()}
         </div>
-        <div className="col-span-5 flex items-center justify-end gap-4">
+        <div className="col-span-5 flex min-h-7 items-center justify-end gap-4 self-center">
           {/* Slot progression (fixe) - on garde seulement le pourcentage */}
           {showProgress && (() => {
             const tooltip = pickTooltipEntry(helpMessages?.progress, helpMode);
@@ -495,11 +502,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onFractalPathClick?.();
                 }}
-                className="relative z-10 -mx-1 flex items-center gap-1 rounded-sm px-1 text-muted transition-colors hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                title="Ouvrir le kanban enfant"
+                className="relative z-10 -mx-1 inline-flex h-7 items-center gap-1.5 rounded-sm px-1 text-muted transition-colors hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                title={fractalActionLabel ?? "Ouvrir le kanban enfant"}
               >
-                <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>
-                <span className="flex items-center gap-[1px] font-mono text-[11px] font-semibold">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-current">
+                  {fractalActionIcon ?? <span className="material-icons-outlined" style={{ fontSize: 16 }}>link</span>}
+                </span>
+                <span className="flex items-center gap-[1px] self-center font-mono text-[11px] font-semibold leading-none">
                   {(() => {
                     const parts = fractalPath.split('.');
                     return parts.map((part, i) => (

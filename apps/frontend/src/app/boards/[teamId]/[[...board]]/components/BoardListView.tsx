@@ -22,6 +22,15 @@ import { type ActivityLog, fetchNodeActivity } from "@/features/activity/activit
 import { formatActivityMessage } from "@/features/activity/activity-formatter";
 import { useBoardFilters } from '../context/BoardFilterContext';
 import { UNASSIGNED_TOKEN } from '../types/board-filters';
+import { CardActionMenu, type CardActionMenuItem } from './CardActionMenu';
+import { EyeIcon, StackHierarchy } from './CardActionIcons';
+import type { CardDisplayOptions } from './types';
+
+type RowMenuState = {
+  row: ListRow;
+  anchorEl?: HTMLElement | null;
+  anchorPosition?: { x: number; y: number } | null;
+};
 
 export type ListScope = "CURRENT" | "SUBTREE" | "ROOT";
 export type ListRenderMode = "TREE" | "FLAT";
@@ -218,9 +227,11 @@ export type BoardOption = {
 
 type BoardListViewProps = {
   rootBoard: Board;
+  displayOptions: CardDisplayOptions;
   filters: BoardListFilters;
   onFiltersChange: (next: BoardListFilters) => void;
   onOpenTask: (id: string) => void;
+  onEditTask: (id: string) => void;
   onOpenBoard: (boardId: string) => void;
   onDataMutated?: () => Promise<void> | void;
   onBoardOptionsChange?: (options: BoardOption[], positionPath: string) => void;
@@ -799,9 +810,11 @@ export function BoardListViewQuickBar({
 
 export function BoardListView({
   rootBoard,
+  displayOptions,
   filters,
   onFiltersChange,
   onOpenTask,
+  onEditTask,
   onOpenBoard,
   onDataMutated,
   onBoardOptionsChange,
@@ -835,12 +848,14 @@ export function BoardListView({
   const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
   const [manageViewsOpen, setManageViewsOpen] = useState(false);
   const [headerActionsRoot, setHeaderActionsRoot] = useState<HTMLElement | null>(null);
+  const [rowMenu, setRowMenu] = useState<RowMenuState | null>(null);
 
   const [personalViews, setPersonalViews] = useState<PersonalView[]>([]);
   const [viewsHydrated, setViewsHydrated] = useState(false);
 
   const rootBoardRef = useRef(rootBoard);
   const rowsRef = useRef<ListRow[]>([]);
+  const clickTimerRef = useRef<number | null>(null);
   const positionMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const viewsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -853,6 +868,19 @@ export function BoardListView({
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  const clearClickTimer = useCallback(() => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearClickTimer();
+    };
+  }, [clearClickTimer]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -897,6 +925,69 @@ export function BoardListView({
     setViewsMenuOpen(false);
     setManageViewsOpen(false);
   }, []);
+
+  const handleRowOpen = useCallback((rowId: string) => {
+    clearClickTimer();
+    clickTimerRef.current = window.setTimeout(() => {
+      onOpenTask(rowId);
+      clickTimerRef.current = null;
+    }, 240);
+  }, [clearClickTimer, onOpenTask]);
+
+  const handleRowEdit = useCallback((rowId: string) => {
+    clearClickTimer();
+    onEditTask(rowId);
+  }, [clearClickTimer, onEditTask]);
+
+  const isInteractiveRowTarget = useCallback((target: EventTarget | null) => {
+    return target instanceof HTMLElement
+      ? Boolean(target.closest('button, input, select, textarea, a, summary, [role="button"], [role="menuitem"]'))
+      : false;
+  }, []);
+
+  function buildRowMenuItems(row: ListRow): CardActionMenuItem[] {
+    const items: CardActionMenuItem[] = [
+      {
+        id: 'open',
+        label: 'Ouvrir',
+        icon: <span className="material-symbols-outlined text-[16px]">visibility</span>,
+        onSelect: () => onOpenTask(row.id),
+      },
+      {
+        id: 'edit',
+        label: 'Modifier',
+        icon: <span className="material-symbols-outlined text-[16px]">edit</span>,
+        onSelect: () => onEditTask(row.id),
+      },
+      {
+        id: 'create-child',
+        label: 'Créer une carte enfant',
+        icon: <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>,
+        onSelect: () => {
+          void createChild(row);
+        },
+      },
+      {
+        id: 'create-sibling',
+        label: 'Créer une carte au même niveau',
+        icon: <span className="material-symbols-outlined text-[16px]">add</span>,
+        onSelect: () => {
+          void createSibling(row);
+        },
+      },
+    ];
+
+    if (row.childBoardId) {
+      items.push({
+        id: 'navigate',
+        label: 'Ouvrir la sous-strate',
+        icon: <StackHierarchy />,
+        onSelect: () => onOpenBoard(row.childBoardId!),
+      });
+    }
+
+    return items;
+  }
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -2397,6 +2488,19 @@ export function BoardListView({
                             ? "opacity-50"
                             : "opacity-100"
                       }`}
+                      onClick={(event) => {
+                        if (isInteractiveRowTarget(event.target)) return;
+                        handleRowOpen(row.id);
+                      }}
+                      onDoubleClick={(event) => {
+                        if (isInteractiveRowTarget(event.target)) return;
+                        handleRowEdit(row.id);
+                      }}
+                      onContextMenu={(event) => {
+                        if (isInteractiveRowTarget(event.target)) return;
+                        event.preventDefault();
+                        setRowMenu({ row, anchorPosition: { x: event.clientX, y: event.clientY } });
+                      }}
                     >
                       {visibleColumns.map((column) => {
                         if (column === "title") {
@@ -2451,16 +2555,14 @@ export function BoardListView({
                                 ) : null}
                                 <div className="flex min-w-0 items-center gap-1.5">
                                   {row.shortId !== null && <span className="shrink-0 text-[11px] font-semibold text-muted/60">#{row.shortId}</span>}
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenTask(row.id)}
+                                  <span
                                     title={row.description?.trim() || row.title}
-                                    className={`min-w-0 truncate text-left text-sm font-medium transition hover:text-accent ${
+                                    className={`min-w-0 truncate text-left text-sm font-medium ${
                                       isTreeFilterHighlight && isMatchedRow ? "text-accent" : "text-foreground"
                                     }`}
                                   >
                                     {row.title}
-                                  </button>
+                                  </span>
                                   {normalizedFilters.renderMode === "FLAT" && row.pathLabel && (
                                     <span
                                       className="hidden shrink-0 max-w-[180px] truncate text-[10px] text-muted/50 xl:inline"
@@ -2705,42 +2807,35 @@ export function BoardListView({
                         <div className="flex items-center gap-0.5 text-[11px] opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             type="button"
-                            onClick={() => void createChild(row)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
-                            title="Creer une carte enfant"
-                            aria-label="Creer une carte enfant"
+                            onClick={() => handleRowOpen(row.id)}
+                            className="inline-flex h-5 w-5 items-center justify-center text-muted/70 transition hover:text-foreground"
+                            title="Lire la carte"
+                            aria-label="Lire la carte"
                           >
-                            <span className="material-symbols-outlined text-[13px]">subdirectory_arrow_right</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void createSibling(row)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
-                            title="Creer une carte au meme niveau"
-                            aria-label="Creer une carte au meme niveau"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">add</span>
+                            <EyeIcon />
                           </button>
                           {row.childBoardId && (
                             <button
                               type="button"
                               onClick={() => onOpenBoard(row.childBoardId)}
-                              className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
-                              title="Ouvrir le sous-kanban"
-                              aria-label="Ouvrir le sous-kanban"
+                              className="inline-flex h-5 w-5 items-center justify-center text-muted/70 transition hover:text-foreground"
+                              title="Ouvrir la sous-strate"
+                              aria-label="Ouvrir la sous-strate"
                             >
-                              <span className="material-symbols-outlined text-[13px]">account_tree</span>
+                              <StackHierarchy />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => onOpenTask(row.id)}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-muted/60 transition hover:border-accent hover:text-foreground"
-                            title="Ouvrir le detail / deplacer"
-                            aria-label="Ouvrir le detail / deplacer"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                          </button>
+                          {displayOptions.showCardMenu ? (
+                            <button
+                              type="button"
+                              onClick={(event) => setRowMenu({ row, anchorEl: event.currentTarget })}
+                              className="inline-flex h-5 w-5 items-center justify-center text-muted/70 transition hover:text-foreground"
+                              title="Actions"
+                              aria-label="Actions"
+                            >
+                              <span className="material-icons-outlined text-[14px]">more_horiz</span>
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -2984,6 +3079,14 @@ export function BoardListView({
           </div>,
           document.body,
         )}
+
+      <CardActionMenu
+        open={Boolean(rowMenu)}
+        anchorEl={rowMenu?.anchorEl ?? null}
+        anchorPosition={rowMenu?.anchorPosition ?? null}
+        items={rowMenu ? buildRowMenuItems(rowMenu.row) : []}
+        onClose={() => setRowMenu(null)}
+      />
     </div>
   );
 }

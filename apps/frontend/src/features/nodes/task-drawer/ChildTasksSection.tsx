@@ -11,7 +11,11 @@ import { useBoardData } from '@/features/boards/board-data-provider';
 const FIELD_INPUT_BASE =
   'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
 
-export const ChildTasksSection: React.FC = () => {
+export interface ChildTasksSectionProps {
+  readOnly?: boolean;
+}
+
+export const ChildTasksSection: React.FC<ChildTasksSectionProps> = ({ readOnly = false }) => {
   const { detail, refresh, applyDetail } = useTaskDrawer();
   const { accessToken } = useAuth();
   const { refreshActiveBoard } = useBoardData();
@@ -64,6 +68,7 @@ export const ChildTasksSection: React.FC = () => {
   React.useEffect(()=>{ setLocalCounts(deriveCounts(optimisticChildren)); }, [optimisticChildren]);
 
   async function onCreate(e: React.FormEvent) {
+    if (readOnly) return;
     e.preventDefault();
     if (!accessToken || !parentId) return;
     const t = title.trim();
@@ -98,6 +103,7 @@ export const ChildTasksSection: React.FC = () => {
   }
 
   async function toggle(childId: string) {
+    if (readOnly) return;
     if (!accessToken || !parentId) return;
     const child = optimisticChildren.find(c=>c.id===childId);
     if (!child) return;
@@ -152,9 +158,11 @@ export const ChildTasksSection: React.FC = () => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingTitle, setEditingTitle] = React.useState("");
   function startEdit(id: string, current: string) {
+    if (readOnly) return;
     setEditingId(id); setEditingTitle(current);
   }
   async function saveEdit(id: string) {
+    if (readOnly) return;
     if (!accessToken || !parentId) return;
     const trimmed = editingTitle.trim();
     if (!trimmed) { setEditingId(null); return; }
@@ -179,6 +187,7 @@ export const ChildTasksSection: React.FC = () => {
   // Reorder local backlog (pas de persistance pour l'instant – simple réordonner local)
   const backlogIds = React.useMemo(() => backlogItems.map(i=>i.id), [backlogItems]);
   function onReorderBacklog(newOrder: string[]) {
+    if (readOnly) return;
     // Réappliquer ordre local optimiste
     setOptimisticChildren(list => {
       const map = new Map(list.map(i=>[i.id,i] as const));
@@ -195,6 +204,7 @@ export const ChildTasksSection: React.FC = () => {
 
   const persistTimer = React.useRef<number | null>(null);
   function schedulePersist(order: string[]) {
+    if (readOnly) return;
     if (!accessToken || !parentId) return;
     if (persistTimer.current) {
       window.clearTimeout(persistTimer.current);
@@ -237,7 +247,8 @@ export const ChildTasksSection: React.FC = () => {
           <span className="text-slate-400">.</span>
           <span className="text-emerald-600 dark:text-emerald-400">{localCounts.done}</span>
         </div>
-        <form onSubmit={onCreate} className="flex w-full flex-col gap-2 rounded-lg border border-dashed border-border/40 bg-card/40 p-3 sm:flex-row sm:items-center">
+        {!readOnly && (
+          <form onSubmit={onCreate} className="flex w-full flex-col gap-2 rounded-lg border border-dashed border-border/40 bg-card/40 p-3 sm:flex-row sm:items-center">
           <label className="flex-1 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             <span className="sr-only">Nouvelle sous-tâche</span>
             <input
@@ -257,7 +268,8 @@ export const ChildTasksSection: React.FC = () => {
             <span className="material-symbols-outlined text-base" aria-hidden>add_circle</span>
             Ajouter
           </button>
-        </form>
+          </form>
+        )}
       </div>
       <div className="space-y-3">
         <Reorder.Group axis="y" values={backlogIds} onReorder={onReorderBacklog} className="space-y-1">
@@ -271,26 +283,38 @@ export const ChildTasksSection: React.FC = () => {
                 key={id}
                 as="div"
                 id={`child-${id}`}
-                className="group flex items-start gap-3 rounded border border-border/50 bg-card px-3 py-2 text-sm text-foreground shadow-sm transition hover:border-accent/40 hover:bg-card/80 cursor-grab"
-                whileDrag={{ scale:1.02, boxShadow:'0 4px 12px rgba(0,0,0,0.18)' }}
+                className={[
+                  'group flex items-start gap-3 rounded border border-border/50 bg-card px-3 py-2 text-sm text-foreground shadow-sm transition hover:border-accent/40 hover:bg-card/80',
+                  readOnly ? 'cursor-default' : 'cursor-grab',
+                ].join(' ')}
+                dragListener={!readOnly}
+                whileDrag={readOnly ? undefined : { scale:1.02, boxShadow:'0 4px 12px rgba(0,0,0,0.18)' }}
               >
-                <button
-                  type="button"
-                  onMouseDown={(e)=>{ e.stopPropagation(); }}
-                  onClick={(e)=>{ e.stopPropagation(); toggle(c.id); }}
-                  role="checkbox"
-                  aria-checked={isDone}
-                  className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-input text-muted transition hover:bg-card"
-                  title={isDone? 'Remettre en Backlog':'Marquer terminé'}
-                >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>
-                    {isDone ? 'check_circle' : 'radio_button_unchecked'}
+                {readOnly ? (
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-input text-muted">
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                      {isDone ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
                   </span>
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    onMouseDown={(e)=>{ e.stopPropagation(); }}
+                    onClick={(e)=>{ e.stopPropagation(); toggle(c.id); }}
+                    role="checkbox"
+                    aria-checked={isDone}
+                    className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-input text-muted transition hover:bg-card"
+                    title={isDone? 'Remettre en Backlog':'Marquer terminé'}
+                  >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                      {isDone ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                  </button>
+                )}
                 {editingId === c.id ? (
                   <input className="flex-1 border-b border-blue-500 focus:outline-none bg-transparent dark:placeholder-slate-400" autoFocus value={editingTitle} onChange={e=>setEditingTitle(e.target.value)} onBlur={()=>saveEdit(c.id)} onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault(); saveEdit(c.id);} if(e.key==='Escape'){ setEditingId(null);} }} />
                 ) : (
-                  <span className="flex-1 leading-5 select-text cursor-text" onDoubleClick={()=>startEdit(c.id, c.title)}>{c.title}</span>
+                  <span className={["flex-1 leading-5 select-text", readOnly ? '' : 'cursor-text'].join(' ')} onDoubleClick={readOnly ? undefined : ()=>startEdit(c.id, c.title)}>{c.title}</span>
                 )}
               </Reorder.Item>
             );
@@ -300,21 +324,27 @@ export const ChildTasksSection: React.FC = () => {
           <div className="pt-3 border-t border-border/40 space-y-1">
             {doneItems.map(c => (
               <div key={c.id} id={`child-${c.id}`} className="flex items-start gap-2 rounded bg-card/40 px-3 py-2 text-sm text-muted line-through">
-                <button
-                  type="button"
-                  onMouseDown={(e)=>{ e.stopPropagation(); }}
-                  onClick={(e)=>{ e.stopPropagation(); toggle(c.id); }}
-                  role="checkbox"
-                  aria-checked={true}
-                  className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300"
-                  title="Remettre en Backlog"
-                >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden>check_circle</span>
-                </button>
+                {readOnly ? (
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300">
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>check_circle</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onMouseDown={(e)=>{ e.stopPropagation(); }}
+                    onClick={(e)=>{ e.stopPropagation(); toggle(c.id); }}
+                    role="checkbox"
+                    aria-checked={true}
+                    className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300"
+                    title="Remettre en Backlog"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden>check_circle</span>
+                  </button>
+                )}
                 {editingId === c.id ? (
                   <input className="flex-1 border-b border-blue-500 focus:outline-none bg-transparent dark:placeholder-slate-400" autoFocus value={editingTitle} onChange={e=>setEditingTitle(e.target.value)} onBlur={()=>saveEdit(c.id)} onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault(); saveEdit(c.id);} if(e.key==='Escape'){ setEditingId(null);} }} />
                 ) : (
-                  <span className="flex-1 select-text cursor-text" onDoubleClick={()=>startEdit(c.id, c.title)}>{c.title}</span>
+                  <span className={["flex-1 select-text", readOnly ? '' : 'cursor-text'].join(' ')} onDoubleClick={readOnly ? undefined : ()=>startEdit(c.id, c.title)}>{c.title}</span>
                 )}
               </div>
             ))}
@@ -332,7 +362,7 @@ export const ChildTasksSection: React.FC = () => {
             </div>
           </div>
         )}
-        <p className="text-[10px] text-gray-400">Double-clic pour éditer, glisser pour réordonner (Backlog). Cocher pour terminer.</p>
+        <p className="text-[10px] text-gray-400">{readOnly ? 'Consultation seule des sous-tâches.' : 'Double-clic pour éditer, glisser pour réordonner (Backlog). Cocher pour terminer.'}</p>
     </div>
   );
 };

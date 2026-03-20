@@ -118,6 +118,7 @@ const CARD_DISPLAY_DEFAULTS: CardDisplayOptions = {
   showProgress: true,
   showEffort: true,
   showDescription: true,
+  showCardMenu: true,
   columnHeight: 'auto',
 };
 
@@ -182,6 +183,7 @@ const DISPLAY_TOGGLE_CONFIG: Array<{ key: keyof CardDisplayOptions; labelKey: st
   { key: 'showProgress', labelKey: 'filters.display.options.progress' },
   { key: 'showEffort', labelKey: 'filters.display.options.effort' },
   { key: 'showDescription', labelKey: 'filters.display.options.description' },
+  { key: 'showCardMenu', labelKey: 'filters.display.options.cardMenu' },
 ];
 
 const PRIORITY_DEFINITIONS: Array<{ value: PriorityValue }> = [
@@ -452,7 +454,7 @@ function InvitationsPanel({ invitations, onClose, onRefresh }: InvitationsPanelP
 function TeamBoardPageInner(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, breadcrumb, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
-  const { open, openedNodeId } = useTaskDrawer();
+  const { openView, openEdit, openedNodeId } = useTaskDrawer();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
@@ -1725,7 +1727,8 @@ function TeamBoardPageInner(){
     await refreshActiveBoard();
   };
 
-  const handleOpenCard = (id:string) => { open(id); };
+  const handleOpenCard = (id:string) => { openView(id); };
+  const handleEditCard = (id:string) => { openEdit(id); };
   const handleNavigateToDescendant = useCallback((preview: {
     nodeId: string;
     title: string;
@@ -1735,7 +1738,7 @@ function TeamBoardPageInner(){
   }) => {
     if (preview.boardId === activeBoardId) {
       setHighlightedNodeId(preview.nodeId);
-      open(preview.nodeId);
+      openView(preview.nodeId);
       if (typeof window !== 'undefined') {
         window.requestAnimationFrame(() => {
           document
@@ -1753,7 +1756,7 @@ function TeamBoardPageInner(){
       );
     }
     openChildBoard(preview.boardId);
-  }, [activeBoardId, open, openChildBoard]);
+  }, [activeBoardId, openChildBoard, openView]);
 
   useEffect(() => {
     if (!activeBoardId || typeof window === 'undefined') return;
@@ -1764,7 +1767,7 @@ function TeamBoardPageInner(){
       if (parsed.boardId !== activeBoardId || !parsed.nodeId) return;
       window.sessionStorage.removeItem(PENDING_DESCENDANT_NAV_KEY);
       setHighlightedNodeId(parsed.nodeId);
-      open(parsed.nodeId);
+      openView(parsed.nodeId);
       window.requestAnimationFrame(() => {
         document
           .querySelector(`[data-node-id="${parsed.nodeId}"]`)
@@ -1773,7 +1776,7 @@ function TeamBoardPageInner(){
     } catch {
       window.sessionStorage.removeItem(PENDING_DESCENDANT_NAV_KEY);
     }
-  }, [activeBoardId, open]);
+  }, [activeBoardId, openView]);
 
   useEffect(() => {
     if (!highlightedNodeId) return;
@@ -2251,35 +2254,7 @@ function TeamBoardPageInner(){
             ) : boardView === 'kanban' ? null : null
           }
           extraDrawerSections={
-            boardView === 'kanban' ? (
-              <>
-                <DrawerSection title={tBoard('filters.columns.title')}>
-                  <div className="flex gap-2">
-                    {(['auto', 'fixed'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setDisplayOptions((prev) => ({ ...prev, columnHeight: mode }))}
-                        className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${displayOptions.columnHeight === mode ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
-                        aria-pressed={displayOptions.columnHeight === mode}
-                      >
-                        {mode === 'auto' ? tBoard('filters.columns.auto') : tBoard('filters.columns.fixed')}
-                      </button>
-                    ))}
-                  </div>
-                </DrawerSection>
-                <DrawerSection title={tBoard('filters.display.title')}>
-                  {DISPLAY_TOGGLE_CONFIG.map(({ key, labelKey }) => (
-                    <ToggleRow
-                      key={key}
-                      label={tBoard(labelKey as Parameters<typeof tBoard>[0])}
-                      checked={displayOptions[key] as boolean}
-                      onChange={() => toggleDisplayOption(key)}
-                    />
-                  ))}
-                </DrawerSection>
-              </>
-            ) : boardView === 'report' ? (
+            boardView === 'report' ? (
               <>
                 <DrawerSection title={tBoard('report.drawer.view')}>
                   <div className="flex gap-2">
@@ -2396,7 +2371,37 @@ function TeamBoardPageInner(){
                   />
                 </DrawerSection>
               </>
-            ) : null
+            ) : (
+              <>
+                {boardView === 'kanban' ? (
+                  <DrawerSection title={tBoard('filters.columns.title')}>
+                    <div className="flex gap-2">
+                      {(['auto', 'fixed'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setDisplayOptions((prev) => ({ ...prev, columnHeight: mode }))}
+                          className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition ${displayOptions.columnHeight === mode ? 'border-accent bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20'}`}
+                          aria-pressed={displayOptions.columnHeight === mode}
+                        >
+                          {mode === 'auto' ? tBoard('filters.columns.auto') : tBoard('filters.columns.fixed')}
+                        </button>
+                      ))}
+                    </div>
+                  </DrawerSection>
+                ) : null}
+                <DrawerSection title={tBoard('filters.display.title')}>
+                  {DISPLAY_TOGGLE_CONFIG.map(({ key, labelKey }) => (
+                    <ToggleRow
+                      key={key}
+                      label={tBoard(labelKey as Parameters<typeof tBoard>[0])}
+                      checked={displayOptions[key] as boolean}
+                      onChange={() => toggleDisplayOption(key)}
+                    />
+                  ))}
+                </DrawerSection>
+              </>
+            )
           }
         />
         {isAddingColumn && (
@@ -2636,7 +2641,8 @@ function TeamBoardPageInner(){
                     onMoveColumn={handleMoveColumn}
                     onDeleteColumn={handleDeleteColumn}
                     onCreateCard={handleCreateCard}
-                    onOpenCard={handleOpenCard}
+                    onOpenCardView={handleOpenCard}
+                    onOpenCardEdit={handleEditCard}
                     onOpenChildBoard={openChildBoard}
                     onRenameCard={handleRenameCard}
                     onRequestMoveCard={handleRequestMoveCard}
@@ -2681,7 +2687,9 @@ function TeamBoardPageInner(){
                   <BoardMindmapView
                     board={board}
                     childBoards={childBoards}
+                    displayOptions={displayOptions}
                     onOpenTask={handleOpenCard}
+                    onEditTask={handleEditCard}
                     onOpenChildBoard={openChildBoard}
                     onOpenParentBoard={() => {
                       const parent = breadcrumb[breadcrumb.length - 2];
@@ -2720,9 +2728,11 @@ function TeamBoardPageInner(){
               ) : (
                 <BoardListView
                   rootBoard={board}
+                  displayOptions={displayOptions}
                   filters={listFilters}
                   onFiltersChange={setListFilters}
                   onOpenTask={handleOpenCard}
+                  onEditTask={handleEditCard}
                   onOpenBoard={(boardId) => {
                     setBoardView('kanban');
                     openChildBoard(boardId);

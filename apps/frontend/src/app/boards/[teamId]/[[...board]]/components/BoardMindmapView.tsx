@@ -23,14 +23,16 @@ import type { MindmapNode, MindmapLayoutResult, MindmapLayoutMode } from './mind
 import { transformBoardToMindmapTree, transformSubBoardToNodes } from './mindmap/mindmap-transform';
 import { computeMindmapLayout, isNodeInViewport } from './mindmap/mindmap-layout';
 import { buildTransition, tickTransition } from './mindmap/mindmap-animation';
-import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, Plus } from 'lucide-react';
 import { type PhysicsNode, createPhysicsNode, tickAllPhysics, propagateDragToAncestors } from './mindmap/mindmap-physics';
 import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 
 import { MindmapEdgesLayer } from './mindmap/MindmapEdgesLayer';
 import { MindmapNodesLayer } from './mindmap/MindmapNodesLayer';
+import { StackHierarchy } from './CardActionIcons';
 import { useBoardFilters } from '../context/BoardFilterContext';
 import { evaluateBoardTreeMatches } from '@/features/boards/board-tree-filtering';
+import type { CardDisplayOptions } from './types';
 
 // ---------------------------------------------------------------------------
 // localStorage helpers (versioned keys)
@@ -133,7 +135,9 @@ function clamp(v: number, min: number, max: number): number {
 interface BoardMindmapViewProps {
   board: Board;
   childBoards: Record<string, NodeChildBoard>;
+  displayOptions: CardDisplayOptions;
   onOpenTask: (nodeId: string) => void;
+  onEditTask: (nodeId: string) => void;
   onOpenChildBoard: (boardId: string) => void;
   onOpenParentBoard?: () => void;
   hasParentBoard?: boolean;
@@ -150,7 +154,9 @@ interface BoardMindmapViewProps {
 export default function BoardMindmapView({
   board,
   childBoards,
+  displayOptions,
   onOpenTask,
+  onEditTask,
   onOpenChildBoard,
   onOpenParentBoard,
   hasParentBoard = false,
@@ -950,9 +956,12 @@ export default function BoardMindmapView({
               selectedId={selectedNodeId}
               loadingIds={loadingNodeIds}
               matchedNodeIds={matchedNodeIds}
+              showMenuButton={displayOptions.showCardMenu}
               onSelect={setSelectedNodeId}
               onExpand={requestExpand}
-              onOpenTask={onOpenTask}
+              onOpenTaskView={onOpenTask}
+              onOpenTaskEdit={onEditTask}
+              onNavigateChild={handleNavigateChild}
               onContextMenu={handleContextMenu}
               onHoverStart={onNodeHoverStart}
               onHoverEnd={onNodeHoverEnd}
@@ -987,25 +996,43 @@ export default function BoardMindmapView({
             <button
               type="button"
               role="menuitem"
-              onClick={() => { closeContextMenu(); centerOnNode(contextMenu.nodeId); }}
-              className="app-toolbar flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
+              onClick={() => { closeContextMenu(); onOpenTask(contextMenu.nodeId); }}
+              className="app-toolbar flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
             >
-              <Home size={14} /> <span>{t('mindmap.contextMenu.centerOnNode')}</span>
+              <span className="material-symbols-outlined text-[16px]">visibility</span> <span>Ouvrir</span>
             </button>
             <button
               type="button"
               role="menuitem"
-              onClick={() => { closeContextMenu(); onOpenTask(contextMenu.nodeId); }}
-              className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
+              onClick={() => { closeContextMenu(); onEditTask(contextMenu.nodeId); }}
+              className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
             >
-              <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-[12px]">✏️</span> <span>{t('mindmap.contextMenu.edit')}</span>
+              <span className="material-symbols-outlined text-[16px]">edit</span> <span>Modifier</span>
+            </button>
+            {(cmNode.childBoardId || childBoardIdByNodeId.has(contextMenu.nodeId)) && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { closeContextMenu(); handleNavigateChild(contextMenu.nodeId); }}
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
+              >
+                <StackHierarchy /> <span>{t('mindmap.contextMenu.openChildBoard')}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { closeContextMenu(); centerOnNode(contextMenu.nodeId); }}
+              className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
+            >
+              <Home size={14} /> <span>{t('mindmap.contextMenu.centerOnNode')}</span>
             </button>
             {onCreateChildTask && (
               <button
                 type="button"
                 role="menuitem"
                 onClick={() => { closeContextMenu(); void handleCreateChildTask(contextMenu.nodeId); }}
-                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
               >
                 <Plus size={14} /> <span>{t('mindmap.contextMenu.createChild')}</span>
               </button>
@@ -1015,19 +1042,9 @@ export default function BoardMindmapView({
                 type="button"
                 role="menuitem"
                 onClick={() => { closeContextMenu(); requestExpand(contextMenu.nodeId); }}
-                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
+                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition duration-150 hover:-translate-y-px hover:bg-white/5 hover:shadow-[0_8px_18px_rgba(0,0,0,0.16)]"
               >
                 <ChevronsUpDown size={14} /> <span>{cmNode.collapsed ? t('mindmap.contextMenu.expand') : t('mindmap.contextMenu.collapse')}</span>
-              </button>
-            )}
-            {childBoardIdByNodeId.has(contextMenu.nodeId) && (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => { closeContextMenu(); handleNavigateChild(contextMenu.nodeId); }}
-                className="app-toolbar mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-foreground transition"
-              >
-                <ArrowUpLeft size={14} className="rotate-180" /> <span>{t('mindmap.contextMenu.openChildBoard')}</span>
               </button>
             )}
             </div>

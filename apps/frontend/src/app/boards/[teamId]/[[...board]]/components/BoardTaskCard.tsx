@@ -9,13 +9,21 @@ import { ensureChildBoard } from '@/features/boards/boards-api';
 import type { BoardNode, ColumnBehaviorKey } from '@/features/boards/boards-api';
 import type { CardDisplayOptions } from './types';
 import { useTranslation } from '@/i18n';
+import { CardActionMenu, type CardActionMenuItem } from './CardActionMenu';
+import { StackHierarchy, StackSearch } from './CardActionIcons';
+
+type MenuState = {
+  anchorEl?: HTMLElement | null;
+  anchorPosition?: { x: number; y: number } | null;
+};
 
 interface BoardTaskCardProps {
   node: BoardNode;
   columnId: string;
   columnBehavior: ColumnBehaviorKey;
   childBoard?: { boardId: string } | undefined;
-  onOpen: (id: string) => void;              // ouvre le drawer tâche
+  onOpenView: (id: string) => void;
+  onOpenEdit: (id: string) => void;
   onOpenChildBoard?: (boardId: string) => void; // navigation vers sous-board
   onRename?: (id: string, newTitle: string) => Promise<void> | void;
   onRequestMove: (node: BoardNode) => void;
@@ -64,7 +72,8 @@ export function BoardTaskCard({
   columnId,
   columnBehavior,
   childBoard,
-  onOpen,
+  onOpenView,
+  onOpenEdit,
   onOpenChildBoard,
   displayOptions,
   helpMode,
@@ -93,6 +102,9 @@ export function BoardTaskCard({
   const descendantsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const descendantsTooltipRef = useRef<HTMLDivElement | null>(null);
   const descendantsCloseTimerRef = useRef<number | null>(null);
+  const clickTimerRef = useRef<number | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuState, setMenuState] = useState<MenuState | null>(null);
 
   const setCardRef = useCallback(
     (element: HTMLDivElement | null) => {
@@ -101,6 +113,19 @@ export function BoardTaskCard({
     },
     [setNodeRef],
   );
+
+  const clearClickTimer = useCallback(() => {
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearClickTimer();
+    };
+  }, [clearClickTimer]);
 
 
   // Mapping vers TaskCard props
@@ -151,7 +176,7 @@ export function BoardTaskCard({
     const result = lines.join('\n');
 
     return result;
-  }, [raciDetails, node.id, node.raci, node.assignees, displayOptions.showOwner]);
+  }, [raciDetails]);
 
   const lateness = useMemo(() => {
     if (!node.dueAt) return undefined;
@@ -299,6 +324,57 @@ export function BoardTaskCard({
       setFractalLoading(false);
     }
   }, [accessToken, childBoard, fractalLoading, isDragging, node.id, onOpenChildBoard]);
+
+  const handleOpenView = useCallback(() => {
+    if (isDragging || fractalLoading) return;
+    onOpenView(node.id);
+  }, [fractalLoading, isDragging, node.id, onOpenView]);
+
+  const handleOpenEdit = useCallback(() => {
+    if (isDragging || fractalLoading) return;
+    onOpenEdit(node.id);
+  }, [fractalLoading, isDragging, node.id, onOpenEdit]);
+
+  const handleCardClick = useCallback(() => {
+    clearClickTimer();
+    clickTimerRef.current = window.setTimeout(() => {
+      handleOpenView();
+      clickTimerRef.current = null;
+    }, 240);
+  }, [clearClickTimer, handleOpenView]);
+
+  const handleCardDoubleClick = useCallback(() => {
+    clearClickTimer();
+    handleOpenEdit();
+  }, [clearClickTimer, handleOpenEdit]);
+
+  const menuItems = useMemo<CardActionMenuItem[]>(() => {
+    const items: CardActionMenuItem[] = [
+      {
+        id: 'open',
+        label: 'Ouvrir',
+        icon: <span className="material-symbols-outlined text-[16px]">visibility</span>,
+        onSelect: handleOpenView,
+      },
+      {
+        id: 'edit',
+        label: 'Modifier',
+        icon: <span className="material-symbols-outlined text-[16px]">edit</span>,
+        onSelect: handleOpenEdit,
+      },
+    ];
+    if (onOpenChildBoard) {
+      items.push({
+        id: 'navigate',
+        label: 'Ouvrir la sous-strate',
+        icon: <StackHierarchy />,
+        onSelect: () => {
+          void handleOpenChildBoard();
+        },
+      });
+    }
+    return items;
+  }, [handleOpenChildBoard, handleOpenEdit, handleOpenView, onOpenChildBoard]);
 
   const helpMessages = useMemo<CardHelpMessages>(() => {
     const messages: CardHelpMessages = {};
@@ -468,21 +544,12 @@ export function BoardTaskCard({
       {...attributes}
       {...listeners}
       className="group relative"
+      onDoubleClick={handleCardDoubleClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuState({ anchorPosition: { x: event.clientX, y: event.clientY } });
+      }}
     >
-      <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen(node.id);
-          }}
-          className="text-muted opacity-0 transition hover:text-foreground focus:outline-none focus:text-foreground group-hover:opacity-100"
-          title={tBoard('cards.menu.open')}
-          aria-label={tBoard('cards.menu.open')}
-        >
-          <span className="material-symbols-outlined text-[16px]" aria-hidden>edit</span>
-        </button>
-      </div>
       <TaskCard
         id={shortIdLabel}
         priority={priority}
@@ -503,15 +570,20 @@ export function BoardTaskCard({
         isShared={node.isSharedRoot}
         helpMode={helpMode}
         helpMessages={helpMessages}
-        onClick={handleOpenChildBoard}
+        onClick={handleCardClick}
+        onDoubleClick={handleCardDoubleClick}
         onFractalPathClick={handleOpenChildBoard}
-        hideInternalMenuButton
+        onMenuButtonClick={() => setMenuState({ anchorEl: menuButtonRef.current })}
+        menuButtonRef={menuButtonRef}
+        hideInternalMenuButton={!displayOptions.showCardMenu}
+        fractalActionIcon={<span className="inline-flex items-center justify-center text-[color:var(--color-accent)]"><StackHierarchy /></span>}
+        fractalActionLabel="Ouvrir la sous-strate"
         className={[
           isSharedLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab active:cursor-grabbing',
           hasDirectMatch || highlighted ? 'ring-1 ring-accent/70 shadow-[0_0_0_3px_rgba(251,191,36,0.14)]' : '',
         ].filter(Boolean).join(' ')}
       />
-      {showDescendantMatches && (
+      {showDescendantMatches ? (
         <div
           className="absolute left-3 bottom-3 z-20"
           onMouseEnter={openDescendants}
@@ -520,18 +592,18 @@ export function BoardTaskCard({
           <button
             ref={descendantsTriggerRef}
             type="button"
-            className="flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm"
-            onClick={() => setDescendantsOpen((prev) => !prev)}
+            className="inline-flex h-6 w-6 items-center justify-center text-[color:var(--color-warning)] transition hover:scale-[1.04] hover:text-[color:var(--color-warning-strong)]"
+            onClick={(event) => {
+              event.stopPropagation();
+              setDescendantsOpen((prev) => !prev);
+            }}
+            title={tBoard('cards.descendants.more', { count: descendantMatchCount })}
+            aria-label={tBoard('cards.descendants.more', { count: descendantMatchCount })}
           >
-            <span className="relative inline-flex h-4 w-5 items-center justify-center">
-              <span className="absolute left-0 top-[5px] h-2.5 w-3 rounded-sm border border-current bg-background/80" />
-              <span className="absolute left-[3px] top-[2px] h-2.5 w-3 rounded-sm border border-current bg-background/80" />
-              <span className="absolute left-[6px] top-0 h-2.5 w-3 rounded-sm border border-current bg-background/90" />
-            </span>
-            <span>{descendantMatchCount > 9 ? '+9' : descendantMatchCount}</span>
+            <StackSearch />
           </button>
         </div>
-      )}
+      ) : null}
       {descendantsOpen && hasDescendantPreview && typeof document !== 'undefined' && createPortal(
         <div
           ref={descendantsTooltipRef}
@@ -588,8 +660,13 @@ export function BoardTaskCard({
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
         </div>
       )}
-      
-      {/* Bouton menu customisé retiré : on utilise celui du TaskCard via delegation */}
+      <CardActionMenu
+        open={Boolean(menuState)}
+        anchorEl={menuState?.anchorEl ?? null}
+        anchorPosition={menuState?.anchorPosition ?? null}
+        items={menuItems}
+        onClose={() => setMenuState(null)}
+      />
     </div>
   );
 }

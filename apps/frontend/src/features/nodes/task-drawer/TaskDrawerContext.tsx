@@ -4,12 +4,18 @@ import type { NodeDetail } from '../types';
 import { fetchNodeDetail } from '../nodes-api';
 import { useAuth } from '@/features/auth/auth-provider';
 
+export type TaskDrawerMode = 'view' | 'edit';
+
 export type TaskDrawerState = {
   openedNodeId: string | null;
+  mode: TaskDrawerMode;
   detail: NodeDetail | null;
   loading: boolean;
   error: string | null;
-  open: (nodeId: string) => void;
+  open: (nodeId: string, mode?: TaskDrawerMode) => void;
+  openView: (nodeId: string) => void;
+  openEdit: (nodeId: string) => void;
+  setMode: (mode: TaskDrawerMode) => void;
   close: () => void;
   refresh: () => void;
   prefetch: (nodeId: string) => void;
@@ -20,6 +26,7 @@ const Ctx = createContext<TaskDrawerState | null>(null);
 
 export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [openedNodeId, setOpenedNodeId] = useState<string | null>(null);
+  const [mode, setMode] = useState<TaskDrawerMode>('edit');
   const [detail, setDetail] = useState<NodeDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +87,8 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [accessToken, openedNodeId, evictCache]);
 
-  const open = useCallback((nodeId: string) => {
+  const open = useCallback((nodeId: string, nextMode: TaskDrawerMode = 'edit') => {
+    setMode(nextMode);
     setOpenedNodeId(nodeId);
     const cached = cacheRef.current.get(nodeId);
     if (cached) {
@@ -93,8 +101,17 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [load]);
 
+  const openView = useCallback((nodeId: string) => {
+    open(nodeId, 'view');
+  }, [open]);
+
+  const openEdit = useCallback((nodeId: string) => {
+    open(nodeId, 'edit');
+  }, [open]);
+
   const close = useCallback(() => {
     setOpenedNodeId(null);
+    setMode('edit');
     setDetail(null);
     setError(null);
     // restore focus
@@ -150,7 +167,7 @@ export const TaskDrawerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [openedNodeId, load]);
 
   return (
-    <Ctx.Provider value={{ openedNodeId, detail, loading, error, open, close, refresh, prefetch, applyDetail }}>
+    <Ctx.Provider value={{ openedNodeId, mode, detail, loading, error, open, openView, openEdit, setMode, close, refresh, prefetch, applyDetail }}>
       {children}
     </Ctx.Provider>
   );
