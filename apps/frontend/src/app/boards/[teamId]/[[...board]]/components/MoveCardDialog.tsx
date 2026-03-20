@@ -21,6 +21,8 @@ interface MoveCardDialogProps {
   teamId: string;
   node: BoardNode;
   currentBoardId: string;
+  currentBoardNodeId?: string;
+  currentBoardName?: string;
   onClose?: () => void;
   onSuccess: (payload: { boardId: string; boardName: string }) => Promise<void> | void;
   variant?: 'modal' | 'inline';
@@ -37,6 +39,7 @@ type NodeOption = {
   columnName?: string;
   behaviorKey?: string;
   parentId: string | null;
+  isCurrentBoard?: boolean;
   children: NodeOption[];
 };
 
@@ -44,6 +47,8 @@ export function MoveCardDialog({
   teamId,
   node,
   currentBoardId,
+  currentBoardNodeId,
+  currentBoardName,
   onClose,
   onSuccess,
   variant = 'modal',
@@ -68,6 +73,31 @@ export function MoveCardDialog({
 
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const currentBoardOptionId = `__current_board__:${currentBoardId}`;
+
+  const currentBoardOption = useMemo<NodeOption | null>(() => {
+    if (!currentBoardNodeId) {
+      return null;
+    }
+
+    return {
+      nodeId: currentBoardOptionId,
+      boardId: currentBoardId,
+      name: currentBoardName ?? tBoard('moveDialog.currentBoardFallback'),
+      depth: 1,
+      hasChildren: false,
+      columnName: tBoard('moveDialog.currentBoardBadge'),
+      parentId: null,
+      isCurrentBoard: true,
+      children: [],
+    };
+  }, [currentBoardId, currentBoardName, currentBoardNodeId, currentBoardOptionId, tBoard]);
+
+  const selectableNodeOptions = useMemo(
+    () => (currentBoardOption ? [currentBoardOption, ...nodeOptions] : nodeOptions),
+    [currentBoardOption, nodeOptions],
+  );
 
   // Charger la hiérarchie complète des tâches
   useEffect(() => {
@@ -192,7 +222,7 @@ export function MoveCardDialog({
 
   // Filtrer les noeuds selon la recherche
   const filteredNodes = useMemo(() => {
-    if (!searchQuery.trim()) return nodeOptions;
+    if (!searchQuery.trim()) return selectableNodeOptions;
 
     const search = searchQuery.toLowerCase();
     
@@ -211,10 +241,10 @@ export function MoveCardDialog({
       return null;
     };
 
-    return nodeOptions
+    return selectableNodeOptions
       .map(option => filterNode(option))
       .filter((option): option is NodeOption => option !== null);
-  }, [nodeOptions, searchQuery]);
+  }, [searchQuery, selectableNodeOptions]);
 
   // Auto-expand lors de la recherche
   useEffect(() => {
@@ -239,8 +269,17 @@ export function MoveCardDialog({
       }
       return null;
     };
-    return selectedNodeId ? findNode(nodeOptions) : null;
-  }, [nodeOptions, selectedNodeId]);
+    return selectedNodeId ? findNode(selectableNodeOptions) : null;
+  }, [selectableNodeOptions, selectedNodeId]);
+
+  useEffect(() => {
+    if (!currentBoardOption || selectedNodeId) {
+      return;
+    }
+
+    setSelectedNodeId(currentBoardOption.nodeId);
+    setColumnsError(null);
+  }, [currentBoardOption, selectedNodeId]);
 
   // Utiliser le boardId existant ou préparer les colonnes par défaut
   const selectedBoardId = selectedNode?.boardId || null;
@@ -445,7 +484,7 @@ export function MoveCardDialog({
     // - la racine (depth === 0)
     // - la tâche elle-même
     // - les descendants de la tâche (pour éviter les boucles)
-    const canSelect = option.depth > 0 && !isNodeToMove && !isDescendantOfNodeToMove;
+    const canSelect = (option.isCurrentBoard || option.depth > 0) && !isNodeToMove && !isDescendantOfNodeToMove;
 
     return (
       <div>

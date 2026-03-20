@@ -271,6 +271,53 @@ export const TaskDrawer: React.FC = () => {
       consumedBudgetPercent: number | null;
     };
   };
+
+  const buildSnapshotFromDetail = useCallback((nodeDetail: NonNullable<typeof detail>): Snapshot => {
+    const dueDate = nodeDetail.dueAt ? nodeDetail.dueAt.substring(0, 10) : '';
+    return {
+      title: nodeDetail.title || '',
+      description: nodeDetail.description || null,
+      dueAt: dueDate,
+      progress: nodeDetail.progress ?? 0,
+      priority: nodeDetail.priority ?? 'NONE',
+      effort: nodeDetail.effort ?? null,
+      tags: nodeDetail.tags ?? [],
+      blocked: {
+        reason: ((nodeDetail as Record<string, unknown>).blockedReason as string | undefined) ?? '',
+        emails: nodeDetail.blockedReminderEmails ? [...nodeDetail.blockedReminderEmails] : [],
+        interval: nodeDetail.blockedReminderIntervalDays != null ? String(nodeDetail.blockedReminderIntervalDays) : '',
+        eta: nodeDetail.blockedExpectedUnblockAt ? nodeDetail.blockedExpectedUnblockAt.substring(0, 10) : '',
+        isResolved: ((nodeDetail as Record<string, unknown>).isBlockResolved as boolean | undefined) ?? false,
+      },
+      backlog: {
+        hiddenUntil: nodeDetail.backlogHiddenUntil ? nodeDetail.backlogHiddenUntil.substring(0, 10) : '',
+      },
+      raci: {
+        R: nodeDetail.raci?.responsibleIds ? [...nodeDetail.raci.responsibleIds] : [],
+        A: nodeDetail.raci?.accountableIds ? [...nodeDetail.raci.accountableIds] : [],
+        C: nodeDetail.raci?.consultedIds ? [...nodeDetail.raci.consultedIds] : [],
+        I: nodeDetail.raci?.informedIds ? [...nodeDetail.raci.informedIds] : [],
+      },
+      timeTracking: {
+        estimatedTimeHours: nodeDetail.timeTracking?.estimatedTimeHours ?? null,
+        actualOpexHours: nodeDetail.timeTracking?.actualOpexHours ?? null,
+        actualCapexHours: nodeDetail.timeTracking?.actualCapexHours ?? null,
+        plannedStartDate: nodeDetail.timeTracking?.plannedStartDate ?? null,
+        plannedEndDate: nodeDetail.timeTracking?.plannedEndDate ?? null,
+        actualEndDate: nodeDetail.timeTracking?.actualEndDate ?? null,
+      },
+      financials: {
+        billingStatus: nodeDetail.financials?.billingStatus ?? null,
+        hourlyRate: nodeDetail.financials?.hourlyRate ?? null,
+        plannedBudget: nodeDetail.financials?.plannedBudget ?? null,
+        consumedBudgetValue: nodeDetail.financials?.consumedBudgetValue ?? null,
+        consumedBudgetPercent: nodeDetail.financials?.consumedBudgetPercent ?? null,
+      },
+    };
+  }, [detail]);
+
+  const serializeSnapshot = useCallback((snapshot: Snapshot): string => JSON.stringify(snapshot), []);
+
   const [initialSnapshot, setInitialSnapshot] = useState<Snapshot | null>(null);
   const [priority, setPriority] = useState<Priority>('NONE');
   const [effort, setEffort] = useState<Effort>(null);
@@ -580,93 +627,61 @@ export const TaskDrawer: React.FC = () => {
 
   const previousNodeIdRef = useRef<string | null>(null);
   const previousBehaviorRef = useRef<string | null>(null);
+  const previousSnapshotSignatureRef = useRef<string | null>(null);
+  const hasDirtyRef = useRef(false);
 
   // Sync form when detail loads or node changes
   useEffect(() => {
-    setSelectedRaciTeamId('');
     if (detail) {
       const nodeIdChanged = previousNodeIdRef.current !== detail.id;
       previousNodeIdRef.current = detail.id;
-      
-      const dDate = detail.dueAt ? detail.dueAt.substring(0,10) : '';
-      setTitle(detail.title || '');
-      setDescription(detail.description || '');
-      setDueAt(dDate);
-      setProgress(detail.progress ?? 0);
-      setPriority(detail.priority ?? 'NONE');
-      setEffort(detail.effort ?? null);
-      setTags(detail.tags || []);
-      // Blocage -> map values
-      setBlockedReason((detail as Record<string, unknown>).blockedReason as string || '');
-      setBlockedEmails(detail.blockedReminderEmails || []);
-      setBlockedEmailInput('');
-      setBlockedInterval(detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '');
-      setBlockedEta(detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '');
-      setBlockedSince((detail as Record<string, unknown>).blockedSince as string | null || null);
-      setIsBlockResolved((detail as Record<string, unknown>).isBlockResolved as boolean || false);
-      setBacklogHiddenUntil(detail.backlogHiddenUntil ? detail.backlogHiddenUntil.substring(0, 10) : '');
-      setBacklogRestartRequested(false);
-      setRResponsible(detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : []);
-      setRAccountable(detail.raci?.accountableIds ? [...detail.raci.accountableIds] : []);
-      setRConsulted(detail.raci?.consultedIds ? [...detail.raci.consultedIds] : []);
-      setRInformed(detail.raci?.informedIds ? [...detail.raci.informedIds] : []);
-      setEstimatedTime(detail.timeTracking?.estimatedTimeHours != null ? String(detail.timeTracking.estimatedTimeHours) : '');
-      setActualOpex(detail.timeTracking?.actualOpexHours != null ? String(detail.timeTracking.actualOpexHours) : '');
-      setActualCapex(detail.timeTracking?.actualCapexHours != null ? String(detail.timeTracking.actualCapexHours) : '');
-      setPlannedStart(detail.timeTracking?.plannedStartDate ?? '');
-      setPlannedEnd(detail.timeTracking?.plannedEndDate ?? '');
-      setActualEnd(detail.timeTracking?.actualEndDate ?? '');
-      setBillingStatus(detail.financials?.billingStatus ?? '');
-      setHourlyRate(detail.financials?.hourlyRate != null ? String(detail.financials.hourlyRate) : '');
-      setPlannedBudget(detail.financials?.plannedBudget != null ? String(detail.financials.plannedBudget) : '');
-      setConsumedBudgetValue(detail.financials?.consumedBudgetValue != null ? String(detail.financials.consumedBudgetValue) : '');
-      setConsumedBudgetPercent(detail.financials?.consumedBudgetPercent != null ? String(detail.financials.consumedBudgetPercent) : '');
-      setInitialSnapshot({
-        title: detail.title||'',
-        description: detail.description||null,
-        dueAt: dDate,
-        progress: detail.progress ?? 0,
-        priority: detail.priority ?? 'NONE',
-        effort: detail.effort ?? null,
-        tags: detail.tags ?? [],
-        blocked: {
-          reason: ((detail as Record<string, unknown>).blockedReason as string | undefined) ?? '',
-          emails: detail.blockedReminderEmails ? [...detail.blockedReminderEmails] : [],
-          interval: detail.blockedReminderIntervalDays != null ? String(detail.blockedReminderIntervalDays) : '',
-          eta: detail.blockedExpectedUnblockAt ? detail.blockedExpectedUnblockAt.substring(0,10) : '',
-          isResolved: ((detail as Record<string, unknown>).isBlockResolved as boolean | undefined) ?? false,
-        },
-        backlog: {
-          hiddenUntil: detail.backlogHiddenUntil ? detail.backlogHiddenUntil.substring(0, 10) : '',
-        },
-        raci: {
-          R: detail.raci?.responsibleIds ? [...detail.raci.responsibleIds] : [],
-          A: detail.raci?.accountableIds ? [...detail.raci.accountableIds] : [],
-          C: detail.raci?.consultedIds ? [...detail.raci.consultedIds] : [],
-          I: detail.raci?.informedIds ? [...detail.raci.informedIds] : [],
-        },
-        timeTracking: {
-          estimatedTimeHours: detail.timeTracking?.estimatedTimeHours ?? null,
-          actualOpexHours: detail.timeTracking?.actualOpexHours ?? null,
-          actualCapexHours: detail.timeTracking?.actualCapexHours ?? null,
-          plannedStartDate: detail.timeTracking?.plannedStartDate ?? null,
-          plannedEndDate: detail.timeTracking?.plannedEndDate ?? null,
-          actualEndDate: detail.timeTracking?.actualEndDate ?? null,
-        },
-        financials: {
-          billingStatus: detail.financials?.billingStatus ?? null,
-          hourlyRate: detail.financials?.hourlyRate ?? null,
-          plannedBudget: detail.financials?.plannedBudget ?? null,
-          consumedBudgetValue: detail.financials?.consumedBudgetValue ?? null,
-          consumedBudgetPercent: detail.financials?.consumedBudgetPercent ?? null,
-        },
-      });
-      // Ne forcer 'details' que si c'est une nouvelle tâche
-      if (nodeIdChanged) {
-        setActiveTab('details');
+      const nextSnapshot = buildSnapshotFromDetail(detail);
+      const nextSignature = serializeSnapshot(nextSnapshot);
+      const shouldHydrateForm = nodeIdChanged || (!hasDirtyRef.current && previousSnapshotSignatureRef.current !== nextSignature);
+
+      if (shouldHydrateForm) {
+        setSelectedRaciTeamId('');
+        setTitle(nextSnapshot.title);
+        setDescription(nextSnapshot.description ?? '');
+        setDueAt(nextSnapshot.dueAt);
+        setProgress(nextSnapshot.progress);
+        setPriority(nextSnapshot.priority);
+        setEffort(nextSnapshot.effort);
+        setTags(nextSnapshot.tags);
+        setBlockedReason(nextSnapshot.blocked.reason);
+        setBlockedEmails(nextSnapshot.blocked.emails);
+        setBlockedEmailInput('');
+        setBlockedInterval(nextSnapshot.blocked.interval);
+        setBlockedEta(nextSnapshot.blocked.eta);
+        setBlockedSince((detail as Record<string, unknown>).blockedSince as string | null || null);
+        setIsBlockResolved(nextSnapshot.blocked.isResolved);
+        setBacklogHiddenUntil(nextSnapshot.backlog.hiddenUntil);
+        setBacklogRestartRequested(false);
+        setRResponsible(nextSnapshot.raci.R);
+        setRAccountable(nextSnapshot.raci.A);
+        setRConsulted(nextSnapshot.raci.C);
+        setRInformed(nextSnapshot.raci.I);
+        setEstimatedTime(nextSnapshot.timeTracking.estimatedTimeHours != null ? String(nextSnapshot.timeTracking.estimatedTimeHours) : '');
+        setActualOpex(nextSnapshot.timeTracking.actualOpexHours != null ? String(nextSnapshot.timeTracking.actualOpexHours) : '');
+        setActualCapex(nextSnapshot.timeTracking.actualCapexHours != null ? String(nextSnapshot.timeTracking.actualCapexHours) : '');
+        setPlannedStart(nextSnapshot.timeTracking.plannedStartDate ?? '');
+        setPlannedEnd(nextSnapshot.timeTracking.plannedEndDate ?? '');
+        setActualEnd(nextSnapshot.timeTracking.actualEndDate ?? '');
+        setBillingStatus(nextSnapshot.financials.billingStatus ?? '');
+        setHourlyRate(nextSnapshot.financials.hourlyRate != null ? String(nextSnapshot.financials.hourlyRate) : '');
+        setPlannedBudget(nextSnapshot.financials.plannedBudget != null ? String(nextSnapshot.financials.plannedBudget) : '');
+        setConsumedBudgetValue(nextSnapshot.financials.consumedBudgetValue != null ? String(nextSnapshot.financials.consumedBudgetValue) : '');
+        setConsumedBudgetPercent(nextSnapshot.financials.consumedBudgetPercent != null ? String(nextSnapshot.financials.consumedBudgetPercent) : '');
+        setInitialSnapshot(nextSnapshot);
+        previousSnapshotSignatureRef.current = nextSignature;
+
+        if (nodeIdChanged) {
+          setActiveTab('details');
+        }
       }
     } else {
       previousNodeIdRef.current = null;
+      previousSnapshotSignatureRef.current = null;
       setTitle('');
       setDescription('');
       setDueAt('');
@@ -700,7 +715,7 @@ export const TaskDrawer: React.FC = () => {
       setConsumedBudgetPercent('');
       setInitialSnapshot(null);
     }
-  }, [detail]);
+  }, [detail, buildSnapshotFromDetail, serializeSnapshot]);
 
   useEffect(() => {
     if (!teamId || !accessToken) {
@@ -1070,6 +1085,10 @@ export const TaskDrawer: React.FC = () => {
     backlogRestartRequested,
   ]);
 
+  useEffect(() => {
+    hasDirtyRef.current = hasDirty;
+  }, [hasDirty]);
+
   const requestClose = useCallback(() => {
     if (!isReadOnly && hasDirty) {
       setShowUnsavedModal(true);
@@ -1206,7 +1225,7 @@ export const TaskDrawer: React.FC = () => {
       await updateNode(detail.id, payload, accessToken);
       await refreshActiveBoard();
   success(tBoard('taskDrawer.toasts.saved'));
-      setInitialSnapshot({
+      const nextSnapshot = {
         title: title.trim()||'',
         description: description.trim()===''? null : description,
         dueAt,
@@ -1245,7 +1264,9 @@ export const TaskDrawer: React.FC = () => {
           consumedBudgetValue: consumedValueNumeric ?? null,
           consumedBudgetPercent: consumedPercentNumeric ?? null,
         },
-      });
+      } satisfies Snapshot;
+      setInitialSnapshot(nextSnapshot);
+      previousSnapshotSignatureRef.current = serializeSnapshot(nextSnapshot);
       setBacklogRestartRequested(false);
       refresh();
       // Fermer le tiroir après une sauvegarde réussie comme demandé
@@ -1545,8 +1566,10 @@ export const TaskDrawer: React.FC = () => {
                     )}
                   </div>
 
-                  {activeTab === 'details' && (
-                    <div className="space-y-5">
+                  <div
+                    className={activeTab === 'details' ? 'space-y-5' : 'hidden space-y-5'}
+                    aria-hidden={activeTab !== 'details'}
+                  >
                       <section className="app-section space-y-3 rounded-lg p-4">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-[24px] text-[color:var(--color-task-label)]">edit_note</span>
@@ -1607,15 +1630,19 @@ export const TaskDrawer: React.FC = () => {
                         </div>
                       </section>
                     </div>
-                  )}
 
-                  {activeTab === 'comments' && detail && (
-                    <CommentsSection
-                      members={teamMembers}
-                      membersLoading={membersLoading}
-                      membersError={membersError}
-                    />
-                  )}
+                  {detail ? (
+                    <div
+                      className={activeTab === 'comments' ? 'space-y-5' : 'hidden space-y-5'}
+                      aria-hidden={activeTab !== 'comments'}
+                    >
+                      <CommentsSection
+                        members={teamMembers}
+                        membersLoading={membersLoading}
+                        membersError={membersError}
+                      />
+                    </div>
+                  ) : null}
 
                   {activeTab === 'planning' && (
                     <div className="space-y-5">
@@ -2084,6 +2111,8 @@ export const TaskDrawer: React.FC = () => {
                           teamId={teamId}
                           node={detail}
                           currentBoardId={board.id}
+                          currentBoardNodeId={board.nodeId}
+                          currentBoardName={board.name}
                           variant="inline"
                           confirmActions={[
                             { id: 'stay', label: 'Déplacer et rester' },
