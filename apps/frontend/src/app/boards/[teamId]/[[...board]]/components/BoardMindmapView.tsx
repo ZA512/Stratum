@@ -23,7 +23,7 @@ import type { MindmapNode, MindmapLayoutResult, MindmapLayoutMode } from './mind
 import { transformBoardToMindmapTree, transformSubBoardToNodes } from './mindmap/mindmap-transform';
 import { computeMindmapLayout, isNodeInViewport } from './mindmap/mindmap-layout';
 import { buildTransition, tickTransition } from './mindmap/mindmap-animation';
-import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, Plus } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ChevronsUpDown, Home, ArrowUpLeft, Plus } from 'lucide-react';
 import { type PhysicsNode, createPhysicsNode, tickAllPhysics, propagateDragToAncestors } from './mindmap/mindmap-physics';
 import { computeBezierPath } from './mindmap/MindmapEdgesLayer';
 
