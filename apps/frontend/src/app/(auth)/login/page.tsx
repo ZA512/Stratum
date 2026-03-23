@@ -4,12 +4,13 @@ export const dynamic = 'force-dynamic';
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useTranslation } from "@/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
@@ -24,7 +25,7 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-  const next = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
+      const next = searchParams.get('next');
       if (next && next.startsWith('/')) {
         router.replace(next);
       } else {
