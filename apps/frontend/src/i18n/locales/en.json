@@ -1307,7 +1307,7 @@
     "report": {
       "eyebrow": "Report mode",
       "title": "Activity report - {boardName}",
-      "subtitle": "Read the real activity over the period, including comments, content edits, and card moves.",
+      "subtitle": "Read the real activity over the period, including comments, content edits, and card moves, with sub-boards included by default.",
       "presets": {
         "24h": "24h",
         "7d": "7 days",
@@ -1325,7 +1325,8 @@
         "from": "Start date",
         "to": "End date",
         "eventType": "Action type",
-        "allEvents": "All actions"
+        "allEvents": "All actions",
+        "scope": "Scope"
       },
       "density": {
         "comfortable": "Comfort",
@@ -1336,7 +1337,12 @@
       },
       "drawer": {
         "view": "Report display",
-        "groupBy": "Grouping"
+        "groupBy": "Grouping",
+        "scope": "Scope"
+      },
+      "scope": {
+        "subtree": "Full project + sub-projects",
+        "board": "Current stratum only"
       },
       "groupBy": {
         "project": "Project + chronology",

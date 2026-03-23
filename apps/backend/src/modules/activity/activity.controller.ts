@@ -76,6 +76,12 @@ export class ActivityController {
   })
   @ApiQuery({ name: 'query', required: false, example: 'devis' })
   @ApiQuery({ name: 'limit', required: false, example: 400 })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    enum: ['subtree', 'board'],
+    description: 'subtree inclut les sous-kanbans, board limite au kanban courant',
+  })
   @ApiOkResponse({ type: BoardActivityReportResponseDto })
   async getBoardReport(
     @CurrentUser() user: AuthenticatedUser,
@@ -86,6 +92,7 @@ export class ActivityController {
     @Query('eventTypes') eventTypesRaw?: string,
     @Query('query') query?: string,
     @Query('limit') limitRaw?: string,
+    @Query('scope') scopeRaw?: string,
   ): Promise<BoardActivityReportResponseDto> {
     const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
     const eventTypes = eventTypesRaw
@@ -94,6 +101,7 @@ export class ActivityController {
           .map((entry) => entry.trim())
           .filter(Boolean)
       : undefined;
+    const scope = scopeRaw === 'board' ? 'board' : 'subtree';
 
     return this.activityService.getBoardReport(boardId, user.id, {
       from,
@@ -102,6 +110,7 @@ export class ActivityController {
       eventTypes,
       query,
       limit,
+      scope,
     });
   }
 

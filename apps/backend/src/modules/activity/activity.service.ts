@@ -32,6 +32,7 @@ type BoardActivityReportQuery = {
   eventTypes?: string[];
   query?: string;
   limit?: number;
+  scope?: 'board' | 'subtree';
 };
 
 @Injectable()
@@ -288,13 +289,19 @@ export class ActivityService {
     const dateRange = this.resolveDateRange(query.from, query.to);
     const limit = Math.min(Math.max(query.limit ?? 400, 1), 2000);
 
+    const scope = query.scope === 'board' ? 'board' : 'subtree';
+
     const subtreeBoards = await this.prisma.board.findMany({
       where: {
         node: {
           workspaceId: board.node.workspaceId,
-          path: {
-            startsWith: board.node.path,
-          },
+          ...(scope === 'board'
+            ? { id: board.node.id }
+            : {
+                path: {
+                  startsWith: board.node.path,
+                },
+              }),
         },
       },
       select: {

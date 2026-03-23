@@ -48,6 +48,7 @@ import {
   REPORT_EVENT_TYPE_OPTIONS,
   type ReportDensity,
   type ReportGroupBy,
+  type ReportScope,
   type ReportPreset,
   type ReportViewFilters,
 } from './BoardReportView';
@@ -310,6 +311,24 @@ function ReportToolbarControls({
           {REPORT_EVENT_TYPE_OPTIONS.map((option) => (
             <option key={option} value={option}>
               {option === 'ALL' ? tBoard('report.filters.allEvents') : option}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="app-pill flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold text-muted">
+        <span>{tBoard('report.filters.scope')}</span>
+        <select
+          value={filters.scope}
+          onChange={(event) => updateFilters((current) => ({
+            ...current,
+            scope: event.target.value === 'board' ? 'board' : 'subtree',
+          }))}
+          className="bg-transparent text-foreground outline-none"
+        >
+          {(['subtree', 'board'] as ReportScope[]).map((scope) => (
+            <option key={scope} value={scope}>
+              {tBoard(`report.scope.${scope}` as const)}
             </option>
           ))}
         </select>
@@ -577,6 +596,7 @@ function TeamBoardPageInner(){
         density: parsed.density === 'comfortable' ? 'comfortable' : 'compact',
         groupBy: parsed.groupBy === 'timeline' || parsed.groupBy === 'type' ? parsed.groupBy : 'project',
         preset: parsed.preset ?? defaults.preset,
+        scope: parsed.scope === 'board' ? 'board' : 'subtree',
       });
     } catch {
       setReportFilters(createDefaultReportFilters());
@@ -2283,6 +2303,22 @@ function TeamBoardPageInner(){
                       >
                         <span>{tBoard(`report.groupBy.${groupBy}` as const)}</span>
                         <span className="text-[10px] uppercase tracking-wide">{reportFilters.groupBy === groupBy ? 'On' : 'Off'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </DrawerSection>
+                <DrawerSection title={tBoard('report.drawer.scope')}>
+                  <div className="space-y-1.5">
+                    {(['subtree', 'board'] as ReportScope[]).map((scope) => (
+                      <button
+                        key={scope}
+                        type="button"
+                        onClick={() => setReportFilters((current) => ({ ...current, scope }))}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition ${reportFilters.scope === scope ? 'border-accent/50 bg-accent/10 text-foreground' : 'border-white/10 text-muted hover:border-white/20 hover:text-foreground'}`}
+                        aria-pressed={reportFilters.scope === scope}
+                      >
+                        <span>{tBoard(`report.scope.${scope}` as const)}</span>
+                        <span className="text-[10px] uppercase tracking-wide">{reportFilters.scope === scope ? 'On' : 'Off'}</span>
                       </button>
                     ))}
                   </div>

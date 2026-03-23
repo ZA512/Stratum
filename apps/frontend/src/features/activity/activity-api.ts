@@ -191,6 +191,7 @@ export async function fetchBoardActivityReport(
     eventTypes?: string[];
     query?: string;
     limit?: number;
+    scope?: 'board' | 'subtree';
   } = {},
 ): Promise<BoardActivityReport> {
   const params = new URLSearchParams();
@@ -202,6 +203,7 @@ export async function fetchBoardActivityReport(
   }
   if (query.query) params.set('query', query.query);
   if (query.limit) params.set('limit', String(query.limit));
+  if (query.scope) params.set('scope', query.scope);
 
   const suffix = params.toString() ? `?${params.toString()}` : '';
   const response = await fetch(

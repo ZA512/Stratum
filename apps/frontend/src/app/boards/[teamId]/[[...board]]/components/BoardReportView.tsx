@@ -11,6 +11,7 @@ import { useTranslation } from '@/i18n';
 
 export type ReportGroupBy = 'project' | 'timeline' | 'type';
 export type ReportDensity = 'comfortable' | 'compact';
+export type ReportScope = 'subtree' | 'board';
 export type ReportPreset =
   | '24h'
   | '7d'
@@ -30,6 +31,7 @@ export type ReportViewFilters = {
   groupBy: ReportGroupBy;
   eventType: string;
   density: ReportDensity;
+  scope: ReportScope;
 };
 
 type BoardReportViewProps = {
@@ -50,6 +52,7 @@ export const createDefaultReportFilters = (): ReportViewFilters => {
     groupBy: 'project',
     eventType: 'ALL',
     density: 'compact',
+    scope: 'subtree',
   };
 };
 
@@ -278,6 +281,7 @@ export function BoardReportView({
       query: deferredQuery.trim() || undefined,
       eventTypes: filters.eventType === 'ALL' ? undefined : [filters.eventType],
       limit: 500,
+      scope: filters.scope,
     })
       .then((data) => {
         if (!cancelled) {
@@ -298,7 +302,7 @@ export function BoardReportView({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, boardId, deferredQuery, filters.eventType, filters.from, filters.to, t]);
+  }, [accessToken, boardId, deferredQuery, filters.eventType, filters.from, filters.scope, filters.to, t]);
 
   const groups = groupReportItems(report?.items ?? [], filters.groupBy);
   const isCompact = filters.density === 'compact';
