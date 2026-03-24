@@ -19,9 +19,19 @@
     "test:backend": "npm run test --workspace backend",
     "test:e2e": "npm run test:e2e --workspace backend"
   },
+  "overrides": {
+    "@prisma/config": {
+      "effect": "^3.21.0"
+    },
+    "@prisma/dev": {
+      "@hono/node-server": "^1.19.11",
+      "hono": "^4.12.9"
+    },
+    "file-type": "^21.3.4"
+  },
   "devDependencies": {
-    "@swc/cli": "^0.5.2",
-    "@swc/core": "^1.15.11",
+    "@swc/cli": "^0.7.10",
+    "@swc/core": "^1.15.21",
     "baseline-browser-mapping": "^2.9.19"
   }
 }
