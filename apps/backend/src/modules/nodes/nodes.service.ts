@@ -58,13 +58,85 @@ function normalizeJson(
 }
 
 const BILLING_STATUS_VALUES = new Set(['TO_BILL', 'BILLED', 'PAID']);
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_STATUS_VALUES = new Set([
   'PENDING',
   'ACCEPTED',
   'DECLINED',
   'EXPIRED',
 ]);
+
+const EMAIL_LOCAL_ALLOWED_CHARS = new Set(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!#$%&'*+/=?^_`{|}~-",
+);
+
+function isAsciiAlphaNumeric(value: string): boolean {
+  if (value.length !== 1) {
+    return false;
+  }
+
+  const code = value.charCodeAt(0);
+  const isUppercase = code >= 65 && code <= 90;
+  const isLowercase = code >= 97 && code <= 122;
+  const isDigit = code >= 48 && code <= 57;
+
+  return isUppercase || isLowercase || isDigit;
+}
+
+function isValidEmailAddress(email: string): boolean {
+  if (email.length === 0 || email.length > 254) {
+    return false;
+  }
+
+  const atIndex = email.indexOf('@');
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf('@')) {
+    return false;
+  }
+
+  const localPart = email.slice(0, atIndex);
+  const domainPart = email.slice(atIndex + 1);
+
+  if (
+    localPart.length === 0 ||
+    localPart.length > 64 ||
+    domainPart.length === 0 ||
+    localPart.startsWith('.') ||
+    localPart.endsWith('.') ||
+    localPart.includes('..')
+  ) {
+    return false;
+  }
+
+  for (const char of localPart) {
+    if (!EMAIL_LOCAL_ALLOWED_CHARS.has(char)) {
+      return false;
+    }
+  }
+
+  const labels = domainPart.split('.');
+  if (labels.length < 2) {
+    return false;
+  }
+
+  for (const label of labels) {
+    if (label.length === 0 || label.length > 63) {
+      return false;
+    }
+
+    const firstChar = label[0];
+    const lastChar = label[label.length - 1];
+    if (!isAsciiAlphaNumeric(firstChar) || !isAsciiAlphaNumeric(lastChar)) {
+      return false;
+    }
+
+    for (const char of label) {
+      if (!(isAsciiAlphaNumeric(char) || char === '-')) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 const DEFAULT_BACKLOG_SETTINGS = Object.freeze({
   reviewAfterDays: 14,
@@ -3719,7 +3791,7 @@ export class NodesService {
     if (!email) {
       throw new BadRequestException('Email obligatoire');
     }
-    if (!EMAIL_REGEX.test(email)) {
+    if (!isValidEmailAddress(email)) {
       throw new BadRequestException('Email invalide');
     }
 
