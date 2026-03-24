@@ -3,7 +3,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { PrismaService } from './../src/prisma/prisma.service';
-import { DEMO_IDS, DEMO_PASSWORD, seedDemoData } from './../prisma/seed';
+import { DEMO_IDS, seedDemoData } from './../prisma/seed';
+import { demoLoginCredentials } from './test-auth.utils';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -20,8 +21,6 @@ function ensureString(value: unknown, context: string): string {
   }
   return value;
 }
-
-const DEMO_EMAIL = 'demo@stratum.local';
 
 const describeIfDatabase: typeof describe = process.env.DATABASE_URL
   ? describe
@@ -85,9 +84,11 @@ describeIfAgentE2E('Agent Native API (e2e)', () => {
 
     await seedDemoData(prisma);
 
+    const demoCredentials = demoLoginCredentials();
+
     const loginResponse = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .send(demoCredentials)
       .expect(200);
 
     const loginBody = ensureRecord(loginResponse.body, 'login response body');

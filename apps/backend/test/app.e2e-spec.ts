@@ -4,7 +4,12 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
-import { DEMO_IDS, DEMO_PASSWORD, seedDemoData } from './../prisma/seed';
+import { DEMO_IDS, seedDemoData } from './../prisma/seed';
+import {
+  buildTestEmail,
+  buildTestPassword,
+  demoLoginCredentials,
+} from './test-auth.utils';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -28,8 +33,6 @@ function ensureArray<T = unknown>(value: unknown, context: string): T[] {
   }
   return value as T[];
 }
-
-const DEMO_EMAIL = 'demo@stratum.local';
 
 const describeIfDatabase: typeof describe = process.env.DATABASE_URL
   ? describe
@@ -79,9 +82,11 @@ describeIfDatabase('App API (e2e)', () => {
 
     await seedDemoData(prisma);
 
+    const demoCredentials = demoLoginCredentials();
+
     const loginResponse = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: DEMO_EMAIL, password: DEMO_PASSWORD })
+      .send(demoCredentials)
       .expect(200);
 
     const loginBody = ensureRecord(loginResponse.body, 'login response body');
@@ -126,9 +131,11 @@ describeIfDatabase('App API (e2e)', () => {
   });
 
   it('POST /api/v1/auth/request-reset then /reset updates password', async () => {
+    const demoCredentials = demoLoginCredentials();
+    const nextPassword = buildTestPassword('reset');
     const resetResponse = await request(app.getHttpServer())
       .post('/api/v1/auth/request-reset')
-      .send({ email: DEMO_EMAIL })
+      .send({ email: demoCredentials.email })
       .expect(202);
 
     const resetBody = ensureRecord(
@@ -141,18 +148,19 @@ describeIfDatabase('App API (e2e)', () => {
       .post('/api/v1/auth/reset')
       .send({
         token: resetToken,
-        password: 'NewPassword!123',
+        password: nextPassword,
       })
       .expect(200);
 
     await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: DEMO_EMAIL, password: 'NewPassword!123' })
+      .send({ email: demoCredentials.email, password: nextPassword })
       .expect(200);
   });
 
   it('POST /api/v1/auth/invitations and accept', async () => {
-    const inviteeEmail = 'new.user@example.com';
+    const inviteeEmail = buildTestEmail('invitee');
+    const invitePassword = buildTestPassword('invite');
 
     const invitation = await request(app.getHttpServer())
       .post('/api/v1/auth/invitations')
@@ -170,7 +178,7 @@ describeIfDatabase('App API (e2e)', () => {
       .post('/api/v1/auth/invitations/accept')
       .send({
         token: invitationToken,
-        password: 'InvitePassword!123',
+        password: invitePassword,
         displayName: 'Invitee',
       })
       .expect(200);

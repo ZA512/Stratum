@@ -13,6 +13,7 @@ Example:
 import sys
 import zipfile
 from pathlib import Path
+from path_safety import resolve_existing_skill_directory, resolve_output_directory
 from quick_validate import validate_skill
 
 
@@ -27,7 +28,12 @@ def package_skill(skill_path, output_dir=None):
     Returns:
         Path to the created .skill file, or None if error
     """
-    skill_path = Path(skill_path).resolve()
+    try:
+        skill_path = resolve_existing_skill_directory(skill_path)
+        output_path = resolve_output_directory(output_dir)
+    except ValueError as exc:
+        print(f"❌ Error: {exc}")
+        return None
 
     # Validate skill folder exists
     if not skill_path.exists():
@@ -56,10 +62,7 @@ def package_skill(skill_path, output_dir=None):
     # Determine output location
     skill_name = skill_path.name
     if output_dir:
-        output_path = Path(output_dir).resolve()
         output_path.mkdir(parents=True, exist_ok=True)
-    else:
-        output_path = Path.cwd()
 
     skill_filename = output_path / f"{skill_name}.skill"
 
@@ -69,9 +72,11 @@ def package_skill(skill_path, output_dir=None):
             # Walk through the skill directory
             for file_path in skill_path.rglob('*'):
                 if file_path.is_file():
+                    resolved_file = file_path.resolve(strict=True)
+                    resolved_file.relative_to(skill_path)
                     # Calculate the relative path within the zip
-                    arcname = file_path.relative_to(skill_path.parent)
-                    zipf.write(file_path, arcname)
+                    arcname = resolved_file.relative_to(skill_path.parent)
+                    zipf.writestr(arcname.as_posix(), resolved_file.read_bytes())
                     print(f"  Added: {arcname}")
 
         print(f"\n✅ Successfully packaged skill to: {skill_filename}")

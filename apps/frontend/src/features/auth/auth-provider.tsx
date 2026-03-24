@@ -44,13 +44,17 @@ type AuthContextValue = {
 const STORAGE_KEY = "stratum_auth_session_v1";
 const ACCESS_COOKIE = "stratum_access";
 
+function getCookieSecurityAttributes() {
+  return window.location.protocol === 'https:' ? '; SameSite=Lax; Secure' : '; SameSite=Lax';
+}
+
 // Helper pour manipuler un cookie côté client (simple, pas HttpOnly mais aligné middleware)
 function setCookie(name: string, value: string, days: number) {
   const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/${getCookieSecurityAttributes()}`;
 }
 function deleteCookie(name: string) {
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${getCookieSecurityAttributes()}`;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);

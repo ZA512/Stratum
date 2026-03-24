@@ -2,6 +2,7 @@ import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
+import { buildTestEmail, buildTestPassword } from './test-auth.utils';
 
 // E2E simplifié: dépend d'une base réelle; si la DB locale n'est pas préparée ce test pourra être ignoré.
 // Objectif: vérifier qu'après bootstrap, la création d'une sous-tâche retourne un parent avec board + colonnes.
@@ -30,9 +31,10 @@ describeIfDatabase('Auto Board E2E (simplifié)', () => {
     httpServer = app.getHttpServer();
 
     // Signup rapide (si endpoint existe) sinon adapter
-    const email = 'autoboard+' + Date.now() + '@test.dev';
-    await request(httpServer).post('/auth/register').send({ email, password: 'Passw0rd!', displayName: 'Auto' });
-    const login = await request(httpServer).post('/auth/login').send({ email, password: 'Passw0rd!' });
+    const email = buildTestEmail('autoboard');
+    const password = buildTestPassword('autoboard');
+    await request(httpServer).post('/auth/register').send({ email, password, displayName: 'Auto' });
+    const login = await request(httpServer).post('/auth/login').send({ email, password });
     authToken = login.body?.accessToken;
 
     const bootstrap = await request(httpServer)

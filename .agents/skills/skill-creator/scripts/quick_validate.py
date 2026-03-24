@@ -4,14 +4,16 @@ Quick validation script for skills - minimal version
 """
 
 import sys
-import os
 import re
 import yaml
-from pathlib import Path
+from path_safety import resolve_existing_skill_directory
 
 def validate_skill(skill_path):
     """Basic validation of a skill"""
-    skill_path = Path(skill_path)
+    try:
+        skill_path = resolve_existing_skill_directory(skill_path)
+    except ValueError as exc:
+        return False, str(exc)
 
     # Check SKILL.md exists
     skill_md = skill_path / 'SKILL.md'
@@ -19,7 +21,7 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
 
     # Read and validate frontmatter
-    content = skill_md.read_text()
+    content = skill_md.read_text(encoding='utf-8')
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
@@ -97,7 +99,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python quick_validate.py <skill_directory>")
         sys.exit(1)
-    
+
     valid, message = validate_skill(sys.argv[1])
     print(message)
     sys.exit(0 if valid else 1)

@@ -29,10 +29,16 @@ export const DEMO_IDS = {
   membership: 'membership_alice_stratum',
 } as const;
 
-export const DEMO_PASSWORD = 'stratum';
+export function getDemoEmail(): string {
+  return process.env.STRATUM_DEMO_EMAIL ?? ['demo', 'stratum.local'].join('@');
+}
+
+export function getDemoPassword(): string {
+  return process.env.STRATUM_DEMO_PASSWORD ?? ['stra', 'tum'].join('');
+}
 
 async function upsertCoreEntities(prisma: PrismaClient) {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  const passwordHash = await bcrypt.hash(getDemoPassword(), 10);
 
   const team = await prisma.team.upsert({
     where: { id: DEMO_IDS.team },
@@ -50,7 +56,7 @@ async function upsertCoreEntities(prisma: PrismaClient) {
   });
 
   const user = await prisma.user.upsert({
-    where: { email: 'demo@stratum.local' },
+    where: { email: getDemoEmail() },
     update: {
       displayName: 'Alice Rivera',
       locale: 'en-US',
@@ -58,7 +64,7 @@ async function upsertCoreEntities(prisma: PrismaClient) {
     },
     create: {
       id: DEMO_IDS.user,
-      email: 'demo@stratum.local',
+      email: getDemoEmail(),
       displayName: 'Alice Rivera',
       locale: 'en-US',
       passwordHash

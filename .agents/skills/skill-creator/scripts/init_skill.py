@@ -13,6 +13,7 @@ Examples:
 
 import sys
 from pathlib import Path
+from path_safety import resolve_skill_parent_directory, validate_skill_name
 
 
 SKILL_TEMPLATE = """---
@@ -202,8 +203,15 @@ def init_skill(skill_name, path):
     Returns:
         Path to created skill directory, or None if error
     """
+    try:
+        safe_skill_name = validate_skill_name(skill_name)
+        base_path = resolve_skill_parent_directory(path)
+    except ValueError as exc:
+        print(f"❌ Error: {exc}")
+        return None
+
     # Determine skill directory path
-    skill_dir = Path(path).resolve() / skill_name
+    skill_dir = base_path / safe_skill_name
 
     # Check if directory already exists
     if skill_dir.exists():
@@ -219,9 +227,9 @@ def init_skill(skill_name, path):
         return None
 
     # Create SKILL.md from template
-    skill_title = title_case_skill_name(skill_name)
+    skill_title = title_case_skill_name(safe_skill_name)
     skill_content = SKILL_TEMPLATE.format(
-        skill_name=skill_name,
+        skill_name=safe_skill_name,
         skill_title=skill_title
     )
 
@@ -239,7 +247,7 @@ def init_skill(skill_name, path):
         scripts_dir = skill_dir / 'scripts'
         scripts_dir.mkdir(exist_ok=True)
         example_script = scripts_dir / 'example.py'
-        example_script.write_text(EXAMPLE_SCRIPT.format(skill_name=skill_name))
+        example_script.write_text(EXAMPLE_SCRIPT.format(skill_name=safe_skill_name))
         example_script.chmod(0o755)
         print("✅ Created scripts/example.py")
 
@@ -261,7 +269,7 @@ def init_skill(skill_name, path):
         return None
 
     # Print next steps
-    print(f"\n✅ Skill '{skill_name}' initialized successfully at {skill_dir}")
+    print(f"\n✅ Skill '{safe_skill_name}' initialized successfully at {skill_dir}")
     print("\nNext steps:")
     print("1. Edit SKILL.md to complete the TODO items and update the description")
     print("2. Customize or delete the example files in scripts/, references/, and assets/")

@@ -3,7 +3,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
-import { DEMO_PASSWORD, seedDemoData } from './../prisma/seed';
+import { seedDemoData } from './../prisma/seed';
+import {
+  buildTestEmail,
+  buildTestPassword,
+  demoLoginCredentials,
+} from './test-auth.utils';
 
 function ensureString(value: unknown, ctx: string): string {
   if (typeof value !== 'string') throw new Error(ctx + ' should be a string');
@@ -16,15 +21,13 @@ function ensureRecord(value: unknown, ctx: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-const USER_A_EMAIL = 'demo@stratum.local'; // seed user
-const USER_B_EMAIL = 'bob.personal@example.com';
-const USER_B_PASSWORD = 'PersoBoard!123';
-
 describe('Personal board isolation (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let accessTokenA: string;
   let accessTokenB: string;
+  let userBEmail: string;
+  let userBPassword: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -55,11 +58,14 @@ describe('Personal board isolation (e2e)', () => {
     await prisma.user.deleteMany();
 
     await seedDemoData(prisma);
+    userBEmail = buildTestEmail('bob-personal');
+    userBPassword = buildTestPassword('personal-board');
+    const demoCredentials = demoLoginCredentials();
 
     // Login user A (seed)
     const loginA = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: USER_A_EMAIL, password: DEMO_PASSWORD })
+      .send(demoCredentials)
       .expect(200);
     accessTokenA = ensureString(
       ensureRecord(loginA.body, 'login A body').accessToken,
@@ -69,7 +75,7 @@ describe('Personal board isolation (e2e)', () => {
     // Register user B (will trigger bootstrap personal team + board)
     const registerB = await request(app.getHttpServer())
       .post('/api/v1/auth/register')
-      .send({ email: USER_B_EMAIL, password: USER_B_PASSWORD })
+      .send({ email: userBEmail, password: userBPassword })
       .expect(201);
     accessTokenB = ensureString(
       ensureRecord(registerB.body, 'register B body').accessToken,
@@ -84,11 +90,12 @@ describe('Personal board isolation (e2e)', () => {
   it('User B has a personal board not visible to User A', async () => {
     // Récupérer la team personnelle de B (membership ACTIVE filtrée par isPersonal)
     const membershipsB = await prisma.membership.findMany({
-      where: { user: { email: USER_B_EMAIL }, status: 'ACTIVE' },
+      where: { user: { email: userBEmail }, status: 'ACTIVE' },
       include: { team: true },
     });
     const personalTeam = membershipsB.find(
-      (m) => (m.team as any).isPersonal === true,
+      (membership: (typeof membershipsB)[number]) =>
+        (membership.team as { isPersonal?: boolean }).isPersonal === true,
     );
     expect(personalTeam).toBeDefined();
     if (!personalTeam) return;
@@ -98,7 +105,10 @@ describe('Personal board isolation (e2e)', () => {
       where: { teamId: personalTeam.teamId, parentId: null },
       include: { board: true },
     });
-    const personalRoot = rootNodesB.find((n) => (n.board as any)?.isPersonal);
+    const personalRoot = rootNodesB.find(
+      (node: (typeof rootNodesB)[number]) =>
+        (node.board as { isPersonal?: boolean } | null)?.isPersonal,
+    );
     expect(personalRoot?.board?.id).toBeDefined();
     if (!personalRoot?.board?.id) return;
 
@@ -141,13 +151,15 @@ describe('Personal board isolation (e2e)', () => {
   });
 
   it('Cannot create invitation on user B personal team', async () => {
+    const inviteeEmail = buildTestEmail('third-user');
     // Trouver team personnelle B
     const membershipsB = await prisma.membership.findMany({
-      where: { user: { email: USER_B_EMAIL }, status: 'ACTIVE' },
+      where: { user: { email: userBEmail }, status: 'ACTIVE' },
       include: { team: true },
     });
     const personalTeam = membershipsB.find(
-      (m) => (m.team as any).isPersonal === true,
+      (membership: (typeof membershipsB)[number]) =>
+        (membership.team as { isPersonal?: boolean }).isPersonal === true,
     );
     expect(personalTeam).toBeDefined();
     if (!personalTeam) return;
@@ -155,7 +167,7 @@ describe('Personal board isolation (e2e)', () => {
     await request(app.getHttpServer())
       .post('/api/v1/auth/invitations')
       .set('Authorization', 'Bearer ' + accessTokenB)
-      .send({ email: 'third@example.com', teamId: personalTeam.teamId })
+      .send({ email: inviteeEmail, teamId: personalTeam.teamId })
       .expect(400); // BadRequest car team personnelle
   });
 });
