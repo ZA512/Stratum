@@ -20,6 +20,8 @@
     "test:e2e": "npm run test:e2e --workspace backend"
   },
   "overrides": {
+    "hono": "^4.12.9",
+    "@hono/node-server": "^1.19.11",
     "@prisma/config": {
       "effect": "^3.21.0"
     },
