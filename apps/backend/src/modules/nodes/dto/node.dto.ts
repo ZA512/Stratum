@@ -191,6 +191,9 @@ export class NodeDto {
   @ApiProperty({ example: '2025-02-05T09:00:00.000Z', nullable: true })
   blockedReminderLastSentAt!: string | null;
 
+  @ApiProperty({ example: true })
+  blockedReminderActive!: boolean;
+
   @ApiProperty({ example: '2025-02-10T10:00:00.000Z', nullable: true })
   blockedExpectedUnblockAt!: string | null;
 

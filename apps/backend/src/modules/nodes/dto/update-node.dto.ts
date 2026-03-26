@@ -79,6 +79,12 @@ export class UpdateNodeDto {
   blockedReminderIntervalDays?: number | null;
 
   @ApiPropertyOptional({
+    example: true,
+    description: 'Active ou désactive la relance automatique sans perdre la cadence configurée',
+  })
+  blockedReminderActive?: boolean;
+
+  @ApiPropertyOptional({
     example: '2025-02-15T00:00:00.000Z',
     description: 'Date estimée de fin de blocage',
     nullable: true,

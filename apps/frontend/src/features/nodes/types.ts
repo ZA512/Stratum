@@ -58,9 +58,11 @@ export type NodeDetail = {
   dueAt: string | null;
   statusMetadata: Record<string, unknown> | null;
   progress: number; // 0-100
+  blockedReason: string | null;
   blockedReminderEmails: string[];
   blockedReminderIntervalDays: number | null;
   blockedReminderLastSentAt: string | null;
+  blockedReminderActive: boolean;
   blockedExpectedUnblockAt: string | null;
   blockedSince: string | null;
   isBlockResolved: boolean;

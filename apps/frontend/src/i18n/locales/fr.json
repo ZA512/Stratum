@@ -797,10 +797,12 @@
         },
         "emails": {
           "label": "Email(s) du/des bloqueur(s)",
-          "placeholder": "ajouter@exemple.com ; autre@exemple.com (Entrée pour ajouter)"
+          "placeholder": "ajouter@exemple.com ; autre@exemple.com",
+          "add": "Ajouter"
         },
         "interval": {
-          "label": "Relance automatique",
+          "label": "Relance tous les",
+          "placeholder": "Nombre de jours",
           "options": {
             "never": "Jamais",
             "daily": "Tous les jours",
@@ -811,12 +813,42 @@
             "everyFourteen": "Toutes les 2 semaines"
           }
         },
+        "status": {
+          "label": "Relance",
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "nextReminder": {
+          "label": "Date prochaine relance",
+          "empty": "Non programmée"
+        },
         "eta": {
           "label": "Date estimée de déblocage"
         },
         "since": "Bloqué depuis : {date}",
+        "lastReminder": "Dernière relance envoyée : {date}",
         "resolved": "Blocage résolu (arrête les relances automatiques)",
-        "autoReminderInfo": "Les relances automatiques incluent le titre de la tâche, ce qui est attendu et un lien vers le kanban."
+        "autoReminderInfo": "Les relances automatiques incluent une formule de politesse, votre message, puis un lien direct vers la carte uniquement si le destinataire y a réellement accès.",
+        "preview": {
+          "title": "Aperçu du mail",
+          "description": "Prévisualisez le mail réellement généré pour un destinataire donné.",
+          "action": "Voir l'aperçu du mail",
+          "loading": "Chargement…",
+          "noRecipient": "Ajoutez au moins un e-mail",
+          "subject": "Objet",
+          "recipient": "Destinataire",
+          "linkStatus": "Lien Stratum",
+          "linkIncluded": "Lien inclus",
+          "linkHidden": "Lien masqué faute d’accès ou d’URL applicative",
+          "nextReminder": "Prochaine relance automatique : {date}",
+          "errors": {
+            "noRecipient": "Ajoutez au moins un destinataire pour générer l’aperçu.",
+            "loadFailed": "Impossible de charger l’aperçu du mail."
+          }
+        },
+        "errors": {
+          "invalidInterval": "La relance automatique doit être configurée avec un nombre de jours supérieur ou égal à 1."
+        }
       }
     },
     "columns": {

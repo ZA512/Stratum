@@ -85,6 +85,7 @@ type ParsedWorkflowSnapshot = {
   backlogReviewStartedAt: string | null;
   backlogLastInteractionAt: string | null;
   backlogLastReminderAt: string | null;
+  blockedReminderActive: boolean;
   lastKnownColumnId: string | null;
   lastKnownBehavior: ColumnBehaviorKey | null;
   doneArchiveScheduledAt: string | null;
@@ -642,7 +643,11 @@ export class BoardsService {
           ? (node.blockedReminderLastSentAt as Date)
           : null;
       let blockedReminderDueInDays: number | null = null;
+      const workflow =
+        workflowByNode.get(node.id) ??
+        this.parseWorkflowMetadata(node.metadata ?? null);
       if (
+        workflow.blockedReminderActive &&
         blockedReminderIntervalDays &&
         Number.isFinite(blockedReminderIntervalDays) &&
         blockedReminderIntervalDays > 0 &&
@@ -657,10 +662,6 @@ export class BoardsService {
             remainingMs <= 0 ? 0 : Math.ceil(remainingMs / DAY_IN_MS);
         }
       }
-      const workflow =
-        workflowByNode.get(node.id) ??
-        this.parseWorkflowMetadata(node.metadata ?? null);
-
       // Déterminer si c'est une tâche mère partagée :
       // 1. Si elle provient d'un SharedNodePlacement reçu (node.isSharedRoot déjà true)
       // 2. OU si elle a des partages actifs avec d'autres utilisateurs (propriétaire qui a partagé)
@@ -1822,6 +1823,12 @@ export class BoardsService {
       !Array.isArray(workflow.done)
         ? (workflow.done as Record<string, any>)
         : {};
+    const blocked =
+      workflow.blocked &&
+      typeof workflow.blocked === 'object' &&
+      !Array.isArray(workflow.blocked)
+        ? (workflow.blocked as Record<string, any>)
+        : {};
 
     const backlogHiddenUntil = toIsoDateTime(backlog.hiddenUntil);
     const backlogNextReviewAt = toIsoDateTime(backlog.nextReviewAt);
@@ -1843,6 +1850,10 @@ export class BoardsService {
       ? (lastKnownBehaviorRaw as ColumnBehaviorKey)
       : null;
     const doneArchiveScheduledAt = toIsoDateTime(done.archiveScheduledAt);
+    const blockedReminderActive =
+      typeof blocked.reminderActive === 'boolean'
+        ? blocked.reminderActive
+        : true;
 
     return {
       backlogHiddenUntil,
@@ -1850,6 +1861,7 @@ export class BoardsService {
       backlogReviewStartedAt,
       backlogLastInteractionAt,
       backlogLastReminderAt,
+      blockedReminderActive,
       lastKnownColumnId,
       lastKnownBehavior,
       doneArchiveScheduledAt,

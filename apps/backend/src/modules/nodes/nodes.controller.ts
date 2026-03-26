@@ -47,6 +47,10 @@ import {
 import { NodesService } from './nodes.service';
 import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
 import { ApiBody } from '@nestjs/swagger';
+import {
+  BlockedReminderPreviewDto,
+  BlockedReminderPreviewResponseDto,
+} from './dto/blocked-reminder-preview.dto';
 
 @ApiTags('Nodes')
 @Controller('nodes')
@@ -330,6 +334,24 @@ export class NodesController {
     @Body() dto: UpdateNodeDto,
   ): Promise<NodeDto> {
     return this.nodesService.updateNode(nodeId, dto, user.id);
+  }
+
+  @Post(':nodeId/blocked-reminder-preview')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Génère un aperçu du mail de relance bloquante pour un destinataire donné',
+  })
+  @ApiParam({ name: 'nodeId', example: 'node_123' })
+  @ApiOkResponse({ type: BlockedReminderPreviewResponseDto })
+  @ApiBody({ type: BlockedReminderPreviewDto })
+  getBlockedReminderPreview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('nodeId') nodeId: string,
+    @Body() dto: BlockedReminderPreviewDto,
+  ): Promise<BlockedReminderPreviewResponseDto> {
+    return this.nodesService.getBlockedReminderPreview(nodeId, dto, user.id);
   }
 
   @Delete(':nodeId')

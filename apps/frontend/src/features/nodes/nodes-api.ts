@@ -17,9 +17,12 @@ export type UpdateNodeInput = {
   description?: string | null;
   dueAt?: string | null;
   progress?: number;
+  blockedReason?: string | null;
   blockedReminderEmails?: string[];
   blockedReminderIntervalDays?: number | null;
+  blockedReminderActive?: boolean;
   blockedExpectedUnblockAt?: string | null;
+  isBlockResolved?: boolean;
   priority?: 'NONE'|'CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'LOWEST';
   effort?: 'UNDER2MIN'|'XS'|'S'|'M'|'L'|'XL'|'XXL' | null;
   tags?: string[];
@@ -141,6 +144,48 @@ export async function fetchNodeDetail(nodeId: string, accessToken: string): Prom
   return (await response.json()) as NodeDetail;
 }
 
+export type BlockedReminderPreviewInput = {
+  recipientEmail: string;
+  blockedReason?: string | null;
+  blockedReminderIntervalDays?: number | null;
+  blockedReminderActive?: boolean;
+};
+
+export type BlockedReminderPreview = {
+  subject: string;
+  text: string;
+  html: string | null;
+  recipientEmail: string;
+  recipientDisplayName: string;
+  linkIncluded: boolean;
+  linkUrl: string | null;
+  recipientHasAccess: boolean;
+  reminderActive: boolean;
+  nextReminderAt: string | null;
+};
+
+export async function fetchBlockedReminderPreview(
+  nodeId: string,
+  input: BlockedReminderPreviewInput,
+  accessToken: string,
+): Promise<BlockedReminderPreview> {
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/nodes/${nodeId}/blocked-reminder-preview`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    await throwNodeError(response, 'Impossible de générer l’aperçu de relance');
+  }
+  return (await response.json()) as BlockedReminderPreview;
+}
+
 export async function fetchNodeSummary(nodeId: string, accessToken: string): Promise<{ id: string; hasBoard: boolean; counts: { backlog:number; inProgress:number; blocked:number; done:number } }>{
   const response = await authenticatedFetch(`${API_BASE_URL}/nodes/${nodeId}/summary`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -168,6 +213,7 @@ export type NodeLite = {
   blockedReminderEmails: string[];
   blockedReminderIntervalDays: number | null;
   blockedReminderLastSentAt: string | null;
+  blockedReminderActive: boolean;
   blockedExpectedUnblockAt: string | null;
   blockedSince: string | null;
   isBlockResolved: boolean;

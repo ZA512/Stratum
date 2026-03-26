@@ -37,6 +37,10 @@ import { NodeBreadcrumbDto } from './dto/node-breadcrumb.dto';
 import { NodeBreadcrumbItemDto } from './dto/node-breadcrumb-item.dto';
 import { NodeChildBoardDto } from './dto/node-child-board.dto';
 import { UpdateNodeDto } from './dto/update-node.dto';
+import {
+  BlockedReminderPreviewDto,
+  BlockedReminderPreviewResponseDto,
+} from './dto/blocked-reminder-preview.dto';
 import { CreateChildNodeDto } from './dto/create-child-node.dto';
 import { NodeSummaryOnlyDto } from './dto/node-summary-only.dto';
 import { NodeDeletePreviewDto } from './dto/node-delete-preview.dto';
@@ -265,10 +269,14 @@ type ExtractedMetadata = {
       completedAt: string | null;
       archiveScheduledAt: string | null;
     };
+    blocked: {
+      reminderActive: boolean;
+    };
   };
   workflowRaw: {
     backlog: Record<string, any>;
     done: Record<string, any>;
+    blocked: Record<string, any>;
   };
 };
 
@@ -1494,6 +1502,18 @@ export class NodesService {
       changed = true;
     }
 
+    if (targetColumn.behavior.key === ColumnBehaviorKey.BLOCKED) {
+      if (workflowState.blocked.reminderActive !== true) {
+        workflowState.blocked.reminderActive = true;
+        workflowRaw.blocked.reminderActive = true;
+        changed = true;
+      }
+    } else if (workflowRaw.blocked.reminderActive !== undefined) {
+      workflowState.blocked.reminderActive = true;
+      delete workflowRaw.blocked.reminderActive;
+      changed = true;
+    }
+
     if (!changed) {
       return {};
     }
@@ -1501,6 +1521,7 @@ export class NodesService {
     extracted.raw.workflow = {
       backlog: { ...workflowRaw.backlog },
       done: { ...workflowRaw.done },
+      blocked: { ...workflowRaw.blocked },
     };
 
     return {
@@ -1581,6 +1602,7 @@ export class NodesService {
       dto.blockedReason === undefined &&
       dto.blockedReminderEmails === undefined &&
       dto.blockedReminderIntervalDays === undefined &&
+      dto.blockedReminderActive === undefined &&
       dto.blockedExpectedUnblockAt === undefined &&
       dto.blockedSince === undefined &&
       dto.isBlockResolved === undefined &&
@@ -1669,7 +1691,7 @@ export class NodesService {
             .filter(Boolean),
         ),
       );
-      const invalid = cleaned.filter((e) => !/.+@.+\..+/.test(e));
+      const invalid = cleaned.filter((email) => !isValidEmailAddress(email));
       if (invalid.length > 0)
         throw new BadRequestException(
           'Emails invalides: ' + invalid.join(', '),
@@ -1819,6 +1841,15 @@ export class NodesService {
           workflowRaw.backlog.hiddenUntil = parsed;
           workflowChanged = true;
         }
+      }
+    }
+
+    if (dto.blockedReminderActive !== undefined) {
+      const nextValue = Boolean(dto.blockedReminderActive);
+      if (workflowState.blocked.reminderActive !== nextValue) {
+        workflowState.blocked.reminderActive = nextValue;
+        workflowRaw.blocked.reminderActive = nextValue;
+        workflowChanged = true;
       }
     }
 
@@ -2141,6 +2172,7 @@ export class NodesService {
       metadata.workflow = {
         backlog: { ...workflowRaw.backlog },
         done: { ...workflowRaw.done },
+        blocked: { ...workflowRaw.blocked },
       };
       metadataChanged = true;
     }
@@ -3055,6 +3087,7 @@ export class NodesService {
         nodeId: string;
         body: string;
         createdAt: Date;
+        updatedAt: Date;
         notifyResponsible: boolean;
         notifyAccountable: boolean;
         notifyConsulted: boolean;
@@ -3088,7 +3121,7 @@ export class NodesService {
       nodeId: string;
       body: string;
       createdAt: Date;
-      updatedAt: Date;
+      updatedAt?: Date;
       notifyResponsible: boolean;
       notifyAccountable: boolean;
       notifyConsulted: boolean;
@@ -3124,7 +3157,7 @@ export class NodesService {
       nodeId: comment.nodeId,
       body: comment.body,
       createdAt: comment.createdAt.toISOString(),
-      updatedAt: comment.updatedAt.toISOString(),
+      updatedAt: (comment.updatedAt ?? comment.createdAt).toISOString(),
       notify: {
         responsible: comment.notifyResponsible ?? true,
         accountable: comment.notifyAccountable ?? true,
@@ -3587,48 +3620,70 @@ export class NodesService {
       case 'blocked-auto-reminder': {
         const reminderEvery = entry.reminderIntervalDays ?? null;
         const reason = (entry.blockedReason ?? '').trim();
+        const taskUrl =
+          typeof entry.taskUrl === 'string' && entry.taskUrl.trim().length > 0
+            ? entry.taskUrl.trim()
+            : null;
         const textLines = [
-          `La tâche "${nodeTitle}" est toujours bloquée.`,
+          'Bonjour,',
+          '',
+          `Je me permets de vous relancer au sujet de la carte "${nodeTitle}", toujours bloquée dans Stratum.`,
           reminderEvery
-            ? `Rappel automatique toutes les ${reminderEvery} journées.`
-            : 'Aucun intervalle de relance n’a été trouvé.',
+            ? `Cadence configurée : tous les ${reminderEvery} jours.`
+            : 'Cadence configurée : aucune.',
         ];
 
         if (reason) {
-          textLines.push('', 'Contexte fourni :', reason);
+          textLines.push('', 'Message de relance :', reason);
+        }
+
+        if (taskUrl) {
+          textLines.push('', 'Accéder directement à la carte :', taskUrl);
         }
 
         textLines.push(
           '',
-          'Merci de mettre à jour la fiche ou de contacter les responsables.',
+          'Merci d’avance pour votre retour.',
+          '',
+          'Bien cordialement,',
+          'Stratum',
         );
 
         const htmlParts = [
-          `<p>La tâche <em>${escapeHtml(nodeTitle)}</em> est toujours bloquée.</p>`,
+          '<p>Bonjour,</p>',
+          `<p>Je me permets de vous relancer au sujet de la carte <strong>${escapeHtml(nodeTitle)}</strong>, toujours bloquée dans Stratum.</p>`,
           reminderEvery
-            ? `<p>Rappel automatique toutes les <strong>${escapeHtml(String(reminderEvery))}</strong> journées.</p>`
-            : '<p>Aucun intervalle de relance n’a été trouvé.</p>',
+            ? `<p>Cadence configurée : tous les <strong>${escapeHtml(String(reminderEvery))}</strong> jours.</p>`
+            : '<p>Cadence configurée : aucune.</p>',
         ];
 
         if (reason) {
           htmlParts.push(
-            '<p>Contexte fourni :</p>',
+            '<p>Message de relance :</p>',
             `<blockquote>${formatMultilineHtml(reason)}</blockquote>`,
           );
         }
 
+        if (taskUrl) {
+          htmlParts.push(
+            `<p><a href="${escapeHtml(taskUrl)}">Ouvrir directement la carte dans Stratum</a></p>`,
+          );
+        }
+
         htmlParts.push(
-          '<p>Merci de mettre à jour la fiche ou de contacter les responsables.</p>',
+          '<p>Merci d’avance pour votre retour.</p>',
+          '<p>Bien cordialement,<br />Stratum</p>',
         );
 
         return {
-          subject: `[Stratum] Relance automatique – ${nodeTitle}`,
+          subject: `[Stratum] Relance blocage – ${nodeTitle}`,
           text: textLines.join('\n'),
           html: htmlParts.join(''),
           metadata: {
             ...baseMetadata,
             reminderIntervalDays: reminderEvery,
             blockedReason: reason || null,
+            taskUrl,
           },
         };
       }
@@ -4664,6 +4719,7 @@ export class NodesService {
         nodeId: string;
         body: string;
         createdAt: Date;
+        updatedAt: Date;
         notifyResponsible: boolean;
         notifyAccountable: boolean;
         notifyConsulted: boolean;
@@ -5341,6 +5397,7 @@ export class NodesService {
       blockedReminderLastSentAt: (node as any).blockedReminderLastSentAt
         ? (node as any).blockedReminderLastSentAt.toISOString?.()
         : null,
+      blockedReminderActive: metadata.workflow.blocked.reminderActive,
       blockedExpectedUnblockAt: (node as any).blockedExpectedUnblockAt
         ? (node as any).blockedExpectedUnblockAt.toISOString?.()
         : null,
@@ -5605,6 +5662,13 @@ export class NodesService {
         ? { ...(workflowRaw.done as Record<string, any>) }
         : {};
     workflowRaw.done = doneWorkflowRaw;
+    const blockedWorkflowRaw =
+      workflowRaw.blocked &&
+      typeof workflowRaw.blocked === 'object' &&
+      !Array.isArray(workflowRaw.blocked)
+        ? { ...(workflowRaw.blocked as Record<string, any>) }
+        : {};
+    workflowRaw.blocked = blockedWorkflowRaw;
     const shareNormalized = normalizeShare(rawRoot);
 
     const responsibleIds = toStringArray(
@@ -5799,6 +5863,11 @@ export class NodesService {
     if (doneArchiveScheduledAt === null)
       delete doneWorkflowRaw.archiveScheduledAt;
     else doneWorkflowRaw.archiveScheduledAt = doneArchiveScheduledAt;
+    const blockedReminderActive =
+      typeof blockedWorkflowRaw.reminderActive === 'boolean'
+        ? blockedWorkflowRaw.reminderActive
+        : true;
+    blockedWorkflowRaw.reminderActive = blockedReminderActive;
 
     return {
       raw: rawRoot,
@@ -5845,10 +5914,14 @@ export class NodesService {
           completedAt: doneCompletedAt,
           archiveScheduledAt: doneArchiveScheduledAt,
         },
+        blocked: {
+          reminderActive: blockedReminderActive,
+        },
       },
       workflowRaw: {
         backlog: backlogWorkflowRaw,
         done: doneWorkflowRaw,
+        blocked: blockedWorkflowRaw,
       },
     };
   }
@@ -5946,6 +6019,274 @@ export class NodesService {
       recipients.push({ userId: null, email, displayName: email });
     }
     return recipients;
+  }
+
+  private resolveBlockedReminderAppBaseUrl(): string | null {
+    const candidates = [
+      process.env.STRATUM_APP_URL,
+      process.env.APP_BASE_URL,
+      process.env.FRONTEND_APP_URL,
+      process.env.NEXT_PUBLIC_APP_URL,
+      process.env.NEXT_PUBLIC_SITE_URL,
+    ];
+
+    for (const candidate of candidates) {
+      const trimmed = candidate?.trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          continue;
+        }
+        return parsed.toString().replace(/\/$/, '');
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  private computeBlockedReminderNextAt(params: {
+    intervalDays: number | null;
+    blockedSince: Date | string | null;
+    lastSentAt: Date | string | null;
+    reminderActive: boolean;
+    isResolved: boolean;
+  }): string | null {
+    const {
+      intervalDays,
+      blockedSince,
+      lastSentAt,
+      reminderActive,
+      isResolved,
+    } = params;
+
+    if (!reminderActive || isResolved || !intervalDays || intervalDays <= 0) {
+      return null;
+    }
+
+    const baselineSource = lastSentAt ?? blockedSince;
+    if (!baselineSource) {
+      return null;
+    }
+
+    const baseline =
+      baselineSource instanceof Date ? baselineSource : new Date(baselineSource);
+    if (Number.isNaN(baseline.getTime())) {
+      return null;
+    }
+
+    return new Date(baseline.getTime() + intervalDays * DAY_IN_MS).toISOString();
+  }
+
+  private async recipientHasNodeAccess(
+    node: Pick<NodeModel, 'teamId' | 'path' | 'createdById' | 'metadata'>,
+    userId: string,
+  ): Promise<boolean> {
+    if (!userId) {
+      return false;
+    }
+
+    if (node.createdById === userId) {
+      return true;
+    }
+
+    const activeMembership = await this.prisma.membership.findFirst({
+      where: {
+        teamId: node.teamId,
+        userId,
+        status: MembershipStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+    if (activeMembership) {
+      return true;
+    }
+
+    const metadata = this.extractMetadata(node as NodeModel);
+    if (metadata.share.collaborators.some((collab) => collab.userId === userId)) {
+      return true;
+    }
+
+    const ancestorIds = node.path.split('/').filter(Boolean).slice(0, -1);
+    if (!ancestorIds.length) {
+      return false;
+    }
+
+    const ancestors = await this.prisma.node.findMany({
+      where: { id: { in: ancestorIds } },
+      select: { metadata: true },
+    });
+
+    return ancestors.some((ancestor) => {
+      const raw =
+        ancestor.metadata &&
+        typeof ancestor.metadata === 'object' &&
+        !Array.isArray(ancestor.metadata)
+          ? { ...(ancestor.metadata as Record<string, any>) }
+          : {};
+      const share = normalizeShare(raw);
+      return share.collaborators.some((collab) => collab.userId === userId);
+    });
+  }
+
+  private async resolveBlockedReminderRecipient(params: {
+    email: string;
+    node: Pick<
+      NodeModel,
+      'id' | 'teamId' | 'path' | 'createdById' | 'metadata'
+    > & { boardId: string | null };
+  }): Promise<{
+    userId: string | null;
+    email: string;
+    displayName: string;
+    hasAccess: boolean;
+    taskUrl: string | null;
+  }> {
+    const normalizedEmail = params.email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, displayName: true },
+    });
+
+    const hasAccess = user
+      ? await this.recipientHasNodeAccess(params.node, user.id)
+      : false;
+    const appBaseUrl = this.resolveBlockedReminderAppBaseUrl();
+    const taskUrl =
+      hasAccess && appBaseUrl && params.node.boardId
+        ? `${appBaseUrl}/boards/${encodeURIComponent(params.node.teamId)}/${encodeURIComponent(params.node.boardId)}?task=${encodeURIComponent(params.node.id)}`
+        : null;
+
+    return {
+      userId: user?.id ?? null,
+      email: normalizedEmail,
+      displayName: user?.displayName?.trim() || normalizedEmail,
+      hasAccess,
+      taskUrl,
+    };
+  }
+
+  async getBlockedReminderPreview(
+    nodeId: string,
+    dto: BlockedReminderPreviewDto,
+    userId: string,
+  ): Promise<BlockedReminderPreviewResponseDto> {
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: {
+        id: true,
+        parentId: true,
+        title: true,
+        teamId: true,
+        path: true,
+        createdById: true,
+        metadata: true,
+        blockedReason: true,
+        blockedReminderIntervalDays: true,
+        blockedReminderLastSentAt: true,
+        blockedSince: true,
+        isBlockResolved: true,
+        column: { select: { boardId: true } },
+      },
+    });
+
+    if (!node) {
+      throw new NotFoundException();
+    }
+
+    await this.ensureUserCanWrite(node.teamId, userId);
+
+    const recipientEmail = String(dto.recipientEmail ?? '')
+      .trim()
+      .toLowerCase();
+    if (!isValidEmailAddress(recipientEmail)) {
+      throw new BadRequestException('recipientEmail invalide');
+    }
+
+    const extracted = this.extractMetadata(node as unknown as NodeModel);
+    const reason =
+      dto.blockedReason === undefined
+        ? (node.blockedReason ?? '').trim() || null
+        : String(dto.blockedReason ?? '')
+            .trim()
+            .slice(0, 5000) || null;
+
+    let intervalDays: number | null;
+    if (dto.blockedReminderIntervalDays === undefined) {
+      intervalDays = node.blockedReminderIntervalDays ?? null;
+    } else if (dto.blockedReminderIntervalDays === null) {
+      intervalDays = null;
+    } else {
+      intervalDays = Number(dto.blockedReminderIntervalDays);
+      if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 365) {
+        throw new BadRequestException(
+          'blockedReminderIntervalDays invalide (1-365)',
+        );
+      }
+    }
+
+    const reminderActive =
+      dto.blockedReminderActive === undefined
+        ? extracted.workflow.blocked.reminderActive
+        : Boolean(dto.blockedReminderActive);
+
+    const recipient = await this.resolveBlockedReminderRecipient({
+      email: recipientEmail,
+      node: {
+        id: node.id,
+        teamId: node.teamId,
+        path: node.path,
+        createdById: node.createdById,
+        metadata: node.metadata,
+        boardId: node.column?.boardId ?? null,
+      },
+    });
+
+    const payload = this.buildMailPayload({
+      id: 'preview',
+      timestamp: new Date().toISOString(),
+      type: 'blocked-auto-reminder',
+      node: {
+        id: node.id,
+        title: node.title,
+        parentId: node.parentId,
+      },
+      blockedReason: reason,
+      reminderIntervalDays: intervalDays,
+      taskUrl: recipient.taskUrl,
+      recipients: [
+        {
+          userId: recipient.userId,
+          email: recipient.email,
+          displayName: recipient.displayName,
+        },
+      ],
+    });
+
+    if (!payload) {
+      throw new BadRequestException('Impossible de générer l’aperçu');
+    }
+
+    return {
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html ?? null,
+      recipientEmail: recipient.email,
+      recipientDisplayName: recipient.displayName,
+      linkIncluded: Boolean(recipient.taskUrl),
+      linkUrl: recipient.taskUrl,
+      recipientHasAccess: recipient.hasAccess,
+      reminderActive,
+      nextReminderAt: this.computeBlockedReminderNextAt({
+        intervalDays,
+        blockedSince: node.blockedSince,
+        lastSentAt: node.blockedReminderLastSentAt,
+        reminderActive,
+        isResolved: node.isBlockResolved ?? false,
+      }),
+    };
   }
 
   async runWorkflowAutomation(now: Date = new Date()): Promise<void> {
@@ -6196,11 +6537,17 @@ export class NodesService {
         id: true,
         parentId: true,
         title: true,
+        teamId: true,
+        path: true,
+        createdById: true,
+        metadata: true,
         blockedReminderEmails: true,
         blockedReminderIntervalDays: true,
+        blockedReminderLastSentAt: true,
         blockedSince: true,
         blockedReason: true,
         isBlockResolved: true,
+        column: { select: { boardId: true } },
       },
     })) as any;
 
@@ -6212,6 +6559,8 @@ export class NodesService {
     const nowIso = now.toISOString();
 
     for (const node of nodes) {
+      const extracted = this.extractMetadata(node as unknown as NodeModel);
+      if (!extracted.workflow.blocked.reminderActive) continue;
       if (node.isBlockResolved) continue;
       const intervalDays = node.blockedReminderIntervalDays ?? null;
       if (!intervalDays || intervalDays <= 0) continue;
@@ -6233,15 +6582,36 @@ export class NodesService {
         data: { blockedReminderLastSentAt: now } as any,
       });
 
-      await this.appendMailLog({
-        id: randomUUID(),
-        timestamp: nowIso,
-        type: 'blocked-auto-reminder',
-        node: { id: node.id, title: node.title, parentId: node.parentId },
-        reminderIntervalDays: intervalDays,
-        blockedReason: node.blockedReason ?? null,
-        recipients,
-      });
+      for (const baseRecipient of recipients) {
+        const recipient = await this.resolveBlockedReminderRecipient({
+          email: baseRecipient.email,
+          node: {
+            id: node.id,
+            teamId: node.teamId,
+            path: node.path,
+            createdById: node.createdById,
+            metadata: node.metadata,
+            boardId: node.column?.boardId ?? null,
+          },
+        });
+
+        await this.appendMailLog({
+          id: randomUUID(),
+          timestamp: nowIso,
+          type: 'blocked-auto-reminder',
+          node: { id: node.id, title: node.title, parentId: node.parentId },
+          reminderIntervalDays: intervalDays,
+          blockedReason: node.blockedReason ?? null,
+          taskUrl: recipient.taskUrl,
+          recipients: [
+            {
+              userId: recipient.userId,
+              email: recipient.email,
+              displayName: recipient.displayName,
+            },
+          ],
+        });
+      }
     }
   }
 

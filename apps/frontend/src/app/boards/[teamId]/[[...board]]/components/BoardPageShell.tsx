@@ -3,7 +3,7 @@ import React, { useState, FormEvent, useMemo, useEffect, useRef, useCallback } f
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useBoardData } from '@/features/boards/board-data-provider';
 import { useAutoRefreshBoard } from '@/features/boards/useAutoRefreshBoard';
@@ -474,6 +474,7 @@ function TeamBoardPageInner(){
   const { user, accessToken, logout } = useAuth();
   const { board, status, error, refreshActiveBoard, childBoards, breadcrumb, teamId, openChildBoard, activeBoardId, transitionPhase, transitionDirection, isFetching } = useBoardData();
   const { openView, openEdit, openedNodeId } = useTaskDrawer();
+  const searchParams = useSearchParams();
   const { success, error: toastError } = useToast();
   const { t } = useTranslation();
   const { t: tBoard } = useTranslation("board");
@@ -755,6 +756,7 @@ function TeamBoardPageInner(){
   const detailLoading = status==='loading' && !!board;
 
   const previousOpenedNodeIdRef = useRef<string | null>(null);
+  const consumedLinkedTaskRef = useRef<string | null>(null);
 
   useEffect(() => {
     const previous = previousOpenedNodeIdRef.current;
@@ -763,6 +765,15 @@ function TeamBoardPageInner(){
     }
     previousOpenedNodeIdRef.current = openedNodeId;
   }, [openedNodeId, refreshActiveBoard]);
+
+  useEffect(() => {
+    const taskId = searchParams.get('task')?.trim() || null;
+    if (!taskId || consumedLinkedTaskRef.current === taskId) {
+      return;
+    }
+    consumedLinkedTaskRef.current = taskId;
+    openView(taskId);
+  }, [searchParams, openView]);
 
 
   const showBoardControls = boardView === 'kanban';

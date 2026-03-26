@@ -795,10 +795,12 @@
         },
         "emails": {
           "label": "Blocker email(s)",
-          "placeholder": "add@example.com ; other@example.com (press Enter to add)"
+          "placeholder": "add@example.com ; other@example.com",
+          "add": "Add"
         },
         "interval": {
-          "label": "Automatic reminder",
+          "label": "Remind every",
+          "placeholder": "Number of days",
           "options": {
             "never": "Never",
             "daily": "Every day",
@@ -809,12 +811,42 @@
             "everyFourteen": "Every 2 weeks"
           }
         },
+        "status": {
+          "label": "Reminder",
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "nextReminder": {
+          "label": "Next reminder date",
+          "empty": "Not scheduled"
+        },
         "eta": {
           "label": "Estimated unblock date"
         },
         "since": "Blocked since: {date}",
+        "lastReminder": "Last reminder sent: {date}",
         "resolved": "Block resolved (stops automatic reminders)",
-        "autoReminderInfo": "Automatic reminders include the task title, the expected outcome, and a link to the board."
+        "autoReminderInfo": "Automatic reminders include a polite greeting, your message, and a direct link to the card only when the recipient can actually access it.",
+        "preview": {
+          "title": "Email preview",
+          "description": "Preview the exact email generated for a specific recipient.",
+          "action": "Preview email",
+          "loading": "Loading…",
+          "noRecipient": "Add at least one email",
+          "subject": "Subject",
+          "recipient": "Recipient",
+          "linkStatus": "Stratum link",
+          "linkIncluded": "Link included",
+          "linkHidden": "Link hidden because access or app URL is missing",
+          "nextReminder": "Next automatic reminder: {date}",
+          "errors": {
+            "noRecipient": "Add at least one recipient before generating the preview.",
+            "loadFailed": "Unable to load the email preview."
+          }
+        },
+        "errors": {
+          "invalidInterval": "Automatic reminder must be configured with a number of days greater than or equal to 1."
+        }
       }
     },
       "columns": {

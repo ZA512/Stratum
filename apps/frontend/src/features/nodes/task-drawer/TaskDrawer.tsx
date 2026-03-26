@@ -6,7 +6,13 @@ import { useTaskDrawer } from './TaskDrawerContext';
 import { useTaskDetail } from './useTaskDetail';
 import { ChildTasksSection } from './ChildTasksSection';
 import { CommentsSection } from './CommentsSection';
-import { updateNode, deleteNode as apiDeleteNode, type UpdateNodeInput } from '@/features/nodes/nodes-api';
+import {
+  updateNode,
+  deleteNode as apiDeleteNode,
+  fetchBlockedReminderPreview,
+  type BlockedReminderPreview,
+  type UpdateNodeInput,
+} from '@/features/nodes/nodes-api';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useToast } from '@/components/toast/ToastProvider';
 import { useBoardUiSettings } from '@/features/boards/board-ui-settings';
@@ -57,6 +63,11 @@ const panelVariants: Variants = {
 
 const FIELD_INPUT_BASE =
   'rounded border border-border/60 bg-input text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const EMAIL_LOCAL_ALLOWED_CHARS = new Set(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!#$%&'*+/=?^_`{|}~-",
+);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -125,6 +136,103 @@ function getDisplayInitials(name: string | null | undefined): string {
   const first = parts[0]?.charAt(0) ?? '';
   const second = parts.length > 1 ? parts[parts.length - 1]?.charAt(0) ?? '' : parts[0]?.charAt(1) ?? '';
   return `${first}${second}`.toUpperCase().slice(0, 2);
+}
+
+function isAsciiAlphaNumeric(value: string): boolean {
+  if (value.length !== 1) return false;
+  const code = value.charCodeAt(0);
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 48 && code <= 57)
+  );
+}
+
+function isValidReminderEmail(email: string): boolean {
+  if (!email || email.length > 254) return false;
+  const atIndex = email.indexOf('@');
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf('@')) return false;
+
+  const localPart = email.slice(0, atIndex);
+  const domainPart = email.slice(atIndex + 1);
+  if (
+    !localPart ||
+    !domainPart ||
+    localPart.length > 64 ||
+    localPart.startsWith('.') ||
+    localPart.endsWith('.') ||
+    localPart.includes('..')
+  ) {
+    return false;
+  }
+
+  for (const char of localPart) {
+    if (!EMAIL_LOCAL_ALLOWED_CHARS.has(char)) {
+      return false;
+    }
+  }
+
+  const labels = domainPart.split('.');
+  if (labels.length < 2) return false;
+  for (const label of labels) {
+    if (!label || label.length > 63) return false;
+    if (!isAsciiAlphaNumeric(label[0]) || !isAsciiAlphaNumeric(label[label.length - 1])) {
+      return false;
+    }
+    for (const char of label) {
+      if (!(isAsciiAlphaNumeric(char) || char === '-')) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function parseReminderEmailInput(input: string, existingEmails: string[]): {
+  validEmails: string[];
+  invalidEmails: string[];
+} {
+  const candidates = input
+    .split(/[;,\n]/)
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  const seen = new Set(existingEmails.map((value) => value.toLowerCase()));
+  const validEmails: string[] = [];
+  const invalidEmails: string[] = [];
+
+  for (const email of candidates) {
+    if (!isValidReminderEmail(email)) {
+      invalidEmails.push(email);
+      continue;
+    }
+    if (seen.has(email)) {
+      continue;
+    }
+    seen.add(email);
+    validEmails.push(email);
+  }
+
+  return { validEmails, invalidEmails };
+}
+
+function computeNextReminderAt(params: {
+  intervalDays: number | null;
+  blockedSince: string | null;
+  lastSentAt: string | null;
+  reminderActive: boolean;
+  isResolved: boolean;
+}): string | null {
+  const { intervalDays, blockedSince, lastSentAt, reminderActive, isResolved } = params;
+  if (!reminderActive || isResolved || !intervalDays || intervalDays <= 0) {
+    return null;
+  }
+  const baseline = lastSentAt ?? blockedSince;
+  if (!baseline) return null;
+  const date = new Date(baseline);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getTime() + intervalDays * DAY_IN_MS).toISOString();
 }
 
 interface MemberMultiSelectProps {
@@ -248,6 +356,7 @@ export const TaskDrawer: React.FC = () => {
       reason: string;
       emails: string[];
       interval: string;
+      active: boolean;
       eta: string;
       isResolved: boolean;
     };
@@ -283,11 +392,12 @@ export const TaskDrawer: React.FC = () => {
       effort: nodeDetail.effort ?? null,
       tags: nodeDetail.tags ?? [],
       blocked: {
-        reason: ((nodeDetail as Record<string, unknown>).blockedReason as string | undefined) ?? '',
+        reason: nodeDetail.blockedReason ?? '',
         emails: nodeDetail.blockedReminderEmails ? [...nodeDetail.blockedReminderEmails] : [],
         interval: nodeDetail.blockedReminderIntervalDays != null ? String(nodeDetail.blockedReminderIntervalDays) : '',
+        active: nodeDetail.blockedReminderActive ?? true,
         eta: nodeDetail.blockedExpectedUnblockAt ? nodeDetail.blockedExpectedUnblockAt.substring(0, 10) : '',
-        isResolved: ((nodeDetail as Record<string, unknown>).isBlockResolved as boolean | undefined) ?? false,
+        isResolved: nodeDetail.isBlockResolved ?? false,
       },
       backlog: {
         hiddenUntil: nodeDetail.backlogHiddenUntil ? nodeDetail.backlogHiddenUntil.substring(0, 10) : '',
@@ -331,7 +441,11 @@ export const TaskDrawer: React.FC = () => {
   const [blockedSince, setBlockedSince] = useState<string | null>(null);
   const [isBlockResolved, setIsBlockResolved] = useState(false);
   const [blockedInterval, setBlockedInterval] = useState('');
+  const [blockedReminderActive, setBlockedReminderActive] = useState(true);
   const [blockedEta, setBlockedEta] = useState('');
+  const [blockedPreviewRecipient, setBlockedPreviewRecipient] = useState('');
+  const [blockedPreview, setBlockedPreview] = useState<BlockedReminderPreview | null>(null);
+  const [blockedPreviewLoading, setBlockedPreviewLoading] = useState(false);
   const [backlogHiddenUntil, setBacklogHiddenUntil] = useState('');
   const [backlogRestartRequested, setBacklogRestartRequested] = useState(false);
   // RACI
@@ -525,9 +639,11 @@ export const TaskDrawer: React.FC = () => {
     detail?.archivedAt ||
     backlogHiddenUntil ||
     blockedInterval ||
+    !blockedReminderActive ||
     blockedEta ||
     blockedReason.trim() ||
     detail?.blockedSince ||
+    detail?.blockedReminderLastSentAt ||
     detail?.backlogNextReviewAt,
   );
 
@@ -569,41 +685,113 @@ export const TaskDrawer: React.FC = () => {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(computedActualCost);
   }, [computedActualCost]);
 
-  const addBlockedEmail = useCallback(() => {
+  const blockedIntervalValue = useMemo(() => {
+    const raw = blockedInterval.trim();
+    if (!raw) return null;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1) return null;
+    return parsed;
+  }, [blockedInterval]);
+
+  const blockedNextReminderAt = useMemo(() => computeNextReminderAt({
+    intervalDays: blockedIntervalValue,
+    blockedSince,
+    lastSentAt: detail?.blockedReminderLastSentAt ?? null,
+    reminderActive: blockedReminderActive,
+    isResolved: isBlockResolved,
+  }), [blockedIntervalValue, blockedSince, detail?.blockedReminderLastSentAt, blockedReminderActive, isBlockResolved]);
+
+  const commitBlockedEmailInput = useCallback(() => {
     const input = blockedEmailInput.trim();
-    if (!input) return;
-    
-    // Séparer par point-virgule pour permettre l'ajout multiple
-    const emails = input.split(';').map(e => e.trim().toLowerCase()).filter(e => e);
-    
-    if (emails.length === 0) return;
-    
-    const emailRegex = /.+@.+\..+/;
-    const validEmails: string[] = [];
-    const invalidEmails: string[] = [];
-    
-    for (const email of emails) {
-      if (!emailRegex.test(email)) {
-        invalidEmails.push(email);
-      } else if (!blockedEmails.includes(email) && !validEmails.includes(email)) {
-        validEmails.push(email);
-      }
+    if (!input) {
+      return { ok: true, emails: blockedEmails };
     }
-    
+
+    const { validEmails, invalidEmails } = parseReminderEmailInput(
+      blockedEmailInput,
+      blockedEmails,
+    );
+
     if (invalidEmails.length > 0) {
       toastError(tBoard('taskDrawer.errors.invalidEmail') + ': ' + invalidEmails.join(', '));
+      return { ok: false, emails: blockedEmails };
     }
-    
+
+    const nextEmails = [...blockedEmails, ...validEmails];
     if (validEmails.length > 0) {
-      setBlockedEmails((prev) => [...prev, ...validEmails]);
+      setBlockedEmails(nextEmails);
+      if (!blockedPreviewRecipient) {
+        setBlockedPreviewRecipient(validEmails[0]);
+      }
     }
-    
     setBlockedEmailInput('');
-  }, [blockedEmailInput, blockedEmails, toastError, tBoard]);
+    return { ok: true, emails: nextEmails };
+  }, [blockedEmailInput, blockedEmails, blockedPreviewRecipient, toastError, tBoard]);
+
+  const addBlockedEmail = useCallback(() => {
+    commitBlockedEmailInput();
+  }, [commitBlockedEmailInput]);
 
   const removeBlockedEmail = useCallback((email: string) => {
-    setBlockedEmails((prev) => prev.filter((value) => value !== email));
+    setBlockedEmails((prev) => {
+      const nextEmails = prev.filter((value) => value !== email);
+      setBlockedPreviewRecipient((current) => {
+        if (current !== email) return current;
+        return nextEmails[0] ?? '';
+      });
+      return nextEmails;
+    });
+    setBlockedPreview(null);
   }, []);
+
+  const loadBlockedReminderPreview = useCallback(async () => {
+    if (!detail || !accessToken) return;
+
+    const emailCommit = commitBlockedEmailInput();
+    if (!emailCommit.ok) {
+      return;
+    }
+
+    const recipientEmail = blockedPreviewRecipient || emailCommit.emails[0] || '';
+    if (!recipientEmail) {
+      toastError(tBoard('taskDrawer.blocked.preview.errors.noRecipient'));
+      return;
+    }
+
+    setBlockedPreviewLoading(true);
+    try {
+      const preview = await fetchBlockedReminderPreview(
+        detail.id,
+        {
+          recipientEmail,
+          blockedReason: blockedReason.trim() || null,
+          blockedReminderIntervalDays: blockedIntervalValue,
+          blockedReminderActive,
+        },
+        accessToken,
+      );
+      setBlockedPreview(preview);
+      setBlockedPreviewRecipient(preview.recipientEmail);
+    } catch (previewError) {
+      const message =
+        previewError instanceof Error
+          ? previewError.message
+          : tBoard('taskDrawer.blocked.preview.errors.loadFailed');
+      toastError(message);
+    } finally {
+      setBlockedPreviewLoading(false);
+    }
+  }, [
+    accessToken,
+    blockedIntervalValue,
+    blockedPreviewRecipient,
+    blockedReason,
+    blockedReminderActive,
+    commitBlockedEmailInput,
+    detail,
+    tBoard,
+    toastError,
+  ]);
 
   const handleDeleteNode = useCallback(async (recursive: boolean) => {
     if (!detail || !accessToken) return;
@@ -652,9 +840,12 @@ export const TaskDrawer: React.FC = () => {
         setBlockedEmails(nextSnapshot.blocked.emails);
         setBlockedEmailInput('');
         setBlockedInterval(nextSnapshot.blocked.interval);
+        setBlockedReminderActive(nextSnapshot.blocked.active);
         setBlockedEta(nextSnapshot.blocked.eta);
-        setBlockedSince((detail as Record<string, unknown>).blockedSince as string | null || null);
+        setBlockedSince(detail.blockedSince || null);
         setIsBlockResolved(nextSnapshot.blocked.isResolved);
+        setBlockedPreviewRecipient(nextSnapshot.blocked.emails[0] ?? '');
+        setBlockedPreview(null);
         setBacklogHiddenUntil(nextSnapshot.backlog.hiddenUntil);
         setBacklogRestartRequested(false);
         setRResponsible(nextSnapshot.raci.R);
@@ -693,9 +884,12 @@ export const TaskDrawer: React.FC = () => {
       setBlockedEmails([]);
       setBlockedEmailInput('');
       setBlockedInterval('');
+      setBlockedReminderActive(true);
       setBlockedEta('');
       setBlockedSince(null);
       setIsBlockResolved(false);
+      setBlockedPreviewRecipient('');
+      setBlockedPreview(null);
       setBacklogHiddenUntil('');
       setBacklogRestartRequested(false);
       setRResponsible([]);
@@ -750,6 +944,23 @@ export const TaskDrawer: React.FC = () => {
     };
   }, [teamId, accessToken]);
 
+  useEffect(() => {
+    if (!blockedEmails.length) {
+      if (blockedPreviewRecipient) {
+        setBlockedPreviewRecipient('');
+      }
+      setBlockedPreview(null);
+      return;
+    }
+    if (!blockedPreviewRecipient || !blockedEmails.includes(blockedPreviewRecipient)) {
+      setBlockedPreviewRecipient(blockedEmails[0]);
+    }
+  }, [blockedEmails, blockedPreviewRecipient]);
+
+  useEffect(() => {
+    setBlockedPreview(null);
+  }, [blockedReason, blockedInterval, blockedReminderActive, blockedEta, isBlockResolved]);
+
   // Effet pour vider les champs blocked quand on quitte la colonne BLOCKED
   useEffect(() => {
     if (!detail) return;
@@ -762,16 +973,20 @@ export const TaskDrawer: React.FC = () => {
       blockedEmails.length > 0 ||
       blockedInterval !== '' ||
       blockedEta !== '' ||
+      !blockedReminderActive ||
       isBlockResolved
     )) {
       setBlockedReason('');
       setBlockedEmails([]);
       setBlockedEmailInput('');
       setBlockedInterval('');
+      setBlockedReminderActive(true);
       setBlockedEta('');
       setIsBlockResolved(false);
+      setBlockedPreviewRecipient('');
+      setBlockedPreview(null);
     }
-  }, [currentColumnBehavior, detail, blockedReason, blockedEmails, blockedInterval, blockedEta, isBlockResolved]);
+  }, [currentColumnBehavior, detail, blockedReason, blockedEmails, blockedInterval, blockedEta, blockedReminderActive, isBlockResolved]);
 
   // Quand on entre dans la colonne BLOQUÉE, basculer une seule fois vers l'onglet Détails
   useEffect(() => {
@@ -1011,8 +1226,10 @@ export const TaskDrawer: React.FC = () => {
     const sortedBlocked = [...blockedEmails].map((email) => email.toLowerCase()).sort();
     const sortedSnapshotBlocked = [...initialSnapshot.blocked.emails].map((email) => email.toLowerCase()).sort();
     if (JSON.stringify(sortedBlocked) !== JSON.stringify(sortedSnapshotBlocked)) return true;
+    if (blockedEmailInput.trim().length > 0) return true;
     if (blockedReason.trim() !== initialSnapshot.blocked.reason.trim()) return true;
     if (blockedInterval.trim() !== initialSnapshot.blocked.interval.trim()) return true;
+    if (blockedReminderActive !== initialSnapshot.blocked.active) return true;
     if (blockedEta.trim() !== initialSnapshot.blocked.eta.trim()) return true;
     if (isBlockResolved !== initialSnapshot.blocked.isResolved) return true;
 
@@ -1131,6 +1348,11 @@ export const TaskDrawer: React.FC = () => {
     if (!hasDirty) return false;
     setSaving(true);
     try {
+      const emailCommit = commitBlockedEmailInput();
+      if (!emailCommit.ok) {
+        return false;
+      }
+
       const payload: UpdateNodeInput = {
         title: title.trim() || undefined,
         description: description.trim() === '' ? null : description,
@@ -1140,14 +1362,18 @@ export const TaskDrawer: React.FC = () => {
       payload.priority = priority;
       payload.effort = effort;
       // Blocage
-      (payload as Record<string, unknown>).blockedReason = blockedReason.trim() || null;
-      payload.blockedReminderEmails = [...blockedEmails];
-      (payload as Record<string, unknown>).isBlockResolved = isBlockResolved;
+      payload.blockedReason = blockedReason.trim() || null;
+      payload.blockedReminderEmails = [...emailCommit.emails];
+      payload.blockedReminderActive = blockedReminderActive;
+      payload.isBlockResolved = isBlockResolved;
       if (blockedInterval.trim() === '') {
         payload.blockedReminderIntervalDays = null;
       } else {
-        const intervalValue = Number(blockedInterval);
-        payload.blockedReminderIntervalDays = Number.isNaN(intervalValue) ? null : intervalValue;
+        if (blockedIntervalValue === null) {
+          toastError(tBoard('taskDrawer.blocked.errors.invalidInterval'));
+          return false;
+        }
+        payload.blockedReminderIntervalDays = blockedIntervalValue;
       }
       if (blockedEta.trim() === '') {
         payload.blockedExpectedUnblockAt = null;
@@ -1235,8 +1461,9 @@ export const TaskDrawer: React.FC = () => {
         tags: [...tags],
         blocked: {
           reason: blockedReason.trim(),
-          emails: [...blockedEmails],
+          emails: [...emailCommit.emails],
           interval: blockedInterval,
+          active: blockedReminderActive,
           eta: blockedEta,
           isResolved: isBlockResolved,
         },
@@ -1489,8 +1716,18 @@ export const TaskDrawer: React.FC = () => {
                               <p className="mt-1 text-sm font-semibold text-foreground">{blockedInterval ? `${blockedInterval} j` : 'Aucun'}</p>
                             </div>
                             <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Statut relance</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">
+                                {blockedReminderActive ? 'Active' : 'Inactive'}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Déblocage estimé</p>
                               <p className="mt-1 text-sm font-semibold text-foreground">{blockedEta ? formatDateMedium(blockedEta) : '—'}</p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-card/50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">Prochaine relance</p>
+                              <p className="mt-1 text-sm font-semibold text-foreground">{blockedNextReminderAt ? formatDateMedium(blockedNextReminderAt) : '—'}</p>
                             </div>
                           </div>
                           {blockedReason.trim() ? (
@@ -2009,31 +2246,76 @@ export const TaskDrawer: React.FC = () => {
                                       ))}
                                     </div>
                                   )}
-                                  <input
-                                    type="text"
-                                    inputMode="email"
-                                    autoComplete="off"
-                                    autoCorrect="off"
-                                    autoCapitalize="none"
-                                    name="blocked-reminder-list"
-                                    data-bwignore
-                                    data-bitwarden-watching="false"
-                                    data-1p-ignore
-                                    data-lpignore="true"
-                                    value={blockedEmailInput}
-                                    onChange={e=>setBlockedEmailInput(e.target.value)}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        addBlockedEmail();
-                                      }
-                                    }}
-                                    className={`w-full ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
-                                    placeholder={tBoard('taskDrawer.blocked.emails.placeholder')}
-                                    disabled={saving}
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      inputMode="email"
+                                      autoComplete="off"
+                                      autoCorrect="off"
+                                      autoCapitalize="none"
+                                      name="blocked-reminder-list"
+                                      data-bwignore
+                                      data-bitwarden-watching="false"
+                                      data-1p-ignore
+                                      data-lpignore="true"
+                                      value={blockedEmailInput}
+                                      onChange={e=>setBlockedEmailInput(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          addBlockedEmail();
+                                        }
+                                      }}
+                                      className={`w-full ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
+                                      placeholder={tBoard('taskDrawer.blocked.emails.placeholder')}
+                                      disabled={saving}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={addBlockedEmail}
+                                      className="rounded bg-card/60 px-2 py-1 text-xs text-muted transition hover:bg-card/80 hover:text-foreground disabled:opacity-50"
+                                      disabled={saving || blockedEmailInput.trim().length === 0}
+                                    >
+                                      {tBoard('taskDrawer.blocked.emails.add')}
+                                    </button>
+                                  </div>
                                 </div>
                               </label>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-lg border border-border/50 bg-card/40 p-3">
+                                <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                  {tBoard('taskDrawer.blocked.status.label')}
+                                </p>
+                                <div className="mt-2 inline-flex rounded-lg border border-border/60 bg-card/50 p-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBlockedReminderActive(true)}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${blockedReminderActive ? 'bg-emerald-500 text-white' : 'text-[color:var(--color-task-label)] hover:bg-card/70'}`}
+                                    disabled={saving}
+                                  >
+                                    {tBoard('taskDrawer.blocked.status.active')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBlockedReminderActive(false)}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${!blockedReminderActive ? 'bg-slate-500 text-white' : 'text-[color:var(--color-task-label)] hover:bg-card/70'}`}
+                                    disabled={saving}
+                                  >
+                                    {tBoard('taskDrawer.blocked.status.inactive')}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="rounded-lg border border-border/50 bg-card/40 p-3">
+                                <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                  {tBoard('taskDrawer.blocked.nextReminder.label')}
+                                </p>
+                                <p className="mt-2 text-sm font-semibold text-foreground">
+                                  {blockedNextReminderAt ? formatDateLong(blockedNextReminderAt) : tBoard('taskDrawer.blocked.nextReminder.empty')}
+                                </p>
+                              </div>
                             </div>
 
                             <div className="grid gap-4 sm:grid-cols-2">
@@ -2044,7 +2326,7 @@ export const TaskDrawer: React.FC = () => {
                                 </span>
                                 <input
                                   type="number"
-                                  min={0}
+                                  min={1}
                                   step={1}
                                   value={blockedInterval}
                                   onChange={e=>{
@@ -2052,10 +2334,10 @@ export const TaskDrawer: React.FC = () => {
                                     if (v === '') { setBlockedInterval(''); return; }
                                     // autoriser seulement des entiers positifs
                                     const n = Number(v);
-                                    if (Number.isNaN(n) || n < 0) return;
+                                    if (Number.isNaN(n) || n < 1) return;
                                     setBlockedInterval(String(Math.floor(n)));
                                   }}
-                                  placeholder="0 = jamais"
+                                  placeholder={tBoard('taskDrawer.blocked.interval.placeholder')}
                                   className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
                                   disabled={saving}
                                 />
@@ -2082,6 +2364,12 @@ export const TaskDrawer: React.FC = () => {
                               </p>
                             )}
 
+                            {detail?.blockedReminderLastSentAt && (
+                              <p className="text-xs text-[color:var(--color-task-label)] flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px]">mail</span> {tBoard('taskDrawer.blocked.lastReminder', { date: formatDateLong(detail.blockedReminderLastSentAt) })}
+                              </p>
+                            )}
+
                             <label className="flex items-center gap-2 text-sm">
                               <input
                                 type="checkbox"
@@ -2098,6 +2386,89 @@ export const TaskDrawer: React.FC = () => {
                             <p className="text-[11px] text-[color:var(--color-task-label)] flex items-start gap-1">
                               <span className="material-symbols-outlined text-[14px] text-amber-500">info</span> {tBoard('taskDrawer.blocked.autoReminderInfo')}
                             </p>
+
+                            <div className="rounded-lg border border-border/50 bg-card/40 p-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                <div className="flex-1 space-y-1">
+                                  <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                    {tBoard('taskDrawer.blocked.preview.title')}
+                                  </p>
+                                  <p className="text-xs text-[color:var(--color-task-label)]">
+                                    {tBoard('taskDrawer.blocked.preview.description')}
+                                  </p>
+                                </div>
+                                <div className="flex flex-col gap-2 sm:min-w-72">
+                                  <select
+                                    value={blockedPreviewRecipient}
+                                    onChange={(event) => setBlockedPreviewRecipient(event.target.value)}
+                                    className={`rounded ${FIELD_INPUT_BASE} px-2 py-1 text-sm`}
+                                    disabled={saving || blockedEmails.length === 0}
+                                  >
+                                    {blockedEmails.length === 0 ? (
+                                      <option value="">{tBoard('taskDrawer.blocked.preview.noRecipient')}</option>
+                                    ) : (
+                                      blockedEmails.map((email) => (
+                                        <option key={email} value={email}>{email}</option>
+                                      ))
+                                    )}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => { void loadBlockedReminderPreview(); }}
+                                    className="rounded bg-card/70 px-3 py-2 text-sm font-medium text-foreground transition hover:bg-card disabled:opacity-50"
+                                    disabled={saving || blockedPreviewLoading}
+                                  >
+                                    {blockedPreviewLoading
+                                      ? tBoard('taskDrawer.blocked.preview.loading')
+                                      : tBoard('taskDrawer.blocked.preview.action')}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {blockedPreview && (
+                                <div className="mt-4 space-y-3 rounded-lg border border-border/50 bg-background/60 p-4">
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                      {tBoard('taskDrawer.blocked.preview.subject')}
+                                    </p>
+                                    <p className="text-sm font-semibold text-foreground">{blockedPreview.subject}</p>
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                      <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                        {tBoard('taskDrawer.blocked.preview.recipient')}
+                                      </p>
+                                      <p className="text-sm text-foreground">{blockedPreview.recipientEmail}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[11px] uppercase tracking-wide text-[color:var(--color-task-label)]">
+                                        {tBoard('taskDrawer.blocked.preview.linkStatus')}
+                                      </p>
+                                      <p className="text-sm text-foreground">
+                                        {blockedPreview.linkIncluded
+                                          ? tBoard('taskDrawer.blocked.preview.linkIncluded')
+                                          : tBoard('taskDrawer.blocked.preview.linkHidden')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {blockedPreview.nextReminderAt && (
+                                    <p className="text-xs text-[color:var(--color-task-label)]">
+                                      {tBoard('taskDrawer.blocked.preview.nextReminder', { date: formatDateLong(blockedPreview.nextReminderAt) })}
+                                    </p>
+                                  )}
+                                  <div className="rounded-lg border border-border/40 bg-card/40 p-4">
+                                    {blockedPreview.html ? (
+                                      <div
+                                        className="prose prose-sm max-w-none dark:prose-invert"
+                                        dangerouslySetInnerHTML={{ __html: blockedPreview.html }}
+                                      />
+                                    ) : (
+                                      <pre className="whitespace-pre-wrap text-sm text-foreground">{blockedPreview.text}</pre>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </section>
                         );
                       })()}

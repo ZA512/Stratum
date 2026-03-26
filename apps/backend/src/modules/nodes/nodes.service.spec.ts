@@ -733,4 +733,51 @@ let mailService: { sendMail: jest.Mock };
     writeSpy.mockRestore();
   });
 
+  it('n’envoie pas de relance bloquée lorsque la relance est inactive', async () => {
+    const ctx = (prisma as any)._ctx;
+    const detail = await service.createChildNode(
+      'parent-1',
+      { title: 'Blocked reminder paused' } as any,
+      'u1',
+    );
+    const taskId = detail.children[detail.children.length - 1].id;
+    const board = ctx.board[0];
+    const columns = ctx.column.filter((c: any) => c.boardId === board.id);
+    const findCol = (key: ColumnBehaviorKey) =>
+      columns.find((c: any) => ctx.columnBehavior.find((b: any) => b.id === c.behaviorId && b.key === key));
+    const blockedCol = findCol(ColumnBehaviorKey.BLOCKED);
+    await service.moveChildNode('parent-1', taskId, { targetColumnId: blockedCol.id }, 'u1');
+    await service.updateNode(
+      taskId,
+      {
+        blockedReminderEmails: ['alert@example.com'],
+        blockedReminderIntervalDays: 3,
+        blockedReminderActive: false,
+      } as any,
+      'u1',
+    );
+    const nodeRecord = ctx.node.find((n: any) => n.id === taskId);
+    nodeRecord.blockedSince = new Date('2025-01-01T00:00:00.000Z');
+
+    const appendSpy = jest.spyOn(service as any, 'appendMailLog');
+    const writeSpy = jest
+      .spyOn(service as any, 'writeMailLog')
+      .mockResolvedValue(undefined);
+
+    await service.runWorkflowAutomation(new Date('2025-01-05T00:00:00.000Z'));
+
+    const refreshed = ctx.node.find((n: any) => n.id === taskId);
+    expect(refreshed.blockedReminderLastSentAt).toBeNull();
+    expect(appendSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'blocked-auto-reminder',
+        node: expect.objectContaining({ id: taskId }),
+      }),
+    );
+    expect(mailService.sendMail).not.toHaveBeenCalled();
+
+    appendSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+
 });
