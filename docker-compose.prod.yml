@@ -56,6 +56,8 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Définir JWT_SECRET dans .env (min 32 caractères)}
       PORT: 4001
+      # URL publique de l'application utilisée dans les emails (relances, liens vers cartes, etc.)
+      STRATUM_APP_URL: ${STRATUM_APP_URL:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       AUTORUN_MIGRATIONS: "true"
     ports:

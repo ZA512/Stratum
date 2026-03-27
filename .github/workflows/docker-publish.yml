@@ -70,6 +70,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          build-args: |
+            NODE_BUILD_IMAGE=${{ env.DHI_USERNAME != '' && env.DHI_PASSWORD != '' && 'dhi.io/node:20-alpine3.22-dev' || 'node:20-alpine3.22' }}
+            NODE_RUNTIME_IMAGE=${{ env.DHI_USERNAME != '' && env.DHI_PASSWORD != '' && 'dhi.io/node:20-alpine3.22' || 'node:20-alpine3.22' }}
 
   build-frontend:
     runs-on: ubuntu-latest
@@ -128,4 +131,6 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
           build-args: |
+            NODE_BUILD_IMAGE=${{ env.DHI_USERNAME != '' && env.DHI_PASSWORD != '' && 'dhi.io/node:20-alpine3.22-dev' || 'node:20-alpine3.22' }}
+            NODE_RUNTIME_IMAGE=${{ env.DHI_USERNAME != '' && env.DHI_PASSWORD != '' && 'dhi.io/node:20-alpine3.22' || 'node:20-alpine3.22' }}
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || '/api' }}

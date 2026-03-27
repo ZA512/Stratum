@@ -1,10 +1,13 @@
 # Backend (NestJS) multi-stage build optimized for GHCR
 # syntax=docker/dockerfile:1
 
+ARG NODE_BUILD_IMAGE=node:20-alpine3.22
+ARG NODE_RUNTIME_IMAGE=node:20-alpine3.22
+
 # ============================================
 # Stage 1: Dependencies
 # ============================================
-FROM dhi.io/node:20-alpine3.22-dev AS deps
+FROM ${NODE_BUILD_IMAGE} AS deps
 WORKDIR /app
 USER root
 
@@ -20,12 +23,13 @@ RUN --mount=type=cache,target=/root/.npm ["npm","ci","--workspace","backend","--
 # ============================================
 # Stage 2: Builder
 # ============================================
-FROM dhi.io/node:20-alpine3.22-dev AS builder
+FROM ${NODE_BUILD_IMAGE} AS builder
 WORKDIR /app
 USER root
 
 # npm workspaces hoists dependencies to root node_modules
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY package*.json ./
 COPY apps/backend ./apps/backend
 COPY packages ./packages
@@ -45,7 +49,7 @@ RUN apk add --no-cache postgresql-client
 # ============================================
 # Stage 3: Production
 # ============================================
-FROM dhi.io/node:20-alpine3.22 AS prod
+FROM ${NODE_RUNTIME_IMAGE} AS prod
 
 # OCI labels for GHCR
 LABEL org.opencontainers.image.title="Stratum Backend"
@@ -72,6 +76,7 @@ USER 1000
 # Copy only production artifacts
 COPY --chown=1000:1000 package*.json ./
 COPY --chown=1000:1000 --from=deps /app/node_modules ./node_modules
+COPY --chown=1000:1000 --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --chown=1000:1000 --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --chown=1000:1000 --from=builder /app/apps/backend/prisma ./apps/backend/prisma
 COPY --chown=1000:1000 --from=builder /app/apps/backend/prisma.config.ts ./apps/backend/prisma.config.ts

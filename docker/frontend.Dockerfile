@@ -1,10 +1,13 @@
 # Frontend (Next.js) multi-stage build optimized for GHCR
 # syntax=docker/dockerfile:1
 
+ARG NODE_BUILD_IMAGE=node:20-alpine3.22
+ARG NODE_RUNTIME_IMAGE=node:20-alpine3.22
+
 # ============================================
 # Stage 1: Dependencies
 # ============================================
-FROM dhi.io/node:20-alpine3.22-dev AS deps
+FROM ${NODE_BUILD_IMAGE} AS deps
 WORKDIR /app
 USER root
 
@@ -22,7 +25,7 @@ RUN --mount=type=cache,target=/root/.npm ["npm","ci","--workspace","frontend","-
 # ============================================
 # Stage 2: Builder
 # ============================================
-FROM dhi.io/node:20-alpine3.22-dev AS builder
+FROM ${NODE_BUILD_IMAGE} AS builder
 WORKDIR /app
 USER root
 
@@ -47,7 +50,7 @@ RUN ["npm","--workspace","frontend","run","build"]
 # ============================================
 # Stage 3: Production
 # ============================================
-FROM dhi.io/node:20-alpine3.22 AS prod
+FROM ${NODE_RUNTIME_IMAGE} AS prod
 
 # OCI labels for GHCR
 LABEL org.opencontainers.image.title="Stratum Frontend"
